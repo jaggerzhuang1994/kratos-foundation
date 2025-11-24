@@ -1,0 +1,511 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+
+message AppComponentConfig {
+  App app = 1;
+
+  message App {
+    // 是否禁用服务注册
+    optional bool disable_registrar = 1;
+    // 注册中心超时时间（默认10s）
+    optional google.protobuf.Duration registrar_timeout = 2;
+    // stop timeout 必须大于 server.stop_delay （默认30s）
+    optional google.protobuf.Duration stop_timeout = 3;
+  }
+}
+
+message LogComponentConfig {
+  Log log = 1;
+
+  // 模块使用的 log 结构
+  message ModuleLog {
+    // 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
+    optional string level = 1;
+    // 打印日志过滤哪些keys
+    repeated string filter_keys = 2;
+  }
+
+  message Log {
+    // 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
+    optional string level = 1;
+    // 打印日志过滤哪些keys
+    repeated string filter_keys = 2;
+    // 标准输出流日志
+    optional StdLogger std = 3;
+    // 文件日志
+    optional FileLogger file = 4;
+    // 时间格式化 默认为 time.RFC3339
+    optional string time_format = 5;
+
+    message StdLogger {
+      // 是否禁用std logger(默认不禁用)
+      optional bool disable = 1;
+      // 最小日志级别（默认继承上层level）
+      optional string level = 2;
+      // 打印日志过滤哪些keys，会合并上层 filter_keys
+      repeated string filter_keys = 3;
+    }
+
+    message FileLogger {
+      // 禁用file logger(默认不禁用)
+      optional bool disable = 1;
+      // 最小日志级别（默认继承上层level）
+      optional string level = 2;
+      // 打印日志过滤哪些keys，会合并上层 filter_keys
+      repeated string filter_keys = 3;
+      // 日志路径 (默认 ./app.log)
+      optional string path = 4;
+      // 文件拆分
+      Rotating rotating = 5;
+
+      message Rotating {
+        // 禁用文件拆分(默认不禁用)
+        bool disable = 1;
+        // 最大文件大小（单位MB，默认100MB）
+        int64 max_size = 2;
+        // 最大文件年龄（单位 天，默认永久）
+        int32 max_file_age = 3;
+        // 最大文件数量（默认都保留）
+        int32 max_files = 4;
+        // 是否使用本地时区拆分文件日志(默认utc)
+        bool local_time = 5;
+        // 轮换后的日志文件是否应该使用 gzip 压缩。默认不进行压缩。
+        bool compress = 6;
+      }
+    }
+  }
+}
+
+message MetricComponentConfig {
+  Metric metric = 1;
+
+  message Metric {
+    // 指标命名空间（默认为启动的应用名）
+    string meter_name = 1;
+    // 初始 counter map 容量（默认 64）
+    // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
+    int32 counter_map_size = 2;
+    // 初始 gauge map 容量（默认 64）
+    // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
+    int32 gauge_map_size = 3;
+    // 初始 histogram map 容量（默认 64）
+    // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
+    int32 histogram_map_size = 4;
+    // log
+    LogComponentConfig.ModuleLog log = 5;
+  }
+}
+
+message TracingComponentConfig {
+  Tracing tracing = 1;
+
+  message Tracing {
+    // 是否禁用链路追踪
+    optional bool disable = 1;
+    // 导出配置
+    Exporter exporter = 2;
+    // 采样率设置
+    Sampler sampler = 3;
+    // log
+    LogComponentConfig.ModuleLog log = 4;
+    // 默认 tracer name，默认值为 appinfo.name
+    optional string tracer_name = 5;
+
+    message Exporter {
+      optional string endpoint = 1;
+      optional string endpoint_url = 2;
+      optional Compression compression = 3;
+      optional string url_path = 4;
+      map<string, string> headers = 5;
+      optional google.protobuf.Duration timeout = 6;
+      optional RetryConfig retry = 7;
+
+      enum Compression {
+        NoCompression = 0;
+        GzipCompression = 1;
+      }
+
+      message RetryConfig {
+        bool enabled = 1;
+        google.protobuf.Duration initial_interval = 2;
+        google.protobuf.Duration max_interval = 3;
+        google.protobuf.Duration max_elapsed_time = 4;
+      }
+    }
+    message Sampler {
+      enum Sample {
+        Ratio = 0; // 按照采样率采样
+        AlwaysOn = 1; // 总是采样
+        AlwaysOff = 2; // 总是不采样
+      }
+      Sample sample = 1;
+      // 采样率(默认采样率0.05)
+      optional double ratio = 2;
+    }
+  }
+}
+
+// 服务组件配置
+message ServerComponentConfig {
+  // 服务端配置
+  Server server = 1;
+
+  message Server {
+    // consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
+    // 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。
+    // 因此给servers套上一个wrapper用于延迟停止服务。
+    optional google.protobuf.Duration stop_delay = 1;
+    // http 服务器配置
+    optional HttpServerOption http = 2;
+    // grpc 服务器配置
+    optional GrpcServerOption grpc = 3;
+    // 通用中间件配置
+    optional Middleware middleware = 4;
+    // logger 配置
+    LogComponentConfig.ModuleLog log = 5;
+
+    // 中间件配置
+    message Middleware {
+      optional Metadata metadata = 1;
+      optional Tracing tracing = 2;
+      optional Metrics metrics = 3;
+      optional Logger logger = 4;
+      optional Validator validator = 5;
+
+      message Metadata {
+        // 是否禁用
+        optional bool disable = 1;
+        // metadata prefix(这个前缀的 metadata 才会保留在server中)
+        repeated string prefix = 2;
+      }
+
+      message Tracing {
+        // 是否禁用
+        optional bool disable = 1;
+        // tracer name
+        optional string tracer_name = 2;
+      }
+
+      message Metrics {
+        // 是否禁用
+        optional bool disable = 1;
+        // meter name
+        optional string meter_name = 2;
+      }
+
+      message Logger {
+        // 是否禁用
+        optional bool disable = 1;
+      }
+
+      message Validator {
+        // 是否禁用
+        optional bool disable = 1;
+      }
+    }
+  }
+
+  message Endpoint {
+    string scheme = 1;
+    string host = 2;
+  }
+
+  message HttpServerOption {
+    optional bool disable = 1;
+    // 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
+    optional string network = 2;
+    // 服务监听地址，host:port 或者 unix文件地址
+    optional string addr = 3;
+    // 对外暴露端点
+    optional Endpoint endpoint = 4;
+    // 服务超时时间（默认1s）
+    optional google.protobuf.Duration timeout = 5;
+    // 默认中间件配置
+    optional Server.Middleware middleware = 6;
+    // 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
+    optional bool disable_strict_slash = 7;
+    // http 路由前缀
+    optional string path_prefix = 8;
+  }
+
+  message GrpcServerOption {
+    optional bool disable = 1;
+    // 一般不需要指定，默认(tcp)
+    string network = 2;
+    // 服务监听地址，host:port
+    string addr = 3;
+    // 对外暴露端点
+    Endpoint endpoint = 4;
+    // 服务超时时间（默认1s）
+    google.protobuf.Duration timeout = 5;
+    // 默认中间件配置
+    optional Server.Middleware middleware = 6;
+    // customHealth 是否禁用grpc自带的健康检查端点
+    optional bool custom_health = 7;
+    // disableReflection
+    optional bool disable_reflection = 8;
+  }
+}
+
+message DatabaseComponentConfig {
+  Database database = 1;
+
+  message Database {
+    // gorm 配置
+    optional Gorm gorm = 1;
+    // logger 配置
+    optional LogComponentConfig.ModuleLog log = 2;
+    // 默认连接
+    string default = 3;
+    // 连接
+    map<string, Connection> connections = 4;
+    // 链路追踪配置
+    Tracing tracing = 5;
+
+    message Tracing {
+      bool disable = 1;
+      bool exclude_query_vars = 2;
+      bool exclude_metrics = 3;
+      bool record_stack_trace_in_span = 4;
+      bool exclude_server_address = 5;
+    }
+
+    message Gorm {
+      optional bool skip_default_transaction = 1;
+      optional google.protobuf.Duration default_transaction_timeout = 2;
+      optional google.protobuf.Duration default_context_timeout = 3;
+      optional bool full_save_associations = 4;
+      optional Logger logger = 5;
+      optional bool disable_automatic_ping = 6;
+      optional bool disable_foreign_key_constraint_when_migrating = 7;
+      optional bool ignore_relationships_when_migrating = 8;
+      optional bool disable_nested_transaction = 9;
+      optional bool allow_global_update = 10;
+      optional bool query_fields = 11;
+      optional int32 create_batch_size = 12;
+      optional bool translate_error = 13;
+      optional bool propagate_unscoped = 14;
+
+      message Logger {
+        Level level = 1;
+        // gorm 慢日志设置
+        optional google.protobuf.Duration slow_threshold = 2;
+        // Colorful
+        optional bool colorful = 3;
+        // IgnoreRecordNotFoundError
+        optional bool ignore_record_not_found_error = 4;
+        // ParameterizedQueries
+        optional bool parameterized_queries = 5;
+
+        enum Level {
+          // default to Silent
+          Unknown = 0;
+          // Silent silent log level
+          Silent = 1;
+          // Error error log level
+          Error = 2;
+          // Warn warn log level
+          Warn = 3;
+          // Info info log level
+          Info = 4;
+        }
+      }
+    }
+
+    message Connection {
+      // 数据库驱动，默认mysql
+      string driver = 1;
+      // dsn
+      string dsn = 2;
+      // 从库
+      repeated Dialector replicas = 3;
+      // 自动切换数据源关联表
+      repeated string datas = 4;
+      // print sources/replicas mode in logger
+      bool trace_resolver_mode = 5;
+
+      // 数据库方言
+      message Dialector {
+        // 数据库驱动，默认mysql
+        string driver = 1;
+        // dsn
+        string dsn = 2;
+      }
+    }
+  }
+}
+
+// redis组件
+message RedisComponentConfig {
+  RedisConfig redis = 1;
+
+  message RedisConfig {
+    // 默认连接
+    string default = 1;
+    // logger 配置
+    optional LogComponentConfig.ModuleLog log = 2;
+
+    // tracing
+    Tracing tracing = 3;
+    message Tracing {
+      bool disable = 1;
+      // DBStatement tells the tracing hook to log raw redis commands.
+      bool db_statement = 2;
+      // CallerEnabled tells the tracing hook to log the calling function, file and line.
+      bool caller_enabled = 3;
+      // DialFilter enables or disables filtering of dial commands.
+      bool dial_filter = 4;
+    }
+
+    // Metrics
+    Metrics metrics = 4;
+    message Metrics {
+      bool disable = 1;
+    }
+
+    // 连接配置
+    map<string, RedisOption> connections = 5;
+    message RedisOption {
+      // Network type, either tcp or unix.
+      //
+      // default: tcp
+      string network = 1;
+      // Addr is the address formatted as host:port
+      string addr = 2;
+      // ClientName will execute the `CLIENT SETNAME ClientName` command for each conn.
+      string client_name = 3;
+      // Protocol 2 or 3. Use the version to negotiate RESP version with redis-server.
+      //
+      // default: 3
+      int32 protocol = 4;
+      // Username is used to authenticate the current connection.
+      string username = 5;
+      // Password is an optional password.
+      string password = 6;
+      // DB is the database to be selected after connecting to the server.
+      int32 db = 7;
+      // MaxRetries is the maximum number of retries before giving up.
+      // -1 (not 0) disables retries.
+      //
+      // default: 3 retries
+      int32 max_retries = 8;
+      // MinRetryBackoff is the minimum backoff between each retry.
+      // -1 disables backoff.
+      //
+      // default: 8 milliseconds
+      google.protobuf.Duration min_retry_backoff = 9;
+      // MaxRetryBackoff is the maximum backoff between each retry.
+      // -1 disables backoff.
+      //
+      // default: 512 milliseconds;
+      google.protobuf.Duration max_retry_backoff = 10;
+      // DialTimeout for establishing new connections.
+      //
+      // default: 5 seconds
+      google.protobuf.Duration dial_timeout = 11;
+      // DialerRetries is the maximum number of retry attempts when dialing fails.
+      //
+      // default: 5
+      int32 dialer_retries = 12;
+      // DialerRetryTimeout is the backoff duration between retry attempts.
+      //
+      // default: 100 milliseconds
+      google.protobuf.Duration dialer_retry_timeout = 13;
+      // ReadTimeout for socket reads.
+      //
+      //  - -1  no timeout (block indefinitely)
+      //  - -2  disables SetReadDeadline calls completely
+      //
+      // default: 3 seconds
+      google.protobuf.Duration read_timeout = 14;
+      // WriteTimeout for socket writes.
+      //
+      //  - -1  no timeout (block indefinitely)
+      //  - -2  disables SetWriteDeadline calls completely
+      //
+      // default: 3 seconds
+      google.protobuf.Duration write_timeout = 15;
+      // ContextTimeoutEnabled controls whether the client respects context timeouts and deadlines.
+      bool context_timeout_enabled = 16;
+      // ReadBufferSize is the size of the bufio.Reader buffer for each connection.
+      //
+      // default: 32KiB (32768 bytes)
+      int32 read_buffer_size = 17;
+      // WriteBufferSize is the size of the bufio.Writer buffer for each connection.
+      //
+      // default: 32KiB (32768 bytes)
+      int32 write_buffer_size = 18;
+      // PoolFIFO type of connection pool.
+      //
+      //  - true  FIFO pool
+      //  - false LIFO pool
+      bool pool_fifo = 19;
+      // PoolSize is the base number of socket connections.
+      //
+      // default: 10 * runtime.GOMAXPROCS(0)
+      int32 pool_size = 20;
+      // MaxConcurrentDials is the maximum number of concurrent connection creation goroutines.
+      int32 max_concurrent_dials = 21;
+      // PoolTimeout is the amount of time client waits for connection if all connections
+      // are busy before returning an error.
+      //
+      // default: ReadTimeout + 1 second
+      google.protobuf.Duration pool_timeout = 22;
+      // MinIdleConns is the minimum number of idle connections.
+      //
+      // default: 0
+      int32 min_idle_conns = 23;
+      // MaxIdleConns is the maximum number of idle connections.
+      //
+      // default: 0
+      int32 max_idle_conns = 24;
+      // MaxActiveConns is the maximum number of connections allocated by the pool at a given time.
+      //
+      // 0 = no limit
+      int32 max_active_conns = 25;
+      // ConnMaxIdleTime is the maximum amount of time a connection may be idle.
+      //
+      // default: 30 minutes
+      google.protobuf.Duration conn_max_idle_time = 26;
+      // ConnMaxLifetime is the maximum amount of time a connection may be reused.
+      //
+      // default: 0
+      google.protobuf.Duration conn_max_lifetime = 27;
+      // readOnly enables read only queries on slave/follower nodes.
+      bool read_only = 28;
+      // DisableIndentity - Disable set-lib on connect.
+      //
+      // Deprecated: Use DisableIdentity instead.
+      bool disable_indentity = 29 [deprecated = true];
+      // DisableIdentity is used to disable CLIENT SETINFO command on connect.
+      bool disable_identity = 30;
+      // Add suffix to client name. Default is empty.
+      string identity_suffix = 31;
+      // UnstableResp3 enables Unstable mode for Redis Search module with RESP3.
+      bool unstable_resp3 = 32;
+      // FailingTimeoutSeconds is the timeout in seconds for marking a cluster node as failing.
+      //
+      // default: 15
+      int32 failing_timeout_seconds = 33;
+    }
+  }
+}
+
+//// 客户端组件
+//message ClientComponent {
+//  map<string, ClientOption> client = 1;
+//
+//  message ClientOption {
+//    // 目标端点 支持服务发现/直连:
+//    //  discovery:///service_name?a=1&b=2 (a/b为metadata过滤器)
+//    //  host:port
+//    string target = 1;
+//    // 超时时间，默认不超时
+//    google.protobuf.Duration timeout = 2;
+//  }
+//}
+//

@@ -1,0 +1,12 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb";
+
+package kratos_foundation_pb;
+
+// 应用信息
+message AppInfo {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  map<string, string> metadata = 4;
+}
