@@ -26,28 +26,25 @@ const (
 type ErrorReason int32
 
 const (
-	// undefined
-	ErrorReason_UNDEFINED ErrorReason = 0
-	// 部分失败
-	ErrorReason_PARTIAL_ERROR       ErrorReason = 206
+	ErrorReason_NONE                ErrorReason = 0   // 成功
 	ErrorReason_BAD_REQUEST         ErrorReason = 400 // 异常请求
 	ErrorReason_UNAUTHORIZED        ErrorReason = 401 // 无效身份
 	ErrorReason_FORBIDDEN           ErrorReason = 403 // 无权限操作
-	ErrorReason_NOT_FOUND           ErrorReason = 404 // 数据不存在
-	ErrorReason_CONFLICT            ErrorReason = 409 // 请求冲突
-	ErrorReason_VALIDATOR           ErrorReason = 422 // 请求字段校验失败
+	ErrorReason_NOT_FOUND           ErrorReason = 404 // 资源不存在
+	ErrorReason_CONFLICT            ErrorReason = 409 // 资源状态冲突
+	ErrorReason_VALIDATOR           ErrorReason = 422 // 请求字段校验不通过
 	ErrorReason_TOO_MANY_REQUESTS   ErrorReason = 429 // 请求次数过多
-	ErrorReason_CLIENT_DISCONNECTED ErrorReason = 499 // client has closed connection
 	ErrorReason_INTERNAL_SERVER     ErrorReason = 500 // 服务器错误
+	ErrorReason_NOT_IMPLEMENTED     ErrorReason = 501 // API 未实现
+	ErrorReason_BAD_GATEWAY         ErrorReason = 502 // 网关转发到下游失败
 	ErrorReason_SERVICE_UNAVAILABLE ErrorReason = 503 // 服务不可用
-	ErrorReason_GATEWAY_TIMEOUT     ErrorReason = 504 // 网关超时
+	ErrorReason_GATEWAY_TIMEOUT     ErrorReason = 504 // 下游响应超时
 )
 
 // Enum value maps for ErrorReason.
 var (
 	ErrorReason_name = map[int32]string{
-		0:   "UNDEFINED",
-		206: "PARTIAL_ERROR",
+		0:   "NONE",
 		400: "BAD_REQUEST",
 		401: "UNAUTHORIZED",
 		403: "FORBIDDEN",
@@ -55,14 +52,14 @@ var (
 		409: "CONFLICT",
 		422: "VALIDATOR",
 		429: "TOO_MANY_REQUESTS",
-		499: "CLIENT_DISCONNECTED",
 		500: "INTERNAL_SERVER",
+		501: "NOT_IMPLEMENTED",
+		502: "BAD_GATEWAY",
 		503: "SERVICE_UNAVAILABLE",
 		504: "GATEWAY_TIMEOUT",
 	}
 	ErrorReason_value = map[string]int32{
-		"UNDEFINED":           0,
-		"PARTIAL_ERROR":       206,
+		"NONE":                0,
 		"BAD_REQUEST":         400,
 		"UNAUTHORIZED":        401,
 		"FORBIDDEN":           403,
@@ -70,8 +67,9 @@ var (
 		"CONFLICT":            409,
 		"VALIDATOR":           422,
 		"TOO_MANY_REQUESTS":   429,
-		"CLIENT_DISCONNECTED": 499,
 		"INTERNAL_SERVER":     500,
+		"NOT_IMPLEMENTED":     501,
+		"BAD_GATEWAY":         502,
 		"SERVICE_UNAVAILABLE": 503,
 		"GATEWAY_TIMEOUT":     504,
 	}
@@ -108,19 +106,19 @@ var File_error_reason_proto protoreflect.FileDescriptor
 
 const file_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"\x12error_reason.proto\x12\x14kratos_foundation_pb\x1a\x13errors/errors.proto*\xe0\x02\n" +
-	"\vErrorReason\x12\x13\n" +
-	"\tUNDEFINED\x10\x00\x1a\x04\xa8E\xc8\x01\x12\x18\n" +
-	"\rPARTIAL_ERROR\x10\xce\x01\x1a\x04\xa8E\xce\x01\x12\x16\n" +
+	"\x12error_reason.proto\x12\x14kratos_foundation_pb\x1a\x13errors/errors.proto*\xd5\x02\n" +
+	"\vErrorReason\x12\x0e\n" +
+	"\x04NONE\x10\x00\x1a\x04\xa8E\xc8\x01\x12\x16\n" +
 	"\vBAD_REQUEST\x10\x90\x03\x1a\x04\xa8E\x90\x03\x12\x17\n" +
 	"\fUNAUTHORIZED\x10\x91\x03\x1a\x04\xa8E\x91\x03\x12\x14\n" +
 	"\tFORBIDDEN\x10\x93\x03\x1a\x04\xa8E\x93\x03\x12\x14\n" +
 	"\tNOT_FOUND\x10\x94\x03\x1a\x04\xa8E\x94\x03\x12\x13\n" +
 	"\bCONFLICT\x10\x99\x03\x1a\x04\xa8E\x99\x03\x12\x14\n" +
 	"\tVALIDATOR\x10\xa6\x03\x1a\x04\xa8E\xa6\x03\x12\x1c\n" +
-	"\x11TOO_MANY_REQUESTS\x10\xad\x03\x1a\x04\xa8E\xad\x03\x12\x1e\n" +
-	"\x13CLIENT_DISCONNECTED\x10\xf3\x03\x1a\x04\xa8E\xf3\x03\x12\x1a\n" +
-	"\x0fINTERNAL_SERVER\x10\xf4\x03\x1a\x04\xa8E\xf4\x03\x12\x1e\n" +
+	"\x11TOO_MANY_REQUESTS\x10\xad\x03\x1a\x04\xa8E\xad\x03\x12\x1a\n" +
+	"\x0fINTERNAL_SERVER\x10\xf4\x03\x1a\x04\xa8E\xf4\x03\x12\x1a\n" +
+	"\x0fNOT_IMPLEMENTED\x10\xf5\x03\x1a\x04\xa8E\xf5\x03\x12\x16\n" +
+	"\vBAD_GATEWAY\x10\xf6\x03\x1a\x04\xa8E\xf6\x03\x12\x1e\n" +
 	"\x13SERVICE_UNAVAILABLE\x10\xf7\x03\x1a\x04\xa8E\xf7\x03\x12\x1a\n" +
 	"\x0fGATEWAY_TIMEOUT\x10\xf8\x03\x1a\x04\xa8E\xf8\x03\x1a\x04\xa0E\xf4\x03BJZHgithub.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pbb\x06proto3"
 

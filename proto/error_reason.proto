@@ -7,28 +7,34 @@ import "errors/errors.proto";
 
 // ErrorReason
 enum ErrorReason {
-  option (errors.default_code) = 500; // 默认错误码 500
+  // 默认 http 错误码 500
+  option (errors.default_code) = 500;
 
-  // undefined
-  UNDEFINED = 0 [(errors.code) = 200];
+  // 示例
+  // ERROR_SYMBOL：错误标识
+  // REASON_CODE：错误码
+  // HTTP_CODE：http状态码
+  // ERROR_SYMBOL = REASON_CODE [(errors.code) = HTTP_CODE];
 
-  // 部分失败
-  PARTIAL_ERROR = 206 [(errors.code) = 206];
+  NONE = 0 [(errors.code) = 200]; // 成功
 
-  // 4xx -> 与业务无关的错误，一般在业务逻辑之前校验返回
+  // 4xx -> 客户端错误
 
   BAD_REQUEST = 400 [(errors.code) = 400]; // 异常请求
   UNAUTHORIZED = 401 [(errors.code) = 401]; // 无效身份
   FORBIDDEN = 403 [(errors.code) = 403]; // 无权限操作
-  NOT_FOUND = 404 [(errors.code) = 404]; // 数据不存在
-  CONFLICT = 409 [(errors.code) = 409]; // 请求冲突
-  VALIDATOR = 422 [(errors.code) = 422]; // 请求字段校验失败
+  NOT_FOUND = 404 [(errors.code) = 404]; // 资源不存在
+  CONFLICT = 409 [(errors.code) = 409]; // 资源状态冲突
+  VALIDATOR = 422 [(errors.code) = 422]; // 请求字段校验不通过
   TOO_MANY_REQUESTS = 429 [(errors.code) = 429]; // 请求次数过多
-  CLIENT_DISCONNECTED = 499 [(errors.code) = 499]; // client has closed connection
+
+  // CLIENT_DISCONNECTED = 499 [(errors.code) = 499]; // client has closed connection
 
   // 5xx -> 服务端错误
 
   INTERNAL_SERVER = 500 [(errors.code) = 500]; // 服务器错误
+  NOT_IMPLEMENTED = 501 [(errors.code) = 501]; // API 未实现
+  BAD_GATEWAY = 502 [(errors.code) = 502]; // 网关转发到下游失败
   SERVICE_UNAVAILABLE = 503 [(errors.code) = 503]; // 服务不可用
-  GATEWAY_TIMEOUT = 504 [(errors.code) = 504]; // 网关超时
+  GATEWAY_TIMEOUT = 504 [(errors.code) = 504]; // 下游响应超时
 }
