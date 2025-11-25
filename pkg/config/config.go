@@ -5,6 +5,9 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
 )
 
+type Config = config.Config
+type Source = config.Source
+
 func NewConfig(localSource config.Source, remoteSource config.Source) (config.Config, error) {
 	var scs []config.Source
 
