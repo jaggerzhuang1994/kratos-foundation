@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 )
 
+type AppInfo = kratos_foundation_pb.AppInfo
+
 func NewAppInfo(version string) *kratos_foundation_pb.AppInfo {
 	id := fmt.Sprintf("%s-%s", Hostname, uuid.New().String())
 	return &kratos_foundation_pb.AppInfo{
