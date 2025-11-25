@@ -5,7 +5,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
 )
 
-func NewConfig(localSource config.Source, remoteSource config.Source) (config.Config, func(), error) {
+func NewConfig(localSource config.Source, remoteSource config.Source) (config.Config, error) {
 	var scs []config.Source
 
 	// 如果是本地环境，本地source优先级更高
@@ -29,10 +29,8 @@ func NewConfig(localSource config.Source, remoteSource config.Source) (config.Co
 	c := config.New(config.WithSource(NewPriorityConfigSource(scs)))
 	if err := c.Load(); err != nil {
 		_ = c.Close() // release config watcher
-		return nil, nil, err
+		return nil, err
 	}
 
-	return c, func() {
-		_ = c.Close()
-	}, nil
+	return c, nil
 }

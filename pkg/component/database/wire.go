@@ -11,5 +11,3 @@ var ProviderSet = wire.NewSet(
 	NewDbResolver,
 	NewManager,
 )
-
-var _ = ProviderSet

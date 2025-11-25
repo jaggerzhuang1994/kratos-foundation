@@ -6,5 +6,3 @@ var ProviderSet = wire.NewSet(
 	NewConfig,
 	NewLog,
 )
-
-var _ = ProviderSet

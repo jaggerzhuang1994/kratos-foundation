@@ -9,5 +9,3 @@ var ProviderSet = wire.NewSet(
 	NewGrpcServer,
 	NewManager,
 )
-
-var _ = ProviderSet

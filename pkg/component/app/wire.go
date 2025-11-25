@@ -10,5 +10,3 @@ var ProviderSet = wire.NewSet(
 	NewHook,
 	NewApp,
 )
-
-var _ = ProviderSet
