@@ -1,4 +1,4 @@
-module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-errors/v2
+module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-errors
 
 go 1.21
 
