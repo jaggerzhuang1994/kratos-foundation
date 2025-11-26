@@ -10,7 +10,7 @@ import (
 )
 
 // NewFilePatternSource 不同patterns的优先级按照传入的顺序，相同pattern的优先级按照 filepath.Glob 返回的顺序的优先级
-func NewFilePatternSource(patterns ...string) (config.Source, error) {
+func NewFilePatternSource(patterns []string) (config.Source, error) {
 	if len(patterns) == 0 {
 		log.Warn("file config source is nil")
 		return nil, nil

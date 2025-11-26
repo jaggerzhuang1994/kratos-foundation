@@ -44,15 +44,18 @@ func newFileLogger(filename string) (log.Logger, func(), error) {
 }
 
 type RotatingFileLoggerConfig struct {
-	// 最大文件大小（单位 bytes，默认100MB）
+	// 日志文件在轮转前允许的最大大小。默认为 100 MB。
 	MaxSize int
-	// 最大文件年龄（单位 天，默认永久）
+	// 是根据备份文件名中编码的时间戳来保留旧日志文件的最大天数。
+	// 注意：一天被定义为 24 小时，可能与日历中的自然日不完全对应，
+	// 比如受到夏令时、闰秒等影响。默认不会因为时间而删除旧日志文件。
 	MaxFileAge int
-	// 最大文件数量（默认都保留）
+	// 要保留的旧日志文件的最大数量。
+	// 默认会保留所有旧日志文件（但 MaxAge 仍可能导致旧文件被删除）。
 	MaxFiles int
-	// 是否使用本地时区拆分文件日志(默认utc)
+	// 决定备份文件名中的时间戳是否使用本地时间。默认使用 UTC 时间。
 	LocalTime bool
-	// 轮换后的日志文件是否应该使用 gzip 压缩。默认不进行压缩。
+	// 决定轮转后的日志文件是否使用 gzip 压缩。默认不压缩。
 	Compress bool
 }
 

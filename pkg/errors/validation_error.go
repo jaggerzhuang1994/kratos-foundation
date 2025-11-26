@@ -89,7 +89,7 @@ func (e ValidationError) Error() string {
 		cause)
 }
 
-func parseValidationError(validationErr error) (validationErrors []ValidationError) {
+func ParseValidationError(validationErr error) (validationErrors []ValidationError) {
 	var pbErrs []error
 
 	if _, ok := validationErr.(ProtoValidationError); ok {

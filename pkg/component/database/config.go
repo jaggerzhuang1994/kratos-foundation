@@ -12,16 +12,24 @@ import (
 
 type Config = kratos_foundation_pb.DatabaseComponentConfig_Database
 
-var defaultGormLogger = &kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger{
-	Level:                     kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_Warn,
-	SlowThreshold:             durationpb.New(200 * time.Millisecond),
-	Colorful:                  proto.Bool(false), // 彩色输出
-	IgnoreRecordNotFoundError: proto.Bool(true),  // 忽略不存在的记录的错误信息
-	ParameterizedQueries:      proto.Bool(false), //
-}
-
 var defaultConfig = &Config{
+	Gorm: &kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm{
+		Logger: &kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger{
+			Level:                     kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_WARN,
+			SlowThreshold:             durationpb.New(200 * time.Millisecond),
+			Colorful:                  false, // 彩色输出
+			IgnoreRecordNotFoundError: true,  // 忽略不存在的记录的错误信息
+			ParameterizedQueries:      false, //
+		},
+	},
 	Default: "default",
+	Tracing: &kratos_foundation_pb.DatabaseComponentConfig_Database_Tracing{
+		Disable:                false,
+		ExcludeQueryVars:       false,
+		ExcludeMetrics:         false,
+		RecordStackTraceInSpan: false,
+		ExcludeServerAddress:   false,
+	},
 }
 
 func NewConfig(cfg config.Config) (*Config, error) {

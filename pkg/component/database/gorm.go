@@ -17,17 +17,14 @@ const logModule = "gorm"
 
 func NewGormLogger(log *log.Log, cfg *Config) logger.Interface {
 	gormLogger := cfg.GetGorm().GetLogger()
-	if gormLogger == nil {
-		gormLogger = defaultGormLogger
-	}
 
 	var level = logger.Silent
 	switch gormLogger.GetLevel() {
-	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_Info:
+	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_INFO:
 		level = logger.Info
-	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_Warn:
+	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_WARN:
 		level = logger.Warn
-	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_Error:
+	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_ERROR:
 		level = logger.Error
 	}
 
@@ -47,8 +44,9 @@ func (w *gormLoggerWriter) Printf(s string, i ...any) {
 	w.Debugf(s, i...)
 }
 
-func NewGormConfig(cfg *kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm, logger logger.Interface) *gorm.Config {
+func NewGormConfig(c *Config, logger logger.Interface) *gorm.Config {
 	gormConfig := &gorm.Config{}
+	cfg := c.GetGorm()
 
 	// SkipDefaultTransaction
 	if cfg.GetSkipDefaultTransaction() {

@@ -13,6 +13,7 @@ import (
 type Config = kratos_foundation_pb.AppComponentConfig_App
 
 var defaultConfig = &Config{
+	DisableRegistrar: false,
 	RegistrarTimeout: durationpb.New(10 * time.Second),
 	StopTimeout:      durationpb.New(30 * time.Second),
 }

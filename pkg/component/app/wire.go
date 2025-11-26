@@ -5,8 +5,7 @@ import (
 )
 
 var ProviderSet = wire.NewSet(
-	NewConsulRegistry,
 	NewConfig,
-	NewHook,
+	NewHookManager,
 	NewApp,
 )

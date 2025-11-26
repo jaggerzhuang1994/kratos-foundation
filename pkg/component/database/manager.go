@@ -7,7 +7,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"gorm.io/plugin/dbresolver"
 
-	//"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
 	"gorm.io/gorm"
 )
 

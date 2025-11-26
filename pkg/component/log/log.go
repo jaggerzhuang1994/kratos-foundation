@@ -10,6 +10,7 @@ import (
 )
 
 type Log struct {
+	*Helper
 	inner       log.Logger
 	presetKv    []any
 	level       log.Level
@@ -19,6 +20,8 @@ type Log struct {
 	withCtx     context.Context
 	callerDepth int32
 }
+
+const defaultCallerDepth = 4
 
 type logCtxKey struct{}
 
@@ -92,66 +95,80 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 
 	inner := logger.NewStackLogger(loggers...)
 
-	return &Log{
-			inner,
-			[]any{
-				TsKey, log.Timestamp(cfg.GetTimeFormat()),
-				ServiceIDKey, serviceID,
-				ServiceNameKey, serviceName,
-				ServiceVersionKey, serviceVersion,
-				TraceIDKey, tracing.TraceID(),
-				SpanIDKey, tracing.SpanID(),
-			},
-			log.ParseLevel(cfg.GetLevel()),
-			cfg.GetFilterKeys(),
-			nil,
-			nil,
-			nil,
-			6, // 默认caller深度6
-		}, func() {
-			for _, rc := range rcs {
-				rc()
-			}
-		}, nil
+	l := &Log{
+		nil,
+		inner,
+		[]any{
+			TsKey, log.Timestamp(cfg.GetTimeFormat()),
+			ServiceIDKey, serviceID,
+			ServiceNameKey, serviceName,
+			ServiceVersionKey, serviceVersion,
+			TraceIDKey, tracing.TraceID(),
+			SpanIDKey, tracing.SpanID(),
+		},
+		log.ParseLevel(cfg.GetLevel()),
+		cfg.GetFilterKeys(),
+		nil,
+		nil,
+		nil,
+		defaultCallerDepth, // 默认caller深度6
+	}
+	l.Helper = l.NewHelper()
+
+	return l, func() {
+		for _, rc := range rcs {
+			rc()
+		}
+	}, nil
 }
 
 func (l *Log) WithCallerDepth(depth int32) *Log {
 	ll := *l
 	ll.callerDepth = depth
+	ll.Helper = ll.NewHelper()
 	return &ll
 }
 
 func (l *Log) WithLevel(lvl log.Level) *Log {
 	ll := *l
 	ll.level = lvl
+	ll.Helper = ll.NewHelper()
 	return &ll
 }
 
 func (l *Log) WithFilterKeys(keys ...string) *Log {
 	ll := *l
 	ll.filterKeys = append(ll.filterKeys, keys...)
+	ll.Helper = ll.NewHelper()
 	return &ll
 }
 
 func (l *Log) WithFilter(opts ...log.FilterOption) *Log {
 	ll := *l
 	ll.filterOpts = append(ll.filterOpts, opts...)
+	ll.Helper = ll.NewHelper()
 	return &ll
 }
 
 func (l *Log) With(kv ...any) *Log {
 	ll := *l
 	ll.withKv = append(ll.withKv, kv...)
+	ll.Helper = ll.NewHelper()
 	return &ll
 }
 
 func (l *Log) WithContext(ctx context.Context) *Log {
 	ll := *l
 	ll.withCtx = ctx
+	ll.Helper = ll.NewHelper()
 	return &ll
 }
 
-func (l *Log) WithModule(module string, moduleLog ModuleConfig) *Log {
+func (l *Log) WithModule(module string, optionalModuleLog ...ModuleConfig) *Log {
+	if len(optionalModuleLog) == 0 {
+		return l.With(ModuleKey, module)
+	}
+	moduleLog := optionalModuleLog[0]
 	return l.With(ModuleKey, module).
 		WithLevel(log.ParseLevel(utils.Select(moduleLog.GetLevel(), l.level.String()))).
 		WithFilterKeys(moduleLog.GetFilterKeys()...)
@@ -166,17 +183,18 @@ func (l *Log) GetLogger() log.Logger {
 	// filter opts 放在前面，才能过滤后面的kv
 	inner = log.NewFilter(inner, l.filterOpts...)
 
+	// 过滤日志等级
+	inner = logger.NewFilterLevelLogger(inner, l.level)
+
 	// with kv
 	kv := append(l.getPresetKv(), l.withKv...)
 	inner = log.With(inner, kv...)
 
-	// with ctx 必须放在 kv 之后，kv 才能读到 ctx
+	// with ctx
 	if l.withCtx != nil {
 		inner = log.WithContext(l.withCtx, inner)
 	}
 
-	// 过滤日志等级 放在最后吧，这个是控制进不进入内部逻辑的最外层入口
-	inner = logger.NewFilterLevelLogger(inner, l.level)
 	return inner
 }
 

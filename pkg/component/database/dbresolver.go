@@ -12,7 +12,7 @@ import (
 
 type DbResolver gorm.Plugin
 
-func NewDbResolver(cfg *Config) gorm.Plugin {
+func NewDbResolver(cfg *Config) DbResolver {
 	resolver := &dbresolver.DBResolver{}
 	for name, connConf := range cfg.GetConnections() {
 		resolverConf := dbresolver.Config{

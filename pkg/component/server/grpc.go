@@ -4,7 +4,6 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metric"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server/middleware"
@@ -17,12 +16,12 @@ type GrpcServerOptions []grpc.ServerOption
 const grpcServerLogModule = "server.grpc"
 
 func NewGrpcServer(
-	_ bootstrap.Bootstrap,
 	cfg *Config,
 	log *log.Log,
 	metrics *metric.Metrics,
 	tracing *tracing.Tracing,
 	hook *HookManager,
+	routeTimeoutMiddleware RouteTimeoutMiddleware,
 ) *grpc.Server {
 	if cfg.GetGrpc().GetDisable() {
 		return nil
@@ -34,16 +33,23 @@ func NewGrpcServer(
 		middlewares = grpcServerMiddleware(middlewares)
 	}
 
-	opts := newGrpcServerOptions(cfg, middlewares)
+	opts := newGrpcServerOptions(cfg)
 	for _, hookGrpcServerOption := range hook.grpcServerOptions {
 		opts = hookGrpcServerOption(opts)
 	}
+
+	// middleware放在最后，不能被 grpcServerOptions 覆盖，需要覆盖 middleware 使用 grpcServerMiddlewares
+	// 指定路由超时设计，使用定制中间件来实现
+	if routeTimeoutMiddleware != nil {
+		middlewares = append(middlewares, (middleware.Middleware)(routeTimeoutMiddleware))
+	}
+	opts = append(opts, grpc.Middleware(middlewares...))
 
 	srv := grpc.NewServer(opts...)
 	return srv
 }
 
-func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server, middlewares middleware.Middlewares) GrpcServerOptions {
+func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server) GrpcServerOptions {
 	grpcCfg := cfg.GetGrpc()
 	var opts GrpcServerOptions
 	// 监听（"tcp", "tcp4", "tcp6", "unix" or "unixpacket"）
@@ -67,9 +73,6 @@ func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server
 	}
 	if grpcCfg.GetDisableReflection() {
 		opts = append(opts, grpc.DisableReflection())
-	}
-	if len(middlewares) > 0 {
-		opts = append(opts, grpc.Middleware(middlewares...))
 	}
 	return opts
 }

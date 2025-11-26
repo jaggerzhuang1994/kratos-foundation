@@ -18,11 +18,28 @@ type ModuleConfig interface {
 }
 
 var defaultConfig = &Config{
-	Level: proto.String(DefaultLevel()),
-	File: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger{
-		Path: proto.String("./app.log"),
+	Level:      DefaultLevel(),
+	FilterKeys: []string{},
+	TimeFormat: time.RFC3339,
+	Std: &kratos_foundation_pb.LogComponentConfig_Log_StdLogger{
+		Disable:    false,
+		Level:      nil, // default to log.level
+		FilterKeys: []string{},
 	},
-	TimeFormat: proto.String(time.RFC3339),
+	File: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger{
+		Disable:    false,
+		Level:      nil, // default to log.level
+		FilterKeys: []string{},
+		Path:       "./app.log",
+		Rotating: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger_Rotating{
+			Disable:    false,
+			MaxSize:    100,
+			MaxFileAge: 0,
+			MaxFiles:   0,
+			LocalTime:  false,
+			Compress:   false,
+		},
+	},
 }
 
 func DefaultLevel() string {

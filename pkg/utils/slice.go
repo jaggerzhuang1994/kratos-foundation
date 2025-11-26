@@ -1,5 +1,13 @@
 package utils
 
+func Reverse[T any](input []T) []T {
+	out := make([]T, len(input))
+	for i := range input {
+		out[len(input)-1-i] = input[i]
+	}
+	return out
+}
+
 // Select 选择第一个非0值
 func Select[T comparable](vals ...T) T {
 	var zero T

@@ -16,12 +16,12 @@ import (
 
 func NewApp(
 	_ bootstrap.Bootstrap,
-	cfg *Config,
 	appInfo *kratos_foundation_pb.AppInfo,
+	cfg *Config,
 	l *log.Log, // log 组件
+	hook *HookManager, // app hook
 	metrics *metric.Metrics, // metric 组件
 	serverManager *server.Manager, // server 组件
-	hook *Hook, // app hook
 	registrar registry.Registrar, // 服务注册中心实例
 ) (*kratos.App, error) {
 	ctx := app_info.NewContext(context.Background(), appInfo)
@@ -50,20 +50,20 @@ func NewApp(
 		opts = append(opts, kratos.BeforeStart(beforeStart))
 	}
 	for _, beforeStop := range hook.beforeStop {
-		opts = append(opts, kratos.BeforeStart(beforeStop))
+		opts = append(opts, kratos.BeforeStop(beforeStop))
 	}
 	for _, afterStart := range hook.afterStart {
-		opts = append(opts, kratos.BeforeStart(afterStart))
+		opts = append(opts, kratos.AfterStart(afterStart))
 	}
 	for _, afterStop := range hook.afterStop {
-		opts = append(opts, kratos.BeforeStart(afterStop))
+		opts = append(opts, kratos.AfterStop(afterStop))
 	}
 
-	if !cfg.GetDisableRegistrar() {
+	if !cfg.GetDisableRegistrar() && registrar != nil {
 		opts = append(opts, kratos.Registrar(registrar), kratos.RegistrarTimeout(cfg.GetRegistrarTimeout().AsDuration()))
 	}
 
-	// initCtx
+	// initOptions
 	for _, initOptions := range hook.initOptions {
 		opts = initOptions(opts)
 	}

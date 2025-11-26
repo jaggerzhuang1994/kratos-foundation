@@ -1,0 +1,7 @@
+app:
+  # 是否禁用服务注册
+  disable_registrar: false
+  # 注册中心超时时间（默认10s）
+  registrar_timeout: 10s
+  # stop timeout 必须大于 server.stop_delay （默认30s）
+  stop_timeout: 30s

@@ -8,4 +8,5 @@ var ProviderSet = wire.NewSet(
 	NewHttpServer,
 	NewGrpcServer,
 	NewManager,
+	NewRouteTimeoutMiddleware,
 )

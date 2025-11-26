@@ -218,17 +218,16 @@ func (e *Error) HttpResponse() string {
 	return e.Metadata[mdHttpResponse]
 }
 
-func (e *Error) WithValidationError(validationError error) *Error {
+func (e *Error) WithValidationError(validationError []ValidationError) *Error {
 	err := Clone(e)
 
-	errList := parseValidationError(validationError)
-	data, _ := json.Marshal(errList)
+	data, _ := json.Marshal(validationError)
 	err.Metadata[mdValidationErrorKey] = string(data)
 	return err
 }
 
 func (e *Error) ValidationError() []ValidationError {
-	if e == nil || e.Metadata == nil {
+	if e == nil || e.Metadata == nil || e.Metadata[mdValidationErrorKey] == "" {
 		return nil
 	}
 

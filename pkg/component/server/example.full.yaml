@@ -1,0 +1,125 @@
+server:
+  # consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
+  # 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。
+  # 因此给servers套上一个wrapper用于延迟停止服务。
+  # 默认0s
+  stop_delay: 0s
+  # middleware
+  middleware:
+    metadata:
+      # 禁用 metadata 中间件
+      disable: false
+      # 这个前缀的 metadata 才会保留在请求中
+      prefix:
+        - x-md-
+    tracing:
+      # 禁用 tracing 中间件
+      disable: false
+      # 默认使用 tracing.tracer_name
+      tracer_name:
+    metrics:
+      # 禁用 metrics 中间件
+      disable: false
+      # 默认使用 metric.meter_name
+      meter_name:
+    logger:
+      # 禁用 validator 中间件
+      disable: false
+    validator:
+      # 禁用 validator 中间件
+      disable: false
+  http:
+    disable: false
+    # 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
+    network: tcp
+    # 服务监听地址，host:port 或者 unix文件地址。默认 0.0.0.0:8000
+    addr: 0.0.0.0:8000
+    # 对外暴露端点，默认为当前对外ip和端口
+    endpoint:
+    #  scheme:
+    #  host:
+    # 服务超时时间（默认1s）
+    timeout: 1s
+    # middleware
+    middleware:
+      metadata:
+        # 禁用 metadata 中间件
+        disable: false
+        # 这个前缀的 metadata 才会保留在请求中
+        prefix:
+          - x-md-
+      tracing:
+        # 禁用 tracing 中间件
+        disable: false
+        # 默认使用 tracing.tracer_name
+        tracer_name:
+      metrics:
+        # 禁用 metrics 中间件
+        disable: false
+        # 默认使用 metric.meter_name
+        meter_name:
+      logger:
+        # 禁用 validator 中间件
+        disable: false
+      validator:
+        # 禁用 validator 中间件
+        disable: false
+    # 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
+    disable_strict_slash: false
+    # http 路由前缀
+    path_prefix:
+    # metrics 路由
+    metrics:
+      disable: false
+      path: /metrics
+  grpc:
+    disable: false
+    # 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
+    network: tcp
+    # 服务监听地址，host:port 或者 unix文件地址。默认 0.0.0.0:8000
+    addr: 0.0.0.0:9000
+    # 对外暴露端点，默认为当前对外ip和端口
+    endpoint:
+    #  scheme:
+    #  host:
+    # 服务超时时间（默认1s）
+    timeout: 1s
+    # middleware
+    middleware:
+      metadata:
+        # 禁用 metadata 中间件
+        disable: false
+        # 这个前缀的 metadata 才会保留在请求中
+        prefix:
+          - x-md-
+      tracing:
+        # 禁用 tracing 中间件
+        disable: false
+        # 默认使用 tracing.tracer_name
+        tracer_name:
+      metrics:
+        # 禁用 metrics 中间件
+        disable: false
+        # 默认使用 metric.meter_name
+        meter_name:
+      logger:
+        # 禁用 validator 中间件
+        disable: false
+      validator:
+        # 禁用 validator 中间件
+        disable: false
+    # 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
+    custom_health: false
+    # 是否禁用服务反射
+    disable_reflection: false
+  log:
+    level: debug
+    filter_keys:
+  # 指定路由超时
+  timeout:
+    - path: /helloworld.v1.Greeter/SayHello
+      timeout: 0.5s
+    - prefix: /pb_package.Service
+      timeout: 0.5s
+    - regexp: /pb_package.Service/*
+      timeout: 0.5s

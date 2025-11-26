@@ -25,19 +25,19 @@ const (
 type TracingComponentConfig_Tracing_Exporter_Compression int32
 
 const (
-	TracingComponentConfig_Tracing_Exporter_NoCompression   TracingComponentConfig_Tracing_Exporter_Compression = 0
-	TracingComponentConfig_Tracing_Exporter_GzipCompression TracingComponentConfig_Tracing_Exporter_Compression = 1
+	TracingComponentConfig_Tracing_Exporter_NO   TracingComponentConfig_Tracing_Exporter_Compression = 0
+	TracingComponentConfig_Tracing_Exporter_GZIP TracingComponentConfig_Tracing_Exporter_Compression = 1
 )
 
 // Enum value maps for TracingComponentConfig_Tracing_Exporter_Compression.
 var (
 	TracingComponentConfig_Tracing_Exporter_Compression_name = map[int32]string{
-		0: "NoCompression",
-		1: "GzipCompression",
+		0: "NO",
+		1: "GZIP",
 	}
 	TracingComponentConfig_Tracing_Exporter_Compression_value = map[string]int32{
-		"NoCompression":   0,
-		"GzipCompression": 1,
+		"NO":   0,
+		"GZIP": 1,
 	}
 )
 
@@ -71,22 +71,22 @@ func (TracingComponentConfig_Tracing_Exporter_Compression) EnumDescriptor() ([]b
 type TracingComponentConfig_Tracing_Sampler_Sample int32
 
 const (
-	TracingComponentConfig_Tracing_Sampler_Ratio     TracingComponentConfig_Tracing_Sampler_Sample = 0 // 按照采样率采样
-	TracingComponentConfig_Tracing_Sampler_AlwaysOn  TracingComponentConfig_Tracing_Sampler_Sample = 1 // 总是采样
-	TracingComponentConfig_Tracing_Sampler_AlwaysOff TracingComponentConfig_Tracing_Sampler_Sample = 2 // 总是不采样
+	TracingComponentConfig_Tracing_Sampler_RATIO  TracingComponentConfig_Tracing_Sampler_Sample = 0 // 按照采样率采样
+	TracingComponentConfig_Tracing_Sampler_ALWAYS TracingComponentConfig_Tracing_Sampler_Sample = 1 // 总是采样
+	TracingComponentConfig_Tracing_Sampler_NEVER  TracingComponentConfig_Tracing_Sampler_Sample = 2 // 总是不采样
 )
 
 // Enum value maps for TracingComponentConfig_Tracing_Sampler_Sample.
 var (
 	TracingComponentConfig_Tracing_Sampler_Sample_name = map[int32]string{
-		0: "Ratio",
-		1: "AlwaysOn",
-		2: "AlwaysOff",
+		0: "RATIO",
+		1: "ALWAYS",
+		2: "NEVER",
 	}
 	TracingComponentConfig_Tracing_Sampler_Sample_value = map[string]int32{
-		"Ratio":     0,
-		"AlwaysOn":  1,
-		"AlwaysOff": 2,
+		"RATIO":  0,
+		"ALWAYS": 1,
+		"NEVER":  2,
 	}
 )
 
@@ -121,32 +121,32 @@ type DatabaseComponentConfig_Database_Gorm_Logger_Level int32
 
 const (
 	// default to Silent
-	DatabaseComponentConfig_Database_Gorm_Logger_Unknown DatabaseComponentConfig_Database_Gorm_Logger_Level = 0
+	DatabaseComponentConfig_Database_Gorm_Logger_UNKNOWN DatabaseComponentConfig_Database_Gorm_Logger_Level = 0
 	// Silent silent log level
-	DatabaseComponentConfig_Database_Gorm_Logger_Silent DatabaseComponentConfig_Database_Gorm_Logger_Level = 1
+	DatabaseComponentConfig_Database_Gorm_Logger_SILENT DatabaseComponentConfig_Database_Gorm_Logger_Level = 1
 	// Error error log level
-	DatabaseComponentConfig_Database_Gorm_Logger_Error DatabaseComponentConfig_Database_Gorm_Logger_Level = 2
+	DatabaseComponentConfig_Database_Gorm_Logger_ERROR DatabaseComponentConfig_Database_Gorm_Logger_Level = 2
 	// Warn warn log level
-	DatabaseComponentConfig_Database_Gorm_Logger_Warn DatabaseComponentConfig_Database_Gorm_Logger_Level = 3
+	DatabaseComponentConfig_Database_Gorm_Logger_WARN DatabaseComponentConfig_Database_Gorm_Logger_Level = 3
 	// Info info log level
-	DatabaseComponentConfig_Database_Gorm_Logger_Info DatabaseComponentConfig_Database_Gorm_Logger_Level = 4
+	DatabaseComponentConfig_Database_Gorm_Logger_INFO DatabaseComponentConfig_Database_Gorm_Logger_Level = 4
 )
 
 // Enum value maps for DatabaseComponentConfig_Database_Gorm_Logger_Level.
 var (
 	DatabaseComponentConfig_Database_Gorm_Logger_Level_name = map[int32]string{
-		0: "Unknown",
-		1: "Silent",
-		2: "Error",
-		3: "Warn",
-		4: "Info",
+		0: "UNKNOWN",
+		1: "SILENT",
+		2: "ERROR",
+		3: "WARN",
+		4: "INFO",
 	}
 	DatabaseComponentConfig_Database_Gorm_Logger_Level_value = map[string]int32{
-		"Unknown": 0,
-		"Silent":  1,
-		"Error":   2,
-		"Warn":    3,
-		"Info":    4,
+		"UNKNOWN": 0,
+		"SILENT":  1,
+		"ERROR":   2,
+		"WARN":    3,
+		"INFO":    4,
 	}
 )
 
@@ -491,11 +491,11 @@ func (x *RedisComponentConfig) GetRedis() *RedisComponentConfig_RedisConfig {
 type AppComponentConfig_App struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用服务注册
-	DisableRegistrar *bool `protobuf:"varint,1,opt,name=disable_registrar,json=disableRegistrar,proto3,oneof" json:"disable_registrar,omitempty"`
+	DisableRegistrar bool `protobuf:"varint,1,opt,name=disable_registrar,json=disableRegistrar,proto3" json:"disable_registrar,omitempty"`
 	// 注册中心超时时间（默认10s）
-	RegistrarTimeout *durationpb.Duration `protobuf:"bytes,2,opt,name=registrar_timeout,json=registrarTimeout,proto3,oneof" json:"registrar_timeout,omitempty"`
+	RegistrarTimeout *durationpb.Duration `protobuf:"bytes,2,opt,name=registrar_timeout,json=registrarTimeout,proto3" json:"registrar_timeout,omitempty"`
 	// stop timeout 必须大于 server.stop_delay （默认30s）
-	StopTimeout   *durationpb.Duration `protobuf:"bytes,3,opt,name=stop_timeout,json=stopTimeout,proto3,oneof" json:"stop_timeout,omitempty"`
+	StopTimeout   *durationpb.Duration `protobuf:"bytes,3,opt,name=stop_timeout,json=stopTimeout,proto3" json:"stop_timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -531,8 +531,8 @@ func (*AppComponentConfig_App) Descriptor() ([]byte, []int) {
 }
 
 func (x *AppComponentConfig_App) GetDisableRegistrar() bool {
-	if x != nil && x.DisableRegistrar != nil {
-		return *x.DisableRegistrar
+	if x != nil {
+		return x.DisableRegistrar
 	}
 	return false
 }
@@ -555,7 +555,7 @@ func (x *AppComponentConfig_App) GetStopTimeout() *durationpb.Duration {
 type LogComponentConfig_ModuleLog struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
-	Level *string `protobuf:"bytes,1,opt,name=level,proto3,oneof" json:"level,omitempty"`
+	Level string `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
 	// 打印日志过滤哪些keys
 	FilterKeys    []string `protobuf:"bytes,2,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -593,8 +593,8 @@ func (*LogComponentConfig_ModuleLog) Descriptor() ([]byte, []int) {
 }
 
 func (x *LogComponentConfig_ModuleLog) GetLevel() string {
-	if x != nil && x.Level != nil {
-		return *x.Level
+	if x != nil {
+		return x.Level
 	}
 	return ""
 }
@@ -609,15 +609,15 @@ func (x *LogComponentConfig_ModuleLog) GetFilterKeys() []string {
 type LogComponentConfig_Log struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
-	Level *string `protobuf:"bytes,1,opt,name=level,proto3,oneof" json:"level,omitempty"`
+	Level string `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
 	// 打印日志过滤哪些keys
 	FilterKeys []string `protobuf:"bytes,2,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
-	// 标准输出流日志
-	Std *LogComponentConfig_Log_StdLogger `protobuf:"bytes,3,opt,name=std,proto3,oneof" json:"std,omitempty"`
-	// 文件日志
-	File *LogComponentConfig_Log_FileLogger `protobuf:"bytes,4,opt,name=file,proto3,oneof" json:"file,omitempty"`
 	// 时间格式化 默认为 time.RFC3339
-	TimeFormat    *string `protobuf:"bytes,5,opt,name=time_format,json=timeFormat,proto3,oneof" json:"time_format,omitempty"`
+	TimeFormat string `protobuf:"bytes,3,opt,name=time_format,json=timeFormat,proto3" json:"time_format,omitempty"`
+	// 标准输出流日志
+	Std *LogComponentConfig_Log_StdLogger `protobuf:"bytes,4,opt,name=std,proto3" json:"std,omitempty"`
+	// 文件日志
+	File          *LogComponentConfig_Log_FileLogger `protobuf:"bytes,5,opt,name=file,proto3" json:"file,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -653,8 +653,8 @@ func (*LogComponentConfig_Log) Descriptor() ([]byte, []int) {
 }
 
 func (x *LogComponentConfig_Log) GetLevel() string {
-	if x != nil && x.Level != nil {
-		return *x.Level
+	if x != nil {
+		return x.Level
 	}
 	return ""
 }
@@ -664,6 +664,13 @@ func (x *LogComponentConfig_Log) GetFilterKeys() []string {
 		return x.FilterKeys
 	}
 	return nil
+}
+
+func (x *LogComponentConfig_Log) GetTimeFormat() string {
+	if x != nil {
+		return x.TimeFormat
+	}
+	return ""
 }
 
 func (x *LogComponentConfig_Log) GetStd() *LogComponentConfig_Log_StdLogger {
@@ -680,17 +687,10 @@ func (x *LogComponentConfig_Log) GetFile() *LogComponentConfig_Log_FileLogger {
 	return nil
 }
 
-func (x *LogComponentConfig_Log) GetTimeFormat() string {
-	if x != nil && x.TimeFormat != nil {
-		return *x.TimeFormat
-	}
-	return ""
-}
-
 type LogComponentConfig_Log_StdLogger struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用std logger(默认不禁用)
-	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 最小日志级别（默认继承上层level）
 	Level *string `protobuf:"bytes,2,opt,name=level,proto3,oneof" json:"level,omitempty"`
 	// 打印日志过滤哪些keys，会合并上层 filter_keys
@@ -730,8 +730,8 @@ func (*LogComponentConfig_Log_StdLogger) Descriptor() ([]byte, []int) {
 }
 
 func (x *LogComponentConfig_Log_StdLogger) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
@@ -753,13 +753,13 @@ func (x *LogComponentConfig_Log_StdLogger) GetFilterKeys() []string {
 type LogComponentConfig_Log_FileLogger struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 禁用file logger(默认不禁用)
-	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 最小日志级别（默认继承上层level）
 	Level *string `protobuf:"bytes,2,opt,name=level,proto3,oneof" json:"level,omitempty"`
 	// 打印日志过滤哪些keys，会合并上层 filter_keys
 	FilterKeys []string `protobuf:"bytes,3,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
 	// 日志路径 (默认 ./app.log)
-	Path *string `protobuf:"bytes,4,opt,name=path,proto3,oneof" json:"path,omitempty"`
+	Path string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
 	// 文件拆分
 	Rotating      *LogComponentConfig_Log_FileLogger_Rotating `protobuf:"bytes,5,opt,name=rotating,proto3" json:"rotating,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -797,8 +797,8 @@ func (*LogComponentConfig_Log_FileLogger) Descriptor() ([]byte, []int) {
 }
 
 func (x *LogComponentConfig_Log_FileLogger) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
@@ -818,8 +818,8 @@ func (x *LogComponentConfig_Log_FileLogger) GetFilterKeys() []string {
 }
 
 func (x *LogComponentConfig_Log_FileLogger) GetPath() string {
-	if x != nil && x.Path != nil {
-		return *x.Path
+	if x != nil {
+		return x.Path
 	}
 	return ""
 }
@@ -835,15 +835,19 @@ type LogComponentConfig_Log_FileLogger_Rotating struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 禁用文件拆分(默认不禁用)
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// 最大文件大小（单位MB，默认100MB）
+	// 日志文件在轮转前允许的最大大小。默认为 100 MB。
 	MaxSize int64 `protobuf:"varint,2,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
-	// 最大文件年龄（单位 天，默认永久）
+	// 是根据备份文件名中编码的时间戳来保留旧日志文件的最大天数。
+	// 注意：一天被定义为 24 小时，可能与日历中的自然日不完全对应，
+	// 比如受到夏令时、闰秒等影响。默认不会因为时间而删除旧日志文件。
+	// 默认会保留所有文件。
 	MaxFileAge int32 `protobuf:"varint,3,opt,name=max_file_age,json=maxFileAge,proto3" json:"max_file_age,omitempty"`
-	// 最大文件数量（默认都保留）
+	// 要保留的旧日志文件的最大数量。
+	// 默认会保留所有旧日志文件（但 MaxAge 仍可能导致旧文件被删除）。
 	MaxFiles int32 `protobuf:"varint,4,opt,name=max_files,json=maxFiles,proto3" json:"max_files,omitempty"`
-	// 是否使用本地时区拆分文件日志(默认utc)
+	// 决定备份文件名中的时间戳是否使用本地时间。默认使用 UTC 时间。
 	LocalTime bool `protobuf:"varint,5,opt,name=local_time,json=localTime,proto3" json:"local_time,omitempty"`
-	// 轮换后的日志文件是否应该使用 gzip 压缩。默认不进行压缩。
+	// 决定轮转后的日志文件是否使用 gzip 压缩。默认不压缩。
 	Compress      bool `protobuf:"varint,6,opt,name=compress,proto3" json:"compress,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1008,15 +1012,15 @@ func (x *MetricComponentConfig_Metric) GetLog() *LogComponentConfig_ModuleLog {
 type TracingComponentConfig_Tracing struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用链路追踪
-	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
-	// 导出配置
-	Exporter *TracingComponentConfig_Tracing_Exporter `protobuf:"bytes,2,opt,name=exporter,proto3" json:"exporter,omitempty"`
-	// 采样率设置
-	Sampler *TracingComponentConfig_Tracing_Sampler `protobuf:"bytes,3,opt,name=sampler,proto3" json:"sampler,omitempty"`
-	// log
-	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,4,opt,name=log,proto3" json:"log,omitempty"`
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 默认 tracer name，默认值为 appinfo.name
-	TracerName    *string `protobuf:"bytes,5,opt,name=tracer_name,json=tracerName,proto3,oneof" json:"tracer_name,omitempty"`
+	TracerName string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3" json:"tracer_name,omitempty"`
+	// 导出配置
+	Exporter *TracingComponentConfig_Tracing_Exporter `protobuf:"bytes,3,opt,name=exporter,proto3" json:"exporter,omitempty"`
+	// 采样率设置
+	Sampler *TracingComponentConfig_Tracing_Sampler `protobuf:"bytes,4,opt,name=sampler,proto3" json:"sampler,omitempty"`
+	// log
+	Log           *LogComponentConfig_ModuleLog `protobuf:"bytes,5,opt,name=log,proto3" json:"log,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1052,10 +1056,17 @@ func (*TracingComponentConfig_Tracing) Descriptor() ([]byte, []int) {
 }
 
 func (x *TracingComponentConfig_Tracing) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
+}
+
+func (x *TracingComponentConfig_Tracing) GetTracerName() string {
+	if x != nil {
+		return x.TracerName
+	}
+	return ""
 }
 
 func (x *TracingComponentConfig_Tracing) GetExporter() *TracingComponentConfig_Tracing_Exporter {
@@ -1079,22 +1090,13 @@ func (x *TracingComponentConfig_Tracing) GetLog() *LogComponentConfig_ModuleLog 
 	return nil
 }
 
-func (x *TracingComponentConfig_Tracing) GetTracerName() string {
-	if x != nil && x.TracerName != nil {
-		return *x.TracerName
-	}
-	return ""
-}
-
 type TracingComponentConfig_Tracing_Exporter struct {
 	state         protoimpl.MessageState                               `protogen:"open.v1"`
-	Endpoint      *string                                              `protobuf:"bytes,1,opt,name=endpoint,proto3,oneof" json:"endpoint,omitempty"`
-	EndpointUrl   *string                                              `protobuf:"bytes,2,opt,name=endpoint_url,json=endpointUrl,proto3,oneof" json:"endpoint_url,omitempty"`
-	Compression   *TracingComponentConfig_Tracing_Exporter_Compression `protobuf:"varint,3,opt,name=compression,proto3,enum=kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter_Compression,oneof" json:"compression,omitempty"`
-	UrlPath       *string                                              `protobuf:"bytes,4,opt,name=url_path,json=urlPath,proto3,oneof" json:"url_path,omitempty"`
-	Headers       map[string]string                                    `protobuf:"bytes,5,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Timeout       *durationpb.Duration                                 `protobuf:"bytes,6,opt,name=timeout,proto3,oneof" json:"timeout,omitempty"`
-	Retry         *TracingComponentConfig_Tracing_Exporter_RetryConfig `protobuf:"bytes,7,opt,name=retry,proto3,oneof" json:"retry,omitempty"`
+	EndpointUrl   string                                               `protobuf:"bytes,1,opt,name=endpoint_url,json=endpointUrl,proto3" json:"endpoint_url,omitempty"`
+	Compression   TracingComponentConfig_Tracing_Exporter_Compression  `protobuf:"varint,2,opt,name=compression,proto3,enum=kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter_Compression" json:"compression,omitempty"`
+	Headers       map[string]string                                    `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Timeout       *durationpb.Duration                                 `protobuf:"bytes,4,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	Retry         *TracingComponentConfig_Tracing_Exporter_RetryConfig `protobuf:"bytes,5,opt,name=retry,proto3" json:"retry,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1129,32 +1131,18 @@ func (*TracingComponentConfig_Tracing_Exporter) Descriptor() ([]byte, []int) {
 	return file_config_proto_rawDescGZIP(), []int{3, 0, 0}
 }
 
-func (x *TracingComponentConfig_Tracing_Exporter) GetEndpoint() string {
-	if x != nil && x.Endpoint != nil {
-		return *x.Endpoint
-	}
-	return ""
-}
-
 func (x *TracingComponentConfig_Tracing_Exporter) GetEndpointUrl() string {
-	if x != nil && x.EndpointUrl != nil {
-		return *x.EndpointUrl
+	if x != nil {
+		return x.EndpointUrl
 	}
 	return ""
 }
 
 func (x *TracingComponentConfig_Tracing_Exporter) GetCompression() TracingComponentConfig_Tracing_Exporter_Compression {
-	if x != nil && x.Compression != nil {
-		return *x.Compression
+	if x != nil {
+		return x.Compression
 	}
-	return TracingComponentConfig_Tracing_Exporter_NoCompression
-}
-
-func (x *TracingComponentConfig_Tracing_Exporter) GetUrlPath() string {
-	if x != nil && x.UrlPath != nil {
-		return *x.UrlPath
-	}
-	return ""
+	return TracingComponentConfig_Tracing_Exporter_NO
 }
 
 func (x *TracingComponentConfig_Tracing_Exporter) GetHeaders() map[string]string {
@@ -1182,7 +1170,7 @@ type TracingComponentConfig_Tracing_Sampler struct {
 	state  protoimpl.MessageState                        `protogen:"open.v1"`
 	Sample TracingComponentConfig_Tracing_Sampler_Sample `protobuf:"varint,1,opt,name=sample,proto3,enum=kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_Sample" json:"sample,omitempty"`
 	// 采样率(默认采样率0.05)
-	Ratio         *float64 `protobuf:"fixed64,2,opt,name=ratio,proto3,oneof" json:"ratio,omitempty"`
+	Ratio         float64 `protobuf:"fixed64,2,opt,name=ratio,proto3" json:"ratio,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1221,12 +1209,12 @@ func (x *TracingComponentConfig_Tracing_Sampler) GetSample() TracingComponentCon
 	if x != nil {
 		return x.Sample
 	}
-	return TracingComponentConfig_Tracing_Sampler_Ratio
+	return TracingComponentConfig_Tracing_Sampler_RATIO
 }
 
 func (x *TracingComponentConfig_Tracing_Sampler) GetRatio() float64 {
-	if x != nil && x.Ratio != nil {
-		return *x.Ratio
+	if x != nil {
+		return x.Ratio
 	}
 	return 0
 }
@@ -1304,15 +1292,17 @@ type ServerComponentConfig_Server struct {
 	// consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
 	// 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。
 	// 因此给servers套上一个wrapper用于延迟停止服务。
-	StopDelay *durationpb.Duration `protobuf:"bytes,1,opt,name=stop_delay,json=stopDelay,proto3,oneof" json:"stop_delay,omitempty"`
-	// http 服务器配置
-	Http *ServerComponentConfig_HttpServerOption `protobuf:"bytes,2,opt,name=http,proto3,oneof" json:"http,omitempty"`
-	// grpc 服务器配置
-	Grpc *ServerComponentConfig_GrpcServerOption `protobuf:"bytes,3,opt,name=grpc,proto3,oneof" json:"grpc,omitempty"`
+	StopDelay *durationpb.Duration `protobuf:"bytes,1,opt,name=stop_delay,json=stopDelay,proto3" json:"stop_delay,omitempty"`
 	// 通用中间件配置
-	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,4,opt,name=middleware,proto3,oneof" json:"middleware,omitempty"`
+	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,2,opt,name=middleware,proto3" json:"middleware,omitempty"`
+	// http 服务器配置
+	Http *ServerComponentConfig_HttpServerOption `protobuf:"bytes,3,opt,name=http,proto3" json:"http,omitempty"`
+	// grpc 服务器配置
+	Grpc *ServerComponentConfig_GrpcServerOption `protobuf:"bytes,4,opt,name=grpc,proto3" json:"grpc,omitempty"`
 	// logger 配置
-	Log           *LogComponentConfig_ModuleLog `protobuf:"bytes,5,opt,name=log,proto3" json:"log,omitempty"`
+	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,5,opt,name=log,proto3" json:"log,omitempty"`
+	// 指定服务路由的超时时间，<优化>，会预处理这里的timeout规则，优先使用hash匹配path，然后是前缀输匹配前缀(前缀会从长到短排序)，最后是正则匹配（正则也会预编译）
+	Timeout       []*ServerComponentConfig_Server_RouteTimeout `protobuf:"bytes,6,rep,name=timeout,proto3" json:"timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1354,6 +1344,13 @@ func (x *ServerComponentConfig_Server) GetStopDelay() *durationpb.Duration {
 	return nil
 }
 
+func (x *ServerComponentConfig_Server) GetMiddleware() *ServerComponentConfig_Server_Middleware {
+	if x != nil {
+		return x.Middleware
+	}
+	return nil
+}
+
 func (x *ServerComponentConfig_Server) GetHttp() *ServerComponentConfig_HttpServerOption {
 	if x != nil {
 		return x.Http
@@ -1368,16 +1365,16 @@ func (x *ServerComponentConfig_Server) GetGrpc() *ServerComponentConfig_GrpcServ
 	return nil
 }
 
-func (x *ServerComponentConfig_Server) GetMiddleware() *ServerComponentConfig_Server_Middleware {
+func (x *ServerComponentConfig_Server) GetLog() *LogComponentConfig_ModuleLog {
 	if x != nil {
-		return x.Middleware
+		return x.Log
 	}
 	return nil
 }
 
-func (x *ServerComponentConfig_Server) GetLog() *LogComponentConfig_ModuleLog {
+func (x *ServerComponentConfig_Server) GetTimeout() []*ServerComponentConfig_Server_RouteTimeout {
 	if x != nil {
-		return x.Log
+		return x.Timeout
 	}
 	return nil
 }
@@ -1436,21 +1433,23 @@ func (x *ServerComponentConfig_Endpoint) GetHost() string {
 
 type ServerComponentConfig_HttpServerOption struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
-	Disable *bool                  `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool                   `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
-	Network *string `protobuf:"bytes,2,opt,name=network,proto3,oneof" json:"network,omitempty"`
+	Network string `protobuf:"bytes,2,opt,name=network,proto3" json:"network,omitempty"`
 	// 服务监听地址，host:port 或者 unix文件地址
-	Addr *string `protobuf:"bytes,3,opt,name=addr,proto3,oneof" json:"addr,omitempty"`
+	Addr string `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
 	// 对外暴露端点
-	Endpoint *ServerComponentConfig_Endpoint `protobuf:"bytes,4,opt,name=endpoint,proto3,oneof" json:"endpoint,omitempty"`
+	Endpoint *ServerComponentConfig_Endpoint `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
 	// 服务超时时间（默认1s）
-	Timeout *durationpb.Duration `protobuf:"bytes,5,opt,name=timeout,proto3,oneof" json:"timeout,omitempty"`
+	Timeout *durationpb.Duration `protobuf:"bytes,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	// 默认中间件配置
-	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,6,opt,name=middleware,proto3,oneof" json:"middleware,omitempty"`
+	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,6,opt,name=middleware,proto3" json:"middleware,omitempty"`
 	// 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
-	DisableStrictSlash *bool `protobuf:"varint,7,opt,name=disable_strict_slash,json=disableStrictSlash,proto3,oneof" json:"disable_strict_slash,omitempty"`
+	DisableStrictSlash bool `protobuf:"varint,7,opt,name=disable_strict_slash,json=disableStrictSlash,proto3" json:"disable_strict_slash,omitempty"`
 	// http 路由前缀
-	PathPrefix    *string `protobuf:"bytes,8,opt,name=path_prefix,json=pathPrefix,proto3,oneof" json:"path_prefix,omitempty"`
+	PathPrefix string `protobuf:"bytes,8,opt,name=path_prefix,json=pathPrefix,proto3" json:"path_prefix,omitempty"`
+	// metrics 路由
+	Metrics       *ServerComponentConfig_HttpServerOption_Metrics `protobuf:"bytes,9,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1486,22 +1485,22 @@ func (*ServerComponentConfig_HttpServerOption) Descriptor() ([]byte, []int) {
 }
 
 func (x *ServerComponentConfig_HttpServerOption) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
 
 func (x *ServerComponentConfig_HttpServerOption) GetNetwork() string {
-	if x != nil && x.Network != nil {
-		return *x.Network
+	if x != nil {
+		return x.Network
 	}
 	return ""
 }
 
 func (x *ServerComponentConfig_HttpServerOption) GetAddr() string {
-	if x != nil && x.Addr != nil {
-		return *x.Addr
+	if x != nil {
+		return x.Addr
 	}
 	return ""
 }
@@ -1528,22 +1527,29 @@ func (x *ServerComponentConfig_HttpServerOption) GetMiddleware() *ServerComponen
 }
 
 func (x *ServerComponentConfig_HttpServerOption) GetDisableStrictSlash() bool {
-	if x != nil && x.DisableStrictSlash != nil {
-		return *x.DisableStrictSlash
+	if x != nil {
+		return x.DisableStrictSlash
 	}
 	return false
 }
 
 func (x *ServerComponentConfig_HttpServerOption) GetPathPrefix() string {
-	if x != nil && x.PathPrefix != nil {
-		return *x.PathPrefix
+	if x != nil {
+		return x.PathPrefix
 	}
 	return ""
 }
 
+func (x *ServerComponentConfig_HttpServerOption) GetMetrics() *ServerComponentConfig_HttpServerOption_Metrics {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
 type ServerComponentConfig_GrpcServerOption struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
-	Disable *bool                  `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool                   `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 一般不需要指定，默认(tcp)
 	Network string `protobuf:"bytes,2,opt,name=network,proto3" json:"network,omitempty"`
 	// 服务监听地址，host:port
@@ -1553,11 +1559,11 @@ type ServerComponentConfig_GrpcServerOption struct {
 	// 服务超时时间（默认1s）
 	Timeout *durationpb.Duration `protobuf:"bytes,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	// 默认中间件配置
-	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,6,opt,name=middleware,proto3,oneof" json:"middleware,omitempty"`
-	// customHealth 是否禁用grpc自带的健康检查端点
-	CustomHealth *bool `protobuf:"varint,7,opt,name=custom_health,json=customHealth,proto3,oneof" json:"custom_health,omitempty"`
-	// disableReflection
-	DisableReflection *bool `protobuf:"varint,8,opt,name=disable_reflection,json=disableReflection,proto3,oneof" json:"disable_reflection,omitempty"`
+	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,6,opt,name=middleware,proto3" json:"middleware,omitempty"`
+	// customHealth 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
+	CustomHealth bool `protobuf:"varint,7,opt,name=custom_health,json=customHealth,proto3" json:"custom_health,omitempty"`
+	// disableReflection 是否禁用服务反射
+	DisableReflection bool `protobuf:"varint,8,opt,name=disable_reflection,json=disableReflection,proto3" json:"disable_reflection,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1593,8 +1599,8 @@ func (*ServerComponentConfig_GrpcServerOption) Descriptor() ([]byte, []int) {
 }
 
 func (x *ServerComponentConfig_GrpcServerOption) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
@@ -1635,34 +1641,107 @@ func (x *ServerComponentConfig_GrpcServerOption) GetMiddleware() *ServerComponen
 }
 
 func (x *ServerComponentConfig_GrpcServerOption) GetCustomHealth() bool {
-	if x != nil && x.CustomHealth != nil {
-		return *x.CustomHealth
+	if x != nil {
+		return x.CustomHealth
 	}
 	return false
 }
 
 func (x *ServerComponentConfig_GrpcServerOption) GetDisableReflection() bool {
-	if x != nil && x.DisableReflection != nil {
-		return *x.DisableReflection
+	if x != nil {
+		return x.DisableReflection
 	}
 	return false
+}
+
+// 服务路由的格式为 /pb_package.Service/Rpc
+type ServerComponentConfig_Server_RouteTimeout struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 前缀匹配，例如 /pb_package.Service/Rpc
+	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	// 正则匹配，例如 /pb_package.Service/*
+	Regexp string `protobuf:"bytes,2,opt,name=regexp,proto3" json:"regexp,omitempty"`
+	// 前缀匹配，例如 /pb_package.Service
+	Prefix string `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	// 超时
+	Timeout       *durationpb.Duration `protobuf:"bytes,4,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) Reset() {
+	*x = ServerComponentConfig_Server_RouteTimeout{}
+	mi := &file_config_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerComponentConfig_Server_RouteTimeout) ProtoMessage() {}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerComponentConfig_Server_RouteTimeout.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_Server_RouteTimeout) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 0}
+}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) GetRegexp() string {
+	if x != nil {
+		return x.Regexp
+	}
+	return ""
+}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *ServerComponentConfig_Server_RouteTimeout) GetTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.Timeout
+	}
+	return nil
 }
 
 // 中间件配置
 type ServerComponentConfig_Server_Middleware struct {
 	state         protoimpl.MessageState                             `protogen:"open.v1"`
-	Metadata      *ServerComponentConfig_Server_Middleware_Metadata  `protobuf:"bytes,1,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
-	Tracing       *ServerComponentConfig_Server_Middleware_Tracing   `protobuf:"bytes,2,opt,name=tracing,proto3,oneof" json:"tracing,omitempty"`
-	Metrics       *ServerComponentConfig_Server_Middleware_Metrics   `protobuf:"bytes,3,opt,name=metrics,proto3,oneof" json:"metrics,omitempty"`
-	Logger        *ServerComponentConfig_Server_Middleware_Logger    `protobuf:"bytes,4,opt,name=logger,proto3,oneof" json:"logger,omitempty"`
-	Validator     *ServerComponentConfig_Server_Middleware_Validator `protobuf:"bytes,5,opt,name=validator,proto3,oneof" json:"validator,omitempty"`
+	Metadata      *ServerComponentConfig_Server_Middleware_Metadata  `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Tracing       *ServerComponentConfig_Server_Middleware_Tracing   `protobuf:"bytes,2,opt,name=tracing,proto3" json:"tracing,omitempty"`
+	Metrics       *ServerComponentConfig_Server_Middleware_Metrics   `protobuf:"bytes,3,opt,name=metrics,proto3" json:"metrics,omitempty"`
+	Logger        *ServerComponentConfig_Server_Middleware_Logger    `protobuf:"bytes,4,opt,name=logger,proto3" json:"logger,omitempty"`
+	Validator     *ServerComponentConfig_Server_Middleware_Validator `protobuf:"bytes,5,opt,name=validator,proto3" json:"validator,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServerComponentConfig_Server_Middleware) Reset() {
 	*x = ServerComponentConfig_Server_Middleware{}
-	mi := &file_config_proto_msgTypes[23]
+	mi := &file_config_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1674,7 +1753,7 @@ func (x *ServerComponentConfig_Server_Middleware) String() string {
 func (*ServerComponentConfig_Server_Middleware) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server_Middleware) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[23]
+	mi := &file_config_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1687,7 +1766,7 @@ func (x *ServerComponentConfig_Server_Middleware) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ServerComponentConfig_Server_Middleware.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server_Middleware) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0}
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 1}
 }
 
 func (x *ServerComponentConfig_Server_Middleware) GetMetadata() *ServerComponentConfig_Server_Middleware_Metadata {
@@ -1728,7 +1807,7 @@ func (x *ServerComponentConfig_Server_Middleware) GetValidator() *ServerComponen
 type ServerComponentConfig_Server_Middleware_Metadata struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用
-	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// metadata prefix(这个前缀的 metadata 才会保留在server中)
 	Prefix        []string `protobuf:"bytes,2,rep,name=prefix,proto3" json:"prefix,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1737,7 +1816,7 @@ type ServerComponentConfig_Server_Middleware_Metadata struct {
 
 func (x *ServerComponentConfig_Server_Middleware_Metadata) Reset() {
 	*x = ServerComponentConfig_Server_Middleware_Metadata{}
-	mi := &file_config_proto_msgTypes[24]
+	mi := &file_config_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1749,7 +1828,7 @@ func (x *ServerComponentConfig_Server_Middleware_Metadata) String() string {
 func (*ServerComponentConfig_Server_Middleware_Metadata) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server_Middleware_Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[24]
+	mi := &file_config_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1762,12 +1841,12 @@ func (x *ServerComponentConfig_Server_Middleware_Metadata) ProtoReflect() protor
 
 // Deprecated: Use ServerComponentConfig_Server_Middleware_Metadata.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server_Middleware_Metadata) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0, 0}
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 0}
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Metadata) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
@@ -1782,16 +1861,16 @@ func (x *ServerComponentConfig_Server_Middleware_Metadata) GetPrefix() []string 
 type ServerComponentConfig_Server_Middleware_Tracing struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用
-	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// tracer name
-	TracerName    *string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3,oneof" json:"tracer_name,omitempty"`
+	TracerName    string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3" json:"tracer_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Tracing) Reset() {
 	*x = ServerComponentConfig_Server_Middleware_Tracing{}
-	mi := &file_config_proto_msgTypes[25]
+	mi := &file_config_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1803,7 +1882,7 @@ func (x *ServerComponentConfig_Server_Middleware_Tracing) String() string {
 func (*ServerComponentConfig_Server_Middleware_Tracing) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server_Middleware_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[25]
+	mi := &file_config_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1816,19 +1895,19 @@ func (x *ServerComponentConfig_Server_Middleware_Tracing) ProtoReflect() protore
 
 // Deprecated: Use ServerComponentConfig_Server_Middleware_Tracing.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server_Middleware_Tracing) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0, 1}
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 1}
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Tracing) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Tracing) GetTracerName() string {
-	if x != nil && x.TracerName != nil {
-		return *x.TracerName
+	if x != nil {
+		return x.TracerName
 	}
 	return ""
 }
@@ -1836,16 +1915,16 @@ func (x *ServerComponentConfig_Server_Middleware_Tracing) GetTracerName() string
 type ServerComponentConfig_Server_Middleware_Metrics struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用
-	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// meter name
-	MeterName     *string `protobuf:"bytes,2,opt,name=meter_name,json=meterName,proto3,oneof" json:"meter_name,omitempty"`
+	MeterName     string `protobuf:"bytes,2,opt,name=meter_name,json=meterName,proto3" json:"meter_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Metrics) Reset() {
 	*x = ServerComponentConfig_Server_Middleware_Metrics{}
-	mi := &file_config_proto_msgTypes[26]
+	mi := &file_config_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1857,7 +1936,7 @@ func (x *ServerComponentConfig_Server_Middleware_Metrics) String() string {
 func (*ServerComponentConfig_Server_Middleware_Metrics) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server_Middleware_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[26]
+	mi := &file_config_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1870,19 +1949,19 @@ func (x *ServerComponentConfig_Server_Middleware_Metrics) ProtoReflect() protore
 
 // Deprecated: Use ServerComponentConfig_Server_Middleware_Metrics.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server_Middleware_Metrics) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0, 2}
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 2}
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Metrics) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Metrics) GetMeterName() string {
-	if x != nil && x.MeterName != nil {
-		return *x.MeterName
+	if x != nil {
+		return x.MeterName
 	}
 	return ""
 }
@@ -1890,14 +1969,14 @@ func (x *ServerComponentConfig_Server_Middleware_Metrics) GetMeterName() string 
 type ServerComponentConfig_Server_Middleware_Logger struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用
-	Disable       *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable       bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Logger) Reset() {
 	*x = ServerComponentConfig_Server_Middleware_Logger{}
-	mi := &file_config_proto_msgTypes[27]
+	mi := &file_config_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1909,7 +1988,7 @@ func (x *ServerComponentConfig_Server_Middleware_Logger) String() string {
 func (*ServerComponentConfig_Server_Middleware_Logger) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server_Middleware_Logger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[27]
+	mi := &file_config_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1922,12 +2001,12 @@ func (x *ServerComponentConfig_Server_Middleware_Logger) ProtoReflect() protoref
 
 // Deprecated: Use ServerComponentConfig_Server_Middleware_Logger.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server_Middleware_Logger) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0, 3}
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 3}
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Logger) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
 }
@@ -1935,14 +2014,14 @@ func (x *ServerComponentConfig_Server_Middleware_Logger) GetDisable() bool {
 type ServerComponentConfig_Server_Middleware_Validator struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 是否禁用
-	Disable       *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
+	Disable       bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Validator) Reset() {
 	*x = ServerComponentConfig_Server_Middleware_Validator{}
-	mi := &file_config_proto_msgTypes[28]
+	mi := &file_config_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1954,7 +2033,7 @@ func (x *ServerComponentConfig_Server_Middleware_Validator) String() string {
 func (*ServerComponentConfig_Server_Middleware_Validator) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server_Middleware_Validator) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[28]
+	mi := &file_config_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1967,22 +2046,76 @@ func (x *ServerComponentConfig_Server_Middleware_Validator) ProtoReflect() proto
 
 // Deprecated: Use ServerComponentConfig_Server_Middleware_Validator.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server_Middleware_Validator) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0, 4}
+	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 4}
 }
 
 func (x *ServerComponentConfig_Server_Middleware_Validator) GetDisable() bool {
-	if x != nil && x.Disable != nil {
-		return *x.Disable
+	if x != nil {
+		return x.Disable
 	}
 	return false
+}
+
+type ServerComponentConfig_HttpServerOption_Metrics struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 禁用
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	// metrics 路由，默认 /metrics
+	Path          string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerComponentConfig_HttpServerOption_Metrics) Reset() {
+	*x = ServerComponentConfig_HttpServerOption_Metrics{}
+	mi := &file_config_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerComponentConfig_HttpServerOption_Metrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerComponentConfig_HttpServerOption_Metrics) ProtoMessage() {}
+
+func (x *ServerComponentConfig_HttpServerOption_Metrics) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerComponentConfig_HttpServerOption_Metrics.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_HttpServerOption_Metrics) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 2, 0}
+}
+
+func (x *ServerComponentConfig_HttpServerOption_Metrics) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+func (x *ServerComponentConfig_HttpServerOption_Metrics) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
 }
 
 type DatabaseComponentConfig_Database struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// gorm 配置
-	Gorm *DatabaseComponentConfig_Database_Gorm `protobuf:"bytes,1,opt,name=gorm,proto3,oneof" json:"gorm,omitempty"`
+	Gorm *DatabaseComponentConfig_Database_Gorm `protobuf:"bytes,1,opt,name=gorm,proto3" json:"gorm,omitempty"`
 	// logger 配置
-	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,2,opt,name=log,proto3,oneof" json:"log,omitempty"`
+	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
 	// 默认连接
 	Default string `protobuf:"bytes,3,opt,name=default,proto3" json:"default,omitempty"`
 	// 连接
@@ -1995,7 +2128,7 @@ type DatabaseComponentConfig_Database struct {
 
 func (x *DatabaseComponentConfig_Database) Reset() {
 	*x = DatabaseComponentConfig_Database{}
-	mi := &file_config_proto_msgTypes[29]
+	mi := &file_config_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2007,7 +2140,7 @@ func (x *DatabaseComponentConfig_Database) String() string {
 func (*DatabaseComponentConfig_Database) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[29]
+	mi := &file_config_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2059,19 +2192,24 @@ func (x *DatabaseComponentConfig_Database) GetTracing() *DatabaseComponentConfig
 }
 
 type DatabaseComponentConfig_Database_Tracing struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	Disable                bool                   `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	ExcludeQueryVars       bool                   `protobuf:"varint,2,opt,name=exclude_query_vars,json=excludeQueryVars,proto3" json:"exclude_query_vars,omitempty"`
-	ExcludeMetrics         bool                   `protobuf:"varint,3,opt,name=exclude_metrics,json=excludeMetrics,proto3" json:"exclude_metrics,omitempty"`
-	RecordStackTraceInSpan bool                   `protobuf:"varint,4,opt,name=record_stack_trace_in_span,json=recordStackTraceInSpan,proto3" json:"record_stack_trace_in_span,omitempty"`
-	ExcludeServerAddress   bool                   `protobuf:"varint,5,opt,name=exclude_server_address,json=excludeServerAddress,proto3" json:"exclude_server_address,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 禁用 gorm.tracing 插件
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	// 排除 db.statement SQL 的变量部分
+	ExcludeQueryVars bool `protobuf:"varint,2,opt,name=exclude_query_vars,json=excludeQueryVars,proto3" json:"exclude_query_vars,omitempty"`
+	// 排除 DBStats 指标被上报
+	ExcludeMetrics bool `protobuf:"varint,3,opt,name=exclude_metrics,json=excludeMetrics,proto3" json:"exclude_metrics,omitempty"`
+	// 在异常事件中包含堆栈追踪
+	RecordStackTraceInSpan bool `protobuf:"varint,4,opt,name=record_stack_trace_in_span,json=recordStackTraceInSpan,proto3" json:"record_stack_trace_in_span,omitempty"`
+	// 排除 db.server_address 属性
+	ExcludeServerAddress bool `protobuf:"varint,5,opt,name=exclude_server_address,json=excludeServerAddress,proto3" json:"exclude_server_address,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *DatabaseComponentConfig_Database_Tracing) Reset() {
 	*x = DatabaseComponentConfig_Database_Tracing{}
-	mi := &file_config_proto_msgTypes[31]
+	mi := &file_config_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2083,7 +2221,7 @@ func (x *DatabaseComponentConfig_Database_Tracing) String() string {
 func (*DatabaseComponentConfig_Database_Tracing) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[31]
+	mi := &file_config_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2136,27 +2274,27 @@ func (x *DatabaseComponentConfig_Database_Tracing) GetExcludeServerAddress() boo
 
 type DatabaseComponentConfig_Database_Gorm struct {
 	state                                    protoimpl.MessageState                        `protogen:"open.v1"`
-	SkipDefaultTransaction                   *bool                                         `protobuf:"varint,1,opt,name=skip_default_transaction,json=skipDefaultTransaction,proto3,oneof" json:"skip_default_transaction,omitempty"`
-	DefaultTransactionTimeout                *durationpb.Duration                          `protobuf:"bytes,2,opt,name=default_transaction_timeout,json=defaultTransactionTimeout,proto3,oneof" json:"default_transaction_timeout,omitempty"`
-	DefaultContextTimeout                    *durationpb.Duration                          `protobuf:"bytes,3,opt,name=default_context_timeout,json=defaultContextTimeout,proto3,oneof" json:"default_context_timeout,omitempty"`
-	FullSaveAssociations                     *bool                                         `protobuf:"varint,4,opt,name=full_save_associations,json=fullSaveAssociations,proto3,oneof" json:"full_save_associations,omitempty"`
-	Logger                                   *DatabaseComponentConfig_Database_Gorm_Logger `protobuf:"bytes,5,opt,name=logger,proto3,oneof" json:"logger,omitempty"`
-	DisableAutomaticPing                     *bool                                         `protobuf:"varint,6,opt,name=disable_automatic_ping,json=disableAutomaticPing,proto3,oneof" json:"disable_automatic_ping,omitempty"`
-	DisableForeignKeyConstraintWhenMigrating *bool                                         `protobuf:"varint,7,opt,name=disable_foreign_key_constraint_when_migrating,json=disableForeignKeyConstraintWhenMigrating,proto3,oneof" json:"disable_foreign_key_constraint_when_migrating,omitempty"`
-	IgnoreRelationshipsWhenMigrating         *bool                                         `protobuf:"varint,8,opt,name=ignore_relationships_when_migrating,json=ignoreRelationshipsWhenMigrating,proto3,oneof" json:"ignore_relationships_when_migrating,omitempty"`
-	DisableNestedTransaction                 *bool                                         `protobuf:"varint,9,opt,name=disable_nested_transaction,json=disableNestedTransaction,proto3,oneof" json:"disable_nested_transaction,omitempty"`
-	AllowGlobalUpdate                        *bool                                         `protobuf:"varint,10,opt,name=allow_global_update,json=allowGlobalUpdate,proto3,oneof" json:"allow_global_update,omitempty"`
-	QueryFields                              *bool                                         `protobuf:"varint,11,opt,name=query_fields,json=queryFields,proto3,oneof" json:"query_fields,omitempty"`
-	CreateBatchSize                          *int32                                        `protobuf:"varint,12,opt,name=create_batch_size,json=createBatchSize,proto3,oneof" json:"create_batch_size,omitempty"`
-	TranslateError                           *bool                                         `protobuf:"varint,13,opt,name=translate_error,json=translateError,proto3,oneof" json:"translate_error,omitempty"`
-	PropagateUnscoped                        *bool                                         `protobuf:"varint,14,opt,name=propagate_unscoped,json=propagateUnscoped,proto3,oneof" json:"propagate_unscoped,omitempty"`
+	SkipDefaultTransaction                   bool                                          `protobuf:"varint,1,opt,name=skip_default_transaction,json=skipDefaultTransaction,proto3" json:"skip_default_transaction,omitempty"`
+	DefaultTransactionTimeout                *durationpb.Duration                          `protobuf:"bytes,2,opt,name=default_transaction_timeout,json=defaultTransactionTimeout,proto3" json:"default_transaction_timeout,omitempty"`
+	DefaultContextTimeout                    *durationpb.Duration                          `protobuf:"bytes,3,opt,name=default_context_timeout,json=defaultContextTimeout,proto3" json:"default_context_timeout,omitempty"`
+	FullSaveAssociations                     bool                                          `protobuf:"varint,4,opt,name=full_save_associations,json=fullSaveAssociations,proto3" json:"full_save_associations,omitempty"`
+	Logger                                   *DatabaseComponentConfig_Database_Gorm_Logger `protobuf:"bytes,5,opt,name=logger,proto3" json:"logger,omitempty"`
+	DisableAutomaticPing                     bool                                          `protobuf:"varint,6,opt,name=disable_automatic_ping,json=disableAutomaticPing,proto3" json:"disable_automatic_ping,omitempty"`
+	DisableForeignKeyConstraintWhenMigrating bool                                          `protobuf:"varint,7,opt,name=disable_foreign_key_constraint_when_migrating,json=disableForeignKeyConstraintWhenMigrating,proto3" json:"disable_foreign_key_constraint_when_migrating,omitempty"`
+	IgnoreRelationshipsWhenMigrating         bool                                          `protobuf:"varint,8,opt,name=ignore_relationships_when_migrating,json=ignoreRelationshipsWhenMigrating,proto3" json:"ignore_relationships_when_migrating,omitempty"`
+	DisableNestedTransaction                 bool                                          `protobuf:"varint,9,opt,name=disable_nested_transaction,json=disableNestedTransaction,proto3" json:"disable_nested_transaction,omitempty"`
+	AllowGlobalUpdate                        bool                                          `protobuf:"varint,10,opt,name=allow_global_update,json=allowGlobalUpdate,proto3" json:"allow_global_update,omitempty"`
+	QueryFields                              bool                                          `protobuf:"varint,11,opt,name=query_fields,json=queryFields,proto3" json:"query_fields,omitempty"`
+	CreateBatchSize                          int32                                         `protobuf:"varint,12,opt,name=create_batch_size,json=createBatchSize,proto3" json:"create_batch_size,omitempty"`
+	TranslateError                           bool                                          `protobuf:"varint,13,opt,name=translate_error,json=translateError,proto3" json:"translate_error,omitempty"`
+	PropagateUnscoped                        bool                                          `protobuf:"varint,14,opt,name=propagate_unscoped,json=propagateUnscoped,proto3" json:"propagate_unscoped,omitempty"`
 	unknownFields                            protoimpl.UnknownFields
 	sizeCache                                protoimpl.SizeCache
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) Reset() {
 	*x = DatabaseComponentConfig_Database_Gorm{}
-	mi := &file_config_proto_msgTypes[32]
+	mi := &file_config_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2168,7 +2306,7 @@ func (x *DatabaseComponentConfig_Database_Gorm) String() string {
 func (*DatabaseComponentConfig_Database_Gorm) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Gorm) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[32]
+	mi := &file_config_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2185,8 +2323,8 @@ func (*DatabaseComponentConfig_Database_Gorm) Descriptor() ([]byte, []int) {
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetSkipDefaultTransaction() bool {
-	if x != nil && x.SkipDefaultTransaction != nil {
-		return *x.SkipDefaultTransaction
+	if x != nil {
+		return x.SkipDefaultTransaction
 	}
 	return false
 }
@@ -2206,8 +2344,8 @@ func (x *DatabaseComponentConfig_Database_Gorm) GetDefaultContextTimeout() *dura
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetFullSaveAssociations() bool {
-	if x != nil && x.FullSaveAssociations != nil {
-		return *x.FullSaveAssociations
+	if x != nil {
+		return x.FullSaveAssociations
 	}
 	return false
 }
@@ -2220,64 +2358,64 @@ func (x *DatabaseComponentConfig_Database_Gorm) GetLogger() *DatabaseComponentCo
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetDisableAutomaticPing() bool {
-	if x != nil && x.DisableAutomaticPing != nil {
-		return *x.DisableAutomaticPing
+	if x != nil {
+		return x.DisableAutomaticPing
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetDisableForeignKeyConstraintWhenMigrating() bool {
-	if x != nil && x.DisableForeignKeyConstraintWhenMigrating != nil {
-		return *x.DisableForeignKeyConstraintWhenMigrating
+	if x != nil {
+		return x.DisableForeignKeyConstraintWhenMigrating
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetIgnoreRelationshipsWhenMigrating() bool {
-	if x != nil && x.IgnoreRelationshipsWhenMigrating != nil {
-		return *x.IgnoreRelationshipsWhenMigrating
+	if x != nil {
+		return x.IgnoreRelationshipsWhenMigrating
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetDisableNestedTransaction() bool {
-	if x != nil && x.DisableNestedTransaction != nil {
-		return *x.DisableNestedTransaction
+	if x != nil {
+		return x.DisableNestedTransaction
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetAllowGlobalUpdate() bool {
-	if x != nil && x.AllowGlobalUpdate != nil {
-		return *x.AllowGlobalUpdate
+	if x != nil {
+		return x.AllowGlobalUpdate
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetQueryFields() bool {
-	if x != nil && x.QueryFields != nil {
-		return *x.QueryFields
+	if x != nil {
+		return x.QueryFields
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetCreateBatchSize() int32 {
-	if x != nil && x.CreateBatchSize != nil {
-		return *x.CreateBatchSize
+	if x != nil {
+		return x.CreateBatchSize
 	}
 	return 0
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetTranslateError() bool {
-	if x != nil && x.TranslateError != nil {
-		return *x.TranslateError
+	if x != nil {
+		return x.TranslateError
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetPropagateUnscoped() bool {
-	if x != nil && x.PropagateUnscoped != nil {
-		return *x.PropagateUnscoped
+	if x != nil {
+		return x.PropagateUnscoped
 	}
 	return false
 }
@@ -2300,7 +2438,7 @@ type DatabaseComponentConfig_Database_Connection struct {
 
 func (x *DatabaseComponentConfig_Database_Connection) Reset() {
 	*x = DatabaseComponentConfig_Database_Connection{}
-	mi := &file_config_proto_msgTypes[33]
+	mi := &file_config_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2312,7 +2450,7 @@ func (x *DatabaseComponentConfig_Database_Connection) String() string {
 func (*DatabaseComponentConfig_Database_Connection) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Connection) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[33]
+	mi := &file_config_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2367,20 +2505,20 @@ type DatabaseComponentConfig_Database_Gorm_Logger struct {
 	state protoimpl.MessageState                             `protogen:"open.v1"`
 	Level DatabaseComponentConfig_Database_Gorm_Logger_Level `protobuf:"varint,1,opt,name=level,proto3,enum=kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_Level" json:"level,omitempty"`
 	// gorm 慢日志设置
-	SlowThreshold *durationpb.Duration `protobuf:"bytes,2,opt,name=slow_threshold,json=slowThreshold,proto3,oneof" json:"slow_threshold,omitempty"`
+	SlowThreshold *durationpb.Duration `protobuf:"bytes,2,opt,name=slow_threshold,json=slowThreshold,proto3" json:"slow_threshold,omitempty"`
 	// Colorful
-	Colorful *bool `protobuf:"varint,3,opt,name=colorful,proto3,oneof" json:"colorful,omitempty"`
+	Colorful bool `protobuf:"varint,3,opt,name=colorful,proto3" json:"colorful,omitempty"`
 	// IgnoreRecordNotFoundError
-	IgnoreRecordNotFoundError *bool `protobuf:"varint,4,opt,name=ignore_record_not_found_error,json=ignoreRecordNotFoundError,proto3,oneof" json:"ignore_record_not_found_error,omitempty"`
+	IgnoreRecordNotFoundError bool `protobuf:"varint,4,opt,name=ignore_record_not_found_error,json=ignoreRecordNotFoundError,proto3" json:"ignore_record_not_found_error,omitempty"`
 	// ParameterizedQueries
-	ParameterizedQueries *bool `protobuf:"varint,5,opt,name=parameterized_queries,json=parameterizedQueries,proto3,oneof" json:"parameterized_queries,omitempty"`
+	ParameterizedQueries bool `protobuf:"varint,5,opt,name=parameterized_queries,json=parameterizedQueries,proto3" json:"parameterized_queries,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) Reset() {
 	*x = DatabaseComponentConfig_Database_Gorm_Logger{}
-	mi := &file_config_proto_msgTypes[34]
+	mi := &file_config_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2392,7 +2530,7 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) String() string {
 func (*DatabaseComponentConfig_Database_Gorm_Logger) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[34]
+	mi := &file_config_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2412,7 +2550,7 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetLevel() DatabaseCompon
 	if x != nil {
 		return x.Level
 	}
-	return DatabaseComponentConfig_Database_Gorm_Logger_Unknown
+	return DatabaseComponentConfig_Database_Gorm_Logger_UNKNOWN
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetSlowThreshold() *durationpb.Duration {
@@ -2423,22 +2561,22 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetSlowThreshold() *durat
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetColorful() bool {
-	if x != nil && x.Colorful != nil {
-		return *x.Colorful
+	if x != nil {
+		return x.Colorful
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetIgnoreRecordNotFoundError() bool {
-	if x != nil && x.IgnoreRecordNotFoundError != nil {
-		return *x.IgnoreRecordNotFoundError
+	if x != nil {
+		return x.IgnoreRecordNotFoundError
 	}
 	return false
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetParameterizedQueries() bool {
-	if x != nil && x.ParameterizedQueries != nil {
-		return *x.ParameterizedQueries
+	if x != nil {
+		return x.ParameterizedQueries
 	}
 	return false
 }
@@ -2456,7 +2594,7 @@ type DatabaseComponentConfig_Database_Connection_Dialector struct {
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) Reset() {
 	*x = DatabaseComponentConfig_Database_Connection_Dialector{}
-	mi := &file_config_proto_msgTypes[35]
+	mi := &file_config_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2468,7 +2606,7 @@ func (x *DatabaseComponentConfig_Database_Connection_Dialector) String() string 
 func (*DatabaseComponentConfig_Database_Connection_Dialector) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[35]
+	mi := &file_config_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2502,21 +2640,21 @@ type RedisComponentConfig_RedisConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 默认连接
 	Default string `protobuf:"bytes,1,opt,name=default,proto3" json:"default,omitempty"`
-	// logger 配置
-	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,2,opt,name=log,proto3,oneof" json:"log,omitempty"`
-	// tracing
-	Tracing *RedisComponentConfig_RedisConfig_Tracing `protobuf:"bytes,3,opt,name=tracing,proto3" json:"tracing,omitempty"`
-	// Metrics
-	Metrics *RedisComponentConfig_RedisConfig_Metrics `protobuf:"bytes,4,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	// 连接配置
-	Connections   map[string]*RedisComponentConfig_RedisConfig_RedisOption `protobuf:"bytes,5,rep,name=connections,proto3" json:"connections,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Connections map[string]*RedisComponentConfig_RedisConfig_RedisOption `protobuf:"bytes,2,rep,name=connections,proto3" json:"connections,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// logger 配置
+	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,3,opt,name=log,proto3,oneof" json:"log,omitempty"`
+	// tracing
+	Tracing *RedisComponentConfig_RedisConfig_Tracing `protobuf:"bytes,4,opt,name=tracing,proto3" json:"tracing,omitempty"`
+	// Metrics
+	Metrics       *RedisComponentConfig_RedisConfig_Metrics `protobuf:"bytes,5,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RedisComponentConfig_RedisConfig) Reset() {
 	*x = RedisComponentConfig_RedisConfig{}
-	mi := &file_config_proto_msgTypes[36]
+	mi := &file_config_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2528,7 +2666,7 @@ func (x *RedisComponentConfig_RedisConfig) String() string {
 func (*RedisComponentConfig_RedisConfig) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[36]
+	mi := &file_config_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2549,6 +2687,13 @@ func (x *RedisComponentConfig_RedisConfig) GetDefault() string {
 		return x.Default
 	}
 	return ""
+}
+
+func (x *RedisComponentConfig_RedisConfig) GetConnections() map[string]*RedisComponentConfig_RedisConfig_RedisOption {
+	if x != nil {
+		return x.Connections
+	}
+	return nil
 }
 
 func (x *RedisComponentConfig_RedisConfig) GetLog() *LogComponentConfig_ModuleLog {
@@ -2572,13 +2717,6 @@ func (x *RedisComponentConfig_RedisConfig) GetMetrics() *RedisComponentConfig_Re
 	return nil
 }
 
-func (x *RedisComponentConfig_RedisConfig) GetConnections() map[string]*RedisComponentConfig_RedisConfig_RedisOption {
-	if x != nil {
-		return x.Connections
-	}
-	return nil
-}
-
 type RedisComponentConfig_RedisConfig_Tracing struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Disable bool                   `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
@@ -2594,7 +2732,7 @@ type RedisComponentConfig_RedisConfig_Tracing struct {
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) Reset() {
 	*x = RedisComponentConfig_RedisConfig_Tracing{}
-	mi := &file_config_proto_msgTypes[37]
+	mi := &file_config_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2606,7 +2744,7 @@ func (x *RedisComponentConfig_RedisConfig_Tracing) String() string {
 func (*RedisComponentConfig_RedisConfig_Tracing) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[37]
+	mi := &file_config_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2619,7 +2757,7 @@ func (x *RedisComponentConfig_RedisConfig_Tracing) ProtoReflect() protoreflect.M
 
 // Deprecated: Use RedisComponentConfig_RedisConfig_Tracing.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig_RedisConfig_Tracing) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 1}
 }
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) GetDisable() bool {
@@ -2659,7 +2797,7 @@ type RedisComponentConfig_RedisConfig_Metrics struct {
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) Reset() {
 	*x = RedisComponentConfig_RedisConfig_Metrics{}
-	mi := &file_config_proto_msgTypes[38]
+	mi := &file_config_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2671,7 +2809,7 @@ func (x *RedisComponentConfig_RedisConfig_Metrics) String() string {
 func (*RedisComponentConfig_RedisConfig_Metrics) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[38]
+	mi := &file_config_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2684,7 +2822,7 @@ func (x *RedisComponentConfig_RedisConfig_Metrics) ProtoReflect() protoreflect.M
 
 // Deprecated: Use RedisComponentConfig_RedisConfig_Metrics.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig_RedisConfig_Metrics) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 1}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 2}
 }
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) GetDisable() bool {
@@ -2825,7 +2963,7 @@ type RedisComponentConfig_RedisConfig_RedisOption struct {
 
 func (x *RedisComponentConfig_RedisConfig_RedisOption) Reset() {
 	*x = RedisComponentConfig_RedisConfig_RedisOption{}
-	mi := &file_config_proto_msgTypes[40]
+	mi := &file_config_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2837,7 +2975,7 @@ func (x *RedisComponentConfig_RedisConfig_RedisOption) String() string {
 func (*RedisComponentConfig_RedisConfig_RedisOption) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_RedisOption) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[40]
+	mi := &file_config_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3089,46 +3227,40 @@ var File_config_proto protoreflect.FileDescriptor
 
 const file_config_proto_rawDesc = "" +
 	"\n" +
-	"\fconfig.proto\x12\x14kratos_foundation_pb\x1a\x1egoogle/protobuf/duration.proto\"\xdb\x02\n" +
+	"\fconfig.proto\x12\x14kratos_foundation_pb\x1a\x1egoogle/protobuf/duration.proto\"\x8f\x02\n" +
 	"\x12AppComponentConfig\x12>\n" +
-	"\x03app\x18\x01 \x01(\v2,.kratos_foundation_pb.AppComponentConfig.AppR\x03app\x1a\x84\x02\n" +
-	"\x03App\x120\n" +
-	"\x11disable_registrar\x18\x01 \x01(\bH\x00R\x10disableRegistrar\x88\x01\x01\x12K\n" +
-	"\x11registrar_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationH\x01R\x10registrarTimeout\x88\x01\x01\x12A\n" +
-	"\fstop_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationH\x02R\vstopTimeout\x88\x01\x01B\x14\n" +
-	"\x12_disable_registrarB\x14\n" +
-	"\x12_registrar_timeoutB\x0f\n" +
-	"\r_stop_timeout\"\x97\b\n" +
+	"\x03app\x18\x01 \x01(\v2,.kratos_foundation_pb.AppComponentConfig.AppR\x03app\x1a\xb8\x01\n" +
+	"\x03App\x12+\n" +
+	"\x11disable_registrar\x18\x01 \x01(\bR\x10disableRegistrar\x12F\n" +
+	"\x11registrar_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x10registrarTimeout\x12<\n" +
+	"\fstop_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\vstopTimeout\"\x99\a\n" +
 	"\x12LogComponentConfig\x12>\n" +
-	"\x03log\x18\x01 \x01(\v2,.kratos_foundation_pb.LogComponentConfig.LogR\x03log\x1aQ\n" +
-	"\tModuleLog\x12\x19\n" +
-	"\x05level\x18\x01 \x01(\tH\x00R\x05level\x88\x01\x01\x12\x1f\n" +
+	"\x03log\x18\x01 \x01(\v2,.kratos_foundation_pb.LogComponentConfig.LogR\x03log\x1aB\n" +
+	"\tModuleLog\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\tR\x05level\x12\x1f\n" +
 	"\vfilter_keys\x18\x02 \x03(\tR\n" +
+	"filterKeys\x1a\xfe\x05\n" +
+	"\x03Log\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\tR\x05level\x12\x1f\n" +
+	"\vfilter_keys\x18\x02 \x03(\tR\n" +
+	"filterKeys\x12\x1f\n" +
+	"\vtime_format\x18\x03 \x01(\tR\n" +
+	"timeFormat\x12H\n" +
+	"\x03std\x18\x04 \x01(\v26.kratos_foundation_pb.LogComponentConfig.Log.StdLoggerR\x03std\x12K\n" +
+	"\x04file\x18\x05 \x01(\v27.kratos_foundation_pb.LogComponentConfig.Log.FileLoggerR\x04file\x1ak\n" +
+	"\tStdLogger\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
+	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x88\x01\x01\x12\x1f\n" +
+	"\vfilter_keys\x18\x03 \x03(\tR\n" +
 	"filterKeysB\b\n" +
-	"\x06_level\x1a\xed\x06\n" +
-	"\x03Log\x12\x19\n" +
-	"\x05level\x18\x01 \x01(\tH\x00R\x05level\x88\x01\x01\x12\x1f\n" +
-	"\vfilter_keys\x18\x02 \x03(\tR\n" +
-	"filterKeys\x12M\n" +
-	"\x03std\x18\x03 \x01(\v26.kratos_foundation_pb.LogComponentConfig.Log.StdLoggerH\x01R\x03std\x88\x01\x01\x12P\n" +
-	"\x04file\x18\x04 \x01(\v27.kratos_foundation_pb.LogComponentConfig.Log.FileLoggerH\x02R\x04file\x88\x01\x01\x12$\n" +
-	"\vtime_format\x18\x05 \x01(\tH\x03R\n" +
-	"timeFormat\x88\x01\x01\x1a|\n" +
-	"\tStdLogger\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12\x19\n" +
-	"\x05level\x18\x02 \x01(\tH\x01R\x05level\x88\x01\x01\x12\x1f\n" +
-	"\vfilter_keys\x18\x03 \x03(\tR\n" +
-	"filterKeysB\n" +
+	"\x06_level\x1a\x9a\x03\n" +
 	"\n" +
-	"\b_disableB\b\n" +
-	"\x06_level\x1a\xb9\x03\n" +
-	"\n" +
-	"FileLogger\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12\x19\n" +
-	"\x05level\x18\x02 \x01(\tH\x01R\x05level\x88\x01\x01\x12\x1f\n" +
+	"FileLogger\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
+	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x88\x01\x01\x12\x1f\n" +
 	"\vfilter_keys\x18\x03 \x03(\tR\n" +
-	"filterKeys\x12\x17\n" +
-	"\x04path\x18\x04 \x01(\tH\x02R\x04path\x88\x01\x01\x12\\\n" +
+	"filterKeys\x12\x12\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\x12\\\n" +
 	"\brotating\x18\x05 \x01(\v2@.kratos_foundation_pb.LogComponentConfig.Log.FileLogger.RotatingR\brotating\x1a\xb9\x01\n" +
 	"\bRotating\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
@@ -3138,15 +3270,8 @@ const file_config_proto_rawDesc = "" +
 	"\tmax_files\x18\x04 \x01(\x05R\bmaxFiles\x12\x1d\n" +
 	"\n" +
 	"local_time\x18\x05 \x01(\bR\tlocalTime\x12\x1a\n" +
-	"\bcompress\x18\x06 \x01(\bR\bcompressB\n" +
-	"\n" +
-	"\b_disableB\b\n" +
-	"\x06_levelB\a\n" +
-	"\x05_pathB\b\n" +
-	"\x06_levelB\x06\n" +
-	"\x04_stdB\a\n" +
-	"\x05_fileB\x0e\n" +
-	"\f_time_format\"\xd1\x02\n" +
+	"\bcompress\x18\x06 \x01(\bR\bcompressB\b\n" +
+	"\x06_level\"\xd1\x02\n" +
 	"\x15MetricComponentConfig\x12J\n" +
 	"\x06metric\x18\x01 \x01(\v22.kratos_foundation_pb.MetricComponentConfig.MetricR\x06metric\x1a\xeb\x01\n" +
 	"\x06Metric\x12\x1d\n" +
@@ -3155,24 +3280,23 @@ const file_config_proto_rawDesc = "" +
 	"\x10counter_map_size\x18\x02 \x01(\x05R\x0ecounterMapSize\x12$\n" +
 	"\x0egauge_map_size\x18\x03 \x01(\x05R\fgaugeMapSize\x12,\n" +
 	"\x12histogram_map_size\x18\x04 \x01(\x05R\x10histogramMapSize\x12D\n" +
-	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\"\xb3\f\n" +
+	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\"\xbc\n" +
+	"\n" +
 	"\x16TracingComponentConfig\x12N\n" +
-	"\atracing\x18\x01 \x01(\v24.kratos_foundation_pb.TracingComponentConfig.TracingR\atracing\x1a\xc8\v\n" +
-	"\aTracing\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12Y\n" +
-	"\bexporter\x18\x02 \x01(\v2=.kratos_foundation_pb.TracingComponentConfig.Tracing.ExporterR\bexporter\x12V\n" +
-	"\asampler\x18\x03 \x01(\v2<.kratos_foundation_pb.TracingComponentConfig.Tracing.SamplerR\asampler\x12D\n" +
-	"\x03log\x18\x04 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x12$\n" +
-	"\vtracer_name\x18\x05 \x01(\tH\x01R\n" +
-	"tracerName\x88\x01\x01\x1a\xa2\a\n" +
-	"\bExporter\x12\x1f\n" +
-	"\bendpoint\x18\x01 \x01(\tH\x00R\bendpoint\x88\x01\x01\x12&\n" +
-	"\fendpoint_url\x18\x02 \x01(\tH\x01R\vendpointUrl\x88\x01\x01\x12p\n" +
-	"\vcompression\x18\x03 \x01(\x0e2I.kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.CompressionH\x02R\vcompression\x88\x01\x01\x12\x1e\n" +
-	"\burl_path\x18\x04 \x01(\tH\x03R\aurlPath\x88\x01\x01\x12d\n" +
-	"\aheaders\x18\x05 \x03(\v2J.kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntryR\aheaders\x128\n" +
-	"\atimeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationH\x04R\atimeout\x88\x01\x01\x12d\n" +
-	"\x05retry\x18\a \x01(\v2I.kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfigH\x05R\x05retry\x88\x01\x01\x1a:\n" +
+	"\atracing\x18\x01 \x01(\v24.kratos_foundation_pb.TracingComponentConfig.TracingR\atracing\x1a\xd1\t\n" +
+	"\aTracing\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x1f\n" +
+	"\vtracer_name\x18\x02 \x01(\tR\n" +
+	"tracerName\x12Y\n" +
+	"\bexporter\x18\x03 \x01(\v2=.kratos_foundation_pb.TracingComponentConfig.Tracing.ExporterR\bexporter\x12V\n" +
+	"\asampler\x18\x04 \x01(\v2<.kratos_foundation_pb.TracingComponentConfig.Tracing.SamplerR\asampler\x12D\n" +
+	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x1a\xe6\x05\n" +
+	"\bExporter\x12!\n" +
+	"\fendpoint_url\x18\x01 \x01(\tR\vendpointUrl\x12k\n" +
+	"\vcompression\x18\x02 \x01(\x0e2I.kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.CompressionR\vcompression\x12d\n" +
+	"\aheaders\x18\x03 \x03(\v2J.kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntryR\aheaders\x123\n" +
+	"\atimeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12_\n" +
+	"\x05retry\x18\x05 \x01(\v2I.kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfigR\x05retry\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xf0\x01\n" +
@@ -3180,132 +3304,93 @@ const file_config_proto_rawDesc = "" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12D\n" +
 	"\x10initial_interval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0finitialInterval\x12<\n" +
 	"\fmax_interval\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\vmaxInterval\x12C\n" +
-	"\x10max_elapsed_time\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0emaxElapsedTime\"5\n" +
-	"\vCompression\x12\x11\n" +
-	"\rNoCompression\x10\x00\x12\x13\n" +
-	"\x0fGzipCompression\x10\x01B\v\n" +
-	"\t_endpointB\x0f\n" +
-	"\r_endpoint_urlB\x0e\n" +
-	"\f_compressionB\v\n" +
-	"\t_url_pathB\n" +
-	"\n" +
-	"\b_timeoutB\b\n" +
-	"\x06_retry\x1a\xbd\x01\n" +
+	"\x10max_elapsed_time\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0emaxElapsedTime\"\x1f\n" +
+	"\vCompression\x12\x06\n" +
+	"\x02NO\x10\x00\x12\b\n" +
+	"\x04GZIP\x10\x01\x1a\xa8\x01\n" +
 	"\aSampler\x12[\n" +
-	"\x06sample\x18\x01 \x01(\x0e2C.kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.SampleR\x06sample\x12\x19\n" +
-	"\x05ratio\x18\x02 \x01(\x01H\x00R\x05ratio\x88\x01\x01\"0\n" +
+	"\x06sample\x18\x01 \x01(\x0e2C.kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.SampleR\x06sample\x12\x14\n" +
+	"\x05ratio\x18\x02 \x01(\x01R\x05ratio\"*\n" +
 	"\x06Sample\x12\t\n" +
-	"\x05Ratio\x10\x00\x12\f\n" +
-	"\bAlwaysOn\x10\x01\x12\r\n" +
-	"\tAlwaysOff\x10\x02B\b\n" +
-	"\x06_ratioB\n" +
+	"\x05RATIO\x10\x00\x12\n" +
 	"\n" +
-	"\b_disableB\x0e\n" +
-	"\f_tracer_name\"\xee\x14\n" +
+	"\x06ALWAYS\x10\x01\x12\t\n" +
+	"\x05NEVER\x10\x02\"\xe1\x13\n" +
 	"\x15ServerComponentConfig\x12J\n" +
-	"\x06server\x18\x01 \x01(\v22.kratos_foundation_pb.ServerComponentConfig.ServerR\x06server\x1a\xb1\v\n" +
-	"\x06Server\x12=\n" +
+	"\x06server\x18\x01 \x01(\v22.kratos_foundation_pb.ServerComponentConfig.ServerR\x06server\x1a\xfd\n" +
 	"\n" +
-	"stop_delay\x18\x01 \x01(\v2\x19.google.protobuf.DurationH\x00R\tstopDelay\x88\x01\x01\x12U\n" +
-	"\x04http\x18\x02 \x01(\v2<.kratos_foundation_pb.ServerComponentConfig.HttpServerOptionH\x01R\x04http\x88\x01\x01\x12U\n" +
-	"\x04grpc\x18\x03 \x01(\v2<.kratos_foundation_pb.ServerComponentConfig.GrpcServerOptionH\x02R\x04grpc\x88\x01\x01\x12b\n" +
+	"\x06Server\x128\n" +
 	"\n" +
-	"middleware\x18\x04 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareH\x03R\n" +
-	"middleware\x88\x01\x01\x12D\n" +
-	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x1a\xdf\a\n" +
+	"stop_delay\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\tstopDelay\x12]\n" +
 	"\n" +
-	"Middleware\x12g\n" +
-	"\bmetadata\x18\x01 \x01(\v2F.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.MetadataH\x00R\bmetadata\x88\x01\x01\x12d\n" +
-	"\atracing\x18\x02 \x01(\v2E.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.TracingH\x01R\atracing\x88\x01\x01\x12d\n" +
-	"\ametrics\x18\x03 \x01(\v2E.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.MetricsH\x02R\ametrics\x88\x01\x01\x12a\n" +
-	"\x06logger\x18\x04 \x01(\v2D.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.LoggerH\x03R\x06logger\x88\x01\x01\x12j\n" +
-	"\tvalidator\x18\x05 \x01(\v2G.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.ValidatorH\x04R\tvalidator\x88\x01\x01\x1aM\n" +
-	"\bMetadata\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12\x16\n" +
-	"\x06prefix\x18\x02 \x03(\tR\x06prefixB\n" +
+	"middleware\x18\x02 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareR\n" +
+	"middleware\x12P\n" +
+	"\x04http\x18\x03 \x01(\v2<.kratos_foundation_pb.ServerComponentConfig.HttpServerOptionR\x04http\x12P\n" +
+	"\x04grpc\x18\x04 \x01(\v2<.kratos_foundation_pb.ServerComponentConfig.GrpcServerOptionR\x04grpc\x12D\n" +
+	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x12Y\n" +
+	"\atimeout\x18\x06 \x03(\v2?.kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeoutR\atimeout\x1a\x87\x01\n" +
+	"\fRouteTimeout\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06regexp\x18\x02 \x01(\tR\x06regexp\x12\x16\n" +
+	"\x06prefix\x18\x03 \x01(\tR\x06prefix\x123\n" +
+	"\atimeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x1a\x8a\x06\n" +
 	"\n" +
-	"\b_disable\x1aj\n" +
-	"\aTracing\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12$\n" +
-	"\vtracer_name\x18\x02 \x01(\tH\x01R\n" +
-	"tracerName\x88\x01\x01B\n" +
+	"Middleware\x12b\n" +
+	"\bmetadata\x18\x01 \x01(\v2F.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.MetadataR\bmetadata\x12_\n" +
+	"\atracing\x18\x02 \x01(\v2E.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.TracingR\atracing\x12_\n" +
+	"\ametrics\x18\x03 \x01(\v2E.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.MetricsR\ametrics\x12\\\n" +
+	"\x06logger\x18\x04 \x01(\v2D.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.LoggerR\x06logger\x12e\n" +
+	"\tvalidator\x18\x05 \x01(\v2G.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.ValidatorR\tvalidator\x1a<\n" +
+	"\bMetadata\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x16\n" +
+	"\x06prefix\x18\x02 \x03(\tR\x06prefix\x1aD\n" +
+	"\aTracing\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x1f\n" +
+	"\vtracer_name\x18\x02 \x01(\tR\n" +
+	"tracerName\x1aB\n" +
+	"\aMetrics\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x1d\n" +
 	"\n" +
-	"\b_disableB\x0e\n" +
-	"\f_tracer_name\x1ag\n" +
-	"\aMetrics\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12\"\n" +
-	"\n" +
-	"meter_name\x18\x02 \x01(\tH\x01R\tmeterName\x88\x01\x01B\n" +
-	"\n" +
-	"\b_disableB\r\n" +
-	"\v_meter_name\x1a3\n" +
-	"\x06Logger\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01B\n" +
-	"\n" +
-	"\b_disable\x1a6\n" +
-	"\tValidator\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01B\n" +
-	"\n" +
-	"\b_disableB\v\n" +
-	"\t_metadataB\n" +
-	"\n" +
-	"\b_tracingB\n" +
-	"\n" +
-	"\b_metricsB\t\n" +
-	"\a_loggerB\f\n" +
-	"\n" +
-	"_validatorB\r\n" +
-	"\v_stop_delayB\a\n" +
-	"\x05_httpB\a\n" +
-	"\x05_grpcB\r\n" +
-	"\v_middleware\x1a6\n" +
+	"meter_name\x18\x02 \x01(\tR\tmeterName\x1a\"\n" +
+	"\x06Logger\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x1a%\n" +
+	"\tValidator\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x1a6\n" +
 	"\bEndpoint\x12\x16\n" +
 	"\x06scheme\x18\x01 \x01(\tR\x06scheme\x12\x12\n" +
-	"\x04host\x18\x02 \x01(\tR\x04host\x1a\xad\x04\n" +
-	"\x10HttpServerOption\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12\x1d\n" +
-	"\anetwork\x18\x02 \x01(\tH\x01R\anetwork\x88\x01\x01\x12\x17\n" +
-	"\x04addr\x18\x03 \x01(\tH\x02R\x04addr\x88\x01\x01\x12U\n" +
-	"\bendpoint\x18\x04 \x01(\v24.kratos_foundation_pb.ServerComponentConfig.EndpointH\x03R\bendpoint\x88\x01\x01\x128\n" +
-	"\atimeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationH\x04R\atimeout\x88\x01\x01\x12b\n" +
-	"\n" +
-	"middleware\x18\x06 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareH\x05R\n" +
-	"middleware\x88\x01\x01\x125\n" +
-	"\x14disable_strict_slash\x18\a \x01(\bH\x06R\x12disableStrictSlash\x88\x01\x01\x12$\n" +
-	"\vpath_prefix\x18\b \x01(\tH\aR\n" +
-	"pathPrefix\x88\x01\x01B\n" +
-	"\n" +
-	"\b_disableB\n" +
-	"\n" +
-	"\b_networkB\a\n" +
-	"\x05_addrB\v\n" +
-	"\t_endpointB\n" +
-	"\n" +
-	"\b_timeoutB\r\n" +
-	"\v_middlewareB\x17\n" +
-	"\x15_disable_strict_slashB\x0e\n" +
-	"\f_path_prefix\x1a\xec\x03\n" +
-	"\x10GrpcServerOption\x12\x1d\n" +
-	"\adisable\x18\x01 \x01(\bH\x00R\adisable\x88\x01\x01\x12\x18\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x1a\xac\x04\n" +
+	"\x10HttpServerOption\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x03 \x01(\tR\x04addr\x12P\n" +
 	"\bendpoint\x18\x04 \x01(\v24.kratos_foundation_pb.ServerComponentConfig.EndpointR\bendpoint\x123\n" +
-	"\atimeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12b\n" +
+	"\atimeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12]\n" +
 	"\n" +
-	"middleware\x18\x06 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareH\x01R\n" +
-	"middleware\x88\x01\x01\x12(\n" +
-	"\rcustom_health\x18\a \x01(\bH\x02R\fcustomHealth\x88\x01\x01\x122\n" +
-	"\x12disable_reflection\x18\b \x01(\bH\x03R\x11disableReflection\x88\x01\x01B\n" +
+	"middleware\x18\x06 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareR\n" +
+	"middleware\x120\n" +
+	"\x14disable_strict_slash\x18\a \x01(\bR\x12disableStrictSlash\x12\x1f\n" +
+	"\vpath_prefix\x18\b \x01(\tR\n" +
+	"pathPrefix\x12^\n" +
+	"\ametrics\x18\t \x01(\v2D.kratos_foundation_pb.ServerComponentConfig.HttpServerOption.MetricsR\ametrics\x1a7\n" +
+	"\aMetrics\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x1a\x94\x03\n" +
+	"\x10GrpcServerOption\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x18\n" +
+	"\anetwork\x18\x02 \x01(\tR\anetwork\x12\x12\n" +
+	"\x04addr\x18\x03 \x01(\tR\x04addr\x12P\n" +
+	"\bendpoint\x18\x04 \x01(\v24.kratos_foundation_pb.ServerComponentConfig.EndpointR\bendpoint\x123\n" +
+	"\atimeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12]\n" +
 	"\n" +
-	"\b_disableB\r\n" +
-	"\v_middlewareB\x10\n" +
-	"\x0e_custom_healthB\x15\n" +
-	"\x13_disable_reflection\"\xcf\x17\n" +
+	"middleware\x18\x06 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareR\n" +
+	"middleware\x12#\n" +
+	"\rcustom_health\x18\a \x01(\bR\fcustomHealth\x12-\n" +
+	"\x12disable_reflection\x18\b \x01(\bR\x11disableReflection\"\x81\x13\n" +
 	"\x17DatabaseComponentConfig\x12R\n" +
-	"\bdatabase\x18\x01 \x01(\v26.kratos_foundation_pb.DatabaseComponentConfig.DatabaseR\bdatabase\x1a\xdf\x16\n" +
-	"\bDatabase\x12T\n" +
-	"\x04gorm\x18\x01 \x01(\v2;.kratos_foundation_pb.DatabaseComponentConfig.Database.GormH\x00R\x04gorm\x88\x01\x01\x12I\n" +
-	"\x03log\x18\x02 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogH\x01R\x03log\x88\x01\x01\x12\x18\n" +
+	"\bdatabase\x18\x01 \x01(\v26.kratos_foundation_pb.DatabaseComponentConfig.DatabaseR\bdatabase\x1a\x91\x12\n" +
+	"\bDatabase\x12O\n" +
+	"\x04gorm\x18\x01 \x01(\v2;.kratos_foundation_pb.DatabaseComponentConfig.Database.GormR\x04gorm\x12D\n" +
+	"\x03log\x18\x02 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x12\x18\n" +
 	"\adefault\x18\x03 \x01(\tR\adefault\x12i\n" +
 	"\vconnections\x18\x04 \x03(\v2G.kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntryR\vconnections\x12X\n" +
 	"\atracing\x18\x05 \x01(\v2>.kratos_foundation_pb.DatabaseComponentConfig.Database.TracingR\atracing\x1a\x81\x01\n" +
@@ -3317,55 +3402,36 @@ const file_config_proto_rawDesc = "" +
 	"\x12exclude_query_vars\x18\x02 \x01(\bR\x10excludeQueryVars\x12'\n" +
 	"\x0fexclude_metrics\x18\x03 \x01(\bR\x0eexcludeMetrics\x12:\n" +
 	"\x1arecord_stack_trace_in_span\x18\x04 \x01(\bR\x16recordStackTraceInSpan\x124\n" +
-	"\x16exclude_server_address\x18\x05 \x01(\bR\x14excludeServerAddress\x1a\xaf\x0e\n" +
-	"\x04Gorm\x12=\n" +
-	"\x18skip_default_transaction\x18\x01 \x01(\bH\x00R\x16skipDefaultTransaction\x88\x01\x01\x12^\n" +
-	"\x1bdefault_transaction_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationH\x01R\x19defaultTransactionTimeout\x88\x01\x01\x12V\n" +
-	"\x17default_context_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationH\x02R\x15defaultContextTimeout\x88\x01\x01\x129\n" +
-	"\x16full_save_associations\x18\x04 \x01(\bH\x03R\x14fullSaveAssociations\x88\x01\x01\x12_\n" +
-	"\x06logger\x18\x05 \x01(\v2B.kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.LoggerH\x04R\x06logger\x88\x01\x01\x129\n" +
-	"\x16disable_automatic_ping\x18\x06 \x01(\bH\x05R\x14disableAutomaticPing\x88\x01\x01\x12d\n" +
-	"-disable_foreign_key_constraint_when_migrating\x18\a \x01(\bH\x06R(disableForeignKeyConstraintWhenMigrating\x88\x01\x01\x12R\n" +
-	"#ignore_relationships_when_migrating\x18\b \x01(\bH\aR ignoreRelationshipsWhenMigrating\x88\x01\x01\x12A\n" +
-	"\x1adisable_nested_transaction\x18\t \x01(\bH\bR\x18disableNestedTransaction\x88\x01\x01\x123\n" +
+	"\x16exclude_server_address\x18\x05 \x01(\bR\x14excludeServerAddress\x1a\xfc\t\n" +
+	"\x04Gorm\x128\n" +
+	"\x18skip_default_transaction\x18\x01 \x01(\bR\x16skipDefaultTransaction\x12Y\n" +
+	"\x1bdefault_transaction_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x19defaultTransactionTimeout\x12Q\n" +
+	"\x17default_context_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x15defaultContextTimeout\x124\n" +
+	"\x16full_save_associations\x18\x04 \x01(\bR\x14fullSaveAssociations\x12Z\n" +
+	"\x06logger\x18\x05 \x01(\v2B.kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.LoggerR\x06logger\x124\n" +
+	"\x16disable_automatic_ping\x18\x06 \x01(\bR\x14disableAutomaticPing\x12_\n" +
+	"-disable_foreign_key_constraint_when_migrating\x18\a \x01(\bR(disableForeignKeyConstraintWhenMigrating\x12M\n" +
+	"#ignore_relationships_when_migrating\x18\b \x01(\bR ignoreRelationshipsWhenMigrating\x12<\n" +
+	"\x1adisable_nested_transaction\x18\t \x01(\bR\x18disableNestedTransaction\x12.\n" +
 	"\x13allow_global_update\x18\n" +
-	" \x01(\bH\tR\x11allowGlobalUpdate\x88\x01\x01\x12&\n" +
-	"\fquery_fields\x18\v \x01(\bH\n" +
-	"R\vqueryFields\x88\x01\x01\x12/\n" +
-	"\x11create_batch_size\x18\f \x01(\x05H\vR\x0fcreateBatchSize\x88\x01\x01\x12,\n" +
-	"\x0ftranslate_error\x18\r \x01(\bH\fR\x0etranslateError\x88\x01\x01\x122\n" +
-	"\x12propagate_unscoped\x18\x0e \x01(\bH\rR\x11propagateUnscoped\x88\x01\x01\x1a\xee\x03\n" +
+	" \x01(\bR\x11allowGlobalUpdate\x12!\n" +
+	"\fquery_fields\x18\v \x01(\bR\vqueryFields\x12*\n" +
+	"\x11create_batch_size\x18\f \x01(\x05R\x0fcreateBatchSize\x12'\n" +
+	"\x0ftranslate_error\x18\r \x01(\bR\x0etranslateError\x12-\n" +
+	"\x12propagate_unscoped\x18\x0e \x01(\bR\x11propagateUnscoped\x1a\xfe\x02\n" +
 	"\x06Logger\x12^\n" +
-	"\x05level\x18\x01 \x01(\x0e2H.kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.LevelR\x05level\x12E\n" +
-	"\x0eslow_threshold\x18\x02 \x01(\v2\x19.google.protobuf.DurationH\x00R\rslowThreshold\x88\x01\x01\x12\x1f\n" +
-	"\bcolorful\x18\x03 \x01(\bH\x01R\bcolorful\x88\x01\x01\x12E\n" +
-	"\x1dignore_record_not_found_error\x18\x04 \x01(\bH\x02R\x19ignoreRecordNotFoundError\x88\x01\x01\x128\n" +
-	"\x15parameterized_queries\x18\x05 \x01(\bH\x03R\x14parameterizedQueries\x88\x01\x01\"?\n" +
+	"\x05level\x18\x01 \x01(\x0e2H.kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.LevelR\x05level\x12@\n" +
+	"\x0eslow_threshold\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\rslowThreshold\x12\x1a\n" +
+	"\bcolorful\x18\x03 \x01(\bR\bcolorful\x12@\n" +
+	"\x1dignore_record_not_found_error\x18\x04 \x01(\bR\x19ignoreRecordNotFoundError\x123\n" +
+	"\x15parameterized_queries\x18\x05 \x01(\bR\x14parameterizedQueries\"?\n" +
 	"\x05Level\x12\v\n" +
-	"\aUnknown\x10\x00\x12\n" +
+	"\aUNKNOWN\x10\x00\x12\n" +
 	"\n" +
-	"\x06Silent\x10\x01\x12\t\n" +
-	"\x05Error\x10\x02\x12\b\n" +
-	"\x04Warn\x10\x03\x12\b\n" +
-	"\x04Info\x10\x04B\x11\n" +
-	"\x0f_slow_thresholdB\v\n" +
-	"\t_colorfulB \n" +
-	"\x1e_ignore_record_not_found_errorB\x18\n" +
-	"\x16_parameterized_queriesB\x1b\n" +
-	"\x19_skip_default_transactionB\x1e\n" +
-	"\x1c_default_transaction_timeoutB\x1a\n" +
-	"\x18_default_context_timeoutB\x19\n" +
-	"\x17_full_save_associationsB\t\n" +
-	"\a_loggerB\x19\n" +
-	"\x17_disable_automatic_pingB0\n" +
-	"._disable_foreign_key_constraint_when_migratingB&\n" +
-	"$_ignore_relationships_when_migratingB\x1d\n" +
-	"\x1b_disable_nested_transactionB\x16\n" +
-	"\x14_allow_global_updateB\x0f\n" +
-	"\r_query_fieldsB\x14\n" +
-	"\x12_create_batch_sizeB\x12\n" +
-	"\x10_translate_errorB\x15\n" +
-	"\x13_propagate_unscoped\x1a\x9c\x02\n" +
+	"\x06SILENT\x10\x01\x12\t\n" +
+	"\x05ERROR\x10\x02\x12\b\n" +
+	"\x04WARN\x10\x03\x12\b\n" +
+	"\x04INFO\x10\x04\x1a\x9c\x02\n" +
 	"\n" +
 	"Connection\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x10\n" +
@@ -3375,17 +3441,18 @@ const file_config_proto_rawDesc = "" +
 	"\x13trace_resolver_mode\x18\x05 \x01(\bR\x11traceResolverMode\x1a5\n" +
 	"\tDialector\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x10\n" +
-	"\x03dsn\x18\x02 \x01(\tR\x03dsnB\a\n" +
-	"\x05_gormB\x06\n" +
-	"\x04_log\"\x9b\x12\n" +
+	"\x03dsn\x18\x02 \x01(\tR\x03dsn\"\x9b\x12\n" +
 	"\x14RedisComponentConfig\x12L\n" +
 	"\x05redis\x18\x01 \x01(\v26.kratos_foundation_pb.RedisComponentConfig.RedisConfigR\x05redis\x1a\xb4\x11\n" +
 	"\vRedisConfig\x12\x18\n" +
-	"\adefault\x18\x01 \x01(\tR\adefault\x12I\n" +
-	"\x03log\x18\x02 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogH\x00R\x03log\x88\x01\x01\x12X\n" +
-	"\atracing\x18\x03 \x01(\v2>.kratos_foundation_pb.RedisComponentConfig.RedisConfig.TracingR\atracing\x12X\n" +
-	"\ametrics\x18\x04 \x01(\v2>.kratos_foundation_pb.RedisComponentConfig.RedisConfig.MetricsR\ametrics\x12i\n" +
-	"\vconnections\x18\x05 \x03(\v2G.kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntryR\vconnections\x1a\x8e\x01\n" +
+	"\adefault\x18\x01 \x01(\tR\adefault\x12i\n" +
+	"\vconnections\x18\x02 \x03(\v2G.kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntryR\vconnections\x12I\n" +
+	"\x03log\x18\x03 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogH\x00R\x03log\x88\x01\x01\x12X\n" +
+	"\atracing\x18\x04 \x01(\v2>.kratos_foundation_pb.RedisComponentConfig.RedisConfig.TracingR\atracing\x12X\n" +
+	"\ametrics\x18\x05 \x01(\v2>.kratos_foundation_pb.RedisComponentConfig.RedisConfig.MetricsR\ametrics\x1a\x82\x01\n" +
+	"\x10ConnectionsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12X\n" +
+	"\x05value\x18\x02 \x01(\v2B.kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOptionR\x05value:\x028\x01\x1a\x8e\x01\n" +
 	"\aTracing\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12!\n" +
 	"\fdb_statement\x18\x02 \x01(\bR\vdbStatement\x12%\n" +
@@ -3393,10 +3460,7 @@ const file_config_proto_rawDesc = "" +
 	"\vdial_filter\x18\x04 \x01(\bR\n" +
 	"dialFilter\x1a#\n" +
 	"\aMetrics\x12\x18\n" +
-	"\adisable\x18\x01 \x01(\bR\adisable\x1a\x82\x01\n" +
-	"\x10ConnectionsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12X\n" +
-	"\x05value\x18\x02 \x01(\v2B.kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOptionR\x05value:\x028\x01\x1a\xdd\v\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x1a\xdd\v\n" +
 	"\vRedisOption\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x1f\n" +
@@ -3449,7 +3513,7 @@ func file_config_proto_rawDescGZIP() []byte {
 }
 
 var file_config_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_config_proto_goTypes = []any{
 	(TracingComponentConfig_Tracing_Exporter_Compression)(0), // 0: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
 	(TracingComponentConfig_Tracing_Sampler_Sample)(0),       // 1: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
@@ -3477,25 +3541,27 @@ var file_config_proto_goTypes = []any{
 	(*ServerComponentConfig_Endpoint)(nil),                        // 23: kratos_foundation_pb.ServerComponentConfig.Endpoint
 	(*ServerComponentConfig_HttpServerOption)(nil),                // 24: kratos_foundation_pb.ServerComponentConfig.HttpServerOption
 	(*ServerComponentConfig_GrpcServerOption)(nil),                // 25: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption
-	(*ServerComponentConfig_Server_Middleware)(nil),               // 26: kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	(*ServerComponentConfig_Server_Middleware_Metadata)(nil),      // 27: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metadata
-	(*ServerComponentConfig_Server_Middleware_Tracing)(nil),       // 28: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Tracing
-	(*ServerComponentConfig_Server_Middleware_Metrics)(nil),       // 29: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metrics
-	(*ServerComponentConfig_Server_Middleware_Logger)(nil),        // 30: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Logger
-	(*ServerComponentConfig_Server_Middleware_Validator)(nil),     // 31: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Validator
-	(*DatabaseComponentConfig_Database)(nil),                      // 32: kratos_foundation_pb.DatabaseComponentConfig.Database
-	nil,                                                           // 33: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
-	(*DatabaseComponentConfig_Database_Tracing)(nil),              // 34: kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
-	(*DatabaseComponentConfig_Database_Gorm)(nil),                 // 35: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
-	(*DatabaseComponentConfig_Database_Connection)(nil),           // 36: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
-	(*DatabaseComponentConfig_Database_Gorm_Logger)(nil),          // 37: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
-	(*DatabaseComponentConfig_Database_Connection_Dialector)(nil), // 38: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
-	(*RedisComponentConfig_RedisConfig)(nil),                      // 39: kratos_foundation_pb.RedisComponentConfig.RedisConfig
-	(*RedisComponentConfig_RedisConfig_Tracing)(nil),              // 40: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
-	(*RedisComponentConfig_RedisConfig_Metrics)(nil),              // 41: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
-	nil, // 42: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
-	(*RedisComponentConfig_RedisConfig_RedisOption)(nil), // 43: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
-	(*durationpb.Duration)(nil),                          // 44: google.protobuf.Duration
+	(*ServerComponentConfig_Server_RouteTimeout)(nil),             // 26: kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeout
+	(*ServerComponentConfig_Server_Middleware)(nil),               // 27: kratos_foundation_pb.ServerComponentConfig.Server.Middleware
+	(*ServerComponentConfig_Server_Middleware_Metadata)(nil),      // 28: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metadata
+	(*ServerComponentConfig_Server_Middleware_Tracing)(nil),       // 29: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Tracing
+	(*ServerComponentConfig_Server_Middleware_Metrics)(nil),       // 30: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metrics
+	(*ServerComponentConfig_Server_Middleware_Logger)(nil),        // 31: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Logger
+	(*ServerComponentConfig_Server_Middleware_Validator)(nil),     // 32: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Validator
+	(*ServerComponentConfig_HttpServerOption_Metrics)(nil),        // 33: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.Metrics
+	(*DatabaseComponentConfig_Database)(nil),                      // 34: kratos_foundation_pb.DatabaseComponentConfig.Database
+	nil,                                                           // 35: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
+	(*DatabaseComponentConfig_Database_Tracing)(nil),              // 36: kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
+	(*DatabaseComponentConfig_Database_Gorm)(nil),                 // 37: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
+	(*DatabaseComponentConfig_Database_Connection)(nil),           // 38: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
+	(*DatabaseComponentConfig_Database_Gorm_Logger)(nil),          // 39: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
+	(*DatabaseComponentConfig_Database_Connection_Dialector)(nil), // 40: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
+	(*RedisComponentConfig_RedisConfig)(nil),                      // 41: kratos_foundation_pb.RedisComponentConfig.RedisConfig
+	nil,                                                           // 42: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
+	(*RedisComponentConfig_RedisConfig_Tracing)(nil),              // 43: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
+	(*RedisComponentConfig_RedisConfig_Metrics)(nil),              // 44: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	(*RedisComponentConfig_RedisConfig_RedisOption)(nil),          // 45: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
+	(*durationpb.Duration)(nil),                                   // 46: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
 	10, // 0: kratos_foundation_pb.AppComponentConfig.app:type_name -> kratos_foundation_pb.AppComponentConfig.App
@@ -3503,10 +3569,10 @@ var file_config_proto_depIdxs = []int32{
 	16, // 2: kratos_foundation_pb.MetricComponentConfig.metric:type_name -> kratos_foundation_pb.MetricComponentConfig.Metric
 	17, // 3: kratos_foundation_pb.TracingComponentConfig.tracing:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing
 	22, // 4: kratos_foundation_pb.ServerComponentConfig.server:type_name -> kratos_foundation_pb.ServerComponentConfig.Server
-	32, // 5: kratos_foundation_pb.DatabaseComponentConfig.database:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database
-	39, // 6: kratos_foundation_pb.RedisComponentConfig.redis:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig
-	44, // 7: kratos_foundation_pb.AppComponentConfig.App.registrar_timeout:type_name -> google.protobuf.Duration
-	44, // 8: kratos_foundation_pb.AppComponentConfig.App.stop_timeout:type_name -> google.protobuf.Duration
+	34, // 5: kratos_foundation_pb.DatabaseComponentConfig.database:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database
+	41, // 6: kratos_foundation_pb.RedisComponentConfig.redis:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig
+	46, // 7: kratos_foundation_pb.AppComponentConfig.App.registrar_timeout:type_name -> google.protobuf.Duration
+	46, // 8: kratos_foundation_pb.AppComponentConfig.App.stop_timeout:type_name -> google.protobuf.Duration
 	13, // 9: kratos_foundation_pb.LogComponentConfig.Log.std:type_name -> kratos_foundation_pb.LogComponentConfig.Log.StdLogger
 	14, // 10: kratos_foundation_pb.LogComponentConfig.Log.file:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger
 	15, // 11: kratos_foundation_pb.LogComponentConfig.Log.FileLogger.rotating:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger.Rotating
@@ -3516,58 +3582,61 @@ var file_config_proto_depIdxs = []int32{
 	11, // 15: kratos_foundation_pb.TracingComponentConfig.Tracing.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
 	0,  // 16: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.compression:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
 	20, // 17: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.headers:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
-	44, // 18: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.timeout:type_name -> google.protobuf.Duration
+	46, // 18: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.timeout:type_name -> google.protobuf.Duration
 	21, // 19: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.retry:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
 	1,  // 20: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.sample:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
-	44, // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.initial_interval:type_name -> google.protobuf.Duration
-	44, // 22: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_interval:type_name -> google.protobuf.Duration
-	44, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_elapsed_time:type_name -> google.protobuf.Duration
-	44, // 24: kratos_foundation_pb.ServerComponentConfig.Server.stop_delay:type_name -> google.protobuf.Duration
-	24, // 25: kratos_foundation_pb.ServerComponentConfig.Server.http:type_name -> kratos_foundation_pb.ServerComponentConfig.HttpServerOption
-	25, // 26: kratos_foundation_pb.ServerComponentConfig.Server.grpc:type_name -> kratos_foundation_pb.ServerComponentConfig.GrpcServerOption
-	26, // 27: kratos_foundation_pb.ServerComponentConfig.Server.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
+	46, // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.initial_interval:type_name -> google.protobuf.Duration
+	46, // 22: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_interval:type_name -> google.protobuf.Duration
+	46, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_elapsed_time:type_name -> google.protobuf.Duration
+	46, // 24: kratos_foundation_pb.ServerComponentConfig.Server.stop_delay:type_name -> google.protobuf.Duration
+	27, // 25: kratos_foundation_pb.ServerComponentConfig.Server.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
+	24, // 26: kratos_foundation_pb.ServerComponentConfig.Server.http:type_name -> kratos_foundation_pb.ServerComponentConfig.HttpServerOption
+	25, // 27: kratos_foundation_pb.ServerComponentConfig.Server.grpc:type_name -> kratos_foundation_pb.ServerComponentConfig.GrpcServerOption
 	11, // 28: kratos_foundation_pb.ServerComponentConfig.Server.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	23, // 29: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Endpoint
-	44, // 30: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.timeout:type_name -> google.protobuf.Duration
-	26, // 31: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	23, // 32: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Endpoint
-	44, // 33: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.timeout:type_name -> google.protobuf.Duration
-	26, // 34: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	27, // 35: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.metadata:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metadata
-	28, // 36: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.tracing:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Tracing
-	29, // 37: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metrics
-	30, // 38: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.logger:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Logger
-	31, // 39: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.validator:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Validator
-	35, // 40: kratos_foundation_pb.DatabaseComponentConfig.Database.gorm:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
-	11, // 41: kratos_foundation_pb.DatabaseComponentConfig.Database.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	33, // 42: kratos_foundation_pb.DatabaseComponentConfig.Database.connections:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
-	34, // 43: kratos_foundation_pb.DatabaseComponentConfig.Database.tracing:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
-	36, // 44: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry.value:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
-	44, // 45: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_transaction_timeout:type_name -> google.protobuf.Duration
-	44, // 46: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_context_timeout:type_name -> google.protobuf.Duration
-	37, // 47: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.logger:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
-	38, // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.replicas:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
-	2,  // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.level:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
-	44, // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.slow_threshold:type_name -> google.protobuf.Duration
-	11, // 51: kratos_foundation_pb.RedisComponentConfig.RedisConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	40, // 52: kratos_foundation_pb.RedisComponentConfig.RedisConfig.tracing:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
-	41, // 53: kratos_foundation_pb.RedisComponentConfig.RedisConfig.metrics:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	26, // 29: kratos_foundation_pb.ServerComponentConfig.Server.timeout:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeout
+	23, // 30: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Endpoint
+	46, // 31: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.timeout:type_name -> google.protobuf.Duration
+	27, // 32: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
+	33, // 33: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.HttpServerOption.Metrics
+	23, // 34: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Endpoint
+	46, // 35: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.timeout:type_name -> google.protobuf.Duration
+	27, // 36: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
+	46, // 37: kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeout.timeout:type_name -> google.protobuf.Duration
+	28, // 38: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.metadata:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metadata
+	29, // 39: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.tracing:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Tracing
+	30, // 40: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metrics
+	31, // 41: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.logger:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Logger
+	32, // 42: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.validator:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Validator
+	37, // 43: kratos_foundation_pb.DatabaseComponentConfig.Database.gorm:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
+	11, // 44: kratos_foundation_pb.DatabaseComponentConfig.Database.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	35, // 45: kratos_foundation_pb.DatabaseComponentConfig.Database.connections:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
+	36, // 46: kratos_foundation_pb.DatabaseComponentConfig.Database.tracing:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
+	38, // 47: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry.value:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
+	46, // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_transaction_timeout:type_name -> google.protobuf.Duration
+	46, // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_context_timeout:type_name -> google.protobuf.Duration
+	39, // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.logger:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
+	40, // 51: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.replicas:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
+	2,  // 52: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.level:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
+	46, // 53: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.slow_threshold:type_name -> google.protobuf.Duration
 	42, // 54: kratos_foundation_pb.RedisComponentConfig.RedisConfig.connections:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
-	43, // 55: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry.value:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
-	44, // 56: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.min_retry_backoff:type_name -> google.protobuf.Duration
-	44, // 57: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.max_retry_backoff:type_name -> google.protobuf.Duration
-	44, // 58: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dial_timeout:type_name -> google.protobuf.Duration
-	44, // 59: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dialer_retry_timeout:type_name -> google.protobuf.Duration
-	44, // 60: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.read_timeout:type_name -> google.protobuf.Duration
-	44, // 61: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.write_timeout:type_name -> google.protobuf.Duration
-	44, // 62: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.pool_timeout:type_name -> google.protobuf.Duration
-	44, // 63: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_idle_time:type_name -> google.protobuf.Duration
-	44, // 64: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_lifetime:type_name -> google.protobuf.Duration
-	65, // [65:65] is the sub-list for method output_type
-	65, // [65:65] is the sub-list for method input_type
-	65, // [65:65] is the sub-list for extension type_name
-	65, // [65:65] is the sub-list for extension extendee
-	0,  // [0:65] is the sub-list for field type_name
+	11, // 55: kratos_foundation_pb.RedisComponentConfig.RedisConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	43, // 56: kratos_foundation_pb.RedisComponentConfig.RedisConfig.tracing:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
+	44, // 57: kratos_foundation_pb.RedisComponentConfig.RedisConfig.metrics:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	45, // 58: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry.value:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
+	46, // 59: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.min_retry_backoff:type_name -> google.protobuf.Duration
+	46, // 60: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.max_retry_backoff:type_name -> google.protobuf.Duration
+	46, // 61: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dial_timeout:type_name -> google.protobuf.Duration
+	46, // 62: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dialer_retry_timeout:type_name -> google.protobuf.Duration
+	46, // 63: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.read_timeout:type_name -> google.protobuf.Duration
+	46, // 64: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.write_timeout:type_name -> google.protobuf.Duration
+	46, // 65: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.pool_timeout:type_name -> google.protobuf.Duration
+	46, // 66: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_idle_time:type_name -> google.protobuf.Duration
+	46, // 67: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_lifetime:type_name -> google.protobuf.Duration
+	68, // [68:68] is the sub-list for method output_type
+	68, // [68:68] is the sub-list for method input_type
+	68, // [68:68] is the sub-list for extension type_name
+	68, // [68:68] is the sub-list for extension extendee
+	0,  // [0:68] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -3575,34 +3644,16 @@ func file_config_proto_init() {
 	if File_config_proto != nil {
 		return
 	}
-	file_config_proto_msgTypes[7].OneofWrappers = []any{}
-	file_config_proto_msgTypes[8].OneofWrappers = []any{}
-	file_config_proto_msgTypes[9].OneofWrappers = []any{}
 	file_config_proto_msgTypes[10].OneofWrappers = []any{}
 	file_config_proto_msgTypes[11].OneofWrappers = []any{}
-	file_config_proto_msgTypes[14].OneofWrappers = []any{}
-	file_config_proto_msgTypes[15].OneofWrappers = []any{}
-	file_config_proto_msgTypes[16].OneofWrappers = []any{}
-	file_config_proto_msgTypes[19].OneofWrappers = []any{}
-	file_config_proto_msgTypes[21].OneofWrappers = []any{}
-	file_config_proto_msgTypes[22].OneofWrappers = []any{}
-	file_config_proto_msgTypes[23].OneofWrappers = []any{}
-	file_config_proto_msgTypes[24].OneofWrappers = []any{}
-	file_config_proto_msgTypes[25].OneofWrappers = []any{}
-	file_config_proto_msgTypes[26].OneofWrappers = []any{}
-	file_config_proto_msgTypes[27].OneofWrappers = []any{}
-	file_config_proto_msgTypes[28].OneofWrappers = []any{}
-	file_config_proto_msgTypes[29].OneofWrappers = []any{}
-	file_config_proto_msgTypes[32].OneofWrappers = []any{}
-	file_config_proto_msgTypes[34].OneofWrappers = []any{}
-	file_config_proto_msgTypes[36].OneofWrappers = []any{}
+	file_config_proto_msgTypes[38].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_proto_rawDesc), len(file_config_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   41,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

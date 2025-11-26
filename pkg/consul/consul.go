@@ -13,7 +13,9 @@ import (
 
 var DefaultIPResolver = net.LookupIP
 
-func NewConsul() (*api.Client, error) {
+type Client = api.Client
+
+func NewConsul() (*Client, error) {
 	// 如果没有指定 api.HTTPAddrEnvName 并且是 local 环境，则不返回 consul 实例
 	if env.GetEnv(api.HTTPAddrEnvName) == "" && env.IsLocal() {
 		log.Warn("本地环境，不连接consul")

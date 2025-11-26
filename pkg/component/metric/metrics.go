@@ -56,12 +56,13 @@ func NewMetrics(
 	meter := provider.Meter(meterName)
 
 	return &Metrics{
-		Helper:       log.WithModule(logModule, cfg.GetLog()).NewHelper(),
-		meter:        meter,
-		meterName:    meterName,
-		counterMap:   make(map[string]metric.Int64Counter, cfg.GetCounterMapSize()),
-		gaugeMap:     make(map[string]metric.Int64Gauge, cfg.GetGaugeMapSize()),
-		histogramMap: make(map[string]metric.Float64Histogram, cfg.GetHistogramMapSize()),
+		Helper:        log.WithModule(logModule, cfg.GetLog()).NewHelper(),
+		meterProvider: provider,
+		meter:         meter,
+		meterName:     meterName,
+		counterMap:    make(map[string]metric.Int64Counter, cfg.GetCounterMapSize()),
+		gaugeMap:      make(map[string]metric.Int64Gauge, cfg.GetGaugeMapSize()),
+		histogramMap:  make(map[string]metric.Float64Histogram, cfg.GetHistogramMapSize()),
 	}, nil
 }
 
@@ -125,7 +126,7 @@ func (m *Metrics) AddCounter(ctx context.Context, name string, incr int64, optio
 	if !ok {
 		counter, err = m.RegisterNewCounter(name)
 		// 如果是已存在，则在读一次
-		if !errors.Is(err, counterAlreadyExistsErr) {
+		if !errors.Is(err, counterAlreadyExistsErr) && err != nil {
 			m.WithContext(ctx).Warnf("AddCounter(%s, %d) failed: create new counter failed: %v", name, incr, err)
 			return false
 		}

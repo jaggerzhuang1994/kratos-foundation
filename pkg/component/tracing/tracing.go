@@ -5,6 +5,7 @@ import (
 
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/trace"
@@ -19,6 +20,7 @@ type Tracing struct {
 	*log.Helper
 	tp                trace.TracerProvider
 	defaultTracerName string
+	defaultTracer     trace.Tracer
 }
 
 const logModule = "tracing"
@@ -33,8 +35,8 @@ func NewTracing(cfg *Config, appInfo *kratos_foundation_pb.AppInfo, log *log.Log
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	sampler := newSampler(cfg.GetSampler())
-	exporter, err := newSpanExporter(ctx, cfg.GetExporter())
+	sampler := newSampler(l, cfg.GetSampler())
+	exporter, err := newExporter(ctx, cfg.GetExporter())
 	if err != nil {
 		l.Error("failed to create span exporter", "error", err)
 		cancel()
@@ -52,14 +54,12 @@ func NewTracing(cfg *Config, appInfo *kratos_foundation_pb.AppInfo, log *log.Log
 	)
 
 	defaultTracerName := cfg.GetTracerName()
-	if defaultTracerName == "" {
-		defaultTracerName = appInfo.GetName()
-	}
 
 	return &Tracing{
 			Helper:            l,
 			tp:                tp,
 			defaultTracerName: defaultTracerName,
+			defaultTracer:     tp.Tracer(defaultTracerName),
 		}, func() {
 			defer cancel()
 			err := tp.Shutdown(context.Background())
@@ -77,23 +77,38 @@ func (t *Tracing) GetDefaultTracerName() string {
 	return t.defaultTracerName
 }
 
-func newSpanExporter(ctx context.Context, cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter) (*otlptrace.Exporter, error) {
-	var opts []otlptracehttp.Option
+func (t *Tracing) SimpleTrace(ctx context.Context, spanName string, logic func(context.Context)) {
+	t.Trace(ctx, spanName, func(ctx context.Context, _ trace.Span) error {
+		logic(ctx)
+		return nil
+	})
+}
 
-	if cfg.GetEndpoint() != "" {
-		opts = append(opts, otlptracehttp.WithEndpoint(cfg.GetEndpoint()))
-	}
+func (t *Tracing) Trace(ctx context.Context, spanName string, logic func(context.Context, trace.Span) error) {
+	ctx, span := t.defaultTracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindInternal))
+	var err error
+	defer func() {
+		if !span.IsRecording() {
+			return
+		}
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	err = logic(ctx, span)
+}
+
+func newExporter(ctx context.Context, cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter) (*otlptrace.Exporter, error) {
+	var opts []otlptracehttp.Option
 
 	if cfg.GetEndpointUrl() != "" {
 		opts = append(opts, otlptracehttp.WithEndpointURL(cfg.GetEndpointUrl()))
 	}
 
-	if cfg != nil && cfg.Compression != nil {
+	if cfg != nil {
 		opts = append(opts, otlptracehttp.WithCompression(otlptracehttp.Compression(cfg.GetCompression())))
-	}
-
-	if cfg.GetUrlPath() != "" {
-		opts = append(opts, otlptracehttp.WithURLPath(cfg.GetUrlPath()))
 	}
 
 	if cfg.GetHeaders() != nil {
@@ -116,14 +131,18 @@ func newSpanExporter(ctx context.Context, cfg *kratos_foundation_pb.TracingCompo
 	return otlptracehttp.New(ctx, opts...)
 }
 
-func newSampler(cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler) tracesdk.Sampler {
+func newSampler(log *log.Helper, cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler) tracesdk.Sampler {
 	switch cfg.GetSample() {
-	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_Ratio:
+	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_RATIO:
+		log.Info("tracing ratio sample", cfg.GetRatio())
 		return tracesdk.ParentBased(tracesdk.TraceIDRatioBased(cfg.GetRatio()))
-	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_AlwaysOn:
+	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_ALWAYS:
+		log.Info("tracing always sample")
 		return tracesdk.AlwaysSample()
-	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_AlwaysOff:
+	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_NEVER:
+		log.Info("tracing never sample")
 		return tracesdk.NeverSample()
 	}
+	log.Warn("fallback: tracing never sample")
 	return tracesdk.NeverSample()
 }

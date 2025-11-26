@@ -2,12 +2,13 @@ package consul
 
 import (
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
-	"github.com/hashicorp/consul/api"
+	"github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
 )
 
-func NewRegistry(client *api.Client) *consul.Registry {
+func NewConsulRegistry(client *Client) *consul.Registry {
 	if client == nil {
+		log.Warn("无consul连接，不提供consul服务注册")
 		return nil
 	}
 	return consul.New(client, getConsulOpts()...)
