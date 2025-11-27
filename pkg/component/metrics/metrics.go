@@ -1,4 +1,4 @@
-package metric
+package metrics
 
 import (
 	"context"
@@ -124,7 +124,7 @@ func (m *Metrics) AddCounter(ctx context.Context, name string, incr int64, optio
 	// counter 不存在，则初始化一个新的
 	var err error
 	if !ok {
-		counter, err = m.RegisterNewCounter(name)
+		_, err = m.RegisterNewCounter(name)
 		// 如果是已存在，则在读一次
 		if !errors.Is(err, counterAlreadyExistsErr) && err != nil {
 			m.WithContext(ctx).Warnf("AddCounter(%s, %d) failed: create new counter failed: %v", name, incr, err)
@@ -193,7 +193,7 @@ func (m *Metrics) RecordGauge(ctx context.Context, name string, value int64, opt
 	// gauge 不存在，则初始化一个新的
 	var err error
 	if !ok {
-		gauge, err = m.RegisterNewGauge(name)
+		_, err = m.RegisterNewGauge(name)
 		// 如果是已存在，则再读一次
 		if !errors.Is(err, gaugeAlreadyExistsErr) && err != nil {
 			m.WithContext(ctx).Warnf("RecordGauge(%s, %d) failed: create new gauge failed: %v", name, value, err)
@@ -253,7 +253,7 @@ func (m *Metrics) RecordHistogram(ctx context.Context, name string, incr float64
 	// histogram 不存在，则初始化一个新的
 	var err error
 	if !ok {
-		histogram, err = m.RegisterNewHistogram(name)
+		_, err = m.RegisterNewHistogram(name)
 		// 如果是已存在，则再读一次
 		if !errors.Is(err, histogramAlreadyExistsErr) && err != nil {
 			m.WithContext(ctx).Warnf("RecordHistogram(%s, %f) failed: create new histogram failed: %v", name, incr, err)

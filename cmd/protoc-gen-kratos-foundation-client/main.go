@@ -8,15 +8,16 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-var showVersion = flag.Bool("version", false, "print the version and exit")
-
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Printf("protoc-gen-kratos-foundation-errors %v\n", Version)
+		fmt.Printf("protoc-gen-kratos-foundation-client %v\n", Version)
 		return
 	}
+
 	var flags flag.FlagSet
+
 	protogen.Options{
 		ParamFunc: flags.Set,
 	}.Run(func(gen *protogen.Plugin) error {

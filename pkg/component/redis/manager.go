@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metric"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/extra/redisotel/v9"
@@ -15,7 +15,7 @@ import (
 type Manager struct {
 	log     *log.Helper
 	tracing *tracing.Tracing
-	metrics *metric.Metrics
+	metrics *metrics.Metrics
 
 	conf        *Config
 	connOptions map[string]*RedisOption
@@ -32,7 +32,7 @@ func NewManager(
 	log *log.Log,
 	conf *Config,
 	tracing *tracing.Tracing,
-	metrics *metric.Metrics,
+	metrics *metrics.Metrics,
 ) (*Manager, func(), error) {
 	c := &Manager{
 		log:     log.WithModule("redis", conf.GetLog()).NewHelper(),

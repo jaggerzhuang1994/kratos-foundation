@@ -1,4 +1,4 @@
-package middleware
+package validator
 
 import (
 	"context"
@@ -7,6 +7,12 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
+
+type Config = kratos_foundation_pb.MiddlewareConfig_Validator
+
+func Enable(config *Config) bool {
+	return !config.GetDisable()
+}
 
 func Validator() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {

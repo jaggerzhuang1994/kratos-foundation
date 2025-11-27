@@ -9,7 +9,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metric"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
@@ -20,13 +20,13 @@ func NewApp(
 	cfg *Config,
 	l *log.Log, // log 组件
 	hook *HookManager, // app hook
-	metrics *metric.Metrics, // metric 组件
+	metrics_ *metrics.Metrics, // metric 组件
 	serverManager *server.Manager, // server 组件
 	registrar registry.Registrar, // 服务注册中心实例
 ) (*kratos.App, error) {
 	ctx := app_info.NewContext(context.Background(), appInfo)
 	ctx = log.NewContext(ctx, l)
-	ctx = metric.NewContext(ctx, metrics)
+	ctx = metrics.NewContext(ctx, metrics_)
 
 	// initCtx
 	for _, initCtx := range hook.initCtx {

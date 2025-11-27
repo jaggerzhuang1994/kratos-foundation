@@ -174,7 +174,59 @@ func (x DatabaseComponentConfig_Database_Gorm_Logger_Level) Number() protoreflec
 
 // Deprecated: Use DatabaseComponentConfig_Database_Gorm_Logger_Level.Descriptor instead.
 func (DatabaseComponentConfig_Database_Gorm_Logger_Level) EnumDescriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0, 2, 0, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 2, 0, 0}
+}
+
+type ClientComponentConfig_Client_ClientOption_Protocol int32
+
+const (
+	ClientComponentConfig_Client_ClientOption_GRPC  ClientComponentConfig_Client_ClientOption_Protocol = 0
+	ClientComponentConfig_Client_ClientOption_HTTP  ClientComponentConfig_Client_ClientOption_Protocol = 1
+	ClientComponentConfig_Client_ClientOption_GRPCS ClientComponentConfig_Client_ClientOption_Protocol = 2
+	ClientComponentConfig_Client_ClientOption_HTTPS ClientComponentConfig_Client_ClientOption_Protocol = 3
+)
+
+// Enum value maps for ClientComponentConfig_Client_ClientOption_Protocol.
+var (
+	ClientComponentConfig_Client_ClientOption_Protocol_name = map[int32]string{
+		0: "GRPC",
+		1: "HTTP",
+		2: "GRPCS",
+		3: "HTTPS",
+	}
+	ClientComponentConfig_Client_ClientOption_Protocol_value = map[string]int32{
+		"GRPC":  0,
+		"HTTP":  1,
+		"GRPCS": 2,
+		"HTTPS": 3,
+	}
+)
+
+func (x ClientComponentConfig_Client_ClientOption_Protocol) Enum() *ClientComponentConfig_Client_ClientOption_Protocol {
+	p := new(ClientComponentConfig_Client_ClientOption_Protocol)
+	*p = x
+	return p
+}
+
+func (x ClientComponentConfig_Client_ClientOption_Protocol) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ClientComponentConfig_Client_ClientOption_Protocol) Descriptor() protoreflect.EnumDescriptor {
+	return file_config_proto_enumTypes[3].Descriptor()
+}
+
+func (ClientComponentConfig_Client_ClientOption_Protocol) Type() protoreflect.EnumType {
+	return &file_config_proto_enumTypes[3]
+}
+
+func (x ClientComponentConfig_Client_ClientOption_Protocol) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ClientComponentConfig_Client_ClientOption_Protocol.Descriptor instead.
+func (ClientComponentConfig_Client_ClientOption_Protocol) EnumDescriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{8, 0, 1, 0}
 }
 
 type AppComponentConfig struct {
@@ -266,8 +318,8 @@ func (x *LogComponentConfig) GetLog() *LogComponentConfig_Log {
 }
 
 type MetricComponentConfig struct {
-	state         protoimpl.MessageState        `protogen:"open.v1"`
-	Metric        *MetricComponentConfig_Metric `protobuf:"bytes,1,opt,name=metric,proto3" json:"metric,omitempty"`
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	Metrics       *MetricComponentConfig_Metrics `protobuf:"bytes,1,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -302,9 +354,9 @@ func (*MetricComponentConfig) Descriptor() ([]byte, []int) {
 	return file_config_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *MetricComponentConfig) GetMetric() *MetricComponentConfig_Metric {
+func (x *MetricComponentConfig) GetMetrics() *MetricComponentConfig_Metrics {
 	if x != nil {
-		return x.Metric
+		return x.Metrics
 	}
 	return nil
 }
@@ -353,6 +405,42 @@ func (x *TracingComponentConfig) GetTracing() *TracingComponentConfig_Tracing {
 	return nil
 }
 
+type MiddlewareConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig) Reset() {
+	*x = MiddlewareConfig{}
+	mi := &file_config_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig) ProtoMessage() {}
+
+func (x *MiddlewareConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4}
+}
+
 // 服务组件配置
 type ServerComponentConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -364,7 +452,7 @@ type ServerComponentConfig struct {
 
 func (x *ServerComponentConfig) Reset() {
 	*x = ServerComponentConfig{}
-	mi := &file_config_proto_msgTypes[4]
+	mi := &file_config_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +464,7 @@ func (x *ServerComponentConfig) String() string {
 func (*ServerComponentConfig) ProtoMessage() {}
 
 func (x *ServerComponentConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[4]
+	mi := &file_config_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +477,7 @@ func (x *ServerComponentConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerComponentConfig.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4}
+	return file_config_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ServerComponentConfig) GetServer() *ServerComponentConfig_Server {
@@ -408,7 +496,7 @@ type DatabaseComponentConfig struct {
 
 func (x *DatabaseComponentConfig) Reset() {
 	*x = DatabaseComponentConfig{}
-	mi := &file_config_proto_msgTypes[5]
+	mi := &file_config_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -420,7 +508,7 @@ func (x *DatabaseComponentConfig) String() string {
 func (*DatabaseComponentConfig) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[5]
+	mi := &file_config_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -433,7 +521,7 @@ func (x *DatabaseComponentConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DatabaseComponentConfig.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5}
+	return file_config_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DatabaseComponentConfig) GetDatabase() *DatabaseComponentConfig_Database {
@@ -453,7 +541,7 @@ type RedisComponentConfig struct {
 
 func (x *RedisComponentConfig) Reset() {
 	*x = RedisComponentConfig{}
-	mi := &file_config_proto_msgTypes[6]
+	mi := &file_config_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -465,7 +553,7 @@ func (x *RedisComponentConfig) String() string {
 func (*RedisComponentConfig) ProtoMessage() {}
 
 func (x *RedisComponentConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[6]
+	mi := &file_config_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -478,12 +566,57 @@ func (x *RedisComponentConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedisComponentConfig.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6}
+	return file_config_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RedisComponentConfig) GetRedis() *RedisComponentConfig_RedisConfig {
 	if x != nil {
 		return x.Redis
+	}
+	return nil
+}
+
+// 客户端组件
+type ClientComponentConfig struct {
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Client        *ClientComponentConfig_Client `protobuf:"bytes,1,opt,name=client,proto3" json:"client,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientComponentConfig) Reset() {
+	*x = ClientComponentConfig{}
+	mi := &file_config_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientComponentConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientComponentConfig) ProtoMessage() {}
+
+func (x *ClientComponentConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientComponentConfig.ProtoReflect.Descriptor instead.
+func (*ClientComponentConfig) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ClientComponentConfig) GetClient() *ClientComponentConfig_Client {
+	if x != nil {
+		return x.Client
 	}
 	return nil
 }
@@ -502,7 +635,7 @@ type AppComponentConfig_App struct {
 
 func (x *AppComponentConfig_App) Reset() {
 	*x = AppComponentConfig_App{}
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -514,7 +647,7 @@ func (x *AppComponentConfig_App) String() string {
 func (*AppComponentConfig_App) ProtoMessage() {}
 
 func (x *AppComponentConfig_App) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -564,7 +697,7 @@ type LogComponentConfig_ModuleLog struct {
 
 func (x *LogComponentConfig_ModuleLog) Reset() {
 	*x = LogComponentConfig_ModuleLog{}
-	mi := &file_config_proto_msgTypes[8]
+	mi := &file_config_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +709,7 @@ func (x *LogComponentConfig_ModuleLog) String() string {
 func (*LogComponentConfig_ModuleLog) ProtoMessage() {}
 
 func (x *LogComponentConfig_ModuleLog) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[8]
+	mi := &file_config_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -624,7 +757,7 @@ type LogComponentConfig_Log struct {
 
 func (x *LogComponentConfig_Log) Reset() {
 	*x = LogComponentConfig_Log{}
-	mi := &file_config_proto_msgTypes[9]
+	mi := &file_config_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -636,7 +769,7 @@ func (x *LogComponentConfig_Log) String() string {
 func (*LogComponentConfig_Log) ProtoMessage() {}
 
 func (x *LogComponentConfig_Log) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[9]
+	mi := &file_config_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +834,7 @@ type LogComponentConfig_Log_StdLogger struct {
 
 func (x *LogComponentConfig_Log_StdLogger) Reset() {
 	*x = LogComponentConfig_Log_StdLogger{}
-	mi := &file_config_proto_msgTypes[10]
+	mi := &file_config_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -713,7 +846,7 @@ func (x *LogComponentConfig_Log_StdLogger) String() string {
 func (*LogComponentConfig_Log_StdLogger) ProtoMessage() {}
 
 func (x *LogComponentConfig_Log_StdLogger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[10]
+	mi := &file_config_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +901,7 @@ type LogComponentConfig_Log_FileLogger struct {
 
 func (x *LogComponentConfig_Log_FileLogger) Reset() {
 	*x = LogComponentConfig_Log_FileLogger{}
-	mi := &file_config_proto_msgTypes[11]
+	mi := &file_config_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -780,7 +913,7 @@ func (x *LogComponentConfig_Log_FileLogger) String() string {
 func (*LogComponentConfig_Log_FileLogger) ProtoMessage() {}
 
 func (x *LogComponentConfig_Log_FileLogger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[11]
+	mi := &file_config_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -855,7 +988,7 @@ type LogComponentConfig_Log_FileLogger_Rotating struct {
 
 func (x *LogComponentConfig_Log_FileLogger_Rotating) Reset() {
 	*x = LogComponentConfig_Log_FileLogger_Rotating{}
-	mi := &file_config_proto_msgTypes[12]
+	mi := &file_config_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -867,7 +1000,7 @@ func (x *LogComponentConfig_Log_FileLogger_Rotating) String() string {
 func (*LogComponentConfig_Log_FileLogger_Rotating) ProtoMessage() {}
 
 func (x *LogComponentConfig_Log_FileLogger_Rotating) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[12]
+	mi := &file_config_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -925,7 +1058,7 @@ func (x *LogComponentConfig_Log_FileLogger_Rotating) GetCompress() bool {
 	return false
 }
 
-type MetricComponentConfig_Metric struct {
+type MetricComponentConfig_Metrics struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 指标命名空间（默认为启动的应用名）
 	MeterName string `protobuf:"bytes,1,opt,name=meter_name,json=meterName,proto3" json:"meter_name,omitempty"`
@@ -944,21 +1077,21 @@ type MetricComponentConfig_Metric struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MetricComponentConfig_Metric) Reset() {
-	*x = MetricComponentConfig_Metric{}
-	mi := &file_config_proto_msgTypes[13]
+func (x *MetricComponentConfig_Metrics) Reset() {
+	*x = MetricComponentConfig_Metrics{}
+	mi := &file_config_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MetricComponentConfig_Metric) String() string {
+func (x *MetricComponentConfig_Metrics) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MetricComponentConfig_Metric) ProtoMessage() {}
+func (*MetricComponentConfig_Metrics) ProtoMessage() {}
 
-func (x *MetricComponentConfig_Metric) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[13]
+func (x *MetricComponentConfig_Metrics) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -969,40 +1102,40 @@ func (x *MetricComponentConfig_Metric) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MetricComponentConfig_Metric.ProtoReflect.Descriptor instead.
-func (*MetricComponentConfig_Metric) Descriptor() ([]byte, []int) {
+// Deprecated: Use MetricComponentConfig_Metrics.ProtoReflect.Descriptor instead.
+func (*MetricComponentConfig_Metrics) Descriptor() ([]byte, []int) {
 	return file_config_proto_rawDescGZIP(), []int{2, 0}
 }
 
-func (x *MetricComponentConfig_Metric) GetMeterName() string {
+func (x *MetricComponentConfig_Metrics) GetMeterName() string {
 	if x != nil {
 		return x.MeterName
 	}
 	return ""
 }
 
-func (x *MetricComponentConfig_Metric) GetCounterMapSize() int32 {
+func (x *MetricComponentConfig_Metrics) GetCounterMapSize() int32 {
 	if x != nil {
 		return x.CounterMapSize
 	}
 	return 0
 }
 
-func (x *MetricComponentConfig_Metric) GetGaugeMapSize() int32 {
+func (x *MetricComponentConfig_Metrics) GetGaugeMapSize() int32 {
 	if x != nil {
 		return x.GaugeMapSize
 	}
 	return 0
 }
 
-func (x *MetricComponentConfig_Metric) GetHistogramMapSize() int32 {
+func (x *MetricComponentConfig_Metrics) GetHistogramMapSize() int32 {
 	if x != nil {
 		return x.HistogramMapSize
 	}
 	return 0
 }
 
-func (x *MetricComponentConfig_Metric) GetLog() *LogComponentConfig_ModuleLog {
+func (x *MetricComponentConfig_Metrics) GetLog() *LogComponentConfig_ModuleLog {
 	if x != nil {
 		return x.Log
 	}
@@ -1027,7 +1160,7 @@ type TracingComponentConfig_Tracing struct {
 
 func (x *TracingComponentConfig_Tracing) Reset() {
 	*x = TracingComponentConfig_Tracing{}
-	mi := &file_config_proto_msgTypes[14]
+	mi := &file_config_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1039,7 +1172,7 @@ func (x *TracingComponentConfig_Tracing) String() string {
 func (*TracingComponentConfig_Tracing) ProtoMessage() {}
 
 func (x *TracingComponentConfig_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[14]
+	mi := &file_config_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1103,7 +1236,7 @@ type TracingComponentConfig_Tracing_Exporter struct {
 
 func (x *TracingComponentConfig_Tracing_Exporter) Reset() {
 	*x = TracingComponentConfig_Tracing_Exporter{}
-	mi := &file_config_proto_msgTypes[15]
+	mi := &file_config_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1115,7 +1248,7 @@ func (x *TracingComponentConfig_Tracing_Exporter) String() string {
 func (*TracingComponentConfig_Tracing_Exporter) ProtoMessage() {}
 
 func (x *TracingComponentConfig_Tracing_Exporter) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[15]
+	mi := &file_config_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1177,7 +1310,7 @@ type TracingComponentConfig_Tracing_Sampler struct {
 
 func (x *TracingComponentConfig_Tracing_Sampler) Reset() {
 	*x = TracingComponentConfig_Tracing_Sampler{}
-	mi := &file_config_proto_msgTypes[16]
+	mi := &file_config_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1189,7 +1322,7 @@ func (x *TracingComponentConfig_Tracing_Sampler) String() string {
 func (*TracingComponentConfig_Tracing_Sampler) ProtoMessage() {}
 
 func (x *TracingComponentConfig_Tracing_Sampler) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[16]
+	mi := &file_config_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1231,7 +1364,7 @@ type TracingComponentConfig_Tracing_Exporter_RetryConfig struct {
 
 func (x *TracingComponentConfig_Tracing_Exporter_RetryConfig) Reset() {
 	*x = TracingComponentConfig_Tracing_Exporter_RetryConfig{}
-	mi := &file_config_proto_msgTypes[18]
+	mi := &file_config_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1243,7 +1376,7 @@ func (x *TracingComponentConfig_Tracing_Exporter_RetryConfig) String() string {
 func (*TracingComponentConfig_Tracing_Exporter_RetryConfig) ProtoMessage() {}
 
 func (x *TracingComponentConfig_Tracing_Exporter_RetryConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[18]
+	mi := &file_config_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1287,6 +1420,652 @@ func (x *TracingComponentConfig_Tracing_Exporter_RetryConfig) GetMaxElapsedTime(
 	return nil
 }
 
+// metadata 中间件配置
+type MiddlewareConfig_Metadata struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否启用
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	// server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
+	// client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-global-
+	Prefix []string `protobuf:"bytes,2,rep,name=prefix,proto3" json:"prefix,omitempty"`
+	// 固定携带md
+	Constants     map[string]string `protobuf:"bytes,3,rep,name=constants,proto3" json:"constants,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Metadata) Reset() {
+	*x = MiddlewareConfig_Metadata{}
+	mi := &file_config_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Metadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Metadata) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Metadata) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Metadata.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Metadata) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 0}
+}
+
+func (x *MiddlewareConfig_Metadata) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+func (x *MiddlewareConfig_Metadata) GetPrefix() []string {
+	if x != nil {
+		return x.Prefix
+	}
+	return nil
+}
+
+func (x *MiddlewareConfig_Metadata) GetConstants() map[string]string {
+	if x != nil {
+		return x.Constants
+	}
+	return nil
+}
+
+// 链路追踪配置
+type MiddlewareConfig_Tracing struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否禁用
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	// tracer name
+	TracerName    string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3" json:"tracer_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Tracing) Reset() {
+	*x = MiddlewareConfig_Tracing{}
+	mi := &file_config_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Tracing) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Tracing) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Tracing) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Tracing.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Tracing) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 1}
+}
+
+func (x *MiddlewareConfig_Tracing) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+func (x *MiddlewareConfig_Tracing) GetTracerName() string {
+	if x != nil {
+		return x.TracerName
+	}
+	return ""
+}
+
+// 监控配置
+type MiddlewareConfig_Metrics struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否禁用
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	// meter name
+	MeterName     string `protobuf:"bytes,2,opt,name=meter_name,json=meterName,proto3" json:"meter_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Metrics) Reset() {
+	*x = MiddlewareConfig_Metrics{}
+	mi := &file_config_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Metrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Metrics) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Metrics) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Metrics.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Metrics) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 2}
+}
+
+func (x *MiddlewareConfig_Metrics) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+func (x *MiddlewareConfig_Metrics) GetMeterName() string {
+	if x != nil {
+		return x.MeterName
+	}
+	return ""
+}
+
+// 日志配置
+type MiddlewareConfig_Logging struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否禁用
+	Disable       bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Logging) Reset() {
+	*x = MiddlewareConfig_Logging{}
+	mi := &file_config_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Logging) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Logging) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Logging) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Logging.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Logging) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 3}
+}
+
+func (x *MiddlewareConfig_Logging) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+// 表单校验配置
+type MiddlewareConfig_Validator struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否禁用
+	Disable       bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Validator) Reset() {
+	*x = MiddlewareConfig_Validator{}
+	mi := &file_config_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Validator) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Validator) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Validator) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Validator.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Validator) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 4}
+}
+
+func (x *MiddlewareConfig_Validator) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+// 限流器
+type MiddlewareConfig_Ratelimit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否禁用
+	Enable bool `protobuf:"varint,1,opt,name=enable,proto3" json:"enable,omitempty"`
+	// 默认使用bbr limiter
+	BbrLimiter    *MiddlewareConfig_Ratelimit_BBRLimiter `protobuf:"bytes,2,opt,name=bbr_limiter,json=bbrLimiter,proto3" json:"bbr_limiter,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Ratelimit) Reset() {
+	*x = MiddlewareConfig_Ratelimit{}
+	mi := &file_config_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Ratelimit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Ratelimit) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Ratelimit) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Ratelimit.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Ratelimit) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 5}
+}
+
+func (x *MiddlewareConfig_Ratelimit) GetEnable() bool {
+	if x != nil {
+		return x.Enable
+	}
+	return false
+}
+
+func (x *MiddlewareConfig_Ratelimit) GetBbrLimiter() *MiddlewareConfig_Ratelimit_BBRLimiter {
+	if x != nil {
+		return x.BbrLimiter
+	}
+	return nil
+}
+
+// 熔断器
+type MiddlewareConfig_Circuitbreaker struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 是否禁用
+	Enable bool `protobuf:"varint,1,opt,name=enable,proto3" json:"enable,omitempty"`
+	// 默认使用 sre 熔断器
+	Sre           *MiddlewareConfig_Circuitbreaker_SREBreaker `protobuf:"bytes,2,opt,name=sre,proto3" json:"sre,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Circuitbreaker) Reset() {
+	*x = MiddlewareConfig_Circuitbreaker{}
+	mi := &file_config_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Circuitbreaker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Circuitbreaker) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Circuitbreaker) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Circuitbreaker.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Circuitbreaker) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 6}
+}
+
+func (x *MiddlewareConfig_Circuitbreaker) GetEnable() bool {
+	if x != nil {
+		return x.Enable
+	}
+	return false
+}
+
+func (x *MiddlewareConfig_Circuitbreaker) GetSre() *MiddlewareConfig_Circuitbreaker_SREBreaker {
+	if x != nil {
+		return x.Sre
+	}
+	return nil
+}
+
+// 超时控制中间件
+// 优化：预编译所有规则，path会转化成hash，前缀匹配利用前缀树
+// 优先级：path > 前缀
+type MiddlewareConfig_Timeout struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 默认超时时间
+	// 服务端默认超时 1s
+	// 客户端默认超时 2s
+	Default *durationpb.Duration `protobuf:"bytes,1,opt,name=default,proto3" json:"default,omitempty"`
+	// 指定路由规则
+	Routes        []*MiddlewareConfig_Timeout_RouteRule `protobuf:"bytes,2,rep,name=routes,proto3" json:"routes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Timeout) Reset() {
+	*x = MiddlewareConfig_Timeout{}
+	mi := &file_config_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Timeout) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Timeout) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Timeout) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Timeout.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Timeout) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 7}
+}
+
+func (x *MiddlewareConfig_Timeout) GetDefault() *durationpb.Duration {
+	if x != nil {
+		return x.Default
+	}
+	return nil
+}
+
+func (x *MiddlewareConfig_Timeout) GetRoutes() []*MiddlewareConfig_Timeout_RouteRule {
+	if x != nil {
+		return x.Routes
+	}
+	return nil
+}
+
+type MiddlewareConfig_Ratelimit_BBRLimiter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 每个窗口的时间长度。默认值 10s
+	Window *durationpb.Duration `protobuf:"bytes,1,opt,name=window,proto3,oneof" json:"window,omitempty"`
+	// 每个窗口包含的桶数量。默认值 100
+	Bucket *int32 `protobuf:"varint,2,opt,name=bucket,proto3,oneof" json:"bucket,omitempty"`
+	// 使用率阈值 默认值 800
+	CpuThreshold *int64 `protobuf:"varint,3,opt,name=cpu_threshold,json=cpuThreshold,proto3,oneof" json:"cpu_threshold,omitempty"`
+	// 如果设置了 CPUQuota，则使用新的 cpuGetter
+	// 根据 CPU 核心数和配额计算实际 CPU 使用值
+	CpuQuota      *float64 `protobuf:"fixed64,4,opt,name=cpu_quota,json=cpuQuota,proto3,oneof" json:"cpu_quota,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) Reset() {
+	*x = MiddlewareConfig_Ratelimit_BBRLimiter{}
+	mi := &file_config_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Ratelimit_BBRLimiter) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Ratelimit_BBRLimiter.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Ratelimit_BBRLimiter) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 5, 0}
+}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) GetWindow() *durationpb.Duration {
+	if x != nil {
+		return x.Window
+	}
+	return nil
+}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) GetBucket() int32 {
+	if x != nil && x.Bucket != nil {
+		return *x.Bucket
+	}
+	return 0
+}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) GetCpuThreshold() int64 {
+	if x != nil && x.CpuThreshold != nil {
+		return *x.CpuThreshold
+	}
+	return 0
+}
+
+func (x *MiddlewareConfig_Ratelimit_BBRLimiter) GetCpuQuota() float64 {
+	if x != nil && x.CpuQuota != nil {
+		return *x.CpuQuota
+	}
+	return 0
+}
+
+type MiddlewareConfig_Circuitbreaker_SREBreaker struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 设置 SRE 熔断器中的 K 值（K = 1 / Success），默认 Success 为 0.6。
+	// 降低 K 值会让自适应限流变得更激进；
+	// 提高 K 值会让自适应限流变得更保守。
+	Success *float64 `protobuf:"fixed64,1,opt,name=success,proto3,oneof" json:"success,omitempty"`
+	// 设置允许的最小请求数量。默认值 100
+	Request *int64 `protobuf:"varint,2,opt,name=request,proto3,oneof" json:"request,omitempty"`
+	// 设置一个统计窗口内的桶（bucket）数量。默认值 10
+	Bucket *int32 `protobuf:"varint,3,opt,name=bucket,proto3,oneof" json:"bucket,omitempty"`
+	// 设置统计窗口的时间长度。默认值3s
+	Window        *durationpb.Duration `protobuf:"bytes,4,opt,name=window,proto3,oneof" json:"window,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) Reset() {
+	*x = MiddlewareConfig_Circuitbreaker_SREBreaker{}
+	mi := &file_config_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Circuitbreaker_SREBreaker) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Circuitbreaker_SREBreaker.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Circuitbreaker_SREBreaker) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 6, 0}
+}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) GetSuccess() float64 {
+	if x != nil && x.Success != nil {
+		return *x.Success
+	}
+	return 0
+}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) GetRequest() int64 {
+	if x != nil && x.Request != nil {
+		return *x.Request
+	}
+	return 0
+}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) GetBucket() int32 {
+	if x != nil && x.Bucket != nil {
+		return *x.Bucket
+	}
+	return 0
+}
+
+func (x *MiddlewareConfig_Circuitbreaker_SREBreaker) GetWindow() *durationpb.Duration {
+	if x != nil {
+		return x.Window
+	}
+	return nil
+}
+
+type MiddlewareConfig_Timeout_RouteRule struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 路径匹配，例如 /pb_package.Service/Rpc
+	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	// 前缀匹配，例如 /pb_package.Se
+	Prefix string `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	// 超时
+	Timeout       *durationpb.Duration `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MiddlewareConfig_Timeout_RouteRule) Reset() {
+	*x = MiddlewareConfig_Timeout_RouteRule{}
+	mi := &file_config_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MiddlewareConfig_Timeout_RouteRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MiddlewareConfig_Timeout_RouteRule) ProtoMessage() {}
+
+func (x *MiddlewareConfig_Timeout_RouteRule) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MiddlewareConfig_Timeout_RouteRule.ProtoReflect.Descriptor instead.
+func (*MiddlewareConfig_Timeout_RouteRule) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 7, 0}
+}
+
+func (x *MiddlewareConfig_Timeout_RouteRule) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *MiddlewareConfig_Timeout_RouteRule) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *MiddlewareConfig_Timeout_RouteRule) GetTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.Timeout
+	}
+	return nil
+}
+
 type ServerComponentConfig_Server struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
@@ -1294,22 +2073,20 @@ type ServerComponentConfig_Server struct {
 	// 因此给servers套上一个wrapper用于延迟停止服务。
 	StopDelay *durationpb.Duration `protobuf:"bytes,1,opt,name=stop_delay,json=stopDelay,proto3" json:"stop_delay,omitempty"`
 	// 通用中间件配置
-	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,2,opt,name=middleware,proto3" json:"middleware,omitempty"`
+	Middleware *ServerComponentConfig_Server_ServerMiddleware `protobuf:"bytes,2,opt,name=middleware,proto3" json:"middleware,omitempty"`
 	// http 服务器配置
-	Http *ServerComponentConfig_HttpServerOption `protobuf:"bytes,3,opt,name=http,proto3" json:"http,omitempty"`
+	Http *ServerComponentConfig_Server_HttpServerOption `protobuf:"bytes,3,opt,name=http,proto3" json:"http,omitempty"`
 	// grpc 服务器配置
-	Grpc *ServerComponentConfig_GrpcServerOption `protobuf:"bytes,4,opt,name=grpc,proto3" json:"grpc,omitempty"`
+	Grpc *ServerComponentConfig_Server_GrpcServerOption `protobuf:"bytes,4,opt,name=grpc,proto3" json:"grpc,omitempty"`
 	// logger 配置
-	Log *LogComponentConfig_ModuleLog `protobuf:"bytes,5,opt,name=log,proto3" json:"log,omitempty"`
-	// 指定服务路由的超时时间，<优化>，会预处理这里的timeout规则，优先使用hash匹配path，然后是前缀输匹配前缀(前缀会从长到短排序)，最后是正则匹配（正则也会预编译）
-	Timeout       []*ServerComponentConfig_Server_RouteTimeout `protobuf:"bytes,6,rep,name=timeout,proto3" json:"timeout,omitempty"`
+	Log           *LogComponentConfig_ModuleLog `protobuf:"bytes,5,opt,name=log,proto3" json:"log,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServerComponentConfig_Server) Reset() {
 	*x = ServerComponentConfig_Server{}
-	mi := &file_config_proto_msgTypes[19]
+	mi := &file_config_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1321,7 +2098,7 @@ func (x *ServerComponentConfig_Server) String() string {
 func (*ServerComponentConfig_Server) ProtoMessage() {}
 
 func (x *ServerComponentConfig_Server) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[19]
+	mi := &file_config_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1334,7 +2111,7 @@ func (x *ServerComponentConfig_Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerComponentConfig_Server.ProtoReflect.Descriptor instead.
 func (*ServerComponentConfig_Server) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0}
+	return file_config_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *ServerComponentConfig_Server) GetStopDelay() *durationpb.Duration {
@@ -1344,21 +2121,21 @@ func (x *ServerComponentConfig_Server) GetStopDelay() *durationpb.Duration {
 	return nil
 }
 
-func (x *ServerComponentConfig_Server) GetMiddleware() *ServerComponentConfig_Server_Middleware {
+func (x *ServerComponentConfig_Server) GetMiddleware() *ServerComponentConfig_Server_ServerMiddleware {
 	if x != nil {
 		return x.Middleware
 	}
 	return nil
 }
 
-func (x *ServerComponentConfig_Server) GetHttp() *ServerComponentConfig_HttpServerOption {
+func (x *ServerComponentConfig_Server) GetHttp() *ServerComponentConfig_Server_HttpServerOption {
 	if x != nil {
 		return x.Http
 	}
 	return nil
 }
 
-func (x *ServerComponentConfig_Server) GetGrpc() *ServerComponentConfig_GrpcServerOption {
+func (x *ServerComponentConfig_Server) GetGrpc() *ServerComponentConfig_Server_GrpcServerOption {
 	if x != nil {
 		return x.Grpc
 	}
@@ -1372,14 +2149,8 @@ func (x *ServerComponentConfig_Server) GetLog() *LogComponentConfig_ModuleLog {
 	return nil
 }
 
-func (x *ServerComponentConfig_Server) GetTimeout() []*ServerComponentConfig_Server_RouteTimeout {
-	if x != nil {
-		return x.Timeout
-	}
-	return nil
-}
-
-type ServerComponentConfig_Endpoint struct {
+// 端点配置
+type ServerComponentConfig_Server_Endpoint struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Scheme        string                 `protobuf:"bytes,1,opt,name=scheme,proto3" json:"scheme,omitempty"`
 	Host          string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
@@ -1387,21 +2158,21 @@ type ServerComponentConfig_Endpoint struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ServerComponentConfig_Endpoint) Reset() {
-	*x = ServerComponentConfig_Endpoint{}
-	mi := &file_config_proto_msgTypes[20]
+func (x *ServerComponentConfig_Server_Endpoint) Reset() {
+	*x = ServerComponentConfig_Server_Endpoint{}
+	mi := &file_config_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ServerComponentConfig_Endpoint) String() string {
+func (x *ServerComponentConfig_Server_Endpoint) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ServerComponentConfig_Endpoint) ProtoMessage() {}
+func (*ServerComponentConfig_Server_Endpoint) ProtoMessage() {}
 
-func (x *ServerComponentConfig_Endpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[20]
+func (x *ServerComponentConfig_Server_Endpoint) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1412,26 +2183,119 @@ func (x *ServerComponentConfig_Endpoint) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ServerComponentConfig_Endpoint.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Endpoint) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 1}
+// Deprecated: Use ServerComponentConfig_Server_Endpoint.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_Server_Endpoint) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{5, 0, 0}
 }
 
-func (x *ServerComponentConfig_Endpoint) GetScheme() string {
+func (x *ServerComponentConfig_Server_Endpoint) GetScheme() string {
 	if x != nil {
 		return x.Scheme
 	}
 	return ""
 }
 
-func (x *ServerComponentConfig_Endpoint) GetHost() string {
+func (x *ServerComponentConfig_Server_Endpoint) GetHost() string {
 	if x != nil {
 		return x.Host
 	}
 	return ""
 }
 
-type ServerComponentConfig_HttpServerOption struct {
+// 中间件配置
+type ServerComponentConfig_Server_ServerMiddleware struct {
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	Timeout       *MiddlewareConfig_Timeout   `protobuf:"bytes,1,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	Metadata      *MiddlewareConfig_Metadata  `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Tracing       *MiddlewareConfig_Tracing   `protobuf:"bytes,3,opt,name=tracing,proto3" json:"tracing,omitempty"`
+	Metrics       *MiddlewareConfig_Metrics   `protobuf:"bytes,4,opt,name=metrics,proto3" json:"metrics,omitempty"`
+	Logging       *MiddlewareConfig_Logging   `protobuf:"bytes,5,opt,name=logging,proto3" json:"logging,omitempty"`
+	Validator     *MiddlewareConfig_Validator `protobuf:"bytes,6,opt,name=validator,proto3" json:"validator,omitempty"`
+	Ratelimit     *MiddlewareConfig_Ratelimit `protobuf:"bytes,7,opt,name=ratelimit,proto3" json:"ratelimit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) Reset() {
+	*x = ServerComponentConfig_Server_ServerMiddleware{}
+	mi := &file_config_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerComponentConfig_Server_ServerMiddleware) ProtoMessage() {}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerComponentConfig_Server_ServerMiddleware.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_Server_ServerMiddleware) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{5, 0, 1}
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetTimeout() *MiddlewareConfig_Timeout {
+	if x != nil {
+		return x.Timeout
+	}
+	return nil
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetMetadata() *MiddlewareConfig_Metadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetTracing() *MiddlewareConfig_Tracing {
+	if x != nil {
+		return x.Tracing
+	}
+	return nil
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetMetrics() *MiddlewareConfig_Metrics {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetLogging() *MiddlewareConfig_Logging {
+	if x != nil {
+		return x.Logging
+	}
+	return nil
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetValidator() *MiddlewareConfig_Validator {
+	if x != nil {
+		return x.Validator
+	}
+	return nil
+}
+
+func (x *ServerComponentConfig_Server_ServerMiddleware) GetRatelimit() *MiddlewareConfig_Ratelimit {
+	if x != nil {
+		return x.Ratelimit
+	}
+	return nil
+}
+
+type ServerComponentConfig_Server_HttpServerOption struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Disable bool                   `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
@@ -1439,36 +2303,32 @@ type ServerComponentConfig_HttpServerOption struct {
 	// 服务监听地址，host:port 或者 unix文件地址
 	Addr string `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
 	// 对外暴露端点
-	Endpoint *ServerComponentConfig_Endpoint `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	// 服务超时时间（默认1s）
-	Timeout *durationpb.Duration `protobuf:"bytes,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	// 默认中间件配置
-	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,6,opt,name=middleware,proto3" json:"middleware,omitempty"`
+	Endpoint *ServerComponentConfig_Server_Endpoint `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
 	// 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
-	DisableStrictSlash bool `protobuf:"varint,7,opt,name=disable_strict_slash,json=disableStrictSlash,proto3" json:"disable_strict_slash,omitempty"`
+	DisableStrictSlash bool `protobuf:"varint,5,opt,name=disable_strict_slash,json=disableStrictSlash,proto3" json:"disable_strict_slash,omitempty"`
 	// http 路由前缀
-	PathPrefix string `protobuf:"bytes,8,opt,name=path_prefix,json=pathPrefix,proto3" json:"path_prefix,omitempty"`
+	PathPrefix string `protobuf:"bytes,6,opt,name=path_prefix,json=pathPrefix,proto3" json:"path_prefix,omitempty"`
 	// metrics 路由
-	Metrics       *ServerComponentConfig_HttpServerOption_Metrics `protobuf:"bytes,9,opt,name=metrics,proto3" json:"metrics,omitempty"`
+	Metrics       *ServerComponentConfig_Server_HttpServerOption_Metrics `protobuf:"bytes,7,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ServerComponentConfig_HttpServerOption) Reset() {
-	*x = ServerComponentConfig_HttpServerOption{}
-	mi := &file_config_proto_msgTypes[21]
+func (x *ServerComponentConfig_Server_HttpServerOption) Reset() {
+	*x = ServerComponentConfig_Server_HttpServerOption{}
+	mi := &file_config_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ServerComponentConfig_HttpServerOption) String() string {
+func (x *ServerComponentConfig_Server_HttpServerOption) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ServerComponentConfig_HttpServerOption) ProtoMessage() {}
+func (*ServerComponentConfig_Server_HttpServerOption) ProtoMessage() {}
 
-func (x *ServerComponentConfig_HttpServerOption) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[21]
+func (x *ServerComponentConfig_Server_HttpServerOption) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1479,75 +2339,61 @@ func (x *ServerComponentConfig_HttpServerOption) ProtoReflect() protoreflect.Mes
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ServerComponentConfig_HttpServerOption.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_HttpServerOption) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 2}
+// Deprecated: Use ServerComponentConfig_Server_HttpServerOption.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_Server_HttpServerOption) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{5, 0, 2}
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetDisable() bool {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetDisable() bool {
 	if x != nil {
 		return x.Disable
 	}
 	return false
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetNetwork() string {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetNetwork() string {
 	if x != nil {
 		return x.Network
 	}
 	return ""
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetAddr() string {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetAddr() string {
 	if x != nil {
 		return x.Addr
 	}
 	return ""
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetEndpoint() *ServerComponentConfig_Endpoint {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetEndpoint() *ServerComponentConfig_Server_Endpoint {
 	if x != nil {
 		return x.Endpoint
 	}
 	return nil
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetTimeout() *durationpb.Duration {
-	if x != nil {
-		return x.Timeout
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_HttpServerOption) GetMiddleware() *ServerComponentConfig_Server_Middleware {
-	if x != nil {
-		return x.Middleware
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_HttpServerOption) GetDisableStrictSlash() bool {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetDisableStrictSlash() bool {
 	if x != nil {
 		return x.DisableStrictSlash
 	}
 	return false
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetPathPrefix() string {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetPathPrefix() string {
 	if x != nil {
 		return x.PathPrefix
 	}
 	return ""
 }
 
-func (x *ServerComponentConfig_HttpServerOption) GetMetrics() *ServerComponentConfig_HttpServerOption_Metrics {
+func (x *ServerComponentConfig_Server_HttpServerOption) GetMetrics() *ServerComponentConfig_Server_HttpServerOption_Metrics {
 	if x != nil {
 		return x.Metrics
 	}
 	return nil
 }
 
-type ServerComponentConfig_GrpcServerOption struct {
+type ServerComponentConfig_Server_GrpcServerOption struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Disable bool                   `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 一般不需要指定，默认(tcp)
@@ -1555,34 +2401,30 @@ type ServerComponentConfig_GrpcServerOption struct {
 	// 服务监听地址，host:port
 	Addr string `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
 	// 对外暴露端点
-	Endpoint *ServerComponentConfig_Endpoint `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	// 服务超时时间（默认1s）
-	Timeout *durationpb.Duration `protobuf:"bytes,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	// 默认中间件配置
-	Middleware *ServerComponentConfig_Server_Middleware `protobuf:"bytes,6,opt,name=middleware,proto3" json:"middleware,omitempty"`
+	Endpoint *ServerComponentConfig_Server_Endpoint `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
 	// customHealth 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
-	CustomHealth bool `protobuf:"varint,7,opt,name=custom_health,json=customHealth,proto3" json:"custom_health,omitempty"`
+	CustomHealth bool `protobuf:"varint,5,opt,name=custom_health,json=customHealth,proto3" json:"custom_health,omitempty"`
 	// disableReflection 是否禁用服务反射
-	DisableReflection bool `protobuf:"varint,8,opt,name=disable_reflection,json=disableReflection,proto3" json:"disable_reflection,omitempty"`
+	DisableReflection bool `protobuf:"varint,6,opt,name=disable_reflection,json=disableReflection,proto3" json:"disable_reflection,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) Reset() {
-	*x = ServerComponentConfig_GrpcServerOption{}
-	mi := &file_config_proto_msgTypes[22]
+func (x *ServerComponentConfig_Server_GrpcServerOption) Reset() {
+	*x = ServerComponentConfig_Server_GrpcServerOption{}
+	mi := &file_config_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) String() string {
+func (x *ServerComponentConfig_Server_GrpcServerOption) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ServerComponentConfig_GrpcServerOption) ProtoMessage() {}
+func (*ServerComponentConfig_Server_GrpcServerOption) ProtoMessage() {}
 
-func (x *ServerComponentConfig_GrpcServerOption) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[22]
+func (x *ServerComponentConfig_Server_GrpcServerOption) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1593,470 +2435,54 @@ func (x *ServerComponentConfig_GrpcServerOption) ProtoReflect() protoreflect.Mes
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ServerComponentConfig_GrpcServerOption.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_GrpcServerOption) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 3}
+// Deprecated: Use ServerComponentConfig_Server_GrpcServerOption.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_Server_GrpcServerOption) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{5, 0, 3}
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) GetDisable() bool {
+func (x *ServerComponentConfig_Server_GrpcServerOption) GetDisable() bool {
 	if x != nil {
 		return x.Disable
 	}
 	return false
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) GetNetwork() string {
+func (x *ServerComponentConfig_Server_GrpcServerOption) GetNetwork() string {
 	if x != nil {
 		return x.Network
 	}
 	return ""
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) GetAddr() string {
+func (x *ServerComponentConfig_Server_GrpcServerOption) GetAddr() string {
 	if x != nil {
 		return x.Addr
 	}
 	return ""
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) GetEndpoint() *ServerComponentConfig_Endpoint {
+func (x *ServerComponentConfig_Server_GrpcServerOption) GetEndpoint() *ServerComponentConfig_Server_Endpoint {
 	if x != nil {
 		return x.Endpoint
 	}
 	return nil
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) GetTimeout() *durationpb.Duration {
-	if x != nil {
-		return x.Timeout
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_GrpcServerOption) GetMiddleware() *ServerComponentConfig_Server_Middleware {
-	if x != nil {
-		return x.Middleware
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_GrpcServerOption) GetCustomHealth() bool {
+func (x *ServerComponentConfig_Server_GrpcServerOption) GetCustomHealth() bool {
 	if x != nil {
 		return x.CustomHealth
 	}
 	return false
 }
 
-func (x *ServerComponentConfig_GrpcServerOption) GetDisableReflection() bool {
+func (x *ServerComponentConfig_Server_GrpcServerOption) GetDisableReflection() bool {
 	if x != nil {
 		return x.DisableReflection
 	}
 	return false
 }
 
-// 服务路由的格式为 /pb_package.Service/Rpc
-type ServerComponentConfig_Server_RouteTimeout struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 前缀匹配，例如 /pb_package.Service/Rpc
-	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	// 正则匹配，例如 /pb_package.Service/*
-	Regexp string `protobuf:"bytes,2,opt,name=regexp,proto3" json:"regexp,omitempty"`
-	// 前缀匹配，例如 /pb_package.Service
-	Prefix string `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	// 超时
-	Timeout       *durationpb.Duration `protobuf:"bytes,4,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) Reset() {
-	*x = ServerComponentConfig_Server_RouteTimeout{}
-	mi := &file_config_proto_msgTypes[23]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_RouteTimeout) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[23]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_RouteTimeout.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_RouteTimeout) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 0}
-}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) GetPath() string {
-	if x != nil {
-		return x.Path
-	}
-	return ""
-}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) GetRegexp() string {
-	if x != nil {
-		return x.Regexp
-	}
-	return ""
-}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) GetPrefix() string {
-	if x != nil {
-		return x.Prefix
-	}
-	return ""
-}
-
-func (x *ServerComponentConfig_Server_RouteTimeout) GetTimeout() *durationpb.Duration {
-	if x != nil {
-		return x.Timeout
-	}
-	return nil
-}
-
-// 中间件配置
-type ServerComponentConfig_Server_Middleware struct {
-	state         protoimpl.MessageState                             `protogen:"open.v1"`
-	Metadata      *ServerComponentConfig_Server_Middleware_Metadata  `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Tracing       *ServerComponentConfig_Server_Middleware_Tracing   `protobuf:"bytes,2,opt,name=tracing,proto3" json:"tracing,omitempty"`
-	Metrics       *ServerComponentConfig_Server_Middleware_Metrics   `protobuf:"bytes,3,opt,name=metrics,proto3" json:"metrics,omitempty"`
-	Logger        *ServerComponentConfig_Server_Middleware_Logger    `protobuf:"bytes,4,opt,name=logger,proto3" json:"logger,omitempty"`
-	Validator     *ServerComponentConfig_Server_Middleware_Validator `protobuf:"bytes,5,opt,name=validator,proto3" json:"validator,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_Middleware) Reset() {
-	*x = ServerComponentConfig_Server_Middleware{}
-	mi := &file_config_proto_msgTypes[24]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_Middleware) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_Middleware) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_Middleware) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[24]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_Middleware.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_Middleware) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 1}
-}
-
-func (x *ServerComponentConfig_Server_Middleware) GetMetadata() *ServerComponentConfig_Server_Middleware_Metadata {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_Server_Middleware) GetTracing() *ServerComponentConfig_Server_Middleware_Tracing {
-	if x != nil {
-		return x.Tracing
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_Server_Middleware) GetMetrics() *ServerComponentConfig_Server_Middleware_Metrics {
-	if x != nil {
-		return x.Metrics
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_Server_Middleware) GetLogger() *ServerComponentConfig_Server_Middleware_Logger {
-	if x != nil {
-		return x.Logger
-	}
-	return nil
-}
-
-func (x *ServerComponentConfig_Server_Middleware) GetValidator() *ServerComponentConfig_Server_Middleware_Validator {
-	if x != nil {
-		return x.Validator
-	}
-	return nil
-}
-
-type ServerComponentConfig_Server_Middleware_Metadata struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 是否禁用
-	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// metadata prefix(这个前缀的 metadata 才会保留在server中)
-	Prefix        []string `protobuf:"bytes,2,rep,name=prefix,proto3" json:"prefix,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metadata) Reset() {
-	*x = ServerComponentConfig_Server_Middleware_Metadata{}
-	mi := &file_config_proto_msgTypes[25]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metadata) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_Middleware_Metadata) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_Middleware_Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[25]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_Middleware_Metadata.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_Middleware_Metadata) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 0}
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metadata) GetDisable() bool {
-	if x != nil {
-		return x.Disable
-	}
-	return false
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metadata) GetPrefix() []string {
-	if x != nil {
-		return x.Prefix
-	}
-	return nil
-}
-
-type ServerComponentConfig_Server_Middleware_Tracing struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 是否禁用
-	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// tracer name
-	TracerName    string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3" json:"tracer_name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Tracing) Reset() {
-	*x = ServerComponentConfig_Server_Middleware_Tracing{}
-	mi := &file_config_proto_msgTypes[26]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Tracing) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_Middleware_Tracing) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_Middleware_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[26]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_Middleware_Tracing.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_Middleware_Tracing) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 1}
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Tracing) GetDisable() bool {
-	if x != nil {
-		return x.Disable
-	}
-	return false
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Tracing) GetTracerName() string {
-	if x != nil {
-		return x.TracerName
-	}
-	return ""
-}
-
-type ServerComponentConfig_Server_Middleware_Metrics struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 是否禁用
-	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// meter name
-	MeterName     string `protobuf:"bytes,2,opt,name=meter_name,json=meterName,proto3" json:"meter_name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metrics) Reset() {
-	*x = ServerComponentConfig_Server_Middleware_Metrics{}
-	mi := &file_config_proto_msgTypes[27]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metrics) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_Middleware_Metrics) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_Middleware_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[27]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_Middleware_Metrics.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_Middleware_Metrics) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 2}
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metrics) GetDisable() bool {
-	if x != nil {
-		return x.Disable
-	}
-	return false
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Metrics) GetMeterName() string {
-	if x != nil {
-		return x.MeterName
-	}
-	return ""
-}
-
-type ServerComponentConfig_Server_Middleware_Logger struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 是否禁用
-	Disable       bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Logger) Reset() {
-	*x = ServerComponentConfig_Server_Middleware_Logger{}
-	mi := &file_config_proto_msgTypes[28]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Logger) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_Middleware_Logger) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_Middleware_Logger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[28]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_Middleware_Logger.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_Middleware_Logger) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 3}
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Logger) GetDisable() bool {
-	if x != nil {
-		return x.Disable
-	}
-	return false
-}
-
-type ServerComponentConfig_Server_Middleware_Validator struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 是否禁用
-	Disable       bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Validator) Reset() {
-	*x = ServerComponentConfig_Server_Middleware_Validator{}
-	mi := &file_config_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Validator) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerComponentConfig_Server_Middleware_Validator) ProtoMessage() {}
-
-func (x *ServerComponentConfig_Server_Middleware_Validator) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerComponentConfig_Server_Middleware_Validator.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_Server_Middleware_Validator) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0, 1, 4}
-}
-
-func (x *ServerComponentConfig_Server_Middleware_Validator) GetDisable() bool {
-	if x != nil {
-		return x.Disable
-	}
-	return false
-}
-
-type ServerComponentConfig_HttpServerOption_Metrics struct {
+type ServerComponentConfig_Server_HttpServerOption_Metrics struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 禁用
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
@@ -2066,21 +2492,21 @@ type ServerComponentConfig_HttpServerOption_Metrics struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ServerComponentConfig_HttpServerOption_Metrics) Reset() {
-	*x = ServerComponentConfig_HttpServerOption_Metrics{}
-	mi := &file_config_proto_msgTypes[30]
+func (x *ServerComponentConfig_Server_HttpServerOption_Metrics) Reset() {
+	*x = ServerComponentConfig_Server_HttpServerOption_Metrics{}
+	mi := &file_config_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ServerComponentConfig_HttpServerOption_Metrics) String() string {
+func (x *ServerComponentConfig_Server_HttpServerOption_Metrics) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ServerComponentConfig_HttpServerOption_Metrics) ProtoMessage() {}
+func (*ServerComponentConfig_Server_HttpServerOption_Metrics) ProtoMessage() {}
 
-func (x *ServerComponentConfig_HttpServerOption_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[30]
+func (x *ServerComponentConfig_Server_HttpServerOption_Metrics) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2091,19 +2517,19 @@ func (x *ServerComponentConfig_HttpServerOption_Metrics) ProtoReflect() protoref
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ServerComponentConfig_HttpServerOption_Metrics.ProtoReflect.Descriptor instead.
-func (*ServerComponentConfig_HttpServerOption_Metrics) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 2, 0}
+// Deprecated: Use ServerComponentConfig_Server_HttpServerOption_Metrics.ProtoReflect.Descriptor instead.
+func (*ServerComponentConfig_Server_HttpServerOption_Metrics) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{5, 0, 2, 0}
 }
 
-func (x *ServerComponentConfig_HttpServerOption_Metrics) GetDisable() bool {
+func (x *ServerComponentConfig_Server_HttpServerOption_Metrics) GetDisable() bool {
 	if x != nil {
 		return x.Disable
 	}
 	return false
 }
 
-func (x *ServerComponentConfig_HttpServerOption_Metrics) GetPath() string {
+func (x *ServerComponentConfig_Server_HttpServerOption_Metrics) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
@@ -2128,7 +2554,7 @@ type DatabaseComponentConfig_Database struct {
 
 func (x *DatabaseComponentConfig_Database) Reset() {
 	*x = DatabaseComponentConfig_Database{}
-	mi := &file_config_proto_msgTypes[31]
+	mi := &file_config_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2140,7 +2566,7 @@ func (x *DatabaseComponentConfig_Database) String() string {
 func (*DatabaseComponentConfig_Database) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[31]
+	mi := &file_config_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2153,7 +2579,7 @@ func (x *DatabaseComponentConfig_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DatabaseComponentConfig_Database.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0}
 }
 
 func (x *DatabaseComponentConfig_Database) GetGorm() *DatabaseComponentConfig_Database_Gorm {
@@ -2209,7 +2635,7 @@ type DatabaseComponentConfig_Database_Tracing struct {
 
 func (x *DatabaseComponentConfig_Database_Tracing) Reset() {
 	*x = DatabaseComponentConfig_Database_Tracing{}
-	mi := &file_config_proto_msgTypes[33]
+	mi := &file_config_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2221,7 +2647,7 @@ func (x *DatabaseComponentConfig_Database_Tracing) String() string {
 func (*DatabaseComponentConfig_Database_Tracing) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[33]
+	mi := &file_config_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2234,7 +2660,7 @@ func (x *DatabaseComponentConfig_Database_Tracing) ProtoReflect() protoreflect.M
 
 // Deprecated: Use DatabaseComponentConfig_Database_Tracing.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Tracing) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0, 1}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 1}
 }
 
 func (x *DatabaseComponentConfig_Database_Tracing) GetDisable() bool {
@@ -2294,7 +2720,7 @@ type DatabaseComponentConfig_Database_Gorm struct {
 
 func (x *DatabaseComponentConfig_Database_Gorm) Reset() {
 	*x = DatabaseComponentConfig_Database_Gorm{}
-	mi := &file_config_proto_msgTypes[34]
+	mi := &file_config_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2306,7 +2732,7 @@ func (x *DatabaseComponentConfig_Database_Gorm) String() string {
 func (*DatabaseComponentConfig_Database_Gorm) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Gorm) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[34]
+	mi := &file_config_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2319,7 +2745,7 @@ func (x *DatabaseComponentConfig_Database_Gorm) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use DatabaseComponentConfig_Database_Gorm.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Gorm) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0, 2}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 2}
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetSkipDefaultTransaction() bool {
@@ -2438,7 +2864,7 @@ type DatabaseComponentConfig_Database_Connection struct {
 
 func (x *DatabaseComponentConfig_Database_Connection) Reset() {
 	*x = DatabaseComponentConfig_Database_Connection{}
-	mi := &file_config_proto_msgTypes[35]
+	mi := &file_config_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2450,7 +2876,7 @@ func (x *DatabaseComponentConfig_Database_Connection) String() string {
 func (*DatabaseComponentConfig_Database_Connection) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Connection) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[35]
+	mi := &file_config_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2463,7 +2889,7 @@ func (x *DatabaseComponentConfig_Database_Connection) ProtoReflect() protoreflec
 
 // Deprecated: Use DatabaseComponentConfig_Database_Connection.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Connection) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0, 3}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 3}
 }
 
 func (x *DatabaseComponentConfig_Database_Connection) GetDriver() string {
@@ -2518,7 +2944,7 @@ type DatabaseComponentConfig_Database_Gorm_Logger struct {
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) Reset() {
 	*x = DatabaseComponentConfig_Database_Gorm_Logger{}
-	mi := &file_config_proto_msgTypes[36]
+	mi := &file_config_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2530,7 +2956,7 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) String() string {
 func (*DatabaseComponentConfig_Database_Gorm_Logger) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[36]
+	mi := &file_config_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2543,7 +2969,7 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) ProtoReflect() protorefle
 
 // Deprecated: Use DatabaseComponentConfig_Database_Gorm_Logger.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Gorm_Logger) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0, 2, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 2, 0}
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetLevel() DatabaseComponentConfig_Database_Gorm_Logger_Level {
@@ -2594,7 +3020,7 @@ type DatabaseComponentConfig_Database_Connection_Dialector struct {
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) Reset() {
 	*x = DatabaseComponentConfig_Database_Connection_Dialector{}
-	mi := &file_config_proto_msgTypes[37]
+	mi := &file_config_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2606,7 +3032,7 @@ func (x *DatabaseComponentConfig_Database_Connection_Dialector) String() string 
 func (*DatabaseComponentConfig_Database_Connection_Dialector) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[37]
+	mi := &file_config_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2619,7 +3045,7 @@ func (x *DatabaseComponentConfig_Database_Connection_Dialector) ProtoReflect() p
 
 // Deprecated: Use DatabaseComponentConfig_Database_Connection_Dialector.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Connection_Dialector) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5, 0, 3, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 3, 0}
 }
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) GetDriver() string {
@@ -2654,7 +3080,7 @@ type RedisComponentConfig_RedisConfig struct {
 
 func (x *RedisComponentConfig_RedisConfig) Reset() {
 	*x = RedisComponentConfig_RedisConfig{}
-	mi := &file_config_proto_msgTypes[38]
+	mi := &file_config_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2666,7 +3092,7 @@ func (x *RedisComponentConfig_RedisConfig) String() string {
 func (*RedisComponentConfig_RedisConfig) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[38]
+	mi := &file_config_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2679,7 +3105,7 @@ func (x *RedisComponentConfig_RedisConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedisComponentConfig_RedisConfig.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig_RedisConfig) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0}
+	return file_config_proto_rawDescGZIP(), []int{7, 0}
 }
 
 func (x *RedisComponentConfig_RedisConfig) GetDefault() string {
@@ -2732,7 +3158,7 @@ type RedisComponentConfig_RedisConfig_Tracing struct {
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) Reset() {
 	*x = RedisComponentConfig_RedisConfig_Tracing{}
-	mi := &file_config_proto_msgTypes[40]
+	mi := &file_config_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2744,7 +3170,7 @@ func (x *RedisComponentConfig_RedisConfig_Tracing) String() string {
 func (*RedisComponentConfig_RedisConfig_Tracing) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[40]
+	mi := &file_config_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2757,7 +3183,7 @@ func (x *RedisComponentConfig_RedisConfig_Tracing) ProtoReflect() protoreflect.M
 
 // Deprecated: Use RedisComponentConfig_RedisConfig_Tracing.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig_RedisConfig_Tracing) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 1}
+	return file_config_proto_rawDescGZIP(), []int{7, 0, 1}
 }
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) GetDisable() bool {
@@ -2797,7 +3223,7 @@ type RedisComponentConfig_RedisConfig_Metrics struct {
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) Reset() {
 	*x = RedisComponentConfig_RedisConfig_Metrics{}
-	mi := &file_config_proto_msgTypes[41]
+	mi := &file_config_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2809,7 +3235,7 @@ func (x *RedisComponentConfig_RedisConfig_Metrics) String() string {
 func (*RedisComponentConfig_RedisConfig_Metrics) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[41]
+	mi := &file_config_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2822,7 +3248,7 @@ func (x *RedisComponentConfig_RedisConfig_Metrics) ProtoReflect() protoreflect.M
 
 // Deprecated: Use RedisComponentConfig_RedisConfig_Metrics.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig_RedisConfig_Metrics) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 2}
+	return file_config_proto_rawDescGZIP(), []int{7, 0, 2}
 }
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) GetDisable() bool {
@@ -2963,7 +3389,7 @@ type RedisComponentConfig_RedisConfig_RedisOption struct {
 
 func (x *RedisComponentConfig_RedisConfig_RedisOption) Reset() {
 	*x = RedisComponentConfig_RedisConfig_RedisOption{}
-	mi := &file_config_proto_msgTypes[42]
+	mi := &file_config_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2975,7 +3401,7 @@ func (x *RedisComponentConfig_RedisConfig_RedisOption) String() string {
 func (*RedisComponentConfig_RedisConfig_RedisOption) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_RedisOption) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[42]
+	mi := &file_config_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2988,7 +3414,7 @@ func (x *RedisComponentConfig_RedisConfig_RedisOption) ProtoReflect() protorefle
 
 // Deprecated: Use RedisComponentConfig_RedisConfig_RedisOption.ProtoReflect.Descriptor instead.
 func (*RedisComponentConfig_RedisConfig_RedisOption) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 3}
+	return file_config_proto_rawDescGZIP(), []int{7, 0, 3}
 }
 
 func (x *RedisComponentConfig_RedisConfig_RedisOption) GetNetwork() string {
@@ -3223,6 +3649,209 @@ func (x *RedisComponentConfig_RedisConfig_RedisOption) GetFailingTimeoutSeconds(
 	return 0
 }
 
+type ClientComponentConfig_Client struct {
+	state   protoimpl.MessageState                                `protogen:"open.v1"`
+	Clients map[string]*ClientComponentConfig_Client_ClientOption `protobuf:"bytes,1,rep,name=clients,proto3" json:"clients,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// logger 配置
+	Log           *LogComponentConfig_ModuleLog `protobuf:"bytes,2,opt,name=log,proto3,oneof" json:"log,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientComponentConfig_Client) Reset() {
+	*x = ClientComponentConfig_Client{}
+	mi := &file_config_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientComponentConfig_Client) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientComponentConfig_Client) ProtoMessage() {}
+
+func (x *ClientComponentConfig_Client) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientComponentConfig_Client.ProtoReflect.Descriptor instead.
+func (*ClientComponentConfig_Client) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{8, 0}
+}
+
+func (x *ClientComponentConfig_Client) GetClients() map[string]*ClientComponentConfig_Client_ClientOption {
+	if x != nil {
+		return x.Clients
+	}
+	return nil
+}
+
+func (x *ClientComponentConfig_Client) GetLog() *LogComponentConfig_ModuleLog {
+	if x != nil {
+		return x.Log
+	}
+	return nil
+}
+
+type ClientComponentConfig_Client_ClientOption struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 协议 默认为 GRPC
+	Protocol ClientComponentConfig_Client_ClientOption_Protocol `protobuf:"varint,1,opt,name=protocol,proto3,enum=kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_Protocol" json:"protocol,omitempty"`
+	// 目标端点 支持服务发现/直连:
+	// 默认为 discovery:///{client_key}
+	// 也可以指定直连 host:port
+	Target string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// 中间件
+	Middleware    *ClientComponentConfig_Client_ClientOption_ClientMiddleware `protobuf:"bytes,3,opt,name=middleware,proto3" json:"middleware,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientComponentConfig_Client_ClientOption) Reset() {
+	*x = ClientComponentConfig_Client_ClientOption{}
+	mi := &file_config_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientComponentConfig_Client_ClientOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientComponentConfig_Client_ClientOption) ProtoMessage() {}
+
+func (x *ClientComponentConfig_Client_ClientOption) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientComponentConfig_Client_ClientOption.ProtoReflect.Descriptor instead.
+func (*ClientComponentConfig_Client_ClientOption) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{8, 0, 1}
+}
+
+func (x *ClientComponentConfig_Client_ClientOption) GetProtocol() ClientComponentConfig_Client_ClientOption_Protocol {
+	if x != nil {
+		return x.Protocol
+	}
+	return ClientComponentConfig_Client_ClientOption_GRPC
+}
+
+func (x *ClientComponentConfig_Client_ClientOption) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *ClientComponentConfig_Client_ClientOption) GetMiddleware() *ClientComponentConfig_Client_ClientOption_ClientMiddleware {
+	if x != nil {
+		return x.Middleware
+	}
+	return nil
+}
+
+// 客户端中间件配置
+type ClientComponentConfig_Client_ClientOption_ClientMiddleware struct {
+	state          protoimpl.MessageState           `protogen:"open.v1"`
+	Timeout        *MiddlewareConfig_Timeout        `protobuf:"bytes,1,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	Metadata       *MiddlewareConfig_Metadata       `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Tracing        *MiddlewareConfig_Tracing        `protobuf:"bytes,3,opt,name=tracing,proto3" json:"tracing,omitempty"`
+	Metrics        *MiddlewareConfig_Metrics        `protobuf:"bytes,4,opt,name=metrics,proto3" json:"metrics,omitempty"`
+	Logging        *MiddlewareConfig_Logging        `protobuf:"bytes,5,opt,name=logging,proto3" json:"logging,omitempty"`
+	Circuitbreaker *MiddlewareConfig_Circuitbreaker `protobuf:"bytes,6,opt,name=circuitbreaker,proto3" json:"circuitbreaker,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) Reset() {
+	*x = ClientComponentConfig_Client_ClientOption_ClientMiddleware{}
+	mi := &file_config_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientComponentConfig_Client_ClientOption_ClientMiddleware) ProtoMessage() {}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientComponentConfig_Client_ClientOption_ClientMiddleware.ProtoReflect.Descriptor instead.
+func (*ClientComponentConfig_Client_ClientOption_ClientMiddleware) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{8, 0, 1, 0}
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) GetTimeout() *MiddlewareConfig_Timeout {
+	if x != nil {
+		return x.Timeout
+	}
+	return nil
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) GetMetadata() *MiddlewareConfig_Metadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) GetTracing() *MiddlewareConfig_Tracing {
+	if x != nil {
+		return x.Tracing
+	}
+	return nil
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) GetMetrics() *MiddlewareConfig_Metrics {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) GetLogging() *MiddlewareConfig_Logging {
+	if x != nil {
+		return x.Logging
+	}
+	return nil
+}
+
+func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) GetCircuitbreaker() *MiddlewareConfig_Circuitbreaker {
+	if x != nil {
+		return x.Circuitbreaker
+	}
+	return nil
+}
+
 var File_config_proto protoreflect.FileDescriptor
 
 const file_config_proto_rawDesc = "" +
@@ -3271,10 +3900,10 @@ const file_config_proto_rawDesc = "" +
 	"\n" +
 	"local_time\x18\x05 \x01(\bR\tlocalTime\x12\x1a\n" +
 	"\bcompress\x18\x06 \x01(\bR\bcompressB\b\n" +
-	"\x06_level\"\xd1\x02\n" +
-	"\x15MetricComponentConfig\x12J\n" +
-	"\x06metric\x18\x01 \x01(\v22.kratos_foundation_pb.MetricComponentConfig.MetricR\x06metric\x1a\xeb\x01\n" +
-	"\x06Metric\x12\x1d\n" +
+	"\x06_level\"\xd5\x02\n" +
+	"\x15MetricComponentConfig\x12M\n" +
+	"\ametrics\x18\x01 \x01(\v23.kratos_foundation_pb.MetricComponentConfig.MetricsR\ametrics\x1a\xec\x01\n" +
+	"\aMetrics\x12\x1d\n" +
 	"\n" +
 	"meter_name\x18\x01 \x01(\tR\tmeterName\x12(\n" +
 	"\x10counter_map_size\x18\x02 \x01(\x05R\x0ecounterMapSize\x12$\n" +
@@ -3315,35 +3944,16 @@ const file_config_proto_rawDesc = "" +
 	"\x05RATIO\x10\x00\x12\n" +
 	"\n" +
 	"\x06ALWAYS\x10\x01\x12\t\n" +
-	"\x05NEVER\x10\x02\"\xe1\x13\n" +
-	"\x15ServerComponentConfig\x12J\n" +
-	"\x06server\x18\x01 \x01(\v22.kratos_foundation_pb.ServerComponentConfig.ServerR\x06server\x1a\xfd\n" +
+	"\x05NEVER\x10\x02\"\xfd\n" +
 	"\n" +
-	"\x06Server\x128\n" +
-	"\n" +
-	"stop_delay\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\tstopDelay\x12]\n" +
-	"\n" +
-	"middleware\x18\x02 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareR\n" +
-	"middleware\x12P\n" +
-	"\x04http\x18\x03 \x01(\v2<.kratos_foundation_pb.ServerComponentConfig.HttpServerOptionR\x04http\x12P\n" +
-	"\x04grpc\x18\x04 \x01(\v2<.kratos_foundation_pb.ServerComponentConfig.GrpcServerOptionR\x04grpc\x12D\n" +
-	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x12Y\n" +
-	"\atimeout\x18\x06 \x03(\v2?.kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeoutR\atimeout\x1a\x87\x01\n" +
-	"\fRouteTimeout\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
-	"\x06regexp\x18\x02 \x01(\tR\x06regexp\x12\x16\n" +
-	"\x06prefix\x18\x03 \x01(\tR\x06prefix\x123\n" +
-	"\atimeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x1a\x8a\x06\n" +
-	"\n" +
-	"Middleware\x12b\n" +
-	"\bmetadata\x18\x01 \x01(\v2F.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.MetadataR\bmetadata\x12_\n" +
-	"\atracing\x18\x02 \x01(\v2E.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.TracingR\atracing\x12_\n" +
-	"\ametrics\x18\x03 \x01(\v2E.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.MetricsR\ametrics\x12\\\n" +
-	"\x06logger\x18\x04 \x01(\v2D.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.LoggerR\x06logger\x12e\n" +
-	"\tvalidator\x18\x05 \x01(\v2G.kratos_foundation_pb.ServerComponentConfig.Server.Middleware.ValidatorR\tvalidator\x1a<\n" +
+	"\x10MiddlewareConfig\x1a\xd8\x01\n" +
 	"\bMetadata\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x16\n" +
-	"\x06prefix\x18\x02 \x03(\tR\x06prefix\x1aD\n" +
+	"\x06prefix\x18\x02 \x03(\tR\x06prefix\x12\\\n" +
+	"\tconstants\x18\x03 \x03(\v2>.kratos_foundation_pb.MiddlewareConfig.Metadata.ConstantsEntryR\tconstants\x1a<\n" +
+	"\x0eConstantsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aD\n" +
 	"\aTracing\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x1f\n" +
 	"\vtracer_name\x18\x02 \x01(\tR\n" +
@@ -3351,41 +3961,89 @@ const file_config_proto_rawDesc = "" +
 	"\aMetrics\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x1d\n" +
 	"\n" +
-	"meter_name\x18\x02 \x01(\tR\tmeterName\x1a\"\n" +
-	"\x06Logger\x12\x18\n" +
+	"meter_name\x18\x02 \x01(\tR\tmeterName\x1a#\n" +
+	"\aLogging\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x1a%\n" +
 	"\tValidator\x12\x18\n" +
-	"\adisable\x18\x01 \x01(\bR\adisable\x1a6\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x1a\xe7\x02\n" +
+	"\tRatelimit\x12\x16\n" +
+	"\x06enable\x18\x01 \x01(\bR\x06enable\x12\\\n" +
+	"\vbbr_limiter\x18\x02 \x01(\v2;.kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiterR\n" +
+	"bbrLimiter\x1a\xe3\x01\n" +
+	"\n" +
+	"BBRLimiter\x126\n" +
+	"\x06window\x18\x01 \x01(\v2\x19.google.protobuf.DurationH\x00R\x06window\x88\x01\x01\x12\x1b\n" +
+	"\x06bucket\x18\x02 \x01(\x05H\x01R\x06bucket\x88\x01\x01\x12(\n" +
+	"\rcpu_threshold\x18\x03 \x01(\x03H\x02R\fcpuThreshold\x88\x01\x01\x12 \n" +
+	"\tcpu_quota\x18\x04 \x01(\x01H\x03R\bcpuQuota\x88\x01\x01B\t\n" +
+	"\a_windowB\t\n" +
+	"\a_bucketB\x10\n" +
+	"\x0e_cpu_thresholdB\f\n" +
+	"\n" +
+	"_cpu_quota\x1a\xcc\x02\n" +
+	"\x0eCircuitbreaker\x12\x16\n" +
+	"\x06enable\x18\x01 \x01(\bR\x06enable\x12R\n" +
+	"\x03sre\x18\x02 \x01(\v2@.kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreakerR\x03sre\x1a\xcd\x01\n" +
+	"\n" +
+	"SREBreaker\x12\x1d\n" +
+	"\asuccess\x18\x01 \x01(\x01H\x00R\asuccess\x88\x01\x01\x12\x1d\n" +
+	"\arequest\x18\x02 \x01(\x03H\x01R\arequest\x88\x01\x01\x12\x1b\n" +
+	"\x06bucket\x18\x03 \x01(\x05H\x02R\x06bucket\x88\x01\x01\x126\n" +
+	"\x06window\x18\x04 \x01(\v2\x19.google.protobuf.DurationH\x03R\x06window\x88\x01\x01B\n" +
+	"\n" +
+	"\b_successB\n" +
+	"\n" +
+	"\b_requestB\t\n" +
+	"\a_bucketB\t\n" +
+	"\a_window\x1a\xfe\x01\n" +
+	"\aTimeout\x123\n" +
+	"\adefault\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\adefault\x12P\n" +
+	"\x06routes\x18\x02 \x03(\v28.kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRuleR\x06routes\x1al\n" +
+	"\tRouteRule\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06prefix\x18\x02 \x01(\tR\x06prefix\x123\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\x9a\x0e\n" +
+	"\x15ServerComponentConfig\x12J\n" +
+	"\x06server\x18\x01 \x01(\v22.kratos_foundation_pb.ServerComponentConfig.ServerR\x06server\x1a\xb4\r\n" +
+	"\x06Server\x128\n" +
+	"\n" +
+	"stop_delay\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\tstopDelay\x12c\n" +
+	"\n" +
+	"middleware\x18\x02 \x01(\v2C.kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddlewareR\n" +
+	"middleware\x12W\n" +
+	"\x04http\x18\x03 \x01(\v2C.kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOptionR\x04http\x12W\n" +
+	"\x04grpc\x18\x04 \x01(\v2C.kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOptionR\x04grpc\x12D\n" +
+	"\x03log\x18\x05 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogR\x03log\x1a6\n" +
 	"\bEndpoint\x12\x16\n" +
 	"\x06scheme\x18\x01 \x01(\tR\x06scheme\x12\x12\n" +
-	"\x04host\x18\x02 \x01(\tR\x04host\x1a\xac\x04\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x1a\xa7\x04\n" +
+	"\x10ServerMiddleware\x12H\n" +
+	"\atimeout\x18\x01 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.TimeoutR\atimeout\x12K\n" +
+	"\bmetadata\x18\x02 \x01(\v2/.kratos_foundation_pb.MiddlewareConfig.MetadataR\bmetadata\x12H\n" +
+	"\atracing\x18\x03 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.TracingR\atracing\x12H\n" +
+	"\ametrics\x18\x04 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.MetricsR\ametrics\x12H\n" +
+	"\alogging\x18\x05 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.LoggingR\alogging\x12N\n" +
+	"\tvalidator\x18\x06 \x01(\v20.kratos_foundation_pb.MiddlewareConfig.ValidatorR\tvalidator\x12N\n" +
+	"\tratelimit\x18\a \x01(\v20.kratos_foundation_pb.MiddlewareConfig.RatelimitR\tratelimit\x1a\xa6\x03\n" +
 	"\x10HttpServerOption\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\tR\anetwork\x12\x12\n" +
-	"\x04addr\x18\x03 \x01(\tR\x04addr\x12P\n" +
-	"\bendpoint\x18\x04 \x01(\v24.kratos_foundation_pb.ServerComponentConfig.EndpointR\bendpoint\x123\n" +
-	"\atimeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12]\n" +
-	"\n" +
-	"middleware\x18\x06 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareR\n" +
-	"middleware\x120\n" +
-	"\x14disable_strict_slash\x18\a \x01(\bR\x12disableStrictSlash\x12\x1f\n" +
-	"\vpath_prefix\x18\b \x01(\tR\n" +
-	"pathPrefix\x12^\n" +
-	"\ametrics\x18\t \x01(\v2D.kratos_foundation_pb.ServerComponentConfig.HttpServerOption.MetricsR\ametrics\x1a7\n" +
+	"\x04addr\x18\x03 \x01(\tR\x04addr\x12W\n" +
+	"\bendpoint\x18\x04 \x01(\v2;.kratos_foundation_pb.ServerComponentConfig.Server.EndpointR\bendpoint\x120\n" +
+	"\x14disable_strict_slash\x18\x05 \x01(\bR\x12disableStrictSlash\x12\x1f\n" +
+	"\vpath_prefix\x18\x06 \x01(\tR\n" +
+	"pathPrefix\x12e\n" +
+	"\ametrics\x18\a \x01(\v2K.kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.MetricsR\ametrics\x1a7\n" +
 	"\aMetrics\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\x1a\x94\x03\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x1a\x87\x02\n" +
 	"\x10GrpcServerOption\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\tR\anetwork\x12\x12\n" +
-	"\x04addr\x18\x03 \x01(\tR\x04addr\x12P\n" +
-	"\bendpoint\x18\x04 \x01(\v24.kratos_foundation_pb.ServerComponentConfig.EndpointR\bendpoint\x123\n" +
-	"\atimeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12]\n" +
-	"\n" +
-	"middleware\x18\x06 \x01(\v2=.kratos_foundation_pb.ServerComponentConfig.Server.MiddlewareR\n" +
-	"middleware\x12#\n" +
-	"\rcustom_health\x18\a \x01(\bR\fcustomHealth\x12-\n" +
-	"\x12disable_reflection\x18\b \x01(\bR\x11disableReflection\"\x81\x13\n" +
+	"\x04addr\x18\x03 \x01(\tR\x04addr\x12W\n" +
+	"\bendpoint\x18\x04 \x01(\v2;.kratos_foundation_pb.ServerComponentConfig.Server.EndpointR\bendpoint\x12#\n" +
+	"\rcustom_health\x18\x05 \x01(\bR\fcustomHealth\x12-\n" +
+	"\x12disable_reflection\x18\x06 \x01(\bR\x11disableReflection\"\x81\x13\n" +
 	"\x17DatabaseComponentConfig\x12R\n" +
 	"\bdatabase\x18\x01 \x01(\v26.kratos_foundation_pb.DatabaseComponentConfig.DatabaseR\bdatabase\x1a\x91\x12\n" +
 	"\bDatabase\x12O\n" +
@@ -3498,6 +4156,33 @@ const file_config_proto_rawDesc = "" +
 	"\x0fidentity_suffix\x18\x1f \x01(\tR\x0eidentitySuffix\x12%\n" +
 	"\x0eunstable_resp3\x18  \x01(\bR\runstableResp3\x126\n" +
 	"\x17failing_timeout_seconds\x18! \x01(\x05R\x15failingTimeoutSecondsB\x06\n" +
+	"\x04_log\"\xb9\t\n" +
+	"\x15ClientComponentConfig\x12J\n" +
+	"\x06client\x18\x01 \x01(\v22.kratos_foundation_pb.ClientComponentConfig.ClientR\x06client\x1a\xd3\b\n" +
+	"\x06Client\x12Y\n" +
+	"\aclients\x18\x01 \x03(\v2?.kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntryR\aclients\x12I\n" +
+	"\x03log\x18\x02 \x01(\v22.kratos_foundation_pb.LogComponentConfig.ModuleLogH\x00R\x03log\x88\x01\x01\x1a{\n" +
+	"\fClientsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12U\n" +
+	"\x05value\x18\x02 \x01(\v2?.kratos_foundation_pb.ClientComponentConfig.Client.ClientOptionR\x05value:\x028\x01\x1a\x9d\x06\n" +
+	"\fClientOption\x12d\n" +
+	"\bprotocol\x18\x01 \x01(\x0e2H.kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ProtocolR\bprotocol\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x12p\n" +
+	"\n" +
+	"middleware\x18\x03 \x01(\v2P.kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddlewareR\n" +
+	"middleware\x1a\xe6\x03\n" +
+	"\x10ClientMiddleware\x12H\n" +
+	"\atimeout\x18\x01 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.TimeoutR\atimeout\x12K\n" +
+	"\bmetadata\x18\x02 \x01(\v2/.kratos_foundation_pb.MiddlewareConfig.MetadataR\bmetadata\x12H\n" +
+	"\atracing\x18\x03 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.TracingR\atracing\x12H\n" +
+	"\ametrics\x18\x04 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.MetricsR\ametrics\x12H\n" +
+	"\alogging\x18\x05 \x01(\v2..kratos_foundation_pb.MiddlewareConfig.LoggingR\alogging\x12]\n" +
+	"\x0ecircuitbreaker\x18\x06 \x01(\v25.kratos_foundation_pb.MiddlewareConfig.CircuitbreakerR\x0ecircuitbreaker\"4\n" +
+	"\bProtocol\x12\b\n" +
+	"\x04GRPC\x10\x00\x12\b\n" +
+	"\x04HTTP\x10\x01\x12\t\n" +
+	"\x05GRPCS\x10\x02\x12\t\n" +
+	"\x05HTTPS\x10\x03B\x06\n" +
 	"\x04_logBJZHgithub.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pbb\x06proto3"
 
 var (
@@ -3512,131 +4197,160 @@ func file_config_proto_rawDescGZIP() []byte {
 	return file_config_proto_rawDescData
 }
 
-var file_config_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_config_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
 var file_config_proto_goTypes = []any{
 	(TracingComponentConfig_Tracing_Exporter_Compression)(0), // 0: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
 	(TracingComponentConfig_Tracing_Sampler_Sample)(0),       // 1: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
 	(DatabaseComponentConfig_Database_Gorm_Logger_Level)(0),  // 2: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
-	(*AppComponentConfig)(nil),                               // 3: kratos_foundation_pb.AppComponentConfig
-	(*LogComponentConfig)(nil),                               // 4: kratos_foundation_pb.LogComponentConfig
-	(*MetricComponentConfig)(nil),                            // 5: kratos_foundation_pb.MetricComponentConfig
-	(*TracingComponentConfig)(nil),                           // 6: kratos_foundation_pb.TracingComponentConfig
-	(*ServerComponentConfig)(nil),                            // 7: kratos_foundation_pb.ServerComponentConfig
-	(*DatabaseComponentConfig)(nil),                          // 8: kratos_foundation_pb.DatabaseComponentConfig
-	(*RedisComponentConfig)(nil),                             // 9: kratos_foundation_pb.RedisComponentConfig
-	(*AppComponentConfig_App)(nil),                           // 10: kratos_foundation_pb.AppComponentConfig.App
-	(*LogComponentConfig_ModuleLog)(nil),                     // 11: kratos_foundation_pb.LogComponentConfig.ModuleLog
-	(*LogComponentConfig_Log)(nil),                           // 12: kratos_foundation_pb.LogComponentConfig.Log
-	(*LogComponentConfig_Log_StdLogger)(nil),                 // 13: kratos_foundation_pb.LogComponentConfig.Log.StdLogger
-	(*LogComponentConfig_Log_FileLogger)(nil),                // 14: kratos_foundation_pb.LogComponentConfig.Log.FileLogger
-	(*LogComponentConfig_Log_FileLogger_Rotating)(nil),       // 15: kratos_foundation_pb.LogComponentConfig.Log.FileLogger.Rotating
-	(*MetricComponentConfig_Metric)(nil),                     // 16: kratos_foundation_pb.MetricComponentConfig.Metric
-	(*TracingComponentConfig_Tracing)(nil),                   // 17: kratos_foundation_pb.TracingComponentConfig.Tracing
-	(*TracingComponentConfig_Tracing_Exporter)(nil),          // 18: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter
-	(*TracingComponentConfig_Tracing_Sampler)(nil),           // 19: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler
-	nil, // 20: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
-	(*TracingComponentConfig_Tracing_Exporter_RetryConfig)(nil),   // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
-	(*ServerComponentConfig_Server)(nil),                          // 22: kratos_foundation_pb.ServerComponentConfig.Server
-	(*ServerComponentConfig_Endpoint)(nil),                        // 23: kratos_foundation_pb.ServerComponentConfig.Endpoint
-	(*ServerComponentConfig_HttpServerOption)(nil),                // 24: kratos_foundation_pb.ServerComponentConfig.HttpServerOption
-	(*ServerComponentConfig_GrpcServerOption)(nil),                // 25: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption
-	(*ServerComponentConfig_Server_RouteTimeout)(nil),             // 26: kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeout
-	(*ServerComponentConfig_Server_Middleware)(nil),               // 27: kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	(*ServerComponentConfig_Server_Middleware_Metadata)(nil),      // 28: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metadata
-	(*ServerComponentConfig_Server_Middleware_Tracing)(nil),       // 29: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Tracing
-	(*ServerComponentConfig_Server_Middleware_Metrics)(nil),       // 30: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metrics
-	(*ServerComponentConfig_Server_Middleware_Logger)(nil),        // 31: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Logger
-	(*ServerComponentConfig_Server_Middleware_Validator)(nil),     // 32: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Validator
-	(*ServerComponentConfig_HttpServerOption_Metrics)(nil),        // 33: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.Metrics
-	(*DatabaseComponentConfig_Database)(nil),                      // 34: kratos_foundation_pb.DatabaseComponentConfig.Database
-	nil,                                                           // 35: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
-	(*DatabaseComponentConfig_Database_Tracing)(nil),              // 36: kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
-	(*DatabaseComponentConfig_Database_Gorm)(nil),                 // 37: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
-	(*DatabaseComponentConfig_Database_Connection)(nil),           // 38: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
-	(*DatabaseComponentConfig_Database_Gorm_Logger)(nil),          // 39: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
-	(*DatabaseComponentConfig_Database_Connection_Dialector)(nil), // 40: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
-	(*RedisComponentConfig_RedisConfig)(nil),                      // 41: kratos_foundation_pb.RedisComponentConfig.RedisConfig
-	nil,                                                           // 42: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
-	(*RedisComponentConfig_RedisConfig_Tracing)(nil),              // 43: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
-	(*RedisComponentConfig_RedisConfig_Metrics)(nil),              // 44: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
-	(*RedisComponentConfig_RedisConfig_RedisOption)(nil),          // 45: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
-	(*durationpb.Duration)(nil),                                   // 46: google.protobuf.Duration
+	(ClientComponentConfig_Client_ClientOption_Protocol)(0),  // 3: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.Protocol
+	(*AppComponentConfig)(nil),                               // 4: kratos_foundation_pb.AppComponentConfig
+	(*LogComponentConfig)(nil),                               // 5: kratos_foundation_pb.LogComponentConfig
+	(*MetricComponentConfig)(nil),                            // 6: kratos_foundation_pb.MetricComponentConfig
+	(*TracingComponentConfig)(nil),                           // 7: kratos_foundation_pb.TracingComponentConfig
+	(*MiddlewareConfig)(nil),                                 // 8: kratos_foundation_pb.MiddlewareConfig
+	(*ServerComponentConfig)(nil),                            // 9: kratos_foundation_pb.ServerComponentConfig
+	(*DatabaseComponentConfig)(nil),                          // 10: kratos_foundation_pb.DatabaseComponentConfig
+	(*RedisComponentConfig)(nil),                             // 11: kratos_foundation_pb.RedisComponentConfig
+	(*ClientComponentConfig)(nil),                            // 12: kratos_foundation_pb.ClientComponentConfig
+	(*AppComponentConfig_App)(nil),                           // 13: kratos_foundation_pb.AppComponentConfig.App
+	(*LogComponentConfig_ModuleLog)(nil),                     // 14: kratos_foundation_pb.LogComponentConfig.ModuleLog
+	(*LogComponentConfig_Log)(nil),                           // 15: kratos_foundation_pb.LogComponentConfig.Log
+	(*LogComponentConfig_Log_StdLogger)(nil),                 // 16: kratos_foundation_pb.LogComponentConfig.Log.StdLogger
+	(*LogComponentConfig_Log_FileLogger)(nil),                // 17: kratos_foundation_pb.LogComponentConfig.Log.FileLogger
+	(*LogComponentConfig_Log_FileLogger_Rotating)(nil),       // 18: kratos_foundation_pb.LogComponentConfig.Log.FileLogger.Rotating
+	(*MetricComponentConfig_Metrics)(nil),                    // 19: kratos_foundation_pb.MetricComponentConfig.Metrics
+	(*TracingComponentConfig_Tracing)(nil),                   // 20: kratos_foundation_pb.TracingComponentConfig.Tracing
+	(*TracingComponentConfig_Tracing_Exporter)(nil),          // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter
+	(*TracingComponentConfig_Tracing_Sampler)(nil),           // 22: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler
+	nil, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
+	(*TracingComponentConfig_Tracing_Exporter_RetryConfig)(nil),        // 24: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
+	(*MiddlewareConfig_Metadata)(nil),                                  // 25: kratos_foundation_pb.MiddlewareConfig.Metadata
+	(*MiddlewareConfig_Tracing)(nil),                                   // 26: kratos_foundation_pb.MiddlewareConfig.Tracing
+	(*MiddlewareConfig_Metrics)(nil),                                   // 27: kratos_foundation_pb.MiddlewareConfig.Metrics
+	(*MiddlewareConfig_Logging)(nil),                                   // 28: kratos_foundation_pb.MiddlewareConfig.Logging
+	(*MiddlewareConfig_Validator)(nil),                                 // 29: kratos_foundation_pb.MiddlewareConfig.Validator
+	(*MiddlewareConfig_Ratelimit)(nil),                                 // 30: kratos_foundation_pb.MiddlewareConfig.Ratelimit
+	(*MiddlewareConfig_Circuitbreaker)(nil),                            // 31: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker
+	(*MiddlewareConfig_Timeout)(nil),                                   // 32: kratos_foundation_pb.MiddlewareConfig.Timeout
+	nil,                                                                // 33: kratos_foundation_pb.MiddlewareConfig.Metadata.ConstantsEntry
+	(*MiddlewareConfig_Ratelimit_BBRLimiter)(nil),                      // 34: kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter
+	(*MiddlewareConfig_Circuitbreaker_SREBreaker)(nil),                 // 35: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker
+	(*MiddlewareConfig_Timeout_RouteRule)(nil),                         // 36: kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule
+	(*ServerComponentConfig_Server)(nil),                               // 37: kratos_foundation_pb.ServerComponentConfig.Server
+	(*ServerComponentConfig_Server_Endpoint)(nil),                      // 38: kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
+	(*ServerComponentConfig_Server_ServerMiddleware)(nil),              // 39: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware
+	(*ServerComponentConfig_Server_HttpServerOption)(nil),              // 40: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption
+	(*ServerComponentConfig_Server_GrpcServerOption)(nil),              // 41: kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption
+	(*ServerComponentConfig_Server_HttpServerOption_Metrics)(nil),      // 42: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.Metrics
+	(*DatabaseComponentConfig_Database)(nil),                           // 43: kratos_foundation_pb.DatabaseComponentConfig.Database
+	nil,                                                                // 44: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
+	(*DatabaseComponentConfig_Database_Tracing)(nil),                   // 45: kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
+	(*DatabaseComponentConfig_Database_Gorm)(nil),                      // 46: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
+	(*DatabaseComponentConfig_Database_Connection)(nil),                // 47: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
+	(*DatabaseComponentConfig_Database_Gorm_Logger)(nil),               // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
+	(*DatabaseComponentConfig_Database_Connection_Dialector)(nil),      // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
+	(*RedisComponentConfig_RedisConfig)(nil),                           // 50: kratos_foundation_pb.RedisComponentConfig.RedisConfig
+	nil,                                                                // 51: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
+	(*RedisComponentConfig_RedisConfig_Tracing)(nil),                   // 52: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
+	(*RedisComponentConfig_RedisConfig_Metrics)(nil),                   // 53: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	(*RedisComponentConfig_RedisConfig_RedisOption)(nil),               // 54: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
+	(*ClientComponentConfig_Client)(nil),                               // 55: kratos_foundation_pb.ClientComponentConfig.Client
+	nil,                                                                // 56: kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry
+	(*ClientComponentConfig_Client_ClientOption)(nil),                  // 57: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption
+	(*ClientComponentConfig_Client_ClientOption_ClientMiddleware)(nil), // 58: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware
+	(*durationpb.Duration)(nil),                                        // 59: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
-	10, // 0: kratos_foundation_pb.AppComponentConfig.app:type_name -> kratos_foundation_pb.AppComponentConfig.App
-	12, // 1: kratos_foundation_pb.LogComponentConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.Log
-	16, // 2: kratos_foundation_pb.MetricComponentConfig.metric:type_name -> kratos_foundation_pb.MetricComponentConfig.Metric
-	17, // 3: kratos_foundation_pb.TracingComponentConfig.tracing:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing
-	22, // 4: kratos_foundation_pb.ServerComponentConfig.server:type_name -> kratos_foundation_pb.ServerComponentConfig.Server
-	34, // 5: kratos_foundation_pb.DatabaseComponentConfig.database:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database
-	41, // 6: kratos_foundation_pb.RedisComponentConfig.redis:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig
-	46, // 7: kratos_foundation_pb.AppComponentConfig.App.registrar_timeout:type_name -> google.protobuf.Duration
-	46, // 8: kratos_foundation_pb.AppComponentConfig.App.stop_timeout:type_name -> google.protobuf.Duration
-	13, // 9: kratos_foundation_pb.LogComponentConfig.Log.std:type_name -> kratos_foundation_pb.LogComponentConfig.Log.StdLogger
-	14, // 10: kratos_foundation_pb.LogComponentConfig.Log.file:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger
-	15, // 11: kratos_foundation_pb.LogComponentConfig.Log.FileLogger.rotating:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger.Rotating
-	11, // 12: kratos_foundation_pb.MetricComponentConfig.Metric.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	18, // 13: kratos_foundation_pb.TracingComponentConfig.Tracing.exporter:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter
-	19, // 14: kratos_foundation_pb.TracingComponentConfig.Tracing.sampler:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler
-	11, // 15: kratos_foundation_pb.TracingComponentConfig.Tracing.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	0,  // 16: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.compression:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
-	20, // 17: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.headers:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
-	46, // 18: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.timeout:type_name -> google.protobuf.Duration
-	21, // 19: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.retry:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
-	1,  // 20: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.sample:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
-	46, // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.initial_interval:type_name -> google.protobuf.Duration
-	46, // 22: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_interval:type_name -> google.protobuf.Duration
-	46, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_elapsed_time:type_name -> google.protobuf.Duration
-	46, // 24: kratos_foundation_pb.ServerComponentConfig.Server.stop_delay:type_name -> google.protobuf.Duration
-	27, // 25: kratos_foundation_pb.ServerComponentConfig.Server.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	24, // 26: kratos_foundation_pb.ServerComponentConfig.Server.http:type_name -> kratos_foundation_pb.ServerComponentConfig.HttpServerOption
-	25, // 27: kratos_foundation_pb.ServerComponentConfig.Server.grpc:type_name -> kratos_foundation_pb.ServerComponentConfig.GrpcServerOption
-	11, // 28: kratos_foundation_pb.ServerComponentConfig.Server.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	26, // 29: kratos_foundation_pb.ServerComponentConfig.Server.timeout:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeout
-	23, // 30: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Endpoint
-	46, // 31: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.timeout:type_name -> google.protobuf.Duration
-	27, // 32: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	33, // 33: kratos_foundation_pb.ServerComponentConfig.HttpServerOption.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.HttpServerOption.Metrics
-	23, // 34: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Endpoint
-	46, // 35: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.timeout:type_name -> google.protobuf.Duration
-	27, // 36: kratos_foundation_pb.ServerComponentConfig.GrpcServerOption.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware
-	46, // 37: kratos_foundation_pb.ServerComponentConfig.Server.RouteTimeout.timeout:type_name -> google.protobuf.Duration
-	28, // 38: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.metadata:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metadata
-	29, // 39: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.tracing:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Tracing
-	30, // 40: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Metrics
-	31, // 41: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.logger:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Logger
-	32, // 42: kratos_foundation_pb.ServerComponentConfig.Server.Middleware.validator:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Middleware.Validator
-	37, // 43: kratos_foundation_pb.DatabaseComponentConfig.Database.gorm:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
-	11, // 44: kratos_foundation_pb.DatabaseComponentConfig.Database.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	35, // 45: kratos_foundation_pb.DatabaseComponentConfig.Database.connections:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
-	36, // 46: kratos_foundation_pb.DatabaseComponentConfig.Database.tracing:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
-	38, // 47: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry.value:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
-	46, // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_transaction_timeout:type_name -> google.protobuf.Duration
-	46, // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_context_timeout:type_name -> google.protobuf.Duration
-	39, // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.logger:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
-	40, // 51: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.replicas:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
-	2,  // 52: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.level:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
-	46, // 53: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.slow_threshold:type_name -> google.protobuf.Duration
-	42, // 54: kratos_foundation_pb.RedisComponentConfig.RedisConfig.connections:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
-	11, // 55: kratos_foundation_pb.RedisComponentConfig.RedisConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	43, // 56: kratos_foundation_pb.RedisComponentConfig.RedisConfig.tracing:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
-	44, // 57: kratos_foundation_pb.RedisComponentConfig.RedisConfig.metrics:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
-	45, // 58: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry.value:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
-	46, // 59: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.min_retry_backoff:type_name -> google.protobuf.Duration
-	46, // 60: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.max_retry_backoff:type_name -> google.protobuf.Duration
-	46, // 61: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dial_timeout:type_name -> google.protobuf.Duration
-	46, // 62: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dialer_retry_timeout:type_name -> google.protobuf.Duration
-	46, // 63: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.read_timeout:type_name -> google.protobuf.Duration
-	46, // 64: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.write_timeout:type_name -> google.protobuf.Duration
-	46, // 65: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.pool_timeout:type_name -> google.protobuf.Duration
-	46, // 66: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_idle_time:type_name -> google.protobuf.Duration
-	46, // 67: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_lifetime:type_name -> google.protobuf.Duration
-	68, // [68:68] is the sub-list for method output_type
-	68, // [68:68] is the sub-list for method input_type
-	68, // [68:68] is the sub-list for extension type_name
-	68, // [68:68] is the sub-list for extension extendee
-	0,  // [0:68] is the sub-list for field type_name
+	13, // 0: kratos_foundation_pb.AppComponentConfig.app:type_name -> kratos_foundation_pb.AppComponentConfig.App
+	15, // 1: kratos_foundation_pb.LogComponentConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.Log
+	19, // 2: kratos_foundation_pb.MetricComponentConfig.metrics:type_name -> kratos_foundation_pb.MetricComponentConfig.Metrics
+	20, // 3: kratos_foundation_pb.TracingComponentConfig.tracing:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing
+	37, // 4: kratos_foundation_pb.ServerComponentConfig.server:type_name -> kratos_foundation_pb.ServerComponentConfig.Server
+	43, // 5: kratos_foundation_pb.DatabaseComponentConfig.database:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database
+	50, // 6: kratos_foundation_pb.RedisComponentConfig.redis:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig
+	55, // 7: kratos_foundation_pb.ClientComponentConfig.client:type_name -> kratos_foundation_pb.ClientComponentConfig.Client
+	59, // 8: kratos_foundation_pb.AppComponentConfig.App.registrar_timeout:type_name -> google.protobuf.Duration
+	59, // 9: kratos_foundation_pb.AppComponentConfig.App.stop_timeout:type_name -> google.protobuf.Duration
+	16, // 10: kratos_foundation_pb.LogComponentConfig.Log.std:type_name -> kratos_foundation_pb.LogComponentConfig.Log.StdLogger
+	17, // 11: kratos_foundation_pb.LogComponentConfig.Log.file:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger
+	18, // 12: kratos_foundation_pb.LogComponentConfig.Log.FileLogger.rotating:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger.Rotating
+	14, // 13: kratos_foundation_pb.MetricComponentConfig.Metrics.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	21, // 14: kratos_foundation_pb.TracingComponentConfig.Tracing.exporter:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter
+	22, // 15: kratos_foundation_pb.TracingComponentConfig.Tracing.sampler:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler
+	14, // 16: kratos_foundation_pb.TracingComponentConfig.Tracing.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	0,  // 17: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.compression:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
+	23, // 18: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.headers:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
+	59, // 19: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.timeout:type_name -> google.protobuf.Duration
+	24, // 20: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.retry:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
+	1,  // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.sample:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
+	59, // 22: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.initial_interval:type_name -> google.protobuf.Duration
+	59, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_interval:type_name -> google.protobuf.Duration
+	59, // 24: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_elapsed_time:type_name -> google.protobuf.Duration
+	33, // 25: kratos_foundation_pb.MiddlewareConfig.Metadata.constants:type_name -> kratos_foundation_pb.MiddlewareConfig.Metadata.ConstantsEntry
+	34, // 26: kratos_foundation_pb.MiddlewareConfig.Ratelimit.bbr_limiter:type_name -> kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter
+	35, // 27: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.sre:type_name -> kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker
+	59, // 28: kratos_foundation_pb.MiddlewareConfig.Timeout.default:type_name -> google.protobuf.Duration
+	36, // 29: kratos_foundation_pb.MiddlewareConfig.Timeout.routes:type_name -> kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule
+	59, // 30: kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter.window:type_name -> google.protobuf.Duration
+	59, // 31: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker.window:type_name -> google.protobuf.Duration
+	59, // 32: kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule.timeout:type_name -> google.protobuf.Duration
+	59, // 33: kratos_foundation_pb.ServerComponentConfig.Server.stop_delay:type_name -> google.protobuf.Duration
+	39, // 34: kratos_foundation_pb.ServerComponentConfig.Server.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware
+	40, // 35: kratos_foundation_pb.ServerComponentConfig.Server.http:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption
+	41, // 36: kratos_foundation_pb.ServerComponentConfig.Server.grpc:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption
+	14, // 37: kratos_foundation_pb.ServerComponentConfig.Server.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	32, // 38: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.timeout:type_name -> kratos_foundation_pb.MiddlewareConfig.Timeout
+	25, // 39: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.metadata:type_name -> kratos_foundation_pb.MiddlewareConfig.Metadata
+	26, // 40: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.tracing:type_name -> kratos_foundation_pb.MiddlewareConfig.Tracing
+	27, // 41: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.metrics:type_name -> kratos_foundation_pb.MiddlewareConfig.Metrics
+	28, // 42: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.logging:type_name -> kratos_foundation_pb.MiddlewareConfig.Logging
+	29, // 43: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.validator:type_name -> kratos_foundation_pb.MiddlewareConfig.Validator
+	30, // 44: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware.ratelimit:type_name -> kratos_foundation_pb.MiddlewareConfig.Ratelimit
+	38, // 45: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
+	42, // 46: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.Metrics
+	38, // 47: kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
+	46, // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.gorm:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
+	14, // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	44, // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.connections:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
+	45, // 51: kratos_foundation_pb.DatabaseComponentConfig.Database.tracing:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
+	47, // 52: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry.value:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
+	59, // 53: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_transaction_timeout:type_name -> google.protobuf.Duration
+	59, // 54: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_context_timeout:type_name -> google.protobuf.Duration
+	48, // 55: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.logger:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
+	49, // 56: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.replicas:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
+	2,  // 57: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.level:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
+	59, // 58: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.slow_threshold:type_name -> google.protobuf.Duration
+	51, // 59: kratos_foundation_pb.RedisComponentConfig.RedisConfig.connections:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
+	14, // 60: kratos_foundation_pb.RedisComponentConfig.RedisConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	52, // 61: kratos_foundation_pb.RedisComponentConfig.RedisConfig.tracing:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
+	53, // 62: kratos_foundation_pb.RedisComponentConfig.RedisConfig.metrics:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	54, // 63: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry.value:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
+	59, // 64: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.min_retry_backoff:type_name -> google.protobuf.Duration
+	59, // 65: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.max_retry_backoff:type_name -> google.protobuf.Duration
+	59, // 66: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dial_timeout:type_name -> google.protobuf.Duration
+	59, // 67: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dialer_retry_timeout:type_name -> google.protobuf.Duration
+	59, // 68: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.read_timeout:type_name -> google.protobuf.Duration
+	59, // 69: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.write_timeout:type_name -> google.protobuf.Duration
+	59, // 70: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.pool_timeout:type_name -> google.protobuf.Duration
+	59, // 71: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_idle_time:type_name -> google.protobuf.Duration
+	59, // 72: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_lifetime:type_name -> google.protobuf.Duration
+	56, // 73: kratos_foundation_pb.ClientComponentConfig.Client.clients:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry
+	14, // 74: kratos_foundation_pb.ClientComponentConfig.Client.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	57, // 75: kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry.value:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption
+	3,  // 76: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.protocol:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.Protocol
+	58, // 77: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.middleware:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware
+	32, // 78: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.timeout:type_name -> kratos_foundation_pb.MiddlewareConfig.Timeout
+	25, // 79: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.metadata:type_name -> kratos_foundation_pb.MiddlewareConfig.Metadata
+	26, // 80: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.tracing:type_name -> kratos_foundation_pb.MiddlewareConfig.Tracing
+	27, // 81: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.metrics:type_name -> kratos_foundation_pb.MiddlewareConfig.Metrics
+	28, // 82: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.logging:type_name -> kratos_foundation_pb.MiddlewareConfig.Logging
+	31, // 83: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.circuitbreaker:type_name -> kratos_foundation_pb.MiddlewareConfig.Circuitbreaker
+	84, // [84:84] is the sub-list for method output_type
+	84, // [84:84] is the sub-list for method input_type
+	84, // [84:84] is the sub-list for extension type_name
+	84, // [84:84] is the sub-list for extension extendee
+	0,  // [0:84] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -3644,16 +4358,19 @@ func file_config_proto_init() {
 	if File_config_proto != nil {
 		return
 	}
-	file_config_proto_msgTypes[10].OneofWrappers = []any{}
-	file_config_proto_msgTypes[11].OneofWrappers = []any{}
-	file_config_proto_msgTypes[38].OneofWrappers = []any{}
+	file_config_proto_msgTypes[12].OneofWrappers = []any{}
+	file_config_proto_msgTypes[13].OneofWrappers = []any{}
+	file_config_proto_msgTypes[30].OneofWrappers = []any{}
+	file_config_proto_msgTypes[31].OneofWrappers = []any{}
+	file_config_proto_msgTypes[46].OneofWrappers = []any{}
+	file_config_proto_msgTypes[51].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_proto_rawDesc), len(file_config_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   43,
+			NumEnums:      4,
+			NumMessages:   55,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -1,7 +1,6 @@
 package errors
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -27,5 +26,5 @@ func TestErr(t *testing.T) {
 		}).
 		WithHttpResponse("http response").
 		WithReasonCode(200001)
-	t.Log(fmt.Sprintf("%+v", err))
+	t.Logf("%+v", err)
 }

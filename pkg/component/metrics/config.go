@@ -1,4 +1,4 @@
-package metric
+package metrics
 
 import (
 	"github.com/go-kratos/kratos/v2/config"
@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type Config = kratos_foundation_pb.MetricComponentConfig_Metric
+type Config = kratos_foundation_pb.MetricComponentConfig_Metrics
 
 var defaultConfig = &Config{
 	CounterMapSize:   64,
@@ -22,8 +22,8 @@ func NewConfig(cfg config.Config) (*Config, error) {
 		return nil, errors.WithMessage(err, "scan MetricComponentConfig failed")
 	}
 
-	metricConfig := proto.CloneOf(defaultConfig)
-	proto.Merge(metricConfig, scc.GetMetric())
+	metricsConfig := proto.CloneOf(defaultConfig)
+	proto.Merge(metricsConfig, scc.GetMetrics())
 
-	return metricConfig, nil
+	return metricsConfig, nil
 }

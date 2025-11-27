@@ -1,4 +1,4 @@
-metric:
+metrics:
   # 指标命名空间（默认为启动的应用名）
   meter_name: example
   # 初始 counter map 容量（默认 64）

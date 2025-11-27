@@ -5,47 +5,32 @@ import (
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metric"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server/middleware"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
 type GrpcServerOptions []grpc.ServerOption
 
-const grpcServerLogModule = "server.grpc"
-
 func NewGrpcServer(
 	cfg *Config,
 	log *log.Log,
-	metrics *metric.Metrics,
-	tracing *tracing.Tracing,
 	hook *HookManager,
-	routeTimeoutMiddleware RouteTimeoutMiddleware,
+	middlewares ServerMiddlewares,
 ) *grpc.Server {
 	if cfg.GetGrpc().GetDisable() {
 		return nil
 	}
-	log = log.WithModule(grpcServerLogModule, cfg.GetLog())
-
-	middlewares := middleware.NewServerMiddleware(log, metrics, tracing, cfg.GetMiddleware(), cfg.GetGrpc().GetMiddleware())
-	for _, grpcServerMiddleware := range hook.grpcServerMiddlewares {
-		middlewares = grpcServerMiddleware(middlewares)
-	}
+	log = log.WithModule("server/grpc", cfg.GetLog())
 
 	opts := newGrpcServerOptions(cfg)
-	for _, hookGrpcServerOption := range hook.grpcServerOptions {
-		opts = hookGrpcServerOption(opts)
-	}
-
-	// middleware放在最后，不能被 grpcServerOptions 覆盖，需要覆盖 middleware 使用 grpcServerMiddlewares
-	// 指定路由超时设计，使用定制中间件来实现
-	if routeTimeoutMiddleware != nil {
-		middlewares = append(middlewares, (middleware.Middleware)(routeTimeoutMiddleware))
-	}
-	opts = append(opts, grpc.Middleware(middlewares...))
+	opts = append(opts, hook.grpcServerOptions...)
+	opts = append(opts, grpc.Middleware(append(middlewares, hook.serverMiddleware...)...))
 
 	srv := grpc.NewServer(opts...)
+
+	// hook grpc server
+	for _, fn := range hook.hookGrpcServer {
+		fn(srv)
+	}
 	return srv
 }
 
@@ -64,10 +49,12 @@ func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server
 	if grpcCfg.GetEndpoint() != nil {
 		opts = append(opts, grpc.Endpoint(&url.URL{Scheme: grpcCfg.GetEndpoint().GetScheme(), Host: grpcCfg.GetEndpoint().GetHost()}))
 	}
-	// 设置http接口的超时时间
-	if grpcCfg.GetTimeout() != nil {
-		opts = append(opts, grpc.Timeout(grpcCfg.GetTimeout().AsDuration()))
-	}
+	//// 设置grpc接口的超时时间
+	//if grpcCfg.GetTimeout() != nil {
+	//	opts = append(opts, grpc.Timeout(grpcCfg.GetTimeout().AsDuration()))
+	//}
+	// 使用中间件来控制超时 需要显式设置为 0，否则内部会有默认值1s
+	opts = append(opts, grpc.Timeout(0))
 	if grpcCfg.GetCustomHealth() {
 		opts = append(opts, grpc.CustomHealth())
 	}

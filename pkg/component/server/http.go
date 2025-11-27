@@ -5,53 +5,36 @@ import (
 
 	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metric"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server/middleware"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/transport"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type HttpServerOptions []http.ServerOption
 
-const httpServerLogModule = "server.http"
-
 func NewHttpServer(
 	cfg *Config,
 	log *log.Log,
-	metrics *metric.Metrics,
-	tracing *tracing.Tracing,
 	hook *HookManager,
-	routeTimeoutMiddleware RouteTimeoutMiddleware,
+	middlewares ServerMiddlewares,
 ) *http.Server {
 	if cfg.GetHttp().GetDisable() {
 		return nil
 	}
-	log = log.WithModule(httpServerLogModule, cfg.GetLog())
-
-	middlewares := middleware.NewServerMiddleware(log, metrics, tracing, cfg.GetMiddleware(), cfg.GetHttp().GetMiddleware())
-	for _, httpServerMiddleware := range hook.httpServerMiddlewares {
-		middlewares = httpServerMiddleware(middlewares)
-	}
+	log = log.WithModule("server/http", cfg.GetLog())
 
 	opts := newHttpServerOptions(cfg)
-	for _, hookHttpServerOption := range hook.httpServerOptions {
-		opts = hookHttpServerOption(opts)
-	}
+	opts = append(opts, hook.httpServerOptions...)
+	opts = append(opts, http.Middleware(append(middlewares, hook.serverMiddleware...)...))
 
-	// middleware放在最后，不能被 httpServerOptions 覆盖，需要覆盖 middleware 使用 httpServerMiddlewares
-	// 指定路由超时设计，使用定制中间件来实现
-	if routeTimeoutMiddleware != nil {
-		middlewares = append(middlewares, (middleware.Middleware)(routeTimeoutMiddleware))
-	}
-	opts = append(opts, http.Middleware(middlewares...))
-
-	// http返回错误信息处理
-	opts = append(opts, http.ErrorEncoder(transport.HttpErrorEncoder()))
 	srv := http.NewServer(opts...)
 
 	if !cfg.GetHttp().GetMetrics().GetDisable() {
 		srv.Handle(cfg.GetHttp().GetMetrics().GetPath(), promhttp.Handler()) // prometheus上报路由
+	}
+
+	// hook http server
+	for _, fn := range hook.hookHttpServer {
+		fn(srv)
 	}
 	return srv
 }
@@ -71,15 +54,20 @@ func newHttpServerOptions(cfg *Config) HttpServerOptions {
 	if httpCfg.GetEndpoint() != nil {
 		opts = append(opts, http.Endpoint(&url.URL{Scheme: httpCfg.GetEndpoint().GetScheme(), Host: httpCfg.GetEndpoint().GetHost()}))
 	}
-	// 设置http接口的超时时间
-	if httpCfg.GetTimeout() != nil {
-		opts = append(opts, http.Timeout(httpCfg.GetTimeout().AsDuration()))
-	}
+	//// 设置http接口的超时时间
+	//if httpCfg.GetTimeout() != nil {
+	//	opts = append(opts, http.Timeout(httpCfg.GetTimeout().AsDuration()))
+	//}
+	// 使用中间件来控制超时 需要显式设置为 0，否则内部会有默认值1s
+	opts = append(opts, http.Timeout(0))
+
 	if httpCfg.GetDisableStrictSlash() {
 		opts = append(opts, http.StrictSlash(false))
 	}
 	if httpCfg.GetPathPrefix() != "" {
 		opts = append(opts, http.PathPrefix(httpCfg.GetPathPrefix()))
 	}
+	// http返回错误信息处理
+	opts = append(opts, http.ErrorEncoder(transport.HttpErrorEncoder()))
 	return opts
 }

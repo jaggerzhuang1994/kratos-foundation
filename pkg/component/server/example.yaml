@@ -6,6 +6,18 @@ server:
   stop_delay: 0s
   # middleware
   middleware:
+    # 超时配置
+    timeout:
+      # 默认超时时间
+      default: 1s
+      # 路由超时控制
+      routes:
+        # 路径匹配
+        - path: /pb_package.Service/Rpc
+          timeout: 1s
+        # 前缀匹配
+        - prefix: /pb_package.Se
+          timeout: 1s
     metadata:
       # 禁用 metadata 中间件
       disable: false
@@ -22,12 +34,24 @@ server:
       disable: false
       # 默认使用 metric.meter_name
       meter_name:
-    logger:
+    logging:
       # 禁用 validator 中间件
       disable: false
     validator:
       # 禁用 validator 中间件
       disable: false
+    ratelimit:
+      enable: true
+      bbr_limiter:
+        # 每个窗口的时间长度。默认值 10s
+        window: 10s
+        # 每个窗口包含的桶数量。默认值 100
+        bucket: 100
+        # 使用率阈值 默认值 800
+        cpu_threshold: 800
+        # 如果设置了 CPUQuota，则使用新的 cpuGetter
+        # 根据 CPU 核心数和配额计算实际 CPU 使用值
+        cpu_quota:
   http:
     disable: false
     # 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
@@ -38,32 +62,6 @@ server:
     endpoint:
     #  scheme:
     #  host:
-    # 服务超时时间（默认1s）
-    timeout: 1s
-    # middleware
-    middleware:
-      metadata:
-        # 禁用 metadata 中间件
-        disable: false
-        # 这个前缀的 metadata 才会保留在请求中
-        prefix:
-          - x-md-
-      tracing:
-        # 禁用 tracing 中间件
-        disable: false
-        # 默认使用 tracing.tracer_name
-        tracer_name:
-      metrics:
-        # 禁用 metrics 中间件
-        disable: false
-        # 默认使用 metric.meter_name
-        meter_name:
-      logger:
-        # 禁用 validator 中间件
-        disable: false
-      validator:
-        # 禁用 validator 中间件
-        disable: false
     # 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
     disable_strict_slash: false
     # http 路由前缀
@@ -82,32 +80,6 @@ server:
     endpoint:
     #  scheme:
     #  host:
-    # 服务超时时间（默认1s）
-    timeout: 1s
-    # middleware
-    middleware:
-      metadata:
-        # 禁用 metadata 中间件
-        disable: false
-        # 这个前缀的 metadata 才会保留在请求中
-        prefix:
-          - x-md-
-      tracing:
-        # 禁用 tracing 中间件
-        disable: false
-        # 默认使用 tracing.tracer_name
-        tracer_name:
-      metrics:
-        # 禁用 metrics 中间件
-        disable: false
-        # 默认使用 metric.meter_name
-        meter_name:
-      logger:
-        # 禁用 validator 中间件
-        disable: false
-      validator:
-        # 禁用 validator 中间件
-        disable: false
     # 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
     custom_health: false
     # 是否禁用服务反射
@@ -115,11 +87,3 @@ server:
   log:
     level: debug
     filter_keys:
-  # 指定路由超时
-  timeout:
-    - path: /helloworld.v1.Greeter/SayHello
-      timeout: 0.5s
-    - prefix: /pb_package.Service
-      timeout: 0.5s
-    - regexp: /pb_package.Service/*
-      timeout: 0.5s

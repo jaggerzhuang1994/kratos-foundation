@@ -169,3 +169,41 @@ func Intersect[T comparable](a, b []T) []T {
 	}
 	return intersection
 }
+
+func Flat[T any](input [][]T) []T {
+	var total int
+	for _, arr := range input {
+		total += len(arr)
+	}
+
+	out := make([]T, 0, total)
+	for _, arr := range input {
+		out = append(out, arr...)
+	}
+
+	return out
+}
+
+func CheckBool(t bool) bool {
+	return t
+}
+
+func Every[T any](input []T, check func(T) bool) bool {
+	for _, item := range input {
+		// 存在一个false，则返回false
+		if !check(item) {
+			return false
+		}
+	}
+	return true
+}
+
+func Some[T any](input []T, check func(T) bool) bool {
+	for _, item := range input {
+		// 存在一个true，则返回true
+		if check(item) {
+			return true
+		}
+	}
+	return false
+}

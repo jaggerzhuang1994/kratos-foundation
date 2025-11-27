@@ -2,7 +2,6 @@ package main
 
 import "runtime/debug"
 
-// Version is the current protoc-gen-kratos-foundation-errors version.
 var Version string
 
 func init() {

@@ -85,9 +85,9 @@ message LogComponentConfig {
 }
 
 message MetricComponentConfig {
-  Metric metric = 1;
+  Metrics metrics = 1;
 
-  message Metric {
+  message Metrics {
     // 指标命名空间（默认为启动的应用名）
     string meter_name = 1;
     // 初始 counter map 容量（默认 64）
@@ -151,6 +151,109 @@ message TracingComponentConfig {
   }
 }
 
+message MiddlewareConfig {
+  // metadata 中间件配置
+  message Metadata {
+    // 是否启用
+    bool disable = 1;
+    // server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
+    // client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-global-
+    repeated string prefix = 2;
+    // 固定携带md
+    map<string, string> constants = 3;
+  }
+
+  // 链路追踪配置
+  message Tracing {
+    // 是否禁用
+    bool disable = 1;
+    // tracer name
+    string tracer_name = 2;
+  }
+
+  // 监控配置
+  message Metrics {
+    // 是否禁用
+    bool disable = 1;
+    // meter name
+    string meter_name = 2;
+  }
+
+  // 日志配置
+  message Logging {
+    // 是否禁用
+    bool disable = 1;
+  }
+
+  // 表单校验配置
+  message Validator {
+    // 是否禁用
+    bool disable = 1;
+  }
+
+  // 限流器
+  message Ratelimit {
+    // 是否禁用
+    bool enable = 1;
+    // 默认使用bbr limiter
+    BBRLimiter bbr_limiter = 2;
+
+    message BBRLimiter {
+      // 每个窗口的时间长度。默认值 10s
+      optional google.protobuf.Duration window = 1;
+      // 每个窗口包含的桶数量。默认值 100
+      optional int32 bucket = 2;
+      // 使用率阈值 默认值 800
+      optional int64 cpu_threshold = 3;
+      // 如果设置了 CPUQuota，则使用新的 cpuGetter
+      // 根据 CPU 核心数和配额计算实际 CPU 使用值
+      optional double cpu_quota = 4;
+    }
+  }
+
+  // 熔断器
+  message Circuitbreaker {
+    // 是否禁用
+    bool enable = 1;
+    // 默认使用 sre 熔断器
+    SREBreaker sre = 2;
+
+    message SREBreaker {
+      // 设置 SRE 熔断器中的 K 值（K = 1 / Success），默认 Success 为 0.6。
+      // 降低 K 值会让自适应限流变得更激进；
+      // 提高 K 值会让自适应限流变得更保守。
+      optional double success = 1;
+      // 设置允许的最小请求数量。默认值 100
+      optional int64 request = 2;
+      // 设置一个统计窗口内的桶（bucket）数量。默认值 10
+      optional int32 bucket = 3;
+      // 设置统计窗口的时间长度。默认值3s
+      optional google.protobuf.Duration window = 4;
+    }
+  }
+
+  // 超时控制中间件
+  // 优化：预编译所有规则，path会转化成hash，前缀匹配利用前缀树
+  // 优先级：path > 前缀
+  message Timeout {
+    // 默认超时时间
+    // 服务端默认超时 1s
+    // 客户端默认超时 2s
+    google.protobuf.Duration default = 1;
+    // 指定路由规则
+    repeated RouteRule routes = 2;
+
+    message RouteRule {
+      // 路径匹配，例如 /pb_package.Service/Rpc
+      string path = 1;
+      // 前缀匹配，例如 /pb_package.Se
+      string prefix = 2;
+      // 超时
+      google.protobuf.Duration timeout = 3;
+    }
+  }
+}
+
 // 服务组件配置
 message ServerComponentConfig {
   // 服务端配置
@@ -162,117 +265,67 @@ message ServerComponentConfig {
     // 因此给servers套上一个wrapper用于延迟停止服务。
     google.protobuf.Duration stop_delay = 1;
     // 通用中间件配置
-    Middleware middleware = 2;
+    ServerMiddleware middleware = 2;
     // http 服务器配置
     HttpServerOption http = 3;
     // grpc 服务器配置
     GrpcServerOption grpc = 4;
     // logger 配置
     LogComponentConfig.ModuleLog log = 5;
-    // 指定服务路由的超时时间，<优化>，会预处理这里的timeout规则，优先使用hash匹配path，然后是前缀输匹配前缀(前缀会从长到短排序)，最后是正则匹配（正则也会预编译）
-    repeated RouteTimeout timeout = 6;
 
-    // 服务路由的格式为 /pb_package.Service/Rpc
-    message RouteTimeout {
-      // 前缀匹配，例如 /pb_package.Service/Rpc
-      string path = 1;
-      // 正则匹配，例如 /pb_package.Service/*
-      string regexp = 2;
-      // 前缀匹配，例如 /pb_package.Service
-      string prefix = 3;
-      // 超时
-      google.protobuf.Duration timeout = 4;
+    // 端点配置
+    message Endpoint {
+      string scheme = 1;
+      string host = 2;
     }
 
     // 中间件配置
-    message Middleware {
-      Metadata metadata = 1;
-      Tracing tracing = 2;
-      Metrics metrics = 3;
-      Logger logger = 4;
-      Validator validator = 5;
+    message ServerMiddleware {
+      MiddlewareConfig.Timeout timeout = 1;
+      MiddlewareConfig.Metadata metadata = 2;
+      MiddlewareConfig.Tracing tracing = 3;
+      MiddlewareConfig.Metrics metrics = 4;
+      MiddlewareConfig.Logging logging = 5;
+      MiddlewareConfig.Validator validator = 6;
+      MiddlewareConfig.Ratelimit ratelimit = 7;
+    }
 
-      message Metadata {
-        // 是否禁用
-        bool disable = 1;
-        // metadata prefix(这个前缀的 metadata 才会保留在server中)
-        repeated string prefix = 2;
-      }
-
-      message Tracing {
-        // 是否禁用
-        bool disable = 1;
-        // tracer name
-        string tracer_name = 2;
-      }
+    message HttpServerOption {
+      bool disable = 1;
+      // 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
+      string network = 2;
+      // 服务监听地址，host:port 或者 unix文件地址
+      string addr = 3;
+      // 对外暴露端点
+      Endpoint endpoint = 4;
+      // 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
+      bool disable_strict_slash = 5;
+      // http 路由前缀
+      string path_prefix = 6;
+      // metrics 路由
+      Metrics metrics = 7;
 
       message Metrics {
-        // 是否禁用
+        // 禁用
         bool disable = 1;
-        // meter name
-        string meter_name = 2;
-      }
-
-      message Logger {
-        // 是否禁用
-        bool disable = 1;
-      }
-
-      message Validator {
-        // 是否禁用
-        bool disable = 1;
+        // metrics 路由，默认 /metrics
+        string path = 2;
       }
     }
-  }
 
-  message Endpoint {
-    string scheme = 1;
-    string host = 2;
-  }
-
-  message HttpServerOption {
-    bool disable = 1;
-    // 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
-    string network = 2;
-    // 服务监听地址，host:port 或者 unix文件地址
-    string addr = 3;
-    // 对外暴露端点
-    Endpoint endpoint = 4;
-    // 服务超时时间（默认1s）
-    google.protobuf.Duration timeout = 5;
-    // 默认中间件配置
-    Server.Middleware middleware = 6;
-    // 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
-    bool disable_strict_slash = 7;
-    // http 路由前缀
-    string path_prefix = 8;
-    // metrics 路由
-    Metrics metrics = 9;
-
-    message Metrics {
-      // 禁用
+    message GrpcServerOption {
       bool disable = 1;
-      // metrics 路由，默认 /metrics
-      string path = 2;
+      // 一般不需要指定，默认(tcp)
+      string network = 2;
+      // 服务监听地址，host:port
+      string addr = 3;
+      // 对外暴露端点
+      Endpoint endpoint = 4;
+      // customHealth 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
+      bool custom_health = 5;
+      // disableReflection 是否禁用服务反射
+      bool disable_reflection = 6;
     }
-  }
-
-  message GrpcServerOption {
-    bool disable = 1;
-    // 一般不需要指定，默认(tcp)
-    string network = 2;
-    // 服务监听地址，host:port
-    string addr = 3;
-    // 对外暴露端点
-    Endpoint endpoint = 4;
-    // 服务超时时间（默认1s）
-    google.protobuf.Duration timeout = 5;
-    // 默认中间件配置
-    Server.Middleware middleware = 6;
-    // customHealth 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
-    bool custom_health = 7;
-    // disableReflection 是否禁用服务反射
-    bool disable_reflection = 8;
   }
 }
 
@@ -525,17 +578,41 @@ message RedisComponentConfig {
   }
 }
 
-//// 客户端组件
-//message ClientComponent {
-//  map<string, ClientOption> client = 1;
-//
-//  message ClientOption {
-//    // 目标端点 支持服务发现/直连:
-//    //  discovery:///service_name?a=1&b=2 (a/b为metadata过滤器)
-//    //  host:port
-//    string target = 1;
-//    // 超时时间，默认不超时
-//    google.protobuf.Duration timeout = 2;
-//  }
-//}
-//
+// 客户端组件
+message ClientComponentConfig {
+  Client client = 1;
+
+  message Client {
+    map<string, ClientOption> clients = 1;
+    // logger 配置
+    optional LogComponentConfig.ModuleLog log = 2;
+
+    message ClientOption {
+      // 协议 默认为 GRPC
+      Protocol protocol = 1;
+      // 目标端点 支持服务发现/直连:
+      // 默认为 discovery:///{client_key}
+      // 也可以指定直连 host:port
+      string target = 2;
+      // 中间件
+      ClientMiddleware middleware = 3;
+
+      enum Protocol {
+        GRPC = 0;
+        HTTP = 1;
+        GRPCS = 2;
+        HTTPS = 3;
+      }
+
+      // 客户端中间件配置
+      message ClientMiddleware {
+        MiddlewareConfig.Timeout timeout = 1;
+        MiddlewareConfig.Metadata metadata = 2;
+        MiddlewareConfig.Tracing tracing = 3;
+        MiddlewareConfig.Metrics metrics = 4;
+        MiddlewareConfig.Logging logging = 5;
+        MiddlewareConfig.Circuitbreaker circuitbreaker = 6;
+      }
+    }
+  }
+}

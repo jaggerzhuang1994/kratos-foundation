@@ -1,0 +1,52 @@
+client:
+  clients:
+    name:
+      protocol: HTTP
+      target: "host:port"
+      middleware:
+        # 超时配置
+        timeout:
+          # 默认超时时间
+          default: 1s
+          # 路由超时控制
+          routes:
+            # 路径匹配
+            - path: /pb_package.Service/Rpc
+              timeout: 1s
+            # 前缀匹配
+            - prefix: /pb_package.Se
+              timeout: 1s
+        metadata:
+          # 禁用 metadata 中间件
+          disable: false
+          # 这个前缀的 metadata 才会保留在请求中
+          prefix:
+            - x-md-
+        tracing:
+          # 禁用 tracing 中间件
+          disable: false
+          # 默认使用 tracing.tracer_name
+          tracer_name:
+        metrics:
+          # 禁用 metrics 中间件
+          disable: false
+          # 默认使用 metric.meter_name
+          meter_name:
+        logging:
+          # 禁用 validator 中间件
+          disable: false
+        # 熔断器
+        circuitbreaker:
+          # 启用熔断器
+          enable: true
+          sre:
+            # 设置 SRE 熔断器中的 K 值（K = 1 / Success），默认 Success 为 0.6。
+            # 降低 K 值会让自适应限流变得更激进；
+            # 提高 K 值会让自适应限流变得更保守。
+            success: 0.6
+            # 设置允许的最小请求数量。默认值 100
+            request: 100
+            # 设置一个统计窗口内的桶（bucket）数量。默认值 10
+            bucket: 10
+            # 设置统计窗口的时间长度。默认值3s
+            window: 3s

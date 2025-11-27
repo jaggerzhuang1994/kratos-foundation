@@ -1,8 +1,6 @@
 package server
 
 import (
-	"time"
-
 	"github.com/go-kratos/kratos/v2/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"github.com/pkg/errors"
@@ -15,27 +13,23 @@ type Config = kratos_foundation_pb.ServerComponentConfig_Server
 var defaultConfig = &Config{
 	StopDelay:  durationpb.New(0),
 	Middleware: nil,
-	Http: &kratos_foundation_pb.ServerComponentConfig_HttpServerOption{
+	Http: &kratos_foundation_pb.ServerComponentConfig_Server_HttpServerOption{
 		Disable:            false,
 		Network:            "tcp",
 		Addr:               "0.0.0.0:8000",
 		Endpoint:           nil, // 默认使用服务暴露的 host:port
-		Timeout:            durationpb.New(1 * time.Second),
-		Middleware:         nil,
 		DisableStrictSlash: false,
 		PathPrefix:         "",
-		Metrics: &kratos_foundation_pb.ServerComponentConfig_HttpServerOption_Metrics{
+		Metrics: &kratos_foundation_pb.ServerComponentConfig_Server_HttpServerOption_Metrics{
 			Disable: false,
 			Path:    "/metrics",
 		},
 	},
-	Grpc: &kratos_foundation_pb.ServerComponentConfig_GrpcServerOption{
+	Grpc: &kratos_foundation_pb.ServerComponentConfig_Server_GrpcServerOption{
 		Disable:           false,
 		Network:           "tcp",
 		Addr:              "0.0.0.0:9000",
 		Endpoint:          nil, // 默认使用服务暴露的 host:port
-		Timeout:           durationpb.New(1 * time.Second),
-		Middleware:        nil,
 		CustomHealth:      false,
 		DisableReflection: false,
 	},
