@@ -25,7 +25,7 @@ var importPackages = []string{
 }
 
 // generateFile .
-func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
+func generateFile(gen *protogen.Plugin, file *protogen.File) *fileDesc {
 	if len(file.Services) == 0 {
 		return nil
 	}
@@ -100,7 +100,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 
 	g.P(fd.execute())
 
-	return g
+	return fd
 }
 
 func parseHttpMethod(service *protogen.Service, md *methodDesc) {
