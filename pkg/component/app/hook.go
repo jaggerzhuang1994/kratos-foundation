@@ -36,7 +36,7 @@ type OnAfterStopHook interface {
 }
 
 type HookManager struct {
-	*log.Log
+	log         *log.Log
 	initCtx     []InitContextHook
 	initOptions []InitOptionsHook
 	beforeStart []HookFunc
@@ -46,55 +46,55 @@ type HookManager struct {
 }
 
 func NewHookManager(log *log.Log) *HookManager {
-	return &HookManager{Log: log}
+	return &HookManager{log: log}
 }
 
 func (m *HookManager) Register(hook any) {
 	if hook, ok := hook.(OnInitContextHook); ok {
-		m.OnInitContext(hook.OnInitContext)
+		m.InitContext(hook.OnInitContext)
 	}
 
 	if hook, ok := hook.(OnInitOptionHook); ok {
-		m.OnInitOptions(hook.OnInitOption)
+		m.InitOptions(hook.OnInitOption)
 	}
 
 	if hook, ok := hook.(OnBeforeStartHook); ok {
-		m.OnBeforeStart(hook.OnBeforeStart)
+		m.BeforeStart(hook.OnBeforeStart)
 	}
 
 	if hook, ok := hook.(OnAfterStartHook); ok {
-		m.OnAfterStart(hook.OnAfterStart)
+		m.AfterStart(hook.OnAfterStart)
 	}
 
 	if hook, ok := hook.(OnBeforeStopHook); ok {
-		m.OnBeforeStop(hook.OnBeforeStop)
+		m.BeforeStop(hook.OnBeforeStop)
 	}
 
 	if hook, ok := hook.(OnAfterStopHook); ok {
-		m.OnAfterStop(hook.OnAfterStop)
+		m.AfterStop(hook.OnAfterStop)
 	}
 }
 
-func (m *HookManager) OnInitContext(fn InitContextHook) {
+func (m *HookManager) InitContext(fn InitContextHook) {
 	m.initCtx = append(m.initCtx, fn)
 }
 
-func (m *HookManager) OnInitOptions(fn InitOptionsHook) {
+func (m *HookManager) InitOptions(fn InitOptionsHook) {
 	m.initOptions = append(m.initOptions, fn)
 }
 
-func (m *HookManager) OnBeforeStart(fn HookFunc) {
+func (m *HookManager) BeforeStart(fn HookFunc) {
 	m.beforeStart = append(m.beforeStart, fn)
 }
 
-func (m *HookManager) OnAfterStart(fn HookFunc) {
+func (m *HookManager) AfterStart(fn HookFunc) {
 	m.afterStart = append(m.afterStart, fn)
 }
 
-func (m *HookManager) OnBeforeStop(fn HookFunc) {
+func (m *HookManager) BeforeStop(fn HookFunc) {
 	m.beforeStop = append(m.beforeStop, fn)
 }
 
-func (m *HookManager) OnAfterStop(fn HookFunc) {
+func (m *HookManager) AfterStop(fn HookFunc) {
 	m.afterStop = append(m.afterStop, fn)
 }

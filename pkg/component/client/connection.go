@@ -123,7 +123,7 @@ func (f *Factory) useMiddlewares(key clientKey) []middleware.Middleware {
 
 	// tracing
 	if tracing.Enable(config.GetTracing()) {
-		m = append(m, tracing.Server(f.tracing, config.GetTracing()))
+		m = append(m, tracing.Client(f.tracing, config.GetTracing()))
 		list = append(list, "tracing")
 	}
 

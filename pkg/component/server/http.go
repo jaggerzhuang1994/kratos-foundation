@@ -4,6 +4,7 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/transport"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -12,6 +13,7 @@ import (
 type HttpServerOptions []http.ServerOption
 
 func NewHttpServer(
+	_ bootstrap.Bootstrap,
 	cfg *Config,
 	log *log.Log,
 	hook *HookManager,

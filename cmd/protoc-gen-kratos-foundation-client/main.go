@@ -49,7 +49,7 @@ func main() {
 				sum = &pkgSummary{
 					GoImportPath:  f.GoImportPath,
 					GoPackageName: f.GoPackageName,
-					FileDirName:   filepath.Dir(f.Desc.Path()),
+					FileDirName:   filepath.Dir(f.GeneratedFilenamePrefix),
 				}
 				pkgs[f.GoImportPath] = sum
 			}
@@ -57,9 +57,9 @@ func main() {
 		}
 
 		// 🔥 全部文件都处理完之后，再针对每个包生成一个 wire.go
-		for _, sum := range pkgs {
-			generateWireFile(gen, sum)
-		}
+		//for _, sum := range pkgs {
+		//	generateWireFile(gen, sum)
+		//}
 
 		return nil
 	})

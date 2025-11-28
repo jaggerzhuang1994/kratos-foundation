@@ -26,7 +26,8 @@ func WithDefaultConnName(ctx context.Context, name string) context.Context {
 
 // ConnNameFromContext 提取连接名称
 func ConnNameFromContext(ctx context.Context) string {
-	return ctx.Value(connNameKey{}).(string)
+	conn, _ := ctx.Value(connNameKey{}).(string)
+	return conn
 }
 
 type timeoutKey struct{}
@@ -48,7 +49,7 @@ var ErrTimeout = errors.New("client: timeout")
 
 // WithTimeoutContext 获取超时context, cancel
 func WithTimeoutContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	timeout := ctx.Value(timeoutKey{}).(time.Duration)
+	timeout, _ := ctx.Value(timeoutKey{}).(time.Duration)
 	if timeout <= 0 {
 		return ctx, func() {
 		}
@@ -66,7 +67,8 @@ func WithHttpCallOption(ctx context.Context, opts ...http.CallOption) context.Co
 
 // HttpCallOptionFromContext 获取额外http请求参数
 func HttpCallOptionFromContext(ctx context.Context) []http.CallOption {
-	return ctx.Value(httpCallOptionKey{}).([]http.CallOption)
+	opts, _ := ctx.Value(httpCallOptionKey{}).([]http.CallOption)
+	return opts
 }
 
 type grpcCallOptionKey struct{}
@@ -78,5 +80,6 @@ func WithGrpcCallOption(ctx context.Context, opts ...grpc.CallOption) context.Co
 
 // GrpcCallOptionFromContext 获取额外grpc请求参数
 func GrpcCallOptionFromContext(ctx context.Context) []grpc.CallOption {
-	return ctx.Value(grpcCallOptionKey{}).([]grpc.CallOption)
+	opts, _ := ctx.Value(grpcCallOptionKey{}).([]grpc.CallOption)
+	return opts
 }

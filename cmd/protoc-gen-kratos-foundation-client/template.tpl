@@ -12,39 +12,56 @@ package {{.GoPackageName}}
 {{- range .Services}}
 
 {{$fileServiceName := .File.ServiceName}}
+{{$deprecated := .Deprecated}}
 
-// wire providers
-
-// {{.ServiceName}}Provider .
-var {{.ServiceName}}Provider = wire.NewSet(
-	New{{.ServiceName}}ClientImpl,
+// {{.ServiceName}}ApiProvider .
+{{- if .Deprecated}}
+// Deprecated: Do not use.
+{{- end}}
+var {{.ServiceName}}ApiProvider = wire.NewSet(
+	New{{.ServiceName}}ApiWrapper,
+	wire.Bind(new({{.ServiceName}}Api), new(*{{.ServiceName}}ApiWrapper)),
 )
 
 // service interface
 
-// {{.ServiceName}} .
+// {{.ServiceName}}Api .
 {{- if .Deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-type {{.ServiceName}} interface {
+type {{.ServiceName}}Api interface {
 {{- range .MethodSets}}
     {{.Comment}}
 	{{.Name}}(context.Context, *{{.Request}}) (*{{.Reply}}, error)
 {{- end}}
 }
 
-// service client impl
+// impl
 
-type {{.ServiceName}}ClientImpl struct {
+// {{.ServiceName}}ApiWrapper .
+{{- if .Deprecated}}
+// Deprecated: Do not use.
+{{- end}}
+type {{.ServiceName}}ApiWrapper struct {
 	factory *client.Factory
 }
 
-func New{{.ServiceName}}ClientImpl(factory *client.Factory) {{.ServiceName}} {
-	return &{{.ServiceName}}ClientImpl{factory}
+var _ {{.ServiceName}}Api = (*{{.ServiceName}}ApiWrapper)(nil)
+
+// New{{.ServiceName}}ApiWrapper .
+{{- if .Deprecated}}
+// Deprecated: Do not use.
+{{- end}}
+func New{{.ServiceName}}ApiWrapper(factory *client.Factory) *{{.ServiceName}}ApiWrapper {
+	return &{{.ServiceName}}ApiWrapper{factory}
 }
 
 {{range .MethodSets}}
-func (c *{{.ServiceName}}ClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}) (rsp *{{.Reply}}, err error) {
+// {{.Name}} .
+{{- if $deprecated}}
+// Deprecated: Do not use.
+{{- end}}
+func (c *{{.ServiceName}}ApiWrapper) {{.Name}}(ctx context.Context, in *{{.Request}}) (rsp *{{.Reply}}, err error) {
 	ctx = client.WithDefaultConnName(ctx, "{{$fileServiceName}}")
 
 	// 获取连接

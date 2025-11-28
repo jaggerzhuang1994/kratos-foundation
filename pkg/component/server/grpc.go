@@ -4,6 +4,7 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
@@ -11,6 +12,7 @@ import (
 type GrpcServerOptions []grpc.ServerOption
 
 func NewGrpcServer(
+	_ bootstrap.Bootstrap,
 	cfg *Config,
 	log *log.Log,
 	hook *HookManager,
