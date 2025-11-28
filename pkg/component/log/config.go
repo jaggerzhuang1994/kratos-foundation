@@ -18,19 +18,22 @@ type ModuleConfig interface {
 }
 
 var defaultConfig = &Config{
-	Level:      DefaultLevel(),
-	FilterKeys: []string{},
-	TimeFormat: time.RFC3339,
+	Level:       DefaultLevel(),
+	FilterKeys:  []string{},
+	FilterEmpty: false,
+	TimeFormat:  time.RFC3339,
 	Std: &kratos_foundation_pb.LogComponentConfig_Log_StdLogger{
-		Disable:    false,
-		Level:      nil, // default to log.level
-		FilterKeys: []string{},
+		Disable:     false,
+		Level:       nil, // default to log.level
+		FilterEmpty: nil, // default to log.FilterEmpty
+		FilterKeys:  []string{},
 	},
 	File: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger{
-		Disable:    false,
-		Level:      nil, // default to log.level
-		FilterKeys: []string{},
-		Path:       "./app.log",
+		Disable:     false,
+		Level:       nil, // default to log.level
+		FilterEmpty: nil, // default to log.FilterEmpty
+		FilterKeys:  []string{},
+		Path:        "./app.log",
 		Rotating: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger_Rotating{
 			Disable:    false,
 			MaxSize:    100,

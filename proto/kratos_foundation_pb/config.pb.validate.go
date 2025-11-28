@@ -1367,7 +1367,13 @@ func (m *LogComponentConfig_ModuleLog) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Level
+	if m.Level != nil {
+		// no validation rules for Level
+	}
+
+	if m.FilterEmpty != nil {
+		// no validation rules for FilterEmpty
+	}
 
 	if len(errors) > 0 {
 		return LogComponentConfig_ModuleLogMultiError(errors)
@@ -1473,6 +1479,8 @@ func (m *LogComponentConfig_Log) validate(all bool) error {
 	var errors []error
 
 	// no validation rules for Level
+
+	// no validation rules for FilterEmpty
 
 	// no validation rules for TimeFormat
 
@@ -1643,6 +1651,10 @@ func (m *LogComponentConfig_Log_StdLogger) validate(all bool) error {
 		// no validation rules for Level
 	}
 
+	if m.FilterEmpty != nil {
+		// no validation rules for FilterEmpty
+	}
+
 	if len(errors) > 0 {
 		return LogComponentConfig_Log_StdLoggerMultiError(errors)
 	}
@@ -1783,6 +1795,10 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 
 	if m.Level != nil {
 		// no validation rules for Level
+	}
+
+	if m.FilterEmpty != nil {
+		// no validation rules for FilterEmpty
 	}
 
 	if len(errors) > 0 {

@@ -1,6 +1,8 @@
 log:
   # 最小日志级别(本地环境或者debug环境默认 debug，其他环境默认 info)
   level: debug
+  # 过滤空值
+  filter_empty: true
   # 打印日志过滤哪些keys
   filter_keys:
   # 时间格式化 默认为 time.RFC3339

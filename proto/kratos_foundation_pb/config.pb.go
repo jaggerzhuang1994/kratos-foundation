@@ -688,9 +688,11 @@ func (x *AppComponentConfig_App) GetStopTimeout() *durationpb.Duration {
 type LogComponentConfig_ModuleLog struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
-	Level string `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
+	Level *string `protobuf:"bytes,1,opt,name=level,proto3,oneof" json:"level,omitempty"`
+	// 是否过滤掉空值的kv
+	FilterEmpty *bool `protobuf:"varint,2,opt,name=filter_empty,json=filterEmpty,proto3,oneof" json:"filter_empty,omitempty"`
 	// 打印日志过滤哪些keys
-	FilterKeys    []string `protobuf:"bytes,2,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
+	FilterKeys    []string `protobuf:"bytes,3,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -726,10 +728,17 @@ func (*LogComponentConfig_ModuleLog) Descriptor() ([]byte, []int) {
 }
 
 func (x *LogComponentConfig_ModuleLog) GetLevel() string {
-	if x != nil {
-		return x.Level
+	if x != nil && x.Level != nil {
+		return *x.Level
 	}
 	return ""
+}
+
+func (x *LogComponentConfig_ModuleLog) GetFilterEmpty() bool {
+	if x != nil && x.FilterEmpty != nil {
+		return *x.FilterEmpty
+	}
+	return false
 }
 
 func (x *LogComponentConfig_ModuleLog) GetFilterKeys() []string {
@@ -743,14 +752,16 @@ type LogComponentConfig_Log struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
 	Level string `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
+	// 是否过滤掉空值的kv
+	FilterEmpty bool `protobuf:"varint,2,opt,name=filter_empty,json=filterEmpty,proto3" json:"filter_empty,omitempty"`
 	// 打印日志过滤哪些keys
-	FilterKeys []string `protobuf:"bytes,2,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
+	FilterKeys []string `protobuf:"bytes,3,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
 	// 时间格式化 默认为 time.RFC3339
-	TimeFormat string `protobuf:"bytes,3,opt,name=time_format,json=timeFormat,proto3" json:"time_format,omitempty"`
+	TimeFormat string `protobuf:"bytes,4,opt,name=time_format,json=timeFormat,proto3" json:"time_format,omitempty"`
 	// 标准输出流日志
-	Std *LogComponentConfig_Log_StdLogger `protobuf:"bytes,4,opt,name=std,proto3" json:"std,omitempty"`
+	Std *LogComponentConfig_Log_StdLogger `protobuf:"bytes,5,opt,name=std,proto3" json:"std,omitempty"`
 	// 文件日志
-	File          *LogComponentConfig_Log_FileLogger `protobuf:"bytes,5,opt,name=file,proto3" json:"file,omitempty"`
+	File          *LogComponentConfig_Log_FileLogger `protobuf:"bytes,6,opt,name=file,proto3" json:"file,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -792,6 +803,13 @@ func (x *LogComponentConfig_Log) GetLevel() string {
 	return ""
 }
 
+func (x *LogComponentConfig_Log) GetFilterEmpty() bool {
+	if x != nil {
+		return x.FilterEmpty
+	}
+	return false
+}
+
 func (x *LogComponentConfig_Log) GetFilterKeys() []string {
 	if x != nil {
 		return x.FilterKeys
@@ -826,8 +844,10 @@ type LogComponentConfig_Log_StdLogger struct {
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 最小日志级别（默认继承上层level）
 	Level *string `protobuf:"bytes,2,opt,name=level,proto3,oneof" json:"level,omitempty"`
+	// 是否过滤掉空值的kv
+	FilterEmpty *bool `protobuf:"varint,3,opt,name=filter_empty,json=filterEmpty,proto3,oneof" json:"filter_empty,omitempty"`
 	// 打印日志过滤哪些keys，会合并上层 filter_keys
-	FilterKeys    []string `protobuf:"bytes,3,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
+	FilterKeys    []string `protobuf:"bytes,4,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -876,6 +896,13 @@ func (x *LogComponentConfig_Log_StdLogger) GetLevel() string {
 	return ""
 }
 
+func (x *LogComponentConfig_Log_StdLogger) GetFilterEmpty() bool {
+	if x != nil && x.FilterEmpty != nil {
+		return *x.FilterEmpty
+	}
+	return false
+}
+
 func (x *LogComponentConfig_Log_StdLogger) GetFilterKeys() []string {
 	if x != nil {
 		return x.FilterKeys
@@ -889,12 +916,14 @@ type LogComponentConfig_Log_FileLogger struct {
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
 	// 最小日志级别（默认继承上层level）
 	Level *string `protobuf:"bytes,2,opt,name=level,proto3,oneof" json:"level,omitempty"`
+	// 是否过滤掉空值的kv
+	FilterEmpty *bool `protobuf:"varint,3,opt,name=filter_empty,json=filterEmpty,proto3,oneof" json:"filter_empty,omitempty"`
 	// 打印日志过滤哪些keys，会合并上层 filter_keys
-	FilterKeys []string `protobuf:"bytes,3,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
+	FilterKeys []string `protobuf:"bytes,4,rep,name=filter_keys,json=filterKeys,proto3" json:"filter_keys,omitempty"`
 	// 日志路径 (默认 ./app.log)
-	Path string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
+	Path string `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
 	// 文件拆分
-	Rotating      *LogComponentConfig_Log_FileLogger_Rotating `protobuf:"bytes,5,opt,name=rotating,proto3" json:"rotating,omitempty"`
+	Rotating      *LogComponentConfig_Log_FileLogger_Rotating `protobuf:"bytes,6,opt,name=rotating,proto3" json:"rotating,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -941,6 +970,13 @@ func (x *LogComponentConfig_Log_FileLogger) GetLevel() string {
 		return *x.Level
 	}
 	return ""
+}
+
+func (x *LogComponentConfig_Log_FileLogger) GetFilterEmpty() bool {
+	if x != nil && x.FilterEmpty != nil {
+		return *x.FilterEmpty
+	}
+	return false
 }
 
 func (x *LogComponentConfig_Log_FileLogger) GetFilterKeys() []string {
@@ -3862,35 +3898,42 @@ const file_config_proto_rawDesc = "" +
 	"\x03App\x12+\n" +
 	"\x11disable_registrar\x18\x01 \x01(\bR\x10disableRegistrar\x12F\n" +
 	"\x11registrar_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x10registrarTimeout\x12<\n" +
-	"\fstop_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\vstopTimeout\"\x99\a\n" +
+	"\fstop_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\vstopTimeout\"\xf8\b\n" +
 	"\x12LogComponentConfig\x12>\n" +
-	"\x03log\x18\x01 \x01(\v2,.kratos_foundation_pb.LogComponentConfig.LogR\x03log\x1aB\n" +
-	"\tModuleLog\x12\x14\n" +
-	"\x05level\x18\x01 \x01(\tR\x05level\x12\x1f\n" +
-	"\vfilter_keys\x18\x02 \x03(\tR\n" +
-	"filterKeys\x1a\xfe\x05\n" +
-	"\x03Log\x12\x14\n" +
-	"\x05level\x18\x01 \x01(\tR\x05level\x12\x1f\n" +
-	"\vfilter_keys\x18\x02 \x03(\tR\n" +
-	"filterKeys\x12\x1f\n" +
-	"\vtime_format\x18\x03 \x01(\tR\n" +
-	"timeFormat\x12H\n" +
-	"\x03std\x18\x04 \x01(\v26.kratos_foundation_pb.LogComponentConfig.Log.StdLoggerR\x03std\x12K\n" +
-	"\x04file\x18\x05 \x01(\v27.kratos_foundation_pb.LogComponentConfig.Log.FileLoggerR\x04file\x1ak\n" +
-	"\tStdLogger\x12\x18\n" +
-	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
-	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x88\x01\x01\x12\x1f\n" +
+	"\x03log\x18\x01 \x01(\v2,.kratos_foundation_pb.LogComponentConfig.LogR\x03log\x1a\x8a\x01\n" +
+	"\tModuleLog\x12\x19\n" +
+	"\x05level\x18\x01 \x01(\tH\x00R\x05level\x88\x01\x01\x12&\n" +
+	"\ffilter_empty\x18\x02 \x01(\bH\x01R\vfilterEmpty\x88\x01\x01\x12\x1f\n" +
 	"\vfilter_keys\x18\x03 \x03(\tR\n" +
 	"filterKeysB\b\n" +
-	"\x06_level\x1a\x9a\x03\n" +
+	"\x06_levelB\x0f\n" +
+	"\r_filter_empty\x1a\x94\a\n" +
+	"\x03Log\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\tR\x05level\x12!\n" +
+	"\ffilter_empty\x18\x02 \x01(\bR\vfilterEmpty\x12\x1f\n" +
+	"\vfilter_keys\x18\x03 \x03(\tR\n" +
+	"filterKeys\x12\x1f\n" +
+	"\vtime_format\x18\x04 \x01(\tR\n" +
+	"timeFormat\x12H\n" +
+	"\x03std\x18\x05 \x01(\v26.kratos_foundation_pb.LogComponentConfig.Log.StdLoggerR\x03std\x12K\n" +
+	"\x04file\x18\x06 \x01(\v27.kratos_foundation_pb.LogComponentConfig.Log.FileLoggerR\x04file\x1a\xa4\x01\n" +
+	"\tStdLogger\x12\x18\n" +
+	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
+	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x88\x01\x01\x12&\n" +
+	"\ffilter_empty\x18\x03 \x01(\bH\x01R\vfilterEmpty\x88\x01\x01\x12\x1f\n" +
+	"\vfilter_keys\x18\x04 \x03(\tR\n" +
+	"filterKeysB\b\n" +
+	"\x06_levelB\x0f\n" +
+	"\r_filter_empty\x1a\xd3\x03\n" +
 	"\n" +
 	"FileLogger\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
-	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x88\x01\x01\x12\x1f\n" +
-	"\vfilter_keys\x18\x03 \x03(\tR\n" +
+	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x88\x01\x01\x12&\n" +
+	"\ffilter_empty\x18\x03 \x01(\bH\x01R\vfilterEmpty\x88\x01\x01\x12\x1f\n" +
+	"\vfilter_keys\x18\x04 \x03(\tR\n" +
 	"filterKeys\x12\x12\n" +
-	"\x04path\x18\x04 \x01(\tR\x04path\x12\\\n" +
-	"\brotating\x18\x05 \x01(\v2@.kratos_foundation_pb.LogComponentConfig.Log.FileLogger.RotatingR\brotating\x1a\xb9\x01\n" +
+	"\x04path\x18\x05 \x01(\tR\x04path\x12\\\n" +
+	"\brotating\x18\x06 \x01(\v2@.kratos_foundation_pb.LogComponentConfig.Log.FileLogger.RotatingR\brotating\x1a\xb9\x01\n" +
 	"\bRotating\x12\x18\n" +
 	"\adisable\x18\x01 \x01(\bR\adisable\x12\x19\n" +
 	"\bmax_size\x18\x02 \x01(\x03R\amaxSize\x12 \n" +
@@ -3900,7 +3943,8 @@ const file_config_proto_rawDesc = "" +
 	"\n" +
 	"local_time\x18\x05 \x01(\bR\tlocalTime\x12\x1a\n" +
 	"\bcompress\x18\x06 \x01(\bR\bcompressB\b\n" +
-	"\x06_level\"\xd5\x02\n" +
+	"\x06_levelB\x0f\n" +
+	"\r_filter_empty\"\xd5\x02\n" +
 	"\x15MetricComponentConfig\x12M\n" +
 	"\ametrics\x18\x01 \x01(\v23.kratos_foundation_pb.MetricComponentConfig.MetricsR\ametrics\x1a\xec\x01\n" +
 	"\aMetrics\x12\x1d\n" +
@@ -4358,6 +4402,7 @@ func file_config_proto_init() {
 	if File_config_proto != nil {
 		return
 	}
+	file_config_proto_msgTypes[10].OneofWrappers = []any{}
 	file_config_proto_msgTypes[12].OneofWrappers = []any{}
 	file_config_proto_msgTypes[13].OneofWrappers = []any{}
 	file_config_proto_msgTypes[30].OneofWrappers = []any{}

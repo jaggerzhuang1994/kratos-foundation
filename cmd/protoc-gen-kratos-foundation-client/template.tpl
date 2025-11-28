@@ -75,8 +75,13 @@ func (c *{{.ServiceName}}ApiWrapper) {{.Name}}(ctx context.Context, in *{{.Reque
 		opts := client.GrpcCallOptionFromContext(ctx)
 		rsp, err = New{{.ServiceName}}Client(grpcClient).{{.Name}}(ctx, in, opts...)
 	} else {
+{{- if eq (index .Service.HttpMethodSets .Name) nil}}
+    _ = httpClient
+	panic("not implemented")
+{{- else}}
 		opts := client.HttpCallOptionFromContext(ctx)
 		rsp, err = New{{.ServiceName}}HTTPClient(httpClient).{{.Name}}(ctx, in, opts...)
+{{- end}}
 	}
 	return
 }

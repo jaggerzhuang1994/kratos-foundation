@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"fmt"
+
 	"github.com/go-kratos/kratos/v2/log"
 )
 
@@ -11,9 +13,11 @@ func NewFilterLevelLogger(logger log.Logger, level log.Level) log.Logger {
 type filterKeysLogger struct {
 	logger  log.Logger
 	filters map[string]struct{}
+	// 是否过滤空值
+	filterEmpty bool
 }
 
-func NewFilterKeysLogger(logger log.Logger, filterKey ...string) log.Logger {
+func NewFilterKeysLogger(logger log.Logger, filterEmpty bool, filterKey ...string) log.Logger {
 	if len(filterKey) == 0 {
 		return logger
 	}
@@ -25,6 +29,7 @@ func NewFilterKeysLogger(logger log.Logger, filterKey ...string) log.Logger {
 	return &filterKeysLogger{
 		logger,
 		filters,
+		filterEmpty,
 	}
 }
 
@@ -37,9 +42,16 @@ func (f *filterKeysLogger) Log(level log.Level, keyvals ...any) error {
 				continue
 			}
 		}
-		newKeyvals = append(newKeyvals, keyvals[i])
 		if i+1 <= length-1 {
+			if f.filterEmpty {
+				if fmt.Sprintf("%v", keyvals[i+1]) == "" {
+					continue
+				}
+			}
+			newKeyvals = append(newKeyvals, keyvals[i])
 			newKeyvals = append(newKeyvals, keyvals[i+1])
+		} else {
+			newKeyvals = append(newKeyvals, keyvals[i])
 		}
 	}
 	return f.logger.Log(level, newKeyvals...)

@@ -24,30 +24,36 @@ message LogComponentConfig {
   // 模块使用的 log 结构
   message ModuleLog {
     // 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
-    string level = 1;
+    optional string level = 1;
+    // 是否过滤掉空值的kv
+    optional bool filter_empty = 2;
     // 打印日志过滤哪些keys
-    repeated string filter_keys = 2;
+    repeated string filter_keys = 3;
   }
 
   message Log {
     // 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
     string level = 1;
+    // 是否过滤掉空值的kv
+    bool filter_empty = 2;
     // 打印日志过滤哪些keys
-    repeated string filter_keys = 2;
+    repeated string filter_keys = 3;
     // 时间格式化 默认为 time.RFC3339
-    string time_format = 3;
+    string time_format = 4;
     // 标准输出流日志
-    StdLogger std = 4;
+    StdLogger std = 5;
     // 文件日志
-    FileLogger file = 5;
+    FileLogger file = 6;
 
     message StdLogger {
       // 是否禁用std logger(默认不禁用)
       bool disable = 1;
       // 最小日志级别（默认继承上层level）
       optional string level = 2;
+      // 是否过滤掉空值的kv
+      optional bool filter_empty = 3;
       // 打印日志过滤哪些keys，会合并上层 filter_keys
-      repeated string filter_keys = 3;
+      repeated string filter_keys = 4;
     }
 
     message FileLogger {
@@ -55,12 +61,14 @@ message LogComponentConfig {
       bool disable = 1;
       // 最小日志级别（默认继承上层level）
       optional string level = 2;
+      // 是否过滤掉空值的kv
+      optional bool filter_empty = 3;
       // 打印日志过滤哪些keys，会合并上层 filter_keys
-      repeated string filter_keys = 3;
+      repeated string filter_keys = 4;
       // 日志路径 (默认 ./app.log)
-      string path = 4;
+      string path = 5;
       // 文件拆分
-      Rotating rotating = 5;
+      Rotating rotating = 6;
 
       message Rotating {
         // 禁用文件拆分(默认不禁用)

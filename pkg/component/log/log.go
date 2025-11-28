@@ -19,6 +19,7 @@ type Log struct {
 	withKv      []any
 	withCtx     context.Context
 	callerDepth int32
+	filterEmpty bool
 }
 
 const defaultCallerDepth = 4
@@ -38,12 +39,18 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 	var loggers []log.Logger
 	var rcs []func()
 
+	var filterEmpty = cfg.GetFilterEmpty()
+
 	// 标准输出流日志
 	if stdLoggerCfg := cfg.GetStd(); !stdLoggerCfg.GetDisable() {
 		stdLogger := logger.NewStdLogger()
 		filterKeys := append(cfg.GetFilterKeys(), stdLoggerCfg.GetFilterKeys()...)
-		if len(filterKeys) > 0 {
-			stdLogger = logger.NewFilterKeysLogger(stdLogger, filterKeys...)
+		stdFilterEmpty := filterEmpty
+		if stdLoggerCfg != nil && stdLoggerCfg.FilterEmpty != nil {
+			stdFilterEmpty = *stdLoggerCfg.FilterEmpty
+		}
+		if len(filterKeys) > 0 || stdFilterEmpty {
+			stdLogger = logger.NewFilterKeysLogger(stdLogger, stdFilterEmpty, filterKeys...)
 		}
 		// 如果指定了 std.level，否则依赖外部的 level
 		if stdLoggerCfg != nil && stdLoggerCfg.Level != nil {
@@ -86,8 +93,12 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 			return nil, nil, err
 		}
 		filterKeys := append(cfg.GetFilterKeys(), fileLoggerCfg.GetFilterKeys()...)
-		if len(filterKeys) > 0 {
-			fileLogger = logger.NewFilterKeysLogger(fileLogger, filterKeys...)
+		fileFilterEmpty := filterEmpty
+		if fileLoggerCfg != nil && fileLoggerCfg.FilterEmpty != nil {
+			fileFilterEmpty = *fileLoggerCfg.FilterEmpty
+		}
+		if len(filterKeys) > 0 || fileFilterEmpty {
+			fileLogger = logger.NewFilterKeysLogger(fileLogger, fileFilterEmpty, filterKeys...)
 		}
 		loggers = append(loggers, fileLogger)
 		rcs = append(rcs, rc)
@@ -112,6 +123,7 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 		nil,
 		nil,
 		defaultCallerDepth, // 默认caller深度6
+		filterEmpty,
 	}
 	l.Helper = l.NewHelper()
 
@@ -125,6 +137,13 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 func (l *Log) WithCallerDepth(depth int32) *Log {
 	ll := *l
 	ll.callerDepth = depth
+	ll.Helper = ll.NewHelper()
+	return &ll
+}
+
+func (l *Log) WithFilterEmpty(filterEmpty bool) *Log {
+	ll := *l
+	ll.filterEmpty = filterEmpty
 	ll.Helper = ll.NewHelper()
 	return &ll
 }
@@ -178,7 +197,7 @@ func (l *Log) GetLogger() log.Logger {
 	inner := l.inner
 
 	// filterKeys 在kv内层，才能拦截过滤kv
-	inner = logger.NewFilterKeysLogger(inner, l.filterKeys...) // 这不是 log包 内部的日志结构，放在最底层
+	inner = logger.NewFilterKeysLogger(inner, l.filterEmpty, l.filterKeys...) // 这不是 log包 内部的日志结构，放在最底层
 
 	// filter opts 放在前面，才能过滤后面的kv
 	inner = log.NewFilter(inner, l.filterOpts...)
