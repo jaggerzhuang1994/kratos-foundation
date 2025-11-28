@@ -28,7 +28,7 @@ func NewServerMiddlewares(
 	var list []string
 
 	var config = cfg.GetMiddleware()
-	var logHelper = log.WithModule("server/middleware").NewHelper()
+	var logHelper = log.WithModule("server").NewHelper()
 
 	// 异常恢复
 	m = append(m, recovery.Recovery())

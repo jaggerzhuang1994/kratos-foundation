@@ -18,7 +18,7 @@ type filterKeysLogger struct {
 }
 
 func NewFilterKeysLogger(logger log.Logger, filterEmpty bool, filterKey ...string) log.Logger {
-	if len(filterKey) == 0 {
+	if len(filterKey) == 0 && !filterEmpty {
 		return logger
 	}
 	filters := make(map[string]struct{}, len(filterKey))

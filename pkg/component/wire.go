@@ -8,6 +8,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/redis"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/registry"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
 )
@@ -19,6 +20,7 @@ var ProviderSet = wire.NewSet(
 	log.ProviderSet,
 	metrics.ProviderSet,
 	redis.ProviderSet,
+	registry.ProviderSet,
 	server.ProviderSet,
 	tracing.ProviderSet,
 )
