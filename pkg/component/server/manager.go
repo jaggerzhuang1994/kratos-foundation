@@ -16,18 +16,20 @@ type Manager struct {
 
 func NewManager(
 	cfg *Config,
-	httpSrv *http.Server,
-	grpcSrv *grpc.Server,
+	hooks *HookManager,
 ) *Manager {
 	mgr := &Manager{
 		cfg: cfg,
 	}
-	if httpSrv != nil {
-		mgr.RegisterServer(httpSrv)
-	}
-	if grpcSrv != nil {
-		mgr.RegisterServer(grpcSrv)
-	}
+
+	hooks.HookHttpServer(func(server *http.Server) {
+		mgr.RegisterServer(server)
+	})
+
+	hooks.HookGrpcServer(func(server *grpc.Server) {
+		mgr.RegisterServer(server)
+	})
+
 	return mgr
 }
 
