@@ -16,19 +16,21 @@ type Manager struct {
 
 func NewManager(
 	cfg *Config,
-	hooks *HookManager,
+	// 无论如何初始化 http/grpc server，会动态根据配置返回 nil/实例
+	httpServer *http.Server,
+	grpcServer *grpc.Server,
 ) *Manager {
 	mgr := &Manager{
 		cfg: cfg,
 	}
 
-	hooks.HookHttpServer(func(server *http.Server) {
-		mgr.RegisterServer(server)
-	})
+	if httpServer != nil {
+		mgr.RegisterServer(httpServer)
+	}
 
-	hooks.HookGrpcServer(func(server *grpc.Server) {
-		mgr.RegisterServer(server)
-	})
+	if grpcServer != nil {
+		mgr.RegisterServer(grpcServer)
+	}
 
 	return mgr
 }
