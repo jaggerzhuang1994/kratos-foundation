@@ -12,5 +12,6 @@ var ProviderSet = wire.NewSet(
 	NewHttpServer,
 	NewGrpcServer,
 	websocket.NewServer,
+	websocket.NewHook,
 	NewRegister,
 )

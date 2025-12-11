@@ -28,9 +28,10 @@ type Server struct {
 func NewServer(
 	log *log.Log,
 	httpServer *http.Server,
+	hook *Hook,
 ) *Server {
 	router := httpServer.Route("/")
-	return &Server{
+	srv := &Server{
 		log: log.WithModule("websocket").With(
 			"client", log2.Valuer(func(ctx context.Context) any {
 				request, ok := http.RequestFromServerContext(ctx)
@@ -43,6 +44,10 @@ func NewServer(
 		httpServer: httpServer,
 		router:     router,
 	}
+	for _, fn := range hook.server {
+		fn(srv)
+	}
+	return srv
 }
 
 func (s *Server) Handle(path string, handler any, optionalUpgrader ...Upgrader) {
