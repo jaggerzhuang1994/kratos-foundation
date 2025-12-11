@@ -11,30 +11,6 @@ type HookFunc func(context.Context) error
 type InitContextHook func(context.Context) context.Context
 type InitOptionsHook func([]kratos.Option) []kratos.Option
 
-type OnInitContextHook interface {
-	OnInitContext(context.Context) context.Context
-}
-
-type OnInitOptionHook interface {
-	OnInitOption([]kratos.Option) []kratos.Option
-}
-
-type OnBeforeStartHook interface {
-	OnBeforeStart(context.Context) error
-}
-
-type OnAfterStartHook interface {
-	OnAfterStart(context.Context) error
-}
-
-type OnBeforeStopHook interface {
-	OnBeforeStop(context.Context) error
-}
-
-type OnAfterStopHook interface {
-	OnAfterStop(context.Context) error
-}
-
 type Hook struct {
 	log         *log.Log
 	initCtx     []InitContextHook
@@ -46,31 +22,33 @@ type Hook struct {
 }
 
 func NewHook(log *log.Log) *Hook {
-	return &Hook{log: log}
+	return &Hook{
+		log: log,
+	}
 }
 
-func (m *Hook) Register(hook any) {
-	if hook, ok := hook.(OnInitContextHook); ok {
+func (m *Hook) Register(hooker any) {
+	if hook, ok := hooker.(OnInitContextHook); ok {
 		m.InitContext(hook.OnInitContext)
 	}
 
-	if hook, ok := hook.(OnInitOptionHook); ok {
+	if hook, ok := hooker.(OnInitOptionHook); ok {
 		m.InitOptions(hook.OnInitOption)
 	}
 
-	if hook, ok := hook.(OnBeforeStartHook); ok {
+	if hook, ok := hooker.(OnBeforeStartHook); ok {
 		m.BeforeStart(hook.OnBeforeStart)
 	}
 
-	if hook, ok := hook.(OnAfterStartHook); ok {
+	if hook, ok := hooker.(OnAfterStartHook); ok {
 		m.AfterStart(hook.OnAfterStart)
 	}
 
-	if hook, ok := hook.(OnBeforeStopHook); ok {
+	if hook, ok := hooker.(OnBeforeStopHook); ok {
 		m.BeforeStop(hook.OnBeforeStop)
 	}
 
-	if hook, ok := hook.(OnAfterStopHook); ok {
+	if hook, ok := hooker.(OnAfterStopHook); ok {
 		m.AfterStop(hook.OnAfterStop)
 	}
 }
