@@ -3,7 +3,6 @@ package metadata
 import (
 	metadata2 "github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
-	"github.com/go-kratos/kratos/v2/middleware/metadata"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
@@ -16,28 +15,27 @@ func Enable(config *Config) bool {
 
 func Server(config *Config) middleware.Middleware {
 	opts := newMiddlewareOptions(config)
-	return metadata.Server(opts...)
+	return server(opts...)
 }
 
 func Client(config *Config) middleware.Middleware {
 	opts := newMiddlewareOptions(config)
-	return metadata.Client(opts...)
+	return client(opts...)
 }
 
-func newMiddlewareOptions(configs ...*Config) []metadata.Option {
-	var opts []metadata.Option
+func newMiddlewareOptions(configs ...*Config) []Option {
+	var opts []Option
 	// 合并去重 prefix
 	prefix := utils.Unique(utils.Flat(utils.Map(configs, (*Config).GetPrefix)))
 	if len(prefix) > 0 {
-		opts = append(opts, metadata.WithPropagatedPrefix(prefix...))
+		opts = append(opts, withPropagatedPrefix(prefix...))
 	}
 	// 合并 constants 后面的 Config 会覆盖前面的
 	constantsList := utils.Map(configs, (*Config).GetConstants)
 	constants := mergeConstantsMd(constantsList...)
 	if len(constants) > 0 {
-		opts = append(opts, metadata.WithConstants(constants))
+		opts = append(opts, withConstants(constants))
 	}
-
 	return opts
 }
 

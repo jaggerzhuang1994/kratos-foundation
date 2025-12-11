@@ -75,22 +75,22 @@ func (s *Server) Handle(path string, handler any, optionalUpgrader ...Upgrader) 
 			request := req.(*http.Request)
 			log_ := log.WithContext(ctx)
 
-			log_.Debug("connecting")
+			log_.Info("connecting")
 			// 握手前的校验
 			if onHandshakeHandler != nil {
 				err = onHandshakeHandler.OnHandshake(request)
 				if err != nil {
-					log_.Debug("on_handshake failure: ", err)
+					log_.Error("on_handshake failure: ", err)
 					return nil, err
 				}
 			}
 			// 建立ws链接
 			conn, err := upgrader.Upgrade(w, request, w.Header())
 			if err != nil {
-				log_.Debug("upgrade failure: ", err)
+				log_.Error("upgrade failure: ", err)
 				return nil, err
 			}
-			log_.Debug("connected")
+			log_.Info("connected")
 
 			go func() {
 				cctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
