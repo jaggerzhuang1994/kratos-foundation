@@ -131,14 +131,14 @@ func (m *Manager) newConnection(name string) (*Client, error) {
 			redisotel.WithDialFilter(tracingCfg.GetDialFilter()),
 		)
 		if err != nil {
-			m.log.Warn("redisotel.InstrumentTracing error", err)
+			m.log.Warn("redisotel.InstrumentTracing error ", err)
 		}
 	}
 
 	if !m.conf.GetMetrics().GetDisable() {
 		err := redisotel.InstrumentMetrics(cc, redisotel.WithMeterProvider(m.metrics.GetMeterProvider()))
 		if err != nil {
-			m.log.Warn("redisotel.InstrumentMetrics error", err)
+			m.log.Warn("redisotel.InstrumentMetrics error ", err)
 		}
 	}
 

@@ -33,11 +33,11 @@ func (s *scheduleWrapper) Next(now time.Time) time.Time {
 	// 如果是立刻调度，并且是首次调度
 	if s.immediately && !s.immediatelyScheduled {
 		s.immediatelyScheduled = true
-		s.log.With("now", now, "next", now).Debug("schedule immediately")
+		s.log.With("next", now.Format(time.RFC3339)).Debug("job schedule immediately")
 		return now
 	}
 
 	next := s.schedule.Next(now)
-	s.log.With("now", now, "next", next).Debug("schedule")
+	s.log.With("next", next.Format(time.RFC3339)).Debug("job schedule")
 	return next
 }

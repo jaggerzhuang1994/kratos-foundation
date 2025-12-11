@@ -3,15 +3,12 @@ package registry
 import (
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
 	"github.com/go-kratos/kratos/v2/registry"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	consul2 "github.com/jaggerzhuang1994/kratos-foundation/pkg/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
 )
 
-func NewConsulRegistry(log *log.Log, client *consul2.Client) *consul.Registry {
-	l := log.WithModule("registry")
+func NewConsulRegistry(client *consul2.Client) *consul.Registry {
 	if client == nil {
-		l.Warn("无consul连接，不提供consul服务注册")
 		return nil
 	}
 	return consul.New(client, getConsulOpts()...)

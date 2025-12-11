@@ -131,7 +131,7 @@ func (f *Factory) useMiddlewares(key clientKey) []middleware.Middleware {
 	if metrics.Enable(config.GetMetrics()) {
 		metricsMiddleware, err := metrics.Client(f.metrics, config.GetMetrics())
 		if err != nil {
-			log.Warn("Failed to create metrics middleware", zap.Error(err))
+			log.Warn("Failed to create metrics middleware ", zap.Error(err))
 		} else {
 			m = append(m, metricsMiddleware)
 			list = append(list, "metrics")

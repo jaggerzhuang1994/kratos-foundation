@@ -23,7 +23,7 @@ func NewFilePatternSource(patterns []string) (config.Source, error) {
 		}
 		matches = append(matches, files...)
 	}
-	log.Debug("file config source list", matches)
+	log.Debug("file config source list ", matches)
 	// 通配符返回的文件列表构成一个优先级组，优先级按照glob返回的顺序
 	return NewPriorityConfigSource(utils.Map(matches, func(filename string) config.Source {
 		return file.NewSource(filename)

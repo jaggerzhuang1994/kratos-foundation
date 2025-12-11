@@ -35,14 +35,14 @@ func NewCron(
 	}
 	cc := cron.New(opt...)
 	return &Cron{
-		log:    log,
+		log:    log.WithModule("cron", conf.GetLog()),
 		cron:   cc,
 		parser: parser,
 	}, nil
 }
 
 func (c *Cron) Schedule(ctx context.Context, name string, job job.Job, schedule Schedule, schedule2 string) cron.EntryID {
-	c.log.Infof("schedule %s - %s", name, schedule2)
+	c.log.Infof("register cron job %s %s", name, schedule2)
 	return c.cron.Schedule(schedule, &cronJob{
 		name: name,
 		ctx:  ctx,

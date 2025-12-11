@@ -38,7 +38,7 @@ func NewTracing(cfg *Config, appInfo *kratos_foundation_pb.AppInfo, log *log.Log
 	sampler := newSampler(l, cfg.GetSampler())
 	exporter, err := newExporter(ctx, cfg.GetExporter())
 	if err != nil {
-		l.Error("failed to create span exporter", "error", err)
+		l.Error("failed to create span exporter error ", err)
 		cancel()
 		return nil, nil, err
 	}
@@ -64,7 +64,7 @@ func NewTracing(cfg *Config, appInfo *kratos_foundation_pb.AppInfo, log *log.Log
 			defer cancel()
 			err := tp.Shutdown(context.Background())
 			if err != nil {
-				l.Error("failed to shutdown tracing", "error", err)
+				l.Error("failed to shutdown tracing error ", err)
 			}
 		}, nil
 }
@@ -141,7 +141,7 @@ func newExporter(ctx context.Context, cfg *kratos_foundation_pb.TracingComponent
 func newSampler(log *log.Helper, cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler) tracesdk.Sampler {
 	switch cfg.GetSample() {
 	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_RATIO:
-		log.Info("tracing ratio sample", cfg.GetRatio())
+		log.Info("tracing ratio sample ", cfg.GetRatio())
 		return tracesdk.ParentBased(tracesdk.TraceIDRatioBased(cfg.GetRatio()))
 	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_ALWAYS:
 		log.Info("tracing always sample")
