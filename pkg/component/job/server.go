@@ -38,8 +38,7 @@ type serverJob struct {
 // 从 registerJob -> cronJob
 type cronJob struct {
 	serverJob
-	schedule       cron.Schedule
-	scheduleString string
+	schedule cron.Schedule
 }
 
 func NewServer(
@@ -88,9 +87,10 @@ func NewServer(
 				job:  job.FuncJob(middleware.Chain(serverJobMiddleware...)(registerJob.Job.Run)),
 			})
 		} else {
+			jobLog.Infof("jobConf schedule=%s concurrent_policy=%s immediately=%v", jobConf.GetSchedule(), jobConf.GetConcurrentPolicy(), jobConf.GetImmediately())
 			schedule, err := parser.Parse(jobConf.GetSchedule())
 			if err != nil {
-				return nil, errors.WithMessagef(err, "parse job %s schedule error", registerJob.Name)
+				return nil, errors.WithMessagef(err, "parse job %s schedule %s error", registerJob.Name, jobConf.GetSchedule())
 			}
 			schedule = cron.NewSchedule(jobLog, jobConf.GetImmediately(), schedule)
 
@@ -104,8 +104,7 @@ func NewServer(
 					name: registerJob.Name,
 					job:  job.FuncJob(middleware.Chain(chain...)(registerJob.Job.Run)),
 				},
-				schedule:       schedule,
-				scheduleString: jobConf.GetSchedule(),
+				schedule: schedule,
 			})
 		}
 	}
@@ -122,7 +121,7 @@ func (s *Server) Start(ctx context.Context) error {
 	ctx, s.cancel = context.WithCancel(ctx)
 
 	for _, cjob := range s.cronJobs {
-		s.cron.Schedule(ctx, cjob.name, cjob.job, cjob.schedule, cjob.scheduleString)
+		s.cron.Schedule(ctx, cjob.name, cjob.job, cjob.schedule)
 	}
 
 	s.cron.Start()

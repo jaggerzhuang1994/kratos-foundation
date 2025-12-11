@@ -9,7 +9,7 @@ import (
 )
 
 func NewConsulSource(
-	client *consul2.Client,  // consul客户端
+	client *consul2.Client, // consul客户端
 	configPathList []string, // 配置列表
 ) config.Source {
 	if client == nil {
