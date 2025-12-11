@@ -34,8 +34,8 @@ message LogComponentConfig {
   message Log {
     // 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
     string level = 1;
-    // 是否过滤掉空值的kv
-    bool filter_empty = 2;
+    // 是否过滤掉空值的kv(默认true)
+    optional bool filter_empty = 2;
     // 打印日志过滤哪些keys
     repeated string filter_keys = 3;
     // 时间格式化 默认为 time.RFC3339
@@ -44,6 +44,8 @@ message LogComponentConfig {
     StdLogger std = 5;
     // 文件日志
     FileLogger file = 6;
+    // 预置哪些 kv，默认 ts, service.id, service.name, service.version, trace.id, span.id, caller
+    repeated string preset = 7;
 
     message StdLogger {
       // 是否禁用std logger(默认不禁用)

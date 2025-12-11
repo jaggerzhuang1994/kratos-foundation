@@ -19,8 +19,8 @@ type ModuleConfig interface {
 
 var defaultConfig = &Config{
 	Level:       DefaultLevel(),
+	FilterEmpty: proto.Bool(true),
 	FilterKeys:  []string{},
-	FilterEmpty: false,
 	TimeFormat:  time.RFC3339,
 	Std: &kratos_foundation_pb.LogComponentConfig_Log_StdLogger{
 		Disable:     false,
@@ -43,6 +43,7 @@ var defaultConfig = &Config{
 			Compress:   false,
 		},
 	},
+	Preset: nil, // 为空默认全部
 }
 
 func DefaultLevel() string {

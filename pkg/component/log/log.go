@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log/logger"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
@@ -99,20 +98,37 @@ func NewLog(
 	}
 
 	inner := logger.NewStackLogger(loggers...)
+	presetKvMap := map[string]any{
+		TsKey:             log.Timestamp(cfg.GetTimeFormat()),
+		ServiceIDKey:      serviceID,
+		ServiceNameKey:    serviceName,
+		ServiceVersionKey: serviceVersion,
+		TraceIDKey:        traceID,
+		SpanIDKey:         spanID,
+		CallerKey:         log.Caller(defaultCallerDepth),
+	}
+
+	var preset = cfg.GetPreset()
+	if len(preset) == 0 {
+		preset = defaultPreset
+	}
+
+	var presetKv = make([]any, 0, len(preset))
+	for _, k := range preset {
+		if v, ok := presetKvMap[k]; ok {
+			presetKv = append(presetKv, k)
+			presetKv = append(presetKv, v)
+		}
+	}
+
+	filterKeys := cfg.GetFilterKeys()
 
 	l := &Log{
 		nil,
 		inner,
-		[]any{
-			TsKey, log.Timestamp(cfg.GetTimeFormat()),
-			ServiceIDKey, serviceID,
-			ServiceNameKey, serviceName,
-			ServiceVersionKey, serviceVersion,
-			TraceIDKey, tracing.TraceID(),
-			SpanIDKey, tracing.SpanID(),
-		},
+		presetKv,
 		log.ParseLevel(cfg.GetLevel()),
-		cfg.GetFilterKeys(),
+		filterKeys,
 		nil,
 		nil,
 		app_info.NewContext(context.Background(), appInfo),
@@ -214,7 +230,7 @@ func (l *Log) GetLogger() log.Logger {
 	var kv = l.withKv
 	if l.module != "" {
 		kv = append([]any{
-			"module", l.module,
+			ModuleKey, l.module,
 		}, kv...)
 	}
 	kv = append(l.getPresetKv(), kv...)
@@ -229,6 +245,7 @@ func (l *Log) GetLogger() log.Logger {
 }
 
 func (l *Log) NewHelper(opts ...log.Option) *log.Helper {
+	opts = append(opts, log.WithMessageKey(MsgKey))
 	helper := log.NewHelper(l.GetLogger(), opts...)
 	return helper
 }
@@ -237,16 +254,16 @@ func (l *Log) getPresetKv() []any {
 	var kv []any
 	filterKeys := l.filterKeys
 
-	for i := 0; i < len(l.presetKv); i += 2 {
-		var k = l.presetKv[i]
+	for i := 0; i < len(l.presetKv)-1; i += 2 {
+		var k, _ = l.presetKv[i].(string)
 		var v = l.presetKv[i+1]
-		if !utils.Includes(filterKeys, k.(string)) {
-			kv = append(kv, k, v)
+		if !utils.Includes(filterKeys, k) {
+			if k == CallerKey {
+				kv = append(kv, k, log.Caller(int(l.callerDepth)))
+			} else {
+				kv = append(kv, k, v)
+			}
 		}
-	}
-
-	if !utils.Includes(filterKeys, CallerKey) {
-		kv = append(kv, CallerKey, log.Caller(int(l.callerDepth)))
 	}
 
 	return kv

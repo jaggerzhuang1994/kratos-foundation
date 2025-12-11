@@ -1608,8 +1608,6 @@ func (m *LogComponentConfig_Log) validate(all bool) error {
 
 	// no validation rules for Level
 
-	// no validation rules for FilterEmpty
-
 	// no validation rules for TimeFormat
 
 	if all {
@@ -1668,6 +1666,10 @@ func (m *LogComponentConfig_Log) validate(all bool) error {
 				cause:  err,
 			}
 		}
+	}
+
+	if m.FilterEmpty != nil {
+		// no validation rules for FilterEmpty
 	}
 
 	if len(errors) > 0 {
