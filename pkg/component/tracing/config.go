@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -33,7 +34,7 @@ var defaultConfig = &kratos_foundation_pb.TracingComponentConfig_Tracing{
 	},
 }
 
-func NewConfig(cfg config.Config, appInfo *kratos_foundation_pb.AppInfo) (*Config, error) {
+func NewConfig(cfg config.Config, appInfo *app_info.AppInfo) (*Config, error) {
 	var scc kratos_foundation_pb.TracingComponentConfig
 	err := cfg.Scan(&scc)
 	if err != nil {

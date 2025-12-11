@@ -7,10 +7,9 @@ import (
 
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
-func PrintAppInfo(ai *kratos_foundation_pb.AppInfo) {
+func PrintAppInfo(ai *AppInfo) {
 	md := fmt.Sprintf("%#v", ai.GetMetadata())
 	md = "map" + md[17:]
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log/logger"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 )
@@ -25,18 +26,10 @@ type Log struct {
 
 const defaultCallerDepth = 4
 
-type logCtxKey struct{}
-
-func NewContext(ctx context.Context, log *Log) context.Context {
-	return context.WithValue(ctx, logCtxKey{}, log)
-}
-
-func FromContext(ctx context.Context) (log *Log, ok bool) {
-	log, ok = ctx.Value(logCtxKey{}).(*Log)
-	return
-}
-
-func NewLog(cfg *Config) (*Log, func(), error) {
+func NewLog(
+	cfg *Config,
+	appInfo *app_info.AppInfo,
+) (*Log, func(), error) {
 	var loggers []log.Logger
 	var rcs []func()
 
@@ -122,7 +115,7 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 		cfg.GetFilterKeys(),
 		nil,
 		nil,
-		nil,
+		app_info.NewContext(context.Background(), appInfo),
 		defaultCallerDepth, // 默认caller深度6
 		filterEmpty,
 		"",
@@ -225,7 +218,7 @@ func (l *Log) GetLogger() log.Logger {
 		}, kv...)
 	}
 	kv = append(l.getPresetKv(), kv...)
-	inner = log.With(inner, kv...)
+	inner = log.With(inner, kv...) // 如果这里的 inner 不是 log.logger，则会丢失 ctx??? 所以 ctx 要放在后面 withContext
 
 	// with ctx
 	if l.withCtx != nil {

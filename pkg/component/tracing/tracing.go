@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"go.opentelemetry.io/otel/codes"
@@ -25,7 +26,7 @@ type Tracing struct {
 
 const logModule = "tracing"
 
-func NewTracing(cfg *Config, appInfo *kratos_foundation_pb.AppInfo, log *log.Log) (*Tracing, func(), error) {
+func NewTracing(cfg *Config, appInfo *app_info.AppInfo, log *log.Log) (*Tracing, func(), error) {
 	l := log.WithModule(logModule, cfg.GetLog()).NewHelper()
 
 	if cfg.GetDisable() {
