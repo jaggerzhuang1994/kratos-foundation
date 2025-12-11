@@ -6,8 +6,11 @@ import (
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/registry"
+	"github.com/go-kratos/kratos/v2/transport/grpc"
+	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server"
@@ -15,17 +18,20 @@ import (
 )
 
 func NewApp(
-	_ bootstrap.Bootstrap,
+	_ bootstrap.Bootstrap, // 禁止在 bootstrap 初始化 app
+	_ *http.Server, // 初始化 http 服务器
+	_ *grpc.Server, // 初始化 grpc 服务器
 	appInfo *kratos_foundation_pb.AppInfo,
 	cfg *Config,
-	l *log.Log, // log 组件
-	hook *HookManager, // app hook
+	log_ *log.Log, // log 组件
 	metrics_ *metrics.Metrics, // metric 组件
-	serverManager *server.Manager, // server 组件
+	hook *Hook, // app hook
+	jobServer *job.Server, // job server
+	serverProvider *server.Register, // server提供者
 	registrar registry.Registrar, // 服务注册中心实例
-) (*kratos.App, error) {
+) *kratos.App {
 	ctx := app_info.NewContext(context.Background(), appInfo)
-	ctx = log.NewContext(ctx, l)
+	ctx = log.NewContext(ctx, log_)
 	ctx = metrics.NewContext(ctx, metrics_)
 
 	// initCtx
@@ -33,14 +39,19 @@ func NewApp(
 		ctx = initCtx(ctx)
 	}
 
+	servers := serverProvider.GetServers()
+	if jobServer != nil {
+		servers = append(servers, jobServer)
+	}
+
 	var opts = []kratos.Option{
 		kratos.ID(appInfo.GetId()),
 		kratos.Name(appInfo.GetName()),
 		kratos.Version(appInfo.GetVersion()),
 		kratos.Metadata(appInfo.GetMetadata()),
+		kratos.Logger(log_.GetLogger()),
 		kratos.Context(ctx),
-		kratos.Logger(l.GetLogger()),
-		kratos.Server(serverManager.GetServers()...),
+		kratos.Server(servers...),
 		kratos.Signal(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGTERM), // 平滑重启的信号量
 		kratos.StopTimeout(cfg.GetStopTimeout().AsDuration()),
 	}
@@ -59,6 +70,7 @@ func NewApp(
 		opts = append(opts, kratos.AfterStop(afterStop))
 	}
 
+	// service register
 	if !cfg.GetDisableRegistrar() && registrar != nil {
 		opts = append(opts, kratos.Registrar(registrar), kratos.RegistrarTimeout(cfg.GetRegistrarTimeout().AsDuration()))
 	}
@@ -68,5 +80,5 @@ func NewApp(
 		opts = initOptions(opts)
 	}
 
-	return kratos.New(opts...), nil
+	return kratos.New(opts...)
 }

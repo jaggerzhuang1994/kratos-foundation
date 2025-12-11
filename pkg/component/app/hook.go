@@ -35,7 +35,7 @@ type OnAfterStopHook interface {
 	OnAfterStop(context.Context) error
 }
 
-type HookManager struct {
+type Hook struct {
 	log         *log.Log
 	initCtx     []InitContextHook
 	initOptions []InitOptionsHook
@@ -45,11 +45,11 @@ type HookManager struct {
 	afterStop   []HookFunc
 }
 
-func NewHookManager(log *log.Log) *HookManager {
-	return &HookManager{log: log}
+func NewHook(log *log.Log) *Hook {
+	return &Hook{log: log}
 }
 
-func (m *HookManager) Register(hook any) {
+func (m *Hook) Register(hook any) {
 	if hook, ok := hook.(OnInitContextHook); ok {
 		m.InitContext(hook.OnInitContext)
 	}
@@ -75,26 +75,26 @@ func (m *HookManager) Register(hook any) {
 	}
 }
 
-func (m *HookManager) InitContext(fn InitContextHook) {
+func (m *Hook) InitContext(fn InitContextHook) {
 	m.initCtx = append(m.initCtx, fn)
 }
 
-func (m *HookManager) InitOptions(fn InitOptionsHook) {
+func (m *Hook) InitOptions(fn InitOptionsHook) {
 	m.initOptions = append(m.initOptions, fn)
 }
 
-func (m *HookManager) BeforeStart(fn HookFunc) {
+func (m *Hook) BeforeStart(fn HookFunc) {
 	m.beforeStart = append(m.beforeStart, fn)
 }
 
-func (m *HookManager) AfterStart(fn HookFunc) {
+func (m *Hook) AfterStart(fn HookFunc) {
 	m.afterStart = append(m.afterStart, fn)
 }
 
-func (m *HookManager) BeforeStop(fn HookFunc) {
+func (m *Hook) BeforeStop(fn HookFunc) {
 	m.beforeStop = append(m.beforeStop, fn)
 }
 
-func (m *HookManager) AfterStop(fn HookFunc) {
+func (m *Hook) AfterStop(fn HookFunc) {
 	m.afterStop = append(m.afterStop, fn)
 }

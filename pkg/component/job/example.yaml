@@ -1,0 +1,42 @@
+job:
+  # 指定cron时区
+  timezone: America/New_York
+  # log配置
+  log:
+    level: debug
+  tracing:
+    disable: true
+  metrics:
+    disable: true
+  jobs:
+    # 关闭指定任务
+    disable_job:
+      disable: true
+    # 指定定时任务的时区
+    tz_job:
+      schedule: TZ=America/New_York 30 * * * *
+    # 使用cron表达式指定任务执行 30min 一次
+    cron_job:
+      schedule: 30 * * * *
+    # 每5s执行一次（如果有6项规则，则第一项表示秒）
+    job1:
+      schedule: 5 * * * * *
+    # 通过 @every <DURATION> 指定定时任务
+    job2:
+      schedule: @every 1m2s
+    # 通过 @daily 指定定时任务
+    job3:
+      schedule: @daily
+    # 串行任务
+    job4:
+      schedule: 30 * * * *
+      # 指定并行策略为 DELAY 表示重叠任务延迟执行。默认为 OVERLAP 表示允许重叠执行。
+      concurrent_policy: DELAY
+    # 跳过重复任务
+    job5:
+      schedule: 30 * * * *
+      concurrent_policy: SKIP
+    # 立刻在启动的时候调度一次
+    job6:
+      schedule: 30 * * * *
+      immediately: true

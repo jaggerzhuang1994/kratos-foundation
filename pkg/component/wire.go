@@ -5,6 +5,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/client"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/database"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/redis"
@@ -17,6 +18,7 @@ var ProviderSet = wire.NewSet(
 	app.ProviderSet,
 	client.ProviderSet,
 	database.ProviderSet,
+	job.ProviderSet,
 	log.ProviderSet,
 	metrics.ProviderSet,
 	redis.ProviderSet,

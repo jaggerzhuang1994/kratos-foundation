@@ -20,6 +20,7 @@ type Log struct {
 	withCtx     context.Context
 	callerDepth int32
 	filterEmpty bool
+	module      string
 }
 
 const defaultCallerDepth = 4
@@ -124,6 +125,7 @@ func NewLog(cfg *Config) (*Log, func(), error) {
 		nil,
 		defaultCallerDepth, // 默认caller深度6
 		filterEmpty,
+		"",
 	}
 	l.Helper = l.NewHelper()
 
@@ -185,12 +187,23 @@ func (l *Log) WithContext(ctx context.Context) *Log {
 
 func (l *Log) WithModule(module string, optionalModuleLog ...ModuleConfig) *Log {
 	if len(optionalModuleLog) == 0 {
-		return l.With(ModuleKey, module)
+		ll := *l
+		ll.module = module
+		ll.Helper = ll.NewHelper()
+		return &ll
 	}
-	moduleLog := optionalModuleLog[0]
-	return l.With(ModuleKey, module).
-		WithLevel(log.ParseLevel(utils.Select(moduleLog.GetLevel(), l.level.String()))).
-		WithFilterKeys(moduleLog.GetFilterKeys()...)
+
+	ll := l.WithModuleConfig(optionalModuleLog[0])
+	ll.module = module
+	ll.Helper = ll.NewHelper()
+	return ll
+}
+
+func (l *Log) WithModuleConfig(moduleConfig ModuleConfig) *Log {
+	ll := *l
+	ll.Helper = ll.NewHelper()
+	return ll.WithLevel(log.ParseLevel(utils.Select(moduleConfig.GetLevel(), l.level.String()))).
+		WithFilterKeys(moduleConfig.GetFilterKeys()...)
 }
 
 func (l *Log) GetLogger() log.Logger {
@@ -206,7 +219,13 @@ func (l *Log) GetLogger() log.Logger {
 	inner = logger.NewFilterLevelLogger(inner, l.level)
 
 	// with kv
-	kv := append(l.getPresetKv(), l.withKv...)
+	var kv = l.withKv
+	if l.module != "" {
+		kv = append([]any{
+			"module", l.module,
+		}, kv...)
+	}
+	kv = append(l.getPresetKv(), kv...)
 	inner = log.With(inner, kv...)
 
 	// with ctx

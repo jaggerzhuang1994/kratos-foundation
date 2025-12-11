@@ -21,8 +21,7 @@ type GrpcClient = grpc.ClientConnInterface
 type Timeout = time.Duration
 
 type Factory struct {
-	log2          *log.Log
-	log           *log.Helper
+	log           *log.Log
 	clientOptions map[string]*ClientOption
 	discovery     registry.Discovery
 	tracing       *tracing.Tracing
@@ -47,8 +46,7 @@ func NewFactory(
 	metrics *metrics.Metrics,
 ) *Factory {
 	return &Factory{
-		log2:          log,
-		log:           log.WithModule("client", config.GetLog()).NewHelper(),
+		log:           log.WithModule("client", config.GetLog()),
 		clientOptions: config.GetClients(),
 		discovery:     discovery,
 		tracing:       tracing,

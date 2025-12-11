@@ -23,8 +23,8 @@ type ValidationError struct {
 	ErrorName string
 }
 
-func NewValidationError(err ProtoValidationError) ValidationError {
-	return ValidationError{
+func NewValidationError(err ProtoValidationError) *ValidationError {
+	return &ValidationError{
 		Field:     err.Field(),
 		Reason:    err.Reason(),
 		Cause:     err.Cause(),
@@ -33,7 +33,7 @@ func NewValidationError(err ProtoValidationError) ValidationError {
 	}
 }
 
-func (e ValidationError) MarshalJSON() ([]byte, error) {
+func (e *ValidationError) MarshalJSON() ([]byte, error) {
 	var cause = ""
 	if e.Cause != nil {
 		cause = fmt.Sprintf("%+v", e.Cause)
@@ -47,7 +47,7 @@ func (e ValidationError) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (e ValidationError) UnmarshalJSON(data []byte) error {
+func (e *ValidationError) UnmarshalJSON(data []byte) error {
 	v := struct {
 		Field     string `json:"field"`
 		Reason    string `json:"reason"`
@@ -70,7 +70,7 @@ func (e ValidationError) UnmarshalJSON(data []byte) error {
 }
 
 // Error satisfies the builtin error interface
-func (e ValidationError) Error() string {
+func (e *ValidationError) Error() string {
 	cause := ""
 	if e.Cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.Cause)
@@ -89,7 +89,7 @@ func (e ValidationError) Error() string {
 		cause)
 }
 
-func ParseValidationError(validationErr error) (validationErrors []ValidationError) {
+func ParseValidationError(validationErr error) (validationErrors []*ValidationError) {
 	var pbErrs []error
 
 	if _, ok := validationErr.(ProtoValidationError); ok {
@@ -108,7 +108,7 @@ func ParseValidationError(validationErr error) (validationErrors []ValidationErr
 
 	// 如果都不是校验错误，则包装一个未知错误
 	if len(validationErrors) == 0 {
-		validationErrors = []ValidationError{
+		validationErrors = []*ValidationError{
 			{
 				Field:     "unknown",
 				Reason:    "unknown",

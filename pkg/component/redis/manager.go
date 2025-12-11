@@ -115,7 +115,7 @@ func (m *Manager) newConnection(name string) (*Client, error) {
 		MaxActiveConns:        int(option.GetMaxActiveConns()),
 		ConnMaxIdleTime:       option.GetConnMaxIdleTime().AsDuration(),
 		ConnMaxLifetime:       option.GetConnMaxLifetime().AsDuration(),
-		DisableIndentity:      option.GetDisableIndentity(),
+		//DisableIndentity:      option.GetDisableIndentity(),
 		DisableIdentity:       option.GetDisableIdentity(),
 		IdentitySuffix:        option.GetIdentitySuffix(),
 		UnstableResp3:         option.GetUnstableResp3(),

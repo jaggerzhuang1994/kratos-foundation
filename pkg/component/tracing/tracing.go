@@ -77,6 +77,13 @@ func (t *Tracing) GetDefaultTracerName() string {
 	return t.defaultTracerName
 }
 
+func (t *Tracing) GetTracer(tracerName string, options ...trace.TracerOption) trace.Tracer {
+	if tracerName == "" {
+		tracerName = t.defaultTracerName
+	}
+	return t.tp.Tracer(tracerName, options...)
+}
+
 func (t *Tracing) SimpleTrace(ctx context.Context, spanName string, logic func(context.Context)) {
 	t.Trace(ctx, spanName, func(ctx context.Context, _ trace.Span) error {
 		logic(ctx)

@@ -4,46 +4,37 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/http"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/transport"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-type HttpServerOptions []http.ServerOption
-
+// NewHttpServer 默认 http 服务器
 func NewHttpServer(
-	_ bootstrap.Bootstrap,
 	cfg *Config,
-	log *log.Log,
-	hook *HookManager,
-	middlewares ServerMiddlewares,
+	middleware DefaultMiddleware,
+	register *Register,
 ) *http.Server {
 	if cfg.GetHttp().GetDisable() {
 		return nil
 	}
-	log = log.WithModule("server/http", cfg.GetLog())
 
 	opts := newHttpServerOptions(cfg)
-	opts = append(opts, hook.httpServerOptions...)
-	opts = append(opts, http.Middleware(append(middlewares, hook.serverMiddleware...)...))
+	opts = append(opts, http.Middleware(middleware...))
 
 	srv := http.NewServer(opts...)
 
+	// prometheus上报路由
 	if !cfg.GetHttp().GetMetrics().GetDisable() {
-		srv.Handle(cfg.GetHttp().GetMetrics().GetPath(), promhttp.Handler()) // prometheus上报路由
+		srv.Handle(cfg.GetHttp().GetMetrics().GetPath(), promhttp.Handler())
 	}
 
-	// hook http server
-	for _, fn := range hook.hookHttpServer {
-		fn(srv)
-	}
+	register.RegisterServer(srv)
 	return srv
 }
 
-func newHttpServerOptions(cfg *Config) HttpServerOptions {
+func newHttpServerOptions(cfg *Config) []http.ServerOption {
 	httpCfg := cfg.GetHttp()
-	var opts HttpServerOptions
+	var opts []http.ServerOption
 	// 监听（"tcp", "tcp4", "tcp6", "unix" or "unixpacket"）
 	if httpCfg.GetNetwork() != "" {
 		opts = append(opts, http.Network(httpCfg.GetNetwork()))

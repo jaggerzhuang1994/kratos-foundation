@@ -22,8 +22,10 @@ init:
 	#go install github.com/go-kratos/kratos/cmd/protoc-gen-go-errors/v2@latest
 	(cd cmd/protoc-gen-kratos-foundation-errors && go install -ldflags "-X main.Version=$(VERSION)")
 	(cd cmd/protoc-gen-kratos-foundation-client && go install -ldflags "-X main.Version=$(VERSION)")
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	#go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	#go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
 	go install github.com/envoyproxy/protoc-gen-validate@latest
 	#go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
 	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.27.2
@@ -34,18 +36,18 @@ PROTO_OUT=./proto/kratos_foundation_pb
 .PHONY: proto
 # 生成内部 proto
 proto:
-	@echo "生成 proto..."
+	@echo "> 生成 proto..."
 	@protoc \
 			--proto_path=./proto \
 			--proto_path=./third_party \
 			--go_out=paths=source_relative:$(PROTO_OUT) \
 			--kratos-foundation-errors_out=paths=source_relative:$(PROTO_OUT) \
 			--validate_out=paths=source_relative,lang=go:$(PROTO_OUT) \
-			$(PROTO_FILES)
+			$(PROTO_FILES) && echo 'done'
 
 .PHONY: generate
 generate:
-	@echo "生成 generate..."
+	@echo "> 生成 generate..."
 	@go mod tidy
 	@go generate ./...
 	@go mod tidy

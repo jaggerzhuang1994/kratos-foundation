@@ -6,6 +6,6 @@ import (
 
 var ProviderSet = wire.NewSet(
 	NewConfig,
-	NewHookManager,
+	NewHook,
 	NewApp,
 )

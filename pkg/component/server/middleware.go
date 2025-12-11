@@ -16,19 +16,19 @@ import (
 
 type Middleware = middleware.Middleware
 
-type ServerMiddlewares []Middleware
+type DefaultMiddleware []Middleware
 
-func NewServerMiddlewares(
+func NewDefaultMiddleware(
 	cfg *Config,
 	log *log.Log,
 	metrics_ *metrics.Metrics,
 	tracing_ *tracing.Tracing,
-) ServerMiddlewares {
-	var m ServerMiddlewares
+) DefaultMiddleware {
+	var m DefaultMiddleware
 	var list []string
 
 	var config = cfg.GetMiddleware()
-	var logHelper = log.WithModule("server").NewHelper()
+	log = log.WithModule("server", cfg.GetLog())
 
 	// 异常恢复
 	m = append(m, recovery.Recovery())
@@ -36,7 +36,7 @@ func NewServerMiddlewares(
 
 	// 超时中间件
 	m = append(m, timeout.Server(
-		logHelper,
+		log,
 		config.GetTimeout(),
 	))
 	list = append(list, "timeout")
@@ -82,6 +82,6 @@ func NewServerMiddlewares(
 		list = append(list, "ratelimit")
 	}
 
-	logHelper.Infof("server middlewares %v", list)
+	log.Debugf("server default middlewares %v", list)
 	return m
 }

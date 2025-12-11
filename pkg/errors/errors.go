@@ -218,7 +218,7 @@ func (e *Error) HttpResponse() string {
 	return e.Metadata[mdHttpResponse]
 }
 
-func (e *Error) WithValidationError(validationError []ValidationError) *Error {
+func (e *Error) WithValidationError(validationError []*ValidationError) *Error {
 	err := Clone(e)
 
 	data, _ := json.Marshal(validationError)
@@ -226,12 +226,12 @@ func (e *Error) WithValidationError(validationError []ValidationError) *Error {
 	return err
 }
 
-func (e *Error) ValidationError() []ValidationError {
+func (e *Error) ValidationError() []*ValidationError {
 	if e == nil || e.Metadata == nil || e.Metadata[mdValidationErrorKey] == "" {
 		return nil
 	}
 
-	var errs []ValidationError
+	var errs []*ValidationError
 	_ = json.Unmarshal([]byte(e.Metadata[mdValidationErrorKey]), &errs)
 	return errs
 }

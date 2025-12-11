@@ -13,16 +13,16 @@ import (
 
 type Config = kratos_foundation_pb.MiddlewareConfig_Timeout
 
-func Server(log *log.Helper, config *Config) middleware.Middleware {
+func Server(log *log.Log, config *Config) middleware.Middleware {
 	return makeMiddleware(log, transport.FromServerContext, time.Second, config)
 }
 
-func Client(log *log.Helper, config *Config) middleware.Middleware {
+func Client(log *log.Log, config *Config) middleware.Middleware {
 	return makeMiddleware(log, transport.FromClientContext, 2*time.Second, config)
 }
 
 func makeMiddleware(
-	log *log.Helper,
+	log *log.Log,
 	trExporter func(context.Context) (transport.Transporter, bool),
 	defaultTimeout time.Duration,
 	config *Config,

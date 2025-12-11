@@ -1183,6 +1183,134 @@ var _ interface {
 	ErrorName() string
 } = ClientComponentConfigValidationError{}
 
+// Validate checks the field values on JobComponent with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *JobComponent) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on JobComponent with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in JobComponentMultiError, or
+// nil if none found.
+func (m *JobComponent) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *JobComponent) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetJob()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, JobComponentValidationError{
+					field:  "Job",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, JobComponentValidationError{
+					field:  "Job",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return JobComponentValidationError{
+				field:  "Job",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return JobComponentMultiError(errors)
+	}
+
+	return nil
+}
+
+// JobComponentMultiError is an error wrapping multiple validation errors
+// returned by JobComponent.ValidateAll() if the designated constraints aren't met.
+type JobComponentMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m JobComponentMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m JobComponentMultiError) AllErrors() []error { return m }
+
+// JobComponentValidationError is the validation error returned by
+// JobComponent.Validate if the designated constraints aren't met.
+type JobComponentValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JobComponentValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JobComponentValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JobComponentValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JobComponentValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JobComponentValidationError) ErrorName() string { return "JobComponentValidationError" }
+
+// Error satisfies the builtin error interface
+func (e JobComponentValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJobComponent.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JobComponentValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JobComponentValidationError{}
+
 // Validate checks the field values on AppComponentConfig_App with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -7807,3 +7935,570 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{}
+
+// Validate checks the field values on JobComponent_JobConfig with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *JobComponent_JobConfig) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on JobComponent_JobConfig with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// JobComponent_JobConfigMultiError, or nil if none found.
+func (m *JobComponent_JobConfig) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *JobComponent_JobConfig) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Disable
+
+	// no validation rules for Timezone
+
+	if all {
+		switch v := interface{}(m.GetTracing()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, JobComponent_JobConfigValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, JobComponent_JobConfigValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return JobComponent_JobConfigValidationError{
+				field:  "Tracing",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetMetrics()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, JobComponent_JobConfigValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, JobComponent_JobConfigValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return JobComponent_JobConfigValidationError{
+				field:  "Metrics",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	{
+		sorted_keys := make([]string, len(m.GetJobs()))
+		i := 0
+		for key := range m.GetJobs() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetJobs()[key]
+			_ = val
+
+			// no validation rules for Jobs[key]
+
+			if all {
+				switch v := interface{}(val).(type) {
+				case interface{ ValidateAll() error }:
+					if err := v.ValidateAll(); err != nil {
+						errors = append(errors, JobComponent_JobConfigValidationError{
+							field:  fmt.Sprintf("Jobs[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				case interface{ Validate() error }:
+					if err := v.Validate(); err != nil {
+						errors = append(errors, JobComponent_JobConfigValidationError{
+							field:  fmt.Sprintf("Jobs[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				}
+			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
+				if err := v.Validate(); err != nil {
+					return JobComponent_JobConfigValidationError{
+						field:  fmt.Sprintf("Jobs[%v]", key),
+						reason: "embedded message failed validation",
+						cause:  err,
+					}
+				}
+			}
+
+		}
+	}
+
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobComponent_JobConfigValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobComponent_JobConfigValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return JobComponent_JobConfigValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return JobComponent_JobConfigMultiError(errors)
+	}
+
+	return nil
+}
+
+// JobComponent_JobConfigMultiError is an error wrapping multiple validation
+// errors returned by JobComponent_JobConfig.ValidateAll() if the designated
+// constraints aren't met.
+type JobComponent_JobConfigMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m JobComponent_JobConfigMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m JobComponent_JobConfigMultiError) AllErrors() []error { return m }
+
+// JobComponent_JobConfigValidationError is the validation error returned by
+// JobComponent_JobConfig.Validate if the designated constraints aren't met.
+type JobComponent_JobConfigValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JobComponent_JobConfigValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JobComponent_JobConfigValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JobComponent_JobConfigValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JobComponent_JobConfigValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JobComponent_JobConfigValidationError) ErrorName() string {
+	return "JobComponent_JobConfigValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e JobComponent_JobConfigValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJobComponent_JobConfig.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JobComponent_JobConfigValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JobComponent_JobConfigValidationError{}
+
+// Validate checks the field values on JobComponent_JobConfig_Job with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *JobComponent_JobConfig_Job) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on JobComponent_JobConfig_Job with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// JobComponent_JobConfig_JobMultiError, or nil if none found.
+func (m *JobComponent_JobConfig_Job) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *JobComponent_JobConfig_Job) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Disable
+
+	// no validation rules for Schedule
+
+	// no validation rules for ConcurrentPolicy
+
+	// no validation rules for Immediately
+
+	if len(errors) > 0 {
+		return JobComponent_JobConfig_JobMultiError(errors)
+	}
+
+	return nil
+}
+
+// JobComponent_JobConfig_JobMultiError is an error wrapping multiple
+// validation errors returned by JobComponent_JobConfig_Job.ValidateAll() if
+// the designated constraints aren't met.
+type JobComponent_JobConfig_JobMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m JobComponent_JobConfig_JobMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m JobComponent_JobConfig_JobMultiError) AllErrors() []error { return m }
+
+// JobComponent_JobConfig_JobValidationError is the validation error returned
+// by JobComponent_JobConfig_Job.Validate if the designated constraints aren't met.
+type JobComponent_JobConfig_JobValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JobComponent_JobConfig_JobValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JobComponent_JobConfig_JobValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JobComponent_JobConfig_JobValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JobComponent_JobConfig_JobValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JobComponent_JobConfig_JobValidationError) ErrorName() string {
+	return "JobComponent_JobConfig_JobValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e JobComponent_JobConfig_JobValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJobComponent_JobConfig_Job.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JobComponent_JobConfig_JobValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JobComponent_JobConfig_JobValidationError{}
+
+// Validate checks the field values on JobComponent_JobConfig_Tracing with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *JobComponent_JobConfig_Tracing) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on JobComponent_JobConfig_Tracing with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// JobComponent_JobConfig_TracingMultiError, or nil if none found.
+func (m *JobComponent_JobConfig_Tracing) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *JobComponent_JobConfig_Tracing) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Disable
+
+	// no validation rules for TracerName
+
+	if len(errors) > 0 {
+		return JobComponent_JobConfig_TracingMultiError(errors)
+	}
+
+	return nil
+}
+
+// JobComponent_JobConfig_TracingMultiError is an error wrapping multiple
+// validation errors returned by JobComponent_JobConfig_Tracing.ValidateAll()
+// if the designated constraints aren't met.
+type JobComponent_JobConfig_TracingMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m JobComponent_JobConfig_TracingMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m JobComponent_JobConfig_TracingMultiError) AllErrors() []error { return m }
+
+// JobComponent_JobConfig_TracingValidationError is the validation error
+// returned by JobComponent_JobConfig_Tracing.Validate if the designated
+// constraints aren't met.
+type JobComponent_JobConfig_TracingValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JobComponent_JobConfig_TracingValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JobComponent_JobConfig_TracingValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JobComponent_JobConfig_TracingValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JobComponent_JobConfig_TracingValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JobComponent_JobConfig_TracingValidationError) ErrorName() string {
+	return "JobComponent_JobConfig_TracingValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e JobComponent_JobConfig_TracingValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJobComponent_JobConfig_Tracing.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JobComponent_JobConfig_TracingValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JobComponent_JobConfig_TracingValidationError{}
+
+// Validate checks the field values on JobComponent_JobConfig_Metrics with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *JobComponent_JobConfig_Metrics) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on JobComponent_JobConfig_Metrics with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// JobComponent_JobConfig_MetricsMultiError, or nil if none found.
+func (m *JobComponent_JobConfig_Metrics) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *JobComponent_JobConfig_Metrics) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Disable
+
+	// no validation rules for MeterName
+
+	if len(errors) > 0 {
+		return JobComponent_JobConfig_MetricsMultiError(errors)
+	}
+
+	return nil
+}
+
+// JobComponent_JobConfig_MetricsMultiError is an error wrapping multiple
+// validation errors returned by JobComponent_JobConfig_Metrics.ValidateAll()
+// if the designated constraints aren't met.
+type JobComponent_JobConfig_MetricsMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m JobComponent_JobConfig_MetricsMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m JobComponent_JobConfig_MetricsMultiError) AllErrors() []error { return m }
+
+// JobComponent_JobConfig_MetricsValidationError is the validation error
+// returned by JobComponent_JobConfig_Metrics.Validate if the designated
+// constraints aren't met.
+type JobComponent_JobConfig_MetricsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JobComponent_JobConfig_MetricsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JobComponent_JobConfig_MetricsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JobComponent_JobConfig_MetricsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JobComponent_JobConfig_MetricsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JobComponent_JobConfig_MetricsValidationError) ErrorName() string {
+	return "JobComponent_JobConfig_MetricsValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e JobComponent_JobConfig_MetricsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJobComponent_JobConfig_Metrics.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JobComponent_JobConfig_MetricsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JobComponent_JobConfig_MetricsValidationError{}

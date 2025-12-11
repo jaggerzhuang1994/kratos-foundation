@@ -70,6 +70,13 @@ func (m *Metrics) GetMeterProvider() metric.MeterProvider {
 	return m.meterProvider
 }
 
+func (m *Metrics) GetMeter(meterName string, options ...metric.MeterOption) metric.Meter {
+	if meterName == "" {
+		meterName = m.meterName
+	}
+	return m.meterProvider.Meter(meterName, options...)
+}
+
 func (m *Metrics) GetDefaultMeter() metric.Meter {
 	return m.meter
 }

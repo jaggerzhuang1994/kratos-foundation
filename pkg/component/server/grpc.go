@@ -4,41 +4,30 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
-type GrpcServerOptions []grpc.ServerOption
-
+// NewGrpcServer 默认 grpc 服务器
 func NewGrpcServer(
-	_ bootstrap.Bootstrap,
 	cfg *Config,
-	log *log.Log,
-	hook *HookManager,
-	middlewares ServerMiddlewares,
+	middleware DefaultMiddleware,
+	register *Register,
 ) *grpc.Server {
 	if cfg.GetGrpc().GetDisable() {
 		return nil
 	}
-	log = log.WithModule("server/grpc", cfg.GetLog())
 
 	opts := newGrpcServerOptions(cfg)
-	opts = append(opts, hook.grpcServerOptions...)
-	opts = append(opts, grpc.Middleware(append(middlewares, hook.serverMiddleware...)...))
+	opts = append(opts, grpc.Middleware(middleware...))
 
 	srv := grpc.NewServer(opts...)
-
-	// hook grpc server
-	for _, fn := range hook.hookGrpcServer {
-		fn(srv)
-	}
+	register.RegisterServer(srv)
 	return srv
 }
 
-func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server) GrpcServerOptions {
+func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server) []grpc.ServerOption {
 	grpcCfg := cfg.GetGrpc()
-	var opts GrpcServerOptions
+	var opts []grpc.ServerOption
 	// 监听（"tcp", "tcp4", "tcp6", "unix" or "unixpacket"）
 	if grpcCfg.GetNetwork() != "" {
 		opts = append(opts, grpc.Network(grpcCfg.GetNetwork()))

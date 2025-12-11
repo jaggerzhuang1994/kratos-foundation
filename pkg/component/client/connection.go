@@ -140,7 +140,7 @@ func (f *Factory) useMiddlewares(key clientKey) []middleware.Middleware {
 
 	// 日志中间件
 	if logging.Enable(config.GetLogging()) {
-		m = append(m, logging.Client(f.log2, config.GetLogging()))
+		m = append(m, logging.Client(f.log, config.GetLogging()))
 		list = append(list, "logging")
 	}
 

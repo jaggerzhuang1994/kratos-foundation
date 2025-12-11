@@ -34,7 +34,10 @@ func newOpts(tracing *tracing.Tracing, configs ...*Config) []tracing2.Option {
 	// 按照 configs 倒序查找第一个不为空的 tracer_name
 	// 兜底为 defaultTracerName
 	tracerName := utils.Select(
-		append(utils.Map(utils.Reverse(configs), (*Config).GetTracerName), tracing.GetDefaultTracerName())...,
+		append(
+			utils.Map(utils.Reverse(configs), (*Config).GetTracerName),
+			tracing.GetDefaultTracerName(),
+		)...,
 	)
 	if tracerName != "" {
 		opts = append(opts, tracing2.WithTracerName(tracerName))
