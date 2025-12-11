@@ -10,6 +10,7 @@ require (
 	github.com/go-kratos/kratos/v2 v2.9.1
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
+	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/consul/api v1.26.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.0
