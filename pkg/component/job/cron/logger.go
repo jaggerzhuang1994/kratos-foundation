@@ -23,7 +23,7 @@ func NewCronLogger(
 
 func (logger *cronLogger) Info(msg string, keysAndValues ...interface{}) {
 	// 跳过 run 日志， job logger 中自己打印
-	if msg == "run" || msg == "schedule" {
+	if msg == "run" || msg == "schedule" || msg == "start" {
 		return
 	}
 	if msg == "wake" {

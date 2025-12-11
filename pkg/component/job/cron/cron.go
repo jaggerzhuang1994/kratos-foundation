@@ -41,7 +41,8 @@ func NewCron(
 	}, nil
 }
 
-func (c *Cron) Schedule(ctx context.Context, name string, job job.Job, schedule Schedule) cron.EntryID {
+func (c *Cron) Schedule(ctx context.Context, name string, job job.Job, schedule Schedule, schedule2 string) cron.EntryID {
+	c.log.Infof("schedule %s - %s", name, schedule2)
 	return c.cron.Schedule(schedule, &cronJob{
 		name: name,
 		ctx:  ctx,
@@ -50,6 +51,7 @@ func (c *Cron) Schedule(ctx context.Context, name string, job job.Job, schedule 
 }
 
 func (c *Cron) Start() {
+	c.log.Info("start")
 	c.cron.Start()
 }
 

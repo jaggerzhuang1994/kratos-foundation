@@ -20,6 +20,7 @@ import (
 
 // Server 将 job 包装成 kratos 的 transport.Server 注册到 app.Server 中运行
 type Server struct {
+	log  *log.Log
 	cron *cron.Cron
 
 	serverJobs []serverJob
@@ -37,7 +38,8 @@ type serverJob struct {
 // 从 registerJob -> cronJob
 type cronJob struct {
 	serverJob
-	schedule cron.Schedule
+	schedule       cron.Schedule
+	scheduleString string
 }
 
 func NewServer(
@@ -102,12 +104,14 @@ func NewServer(
 					name: registerJob.Name,
 					job:  job.FuncJob(middleware.Chain(chain...)(registerJob.Job.Run)),
 				},
-				schedule: schedule,
+				schedule:       schedule,
+				scheduleString: jobConf.GetSchedule(),
 			})
 		}
 	}
 
 	return &Server{
+		log:        log,
 		cron:       cron_,
 		serverJobs: serverJobs,
 		cronJobs:   cronJobs,
@@ -118,7 +122,7 @@ func (s *Server) Start(ctx context.Context) error {
 	ctx, s.cancel = context.WithCancel(ctx)
 
 	for _, cjob := range s.cronJobs {
-		s.cron.Schedule(ctx, cjob.name, cjob.job, cjob.schedule)
+		s.cron.Schedule(ctx, cjob.name, cjob.job, cjob.schedule, cjob.scheduleString)
 	}
 
 	s.cron.Start()

@@ -7,7 +7,7 @@ import (
 )
 
 func NewFilterLevelLogger(logger log.Logger, level log.Level) log.Logger {
-	return log.With(log.NewFilter(logger, log.FilterLevel(level)))
+	return log.NewFilter(logger, log.FilterLevel(level))
 }
 
 type filterKeysLogger struct {

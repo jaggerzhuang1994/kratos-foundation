@@ -212,11 +212,10 @@ func (l *Log) GetLogger() log.Logger {
 	// filterKeys 在kv内层，才能拦截过滤kv
 	inner = logger.NewFilterKeysLogger(inner, l.filterEmpty, l.filterKeys...) // 这不是 log包 内部的日志结构，放在最底层
 
-	// filter opts 放在前面，才能过滤后面的kv
-	inner = log.NewFilter(inner, l.filterOpts...)
-
 	// 过滤日志等级
-	inner = logger.NewFilterLevelLogger(inner, l.level)
+	// filter opts 放在前面，才能过滤后面的kv
+	filterOpts := append(l.filterOpts, log.FilterLevel(l.level))
+	inner = log.NewFilter(inner, filterOpts...)
 
 	// with kv
 	var kv = l.withKv

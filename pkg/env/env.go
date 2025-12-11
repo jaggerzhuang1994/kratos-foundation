@@ -23,7 +23,7 @@ func init() {
 	switch appEnv {
 	case Local, Dev, Test, Pre, Prod:
 	default:
-		log.Warnf("unknown environment=%s, set to local", appEnv)
+		log.Warnf("unknown environment=%s set to local", appEnv)
 		appEnv = Local // 无效env，设置为local
 	}
 }
