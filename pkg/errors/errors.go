@@ -109,12 +109,15 @@ func (e *Error) Format(s fmt.State, verb rune) {
 }
 
 // WithErrStack 携带堆栈，栈顶是 WithErrStack 调用点
-func (e *Error) WithErrStack() *Error {
+func (e *Error) WithErrStack(optionalSkip ...int) *Error {
 	// 0 - runtime.Callers 的callers调用点
 	// 1 - errors/stack.go 的runtime.Callers调用点
 	// 2 - errors/errors.go 当前函数 callers(skip) 的调用点
 	// 3 - 业务侧调用 WithErrStack 的调用点
-	const skip = 3
+	var skip = 3
+	if len(optionalSkip) > 0 {
+		skip = optionalSkip[0]
+	}
 	err := Clone(e)
 	err.Metadata[mdErrStackKey] += fmt.Sprintf("%+v", callers(skip))
 	return err

@@ -19,7 +19,7 @@ func Is{{.CamelValue}}(err error) bool {
 {{ .Comment }}
 {{- end -}}
 func Error{{ .CamelValue }}(format string, args ...any) *errors.Error {
-	 return errors.New({{ .HTTPCode }}, "{{ .Value }}", fmt.Sprintf(format, args...)).WithReasonCode({{ .NumberValue }}).WithErrStack()
+	 return errors.New({{ .HTTPCode }}, "{{ .Value }}", fmt.Sprintf(format, args...)).WithReasonCode({{ .NumberValue }}).WithErrStack(4)
 }
 
 {{ if .HasComment -}}
@@ -27,7 +27,7 @@ func Error{{ .CamelValue }}(format string, args ...any) *errors.Error {
 {{- end -}}
 func Error{{ .CamelValue }}WithFormat(args ...any) *errors.Error {
     var format = {{ .CommentLiteral }}
-    return errors.New({{ .HTTPCode }}, "{{ .Value }}", fmt.Sprintf(format, args...)).WithReasonCode({{ .NumberValue }}).WithErrStack()
+    return errors.New({{ .HTTPCode }}, "{{ .Value }}", fmt.Sprintf(format, args...)).WithReasonCode({{ .NumberValue }}).WithErrStack(4)
 }
 {{ else }}
 
@@ -45,7 +45,7 @@ func Error{{ .CamelValue }}(formatAndArgs ...any) *errors.Error {
 		format = {{ .CommentLiteral }}
 {{- end }}
 	}
-	 return errors.New({{ .HTTPCode }}, "{{ .Value }}", fmt.Sprintf(format, args...)).WithReasonCode({{ .NumberValue }}).WithErrStack()
+	 return errors.New({{ .HTTPCode }}, "{{ .Value }}", fmt.Sprintf(format, args...)).WithReasonCode({{ .NumberValue }}).WithErrStack(4)
 }
 {{- end }}
 
