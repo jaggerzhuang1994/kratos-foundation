@@ -10,17 +10,21 @@ import (
 // NewGrpcServer 默认 grpc 服务器
 func NewGrpcServer(
 	cfg *Config,
-	middleware DefaultMiddleware,
 	register *Register,
+	hook *Hook,
 ) *grpc.Server {
 	if cfg.GetGrpc().GetDisable() {
 		return nil
 	}
 
 	opts := newGrpcServerOptions(cfg)
-	opts = append(opts, grpc.Middleware(middleware...))
+	opts = append(opts, grpc.Middleware(hook.middleware...))
 
 	srv := grpc.NewServer(opts...)
+	// hook回调
+	for _, fn := range hook.grpcServer {
+		fn(srv)
+	}
 	register.RegisterServer(srv)
 	return srv
 }

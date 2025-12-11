@@ -33,7 +33,7 @@ func ErrorNone(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "成功"
 	}
-	return errors.New(200, "NONE", fmt.Sprintf(format, args...)).WithReasonCode(0).WithErrStack()
+	return errors.New(200, "NONE", fmt.Sprintf(format, args...)).WithReasonCode(0).WithErrStack(4)
 }
 
 // 异常请求
@@ -58,7 +58,7 @@ func ErrorBadRequest(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "异常请求"
 	}
-	return errors.New(400, "BAD_REQUEST", fmt.Sprintf(format, args...)).WithReasonCode(400).WithErrStack()
+	return errors.New(400, "BAD_REQUEST", fmt.Sprintf(format, args...)).WithReasonCode(400).WithErrStack(4)
 }
 
 // 无效身份
@@ -83,7 +83,7 @@ func ErrorUnauthorized(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "无效身份"
 	}
-	return errors.New(401, "UNAUTHORIZED", fmt.Sprintf(format, args...)).WithReasonCode(401).WithErrStack()
+	return errors.New(401, "UNAUTHORIZED", fmt.Sprintf(format, args...)).WithReasonCode(401).WithErrStack(4)
 }
 
 // 无权限操作
@@ -108,7 +108,7 @@ func ErrorForbidden(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "无权限操作"
 	}
-	return errors.New(403, "FORBIDDEN", fmt.Sprintf(format, args...)).WithReasonCode(403).WithErrStack()
+	return errors.New(403, "FORBIDDEN", fmt.Sprintf(format, args...)).WithReasonCode(403).WithErrStack(4)
 }
 
 // 资源不存在
@@ -133,7 +133,7 @@ func ErrorNotFound(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "资源不存在"
 	}
-	return errors.New(404, "NOT_FOUND", fmt.Sprintf(format, args...)).WithReasonCode(404).WithErrStack()
+	return errors.New(404, "NOT_FOUND", fmt.Sprintf(format, args...)).WithReasonCode(404).WithErrStack(4)
 }
 
 // 资源状态冲突
@@ -158,7 +158,7 @@ func ErrorConflict(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "资源状态冲突"
 	}
-	return errors.New(409, "CONFLICT", fmt.Sprintf(format, args...)).WithReasonCode(409).WithErrStack()
+	return errors.New(409, "CONFLICT", fmt.Sprintf(format, args...)).WithReasonCode(409).WithErrStack(4)
 }
 
 // 请求字段校验不通过
@@ -183,7 +183,7 @@ func ErrorValidator(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "请求字段校验不通过"
 	}
-	return errors.New(422, "VALIDATOR", fmt.Sprintf(format, args...)).WithReasonCode(422).WithErrStack()
+	return errors.New(422, "VALIDATOR", fmt.Sprintf(format, args...)).WithReasonCode(422).WithErrStack(4)
 }
 
 // 请求次数过多
@@ -208,7 +208,7 @@ func ErrorTooManyRequests(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "请求次数过多"
 	}
-	return errors.New(429, "TOO_MANY_REQUESTS", fmt.Sprintf(format, args...)).WithReasonCode(429).WithErrStack()
+	return errors.New(429, "TOO_MANY_REQUESTS", fmt.Sprintf(format, args...)).WithReasonCode(429).WithErrStack(4)
 }
 
 // 服务器错误
@@ -233,7 +233,7 @@ func ErrorInternalServer(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "服务器错误"
 	}
-	return errors.New(500, "INTERNAL_SERVER", fmt.Sprintf(format, args...)).WithReasonCode(500).WithErrStack()
+	return errors.New(500, "INTERNAL_SERVER", fmt.Sprintf(format, args...)).WithReasonCode(500).WithErrStack(4)
 }
 
 // API 未实现
@@ -258,7 +258,7 @@ func ErrorNotImplemented(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "API 未实现"
 	}
-	return errors.New(501, "NOT_IMPLEMENTED", fmt.Sprintf(format, args...)).WithReasonCode(501).WithErrStack()
+	return errors.New(501, "NOT_IMPLEMENTED", fmt.Sprintf(format, args...)).WithReasonCode(501).WithErrStack(4)
 }
 
 // 网关转发到下游失败
@@ -283,7 +283,7 @@ func ErrorBadGateway(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "网关转发到下游失败"
 	}
-	return errors.New(502, "BAD_GATEWAY", fmt.Sprintf(format, args...)).WithReasonCode(502).WithErrStack()
+	return errors.New(502, "BAD_GATEWAY", fmt.Sprintf(format, args...)).WithReasonCode(502).WithErrStack(4)
 }
 
 // 服务不可用
@@ -308,7 +308,7 @@ func ErrorServiceUnavailable(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "服务不可用"
 	}
-	return errors.New(503, "SERVICE_UNAVAILABLE", fmt.Sprintf(format, args...)).WithReasonCode(503).WithErrStack()
+	return errors.New(503, "SERVICE_UNAVAILABLE", fmt.Sprintf(format, args...)).WithReasonCode(503).WithErrStack(4)
 }
 
 // 下游响应超时
@@ -333,5 +333,5 @@ func ErrorGatewayTimeout(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "下游响应超时"
 	}
-	return errors.New(504, "GATEWAY_TIMEOUT", fmt.Sprintf(format, args...)).WithReasonCode(504).WithErrStack()
+	return errors.New(504, "GATEWAY_TIMEOUT", fmt.Sprintf(format, args...)).WithReasonCode(504).WithErrStack(4)
 }

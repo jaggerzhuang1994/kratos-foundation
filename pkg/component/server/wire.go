@@ -8,6 +8,7 @@ import (
 var ProviderSet = wire.NewSet(
 	NewConfig,
 	NewDefaultMiddleware,
+	NewHook,
 	NewHttpServer,
 	NewGrpcServer,
 	websocket.NewServer,

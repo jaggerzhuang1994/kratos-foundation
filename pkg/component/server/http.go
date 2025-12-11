@@ -11,23 +11,25 @@ import (
 // NewHttpServer 默认 http 服务器
 func NewHttpServer(
 	cfg *Config,
-	middleware DefaultMiddleware,
 	register *Register,
+	hook *Hook,
 ) *http.Server {
 	if cfg.GetHttp().GetDisable() {
 		return nil
 	}
 
 	opts := newHttpServerOptions(cfg)
-	opts = append(opts, http.Middleware(middleware...))
+	opts = append(opts, http.Middleware(hook.middleware...))
 
 	srv := http.NewServer(opts...)
-
 	// prometheus上报路由
 	if !cfg.GetHttp().GetMetrics().GetDisable() {
 		srv.Handle(cfg.GetHttp().GetMetrics().GetPath(), promhttp.Handler())
 	}
-
+	// hook回调
+	for _, fn := range hook.httpServer {
+		fn(srv)
+	}
 	register.RegisterServer(srv)
 	return srv
 }
