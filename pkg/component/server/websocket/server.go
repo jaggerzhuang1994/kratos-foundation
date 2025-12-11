@@ -30,6 +30,9 @@ func NewServer(
 	httpServer *http.Server,
 	hook *Hook,
 ) *Server {
+	if httpServer == nil {
+		return nil
+	}
 	router := httpServer.Route("/")
 	srv := &Server{
 		log: log.WithModule("websocket").With(

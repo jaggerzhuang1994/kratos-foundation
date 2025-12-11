@@ -14,6 +14,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server/websocket"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
@@ -21,6 +22,7 @@ func NewApp(
 	_ bootstrap.Bootstrap, // 禁止在 bootstrap 初始化 app
 	_ *http.Server, // 初始化 http 服务器
 	_ *grpc.Server, // 初始化 grpc 服务器
+	_ *websocket.Server, // 初始化 ws 服务器
 	appInfo *kratos_foundation_pb.AppInfo,
 	cfg *Config,
 	log_ *log.Log, // log 组件
