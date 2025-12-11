@@ -17,18 +17,14 @@ VERSION=$(shell git describe --tags --always)
 # 初始化框架环境
 init:
 	go install github.com/google/wire/cmd/wire@latest
-	go install github.com/go-kratos/kratos/cmd/kratos/v2@latest
-	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
-	#go install github.com/go-kratos/kratos/cmd/protoc-gen-go-errors/v2@latest
-	(cd cmd/protoc-gen-kratos-foundation-errors && go install -ldflags "-X main.Version=$(VERSION)")
-	(cd cmd/protoc-gen-kratos-foundation-client && go install -ldflags "-X main.Version=$(VERSION)")
-	#go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	#go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
+	go install github.com/go-kratos/kratos/cmd/kratos/v2@latest
+	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
+	go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-errors@main
+	go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-client@main
 	go install github.com/envoyproxy/protoc-gen-validate@latest
-	#go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
-	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.27.2
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 PROTO_OUT=./proto/kratos_foundation_pb
