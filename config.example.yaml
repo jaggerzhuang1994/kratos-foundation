@@ -1,36 +1,37 @@
 # yaml-language-server: $schema=./config.schema.json
 #
-# Kratos Foundation 配置示例
-# 此文件展示了所有可配置项及其默认值
+# Kratos Foundation 配置参考
+# 此文件展示所有可配置项及其默认值
+# 标注 [默认] 的值为框架或第三方库的默认值，可省略不写
 #
 
 # =============================================================================
 # 应用生命周期配置
 # =============================================================================
 app:
-  # 是否禁用服务注册（默认 false）
+  # 是否禁用服务注册 [默认: false]
   disable_registrar: false
-  # 注册中心超时时间（默认 10s）
+  # 注册中心超时时间 [默认: 10s]
   registrar_timeout: 10s
-  # 停机超时时间，必须大于 server.stop_delay（默认 30s）
+  # 停机超时时间，必须大于 server.stop_delay [默认: 30s]
   stop_timeout: 30s
 
 # =============================================================================
 # 日志配置
 # =============================================================================
 log:
-  # 最小日志级别（本地/debug 环境默认 debug，其他环境默认 info）
+  # 最小日志级别 [默认: 本地/debug 环境为 debug，其他环境为 info]
   level: info
-  # 是否过滤空值 KV（默认 true）
+  # 是否过滤空值 KV [默认: true]
   filter_empty: true
-  # 过滤指定的 keys（敏感信息脱敏）
+  # 过滤指定的 keys（敏感信息脱敏）[默认: []]
   filter_keys:
     - password
     - token
     - secret
-  # 时间格式（默认 RFC3339）
-  time_format: "2006-01-02T15:04:05.000Z07:00"
-  # 预置字段
+  # 时间格式 [默认: RFC3339 = "2006-01-02T15:04:05Z07:00"]
+  time_format: "2006-01-02T15:04:05Z07:00"
+  # 预置字段，为空则使用全部默认值 [默认: ts, service.id, service.name, service.version, trace.id, span.id, caller]
   preset:
     - ts
     - service.id
@@ -42,257 +43,501 @@ log:
 
   # 标准输出日志配置
   std:
+    # 是否禁用 [默认: false]
     disable: false
-    # level: debug  # 可覆盖全局 level
+    # 最小日志级别，可覆盖全局 level [默认: 继承 log.level]
+    # level: debug
+    # 是否过滤空值 KV [默认: 继承 log.filter_empty]
+    # filter_empty: true
+    # 过滤指定的 keys，会合并 log.filter_keys [默认: []]
+    # filter_keys: []
 
   # 文件日志配置
   file:
-    disable: true  # 默认禁用文件日志
+    # 是否禁用 [默认: false]
+    disable: true
+    # 最小日志级别 [默认: 继承 log.level]
+    # level: info
+    # 日志文件路径 [默认: ./app.log]
     path: ./logs/app.log
+    # 文件轮转配置
     rotating:
+      # 是否禁用轮转 [默认: false]
       disable: false
-      max_size: 100        # MB
-      max_file_age: 7      # 天
-      max_files: 10        # 保留数量
+      # 单个日志文件最大大小 (MB) [默认: 100]
+      max_size: 100
+      # 日志文件保留天数，0 表示不限制 [默认: 0]
+      max_file_age: 7
+      # 保留的日志文件数量，0 表示不限制 [默认: 0]
+      max_files: 10
+      # 文件名时间戳是否使用本地时间 [默认: false (UTC)]
       local_time: true
+      # 是否压缩轮转后的日志文件 [默认: false]
       compress: true
 
 # =============================================================================
 # 指标配置
 # =============================================================================
 metrics:
-  # 指标命名空间（默认为应用名）
+  # 指标命名空间 [默认: 应用名]
   # meter_name: my-service
-  # Map 初始容量（优化预分配）
+  # Map 初始容量（优化预分配）[默认: 64]
   counter_map_size: 64
   gauge_map_size: 64
   histogram_map_size: 64
+  # 模块日志配置
+  # log:
+  #   level: info
 
 # =============================================================================
 # 链路追踪配置
 # =============================================================================
 tracing:
+  # 是否禁用 [默认: false]
   disable: false
-  # tracer_name: my-service  # 默认为应用名
+  # Tracer 名称 [默认: 应用名]
+  # tracer_name: my-service
+  # 导出器配置
   exporter:
-    # OTLP HTTP 端点
+    # OTLP HTTP 端点 [默认: http://localhost:4318/v1/traces]
     endpoint_url: http://localhost:4318/v1/traces
-    compression: GZIP  # NO 或 GZIP
+    # 压缩方式: NO, GZIP [默认: NO]
+    compression: NO
+    # 导出超时时间 [默认: 10s]
     timeout: 10s
-    headers:
-      # Authorization: Bearer xxx
+    # 自定义 Headers
+    # headers:
+    #   Authorization: Bearer xxx
+    # 重试配置
     retry:
+      # 是否启用重试 [默认: true]
       enabled: true
-      initial_interval: 1s
+      # 初始重试间隔 [默认: 5s]
+      initial_interval: 5s
+      # 最大重试间隔 [默认: 30s]
       max_interval: 30s
+      # 最大重试总时长 [默认: 60s]
       max_elapsed_time: 60s
+  # 采样器配置
   sampler:
-    sample: RATIO  # RATIO, ALWAYS, NEVER
-    ratio: 0.05    # 5% 采样率
+    # 采样策略: RATIO, ALWAYS, NEVER [默认: RATIO]
+    sample: RATIO
+    # 采样率 (0.0-1.0) [默认: 0.05 = 5%]
+    ratio: 0.05
 
 # =============================================================================
 # 服务器配置
 # =============================================================================
 server:
-  # 停机延迟（等待服务发现更新，默认 0s）
+  # 停机延迟，等待服务发现更新 [默认: 0s]
+  # 建议设置 3-5s，让服务发现有时间同步
   stop_delay: 3s
 
   # 通用中间件配置
   middleware:
+    # 超时控制中间件
     timeout:
-      default: 1s  # 服务端默认超时
+      # 默认超时时间 [默认: Server 1s, Client 2s]
+      default: 1s
+      # 路由级超时配置（优先级: path > prefix）
       routes:
-        # 路由级超时配置
+        # 精确路径匹配
         - path: /api.v1.LongRunning/Process
           timeout: 30s
+        # 前缀匹配
         - prefix: /api.v1.Upload
           timeout: 60s
+    # Metadata 中间件
     metadata:
+      # 是否禁用 [默认: false]
       disable: false
+      # 传播的 metadata 前缀 [默认: Server 使用 x-md-, Client 使用 x-md-global-]
       prefix:
         - x-md-
-      constants:
-        x-md-service-version: v1.0.0
+      # 固定携带的 metadata
+      # constants:
+      #   x-md-service-version: v1.0.0
+    # 链路追踪中间件
     tracing:
+      # 是否禁用 [默认: false]
       disable: false
+    # 监控中间件
     metrics:
+      # 是否禁用 [默认: false]
       disable: false
+    # 日志中间件
     logging:
+      # 是否禁用 [默认: false]
       disable: false
+    # 表单校验中间件
     validator:
+      # 是否禁用 [默认: false]
       disable: false
+    # 限流中间件
     ratelimit:
+      # 是否启用 [默认: false]
       enable: false
+      # BBR 限流器配置
       bbr_limiter:
+        # 窗口时间长度 [默认: 10s]
         window: 10s
+        # 每个窗口的桶数量 [默认: 100]
         bucket: 100
+        # CPU 使用率阈值 (千分比) [默认: 800 = 80%]
         cpu_threshold: 800
-        # cpu_quota: 2.0  # 容器环境设置 CPU 配额
+        # 容器环境 CPU 配额，设置后使用新的 CPU 计算方式
+        # cpu_quota: 2.0
 
   # HTTP 服务器配置
   http:
+    # 是否禁用 [默认: false]
     disable: false
-    addr: :8080
-    # network: tcp
+    # 网络类型: tcp, tcp4, tcp6, unix, unixpacket [默认: tcp]
+    network: tcp
+    # 监听地址 [默认: 0.0.0.0:8000]
+    addr: 0.0.0.0:8000
+    # 对外暴露端点（用于服务注册，默认使用监听地址）
+    # endpoint:
+    #   scheme: http
+    #   host: my-service.example.com:8000
+    # 是否禁用 StrictSlash [默认: false]
+    # 禁用后 /path/ 和 /path 是不同路由，否则会自动重定向
+    disable_strict_slash: false
+    # HTTP 路由前缀
     # path_prefix: /api
-    # disable_strict_slash: false
-    endpoint:
-      scheme: http
-      host: localhost:8080
+    # Metrics 端点配置
     metrics:
+      # 是否禁用 [默认: false]
       disable: false
+      # Metrics 路由路径 [默认: /metrics]
       path: /metrics
 
   # gRPC 服务器配置
   grpc:
+    # 是否禁用 [默认: false]
     disable: false
-    addr: :9090
-    endpoint:
-      scheme: grpc
-      host: localhost:9090
-    # custom_health: false
-    # disable_reflection: false
+    # 网络类型 [默认: tcp]
+    network: tcp
+    # 监听地址 [默认: 0.0.0.0:9000]
+    addr: 0.0.0.0:9000
+    # 对外暴露端点
+    # endpoint:
+    #   scheme: grpc
+    #   host: my-service.example.com:9000
+    # 是否自定义健康检查，false 则使用 gRPC 自带健康端点 [默认: false]
+    custom_health: false
+    # 是否禁用服务反射 [默认: false]
+    disable_reflection: false
+
+  # 模块日志配置
+  # log:
+  #   level: info
 
 # =============================================================================
 # 数据库配置
 # =============================================================================
 database:
+  # 默认连接名 [默认: default]
   default: main
+
+  # 数据库连接配置
   connections:
     main:
+      # 数据库驱动: mysql, sqlite, postgres [默认: mysql]
       driver: mysql
+      # DSN 连接字符串
       dsn: "user:password@tcp(localhost:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
-      # 从库配置（可选）
-      replicas:
-        - driver: mysql
-          dsn: "user:password@tcp(replica1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
-        - driver: mysql
-          dsn: "user:password@tcp(replica2:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
-      # 自动切换的表名
+      # 从库配置（可选，用于读写分离）
+      # replicas:
+      #   - driver: mysql
+      #     dsn: "user:password@tcp(replica1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+      #   - driver: mysql
+      #     dsn: "user:password@tcp(replica2:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+      # 自动切换数据源关联的表名
       # datas:
       #   - users
       #   - orders
+      # 是否在日志中打印 sources/replicas 模式 [默认: false]
+      # trace_resolver_mode: false
 
+  # GORM 配置
   gorm:
+    # 是否跳过默认事务 [默认: false]
     skip_default_transaction: false
+    # 默认事务超时时间
     # default_transaction_timeout: 30s
+    # 默认 Context 超时时间
     # default_context_timeout: 10s
+    # 是否完整保存关联 [默认: false]
+    # full_save_associations: false
+    # 是否禁用自动 Ping [默认: false]
+    # disable_automatic_ping: false
+    # 是否禁用迁移时的外键约束 [默认: false]
+    # disable_foreign_key_constraint_when_migrating: false
+    # 是否在迁移时忽略关系 [默认: false]
+    # ignore_relationships_when_migrating: false
+    # 是否禁用嵌套事务 [默认: false]
+    # disable_nested_transaction: false
+    # 是否允许全局更新 [默认: false]
+    # allow_global_update: false
+    # 是否查询所有字段 [默认: false]
+    # query_fields: false
+    # 批量创建大小 [默认: 0]
+    # create_batch_size: 100
+    # 是否翻译错误 [默认: false]
+    # translate_error: false
+    # 是否传播 Unscoped [默认: false]
+    # propagate_unscoped: false
+    # 日志配置
     logger:
-      level: WARN  # SILENT, ERROR, WARN, INFO
+      # 日志级别: UNKNOWN, SILENT, ERROR, WARN, INFO [默认: WARN]
+      level: WARN
+      # 慢查询阈值 [默认: 200ms]
       slow_threshold: 200ms
+      # 是否彩色输出 [默认: false]
+      colorful: false
+      # 是否忽略 RecordNotFound 错误 [默认: true]
       ignore_record_not_found_error: true
+      # 是否参数化查询（日志中不显示参数值）[默认: false]
       parameterized_queries: false
 
+  # 链路追踪配置
   tracing:
+    # 是否禁用 [默认: false]
     disable: false
+    # 是否排除 SQL 变量部分 [默认: false]
     exclude_query_vars: false
+    # 是否排除 DBStats 指标上报 [默认: false]
     exclude_metrics: false
+    # 是否在异常事件中包含堆栈追踪 [默认: false]
     # record_stack_trace_in_span: false
+    # 是否排除 db.server_address 属性 [默认: false]
+    # exclude_server_address: false
 
+  # 监控配置
   metrics:
+    # 是否禁用 [默认: false]
     disable: false
+    # 刷新间隔 [默认: 15s]
     refresh_interval: 15s
-    labels:
-      env: production
+    # 常量 Labels
+    # labels:
+    #   env: production
+    # MySQL 插件配置
     mysql:
+      # 指标前缀 [默认: gorm_status_]
       prefix: gorm_status_
+      # 采集间隔，默认使用 refresh_interval
+      # interval: 15s
+      # 采集的变量名，默认采集所有
       # variable_names:
       #   - Threads_connected
       #   - Threads_running
+
+  # 模块日志配置
+  # log:
+  #   level: info
 
 # =============================================================================
 # Redis 配置
 # =============================================================================
 redis:
+  # 默认连接名 [默认: default]
   default: main
+
+  # Redis 连接配置
   connections:
     main:
+      # 网络类型: tcp, unix [默认: tcp]
+      network: tcp
+      # 地址 host:port
       addr: localhost:6379
+      # 客户端名称（执行 CLIENT SETNAME）
+      # client_name: my-service
+      # RESP 协议版本: 2, 3 [默认: 3]
+      protocol: 3
+      # 用户名（Redis 6.0+ ACL）
+      # username: ""
+      # 密码
       password: ""
+      # 数据库编号 [默认: 0]
       db: 0
-      # 连接池配置
-      pool_size: 100
-      min_idle_conns: 10
-      max_idle_conns: 50
-      conn_max_idle_time: 30m
-      # 超时配置
-      dial_timeout: 5s
-      read_timeout: 3s
-      write_timeout: 3s
-      # 重试配置
+      # 最大重试次数，-1 禁用重试 [默认: 3]
       max_retries: 3
+      # 最小重试退避时间，-1 禁用退避 [默认: 8ms]
       min_retry_backoff: 8ms
+      # 最大重试退避时间，-1 禁用退避 [默认: 512ms]
       max_retry_backoff: 512ms
+      # 连接超时 [默认: 5s]
+      dial_timeout: 5s
+      # 连接重试次数 [默认: 5]
+      dialer_retries: 5
+      # 连接重试间隔 [默认: 100ms]
+      dialer_retry_timeout: 100ms
+      # 读取超时，-1 无限，-2 禁用 [默认: 3s]
+      read_timeout: 3s
+      # 写入超时，-1 无限，-2 禁用 [默认: 3s]
+      write_timeout: 3s
+      # 是否启用 Context 超时控制 [默认: false]
+      # context_timeout_enabled: false
+      # 读缓冲区大小 [默认: 32KB]
+      # read_buffer_size: 32768
+      # 写缓冲区大小 [默认: 32KB]
+      # write_buffer_size: 32768
+      # 连接池类型: true=FIFO, false=LIFO [默认: false]
+      # pool_fifo: false
+      # 连接池大小 [默认: 10 * runtime.GOMAXPROCS(0)]
+      pool_size: 100
+      # 最大并发连接创建数
+      # max_concurrent_dials: 0
+      # 连接池超时 [默认: read_timeout + 1s]
+      # pool_timeout: 4s
+      # 最小空闲连接数 [默认: 0]
+      min_idle_conns: 10
+      # 最大空闲连接数 [默认: 0]
+      max_idle_conns: 50
+      # 最大活跃连接数，0 表示无限制 [默认: 0]
+      # max_active_conns: 0
+      # 连接最大空闲时间 [默认: 30m]
+      conn_max_idle_time: 30m
+      # 连接最大生命周期，0 表示无限制 [默认: 0]
+      # conn_max_lifetime: 0
+      # 是否只读模式 [默认: false]
+      # read_only: false
+      # 是否禁用 CLIENT SETINFO [默认: false]
+      # disable_identity: false
+      # 客户端名称后缀
+      # identity_suffix: ""
+      # 标记节点失败的超时时间 (秒) [默认: 15]
+      # failing_timeout_seconds: 15
 
-    cache:
-      addr: localhost:6380
-      db: 1
+    # 示例：缓存专用连接
+    # cache:
+    #   addr: localhost:6380
+    #   db: 1
 
+  # 链路追踪配置
   tracing:
+    # 是否禁用 [默认: false]
     disable: false
-    db_statement: false
-    caller_enabled: false
+    # 是否记录原始 Redis 命令 [默认: true]
+    db_statement: true
+    # 是否记录调用者信息 [默认: true]
+    caller_enabled: true
+    # 是否启用 dial 过滤 [默认: false]
+    # dial_filter: false
 
+  # 监控配置
   metrics:
+    # 是否禁用 [默认: false]
     disable: false
+
+  # 模块日志配置
+  # log:
+  #   level: info
 
 # =============================================================================
 # 服务客户端配置
 # =============================================================================
 client:
   clients:
-    # 服务发现模式
+    # 服务发现模式示例
     user-service:
+      # 协议: GRPC, HTTP, GRPCS, HTTPS [默认: GRPC]
       protocol: GRPC
+      # 目标端点 [默认: discovery:///{client_key}]
+      # 支持服务发现: discovery:///service-name
+      # 支持直连: host:port
       target: discovery:///user-service
+      # 中间件配置
       middleware:
+        # 超时配置
         timeout:
+          # 默认超时 [默认: Client 2s]
           default: 2s
+          # 路由级超时
           routes:
             - path: /api.user.v1.UserService/GetProfile
               timeout: 5s
+        # Metadata 配置
         metadata:
+          # 传播的 metadata 前缀 [默认: x-md-global-]
           prefix:
             - x-md-global-
+        # 链路追踪
         tracing:
           disable: false
+        # 监控
         metrics:
           disable: false
+        # 日志
         logging:
           disable: false
+        # 熔断器配置
         circuitbreaker:
+          # 是否启用 [默认: false]
           enable: true
+          # SRE 熔断器配置
           sre:
+            # 成功率阈值 (K = 1/success) [默认: 0.6]
+            # 降低该值会使熔断更激进，提高则更保守
             success: 0.6
+            # 最小请求数 [默认: 100]
             request: 100
+            # 桶数量 [默认: 10]
             bucket: 10
+            # 统计窗口时长 [默认: 3s]
             window: 3s
 
-    # 直连模式
-    external-api:
-      protocol: HTTPS
-      target: api.example.com:443
-      middleware:
-        timeout:
-          default: 10s
-        circuitbreaker:
-          enable: true
+    # 直连模式示例
+    # external-api:
+    #   protocol: HTTPS
+    #   target: api.example.com:443
+    #   middleware:
+    #     timeout:
+    #       default: 10s
+    #     circuitbreaker:
+    #       enable: true
+
+  # 模块日志配置
+  # log:
+  #   level: info
 
 # =============================================================================
 # 定时任务配置
 # =============================================================================
 job:
+  # 是否禁用 [默认: false]
   disable: false
+  # 时区 [默认: 系统时区]
   timezone: Asia/Shanghai
+
+  # 链路追踪配置
   tracing:
+    # 是否禁用 [默认: false]
     disable: false
+
+  # 监控配置
   metrics:
+    # 是否禁用 [默认: false]
     disable: false
+
+  # 任务定义
   jobs:
-    # 每分钟执行一次
+    # 每分钟执行
+    # schedule 支持:
+    # - cron 表达式（6 位含秒，5 位不含秒）: [秒] 分 时 日 月 周
+    # - 预定义: @yearly, @monthly, @weekly, @daily, @hourly
+    # - 间隔: @every 30s, @every 1m, @every 1h30m
+    # - 指定时区: TZ=America/New_York 0 9 * * 1-5
     sync-data:
-      schedule: "0 * * * * *"  # 秒 分 时 日 月 周
+      # 是否禁用 [默认: false]
+      disable: false
+      # Cron 表达式: 每分钟第 0 秒执行
+      schedule: "0 * * * * *"
+      # 并发策略: OVERLAP(允许重叠), DELAY(推迟), SKIP(跳过) [默认: OVERLAP]
       concurrent_policy: SKIP
+      # 启动时是否立即执行一次 [默认: false]
       immediately: false
 
     # 每小时执行
@@ -306,7 +551,11 @@ job:
       concurrent_policy: SKIP
       immediately: true
 
-    # 指定时区
-    report:
-      schedule: "TZ=America/New_York 0 9 * * 1-5"  # 工作日上午 9 点
-      concurrent_policy: DELAY
+    # 指定时区示例：工作日上午 9 点（纽约时间）
+    # report:
+    #   schedule: "TZ=America/New_York 0 9 * * 1-5"
+    #   concurrent_policy: DELAY
+
+  # 模块日志配置
+  # log:
+  #   level: info

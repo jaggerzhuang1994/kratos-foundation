@@ -1,0 +1,976 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kratos Foundation Config",
+  "description": "Kratos Foundation 配置文件 Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "type": "object",
+      "description": "应用生命周期配置",
+      "additionalProperties": false,
+      "properties": {
+        "disable_registrar": {
+          "type": "boolean",
+          "description": "是否禁用服务注册",
+          "default": false
+        },
+        "registrar_timeout": {
+          "type": "string",
+          "description": "注册中心超时时间",
+          "default": "10s",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "stop_timeout": {
+          "type": "string",
+          "description": "停机超时时间，必须大于 server.stop_delay",
+          "default": "30s",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "description": "日志配置",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "description": "最小日志级别 (本地/debug 环境默认 debug，其他环境默认 info)",
+          "enum": ["debug", "info", "warn", "error", "fatal"],
+          "default": "info"
+        },
+        "filter_empty": {
+          "type": "boolean",
+          "description": "是否过滤空值 KV",
+          "default": true
+        },
+        "filter_keys": {
+          "type": "array",
+          "description": "过滤指定的 keys（敏感信息脱敏）",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "time_format": {
+          "type": "string",
+          "description": "时间格式",
+          "default": "2006-01-02T15:04:05Z07:00"
+        },
+        "preset": {
+          "type": "array",
+          "description": "预置字段",
+          "items": {
+            "type": "string",
+            "enum": ["ts", "service.id", "service.name", "service.version", "trace.id", "span.id", "caller"]
+          },
+          "default": ["ts", "service.id", "service.name", "service.version", "trace.id", "span.id", "caller"]
+        },
+        "std": {
+          "type": "object",
+          "description": "标准输出日志配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": {
+              "type": "boolean",
+              "description": "是否禁用",
+              "default": false
+            },
+            "level": {
+              "type": "string",
+              "description": "最小日志级别（默认继承 log.level）",
+              "enum": ["debug", "info", "warn", "error", "fatal"]
+            },
+            "filter_empty": {
+              "type": "boolean",
+              "description": "是否过滤空值 KV"
+            },
+            "filter_keys": {
+              "type": "array",
+              "description": "过滤指定的 keys，会合并 log.filter_keys",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "file": {
+          "type": "object",
+          "description": "文件日志配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": {
+              "type": "boolean",
+              "description": "是否禁用",
+              "default": false
+            },
+            "level": {
+              "type": "string",
+              "description": "最小日志级别（默认继承 log.level）",
+              "enum": ["debug", "info", "warn", "error", "fatal"]
+            },
+            "filter_empty": {
+              "type": "boolean",
+              "description": "是否过滤空值 KV"
+            },
+            "filter_keys": {
+              "type": "array",
+              "description": "过滤指定的 keys，会合并 log.filter_keys",
+              "items": { "type": "string" }
+            },
+            "path": {
+              "type": "string",
+              "description": "日志文件路径",
+              "default": "./app.log"
+            },
+            "rotating": {
+              "type": "object",
+              "description": "文件轮转配置",
+              "additionalProperties": false,
+              "properties": {
+                "disable": {
+                  "type": "boolean",
+                  "description": "是否禁用轮转",
+                  "default": false
+                },
+                "max_size": {
+                  "type": "integer",
+                  "description": "单个日志文件最大大小 (MB)",
+                  "default": 100,
+                  "minimum": 1
+                },
+                "max_file_age": {
+                  "type": "integer",
+                  "description": "日志文件保留天数，0 表示不限制",
+                  "default": 0,
+                  "minimum": 0
+                },
+                "max_files": {
+                  "type": "integer",
+                  "description": "保留的日志文件数量，0 表示不限制",
+                  "default": 0,
+                  "minimum": 0
+                },
+                "local_time": {
+                  "type": "boolean",
+                  "description": "文件名时间戳是否使用本地时间",
+                  "default": false
+                },
+                "compress": {
+                  "type": "boolean",
+                  "description": "是否压缩轮转后的日志文件",
+                  "default": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "指标配置",
+      "additionalProperties": false,
+      "properties": {
+        "meter_name": {
+          "type": "string",
+          "description": "指标命名空间（默认为应用名）"
+        },
+        "counter_map_size": {
+          "type": "integer",
+          "description": "Counter Map 初始容量",
+          "default": 64,
+          "minimum": 1
+        },
+        "gauge_map_size": {
+          "type": "integer",
+          "description": "Gauge Map 初始容量",
+          "default": 64,
+          "minimum": 1
+        },
+        "histogram_map_size": {
+          "type": "integer",
+          "description": "Histogram Map 初始容量",
+          "default": 64,
+          "minimum": 1
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    },
+    "tracing": {
+      "type": "object",
+      "description": "链路追踪配置",
+      "additionalProperties": false,
+      "properties": {
+        "disable": {
+          "type": "boolean",
+          "description": "是否禁用",
+          "default": false
+        },
+        "tracer_name": {
+          "type": "string",
+          "description": "Tracer 名称（默认为应用名）"
+        },
+        "exporter": {
+          "type": "object",
+          "description": "导出器配置",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint_url": {
+              "type": "string",
+              "description": "OTLP HTTP 端点",
+              "default": "http://localhost:4318/v1/traces",
+              "format": "uri"
+            },
+            "compression": {
+              "type": "string",
+              "description": "压缩方式",
+              "enum": ["NO", "GZIP"],
+              "default": "NO"
+            },
+            "headers": {
+              "type": "object",
+              "description": "自定义 Headers",
+              "additionalProperties": { "type": "string" }
+            },
+            "timeout": {
+              "type": "string",
+              "description": "导出超时时间",
+              "default": "10s",
+              "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+            },
+            "retry": {
+              "type": "object",
+              "description": "重试配置",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "是否启用重试",
+                  "default": true
+                },
+                "initial_interval": {
+                  "type": "string",
+                  "description": "初始重试间隔",
+                  "default": "5s",
+                  "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+                },
+                "max_interval": {
+                  "type": "string",
+                  "description": "最大重试间隔",
+                  "default": "30s",
+                  "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+                },
+                "max_elapsed_time": {
+                  "type": "string",
+                  "description": "最大重试总时长",
+                  "default": "60s",
+                  "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+                }
+              }
+            }
+          }
+        },
+        "sampler": {
+          "type": "object",
+          "description": "采样器配置",
+          "additionalProperties": false,
+          "properties": {
+            "sample": {
+              "type": "string",
+              "description": "采样策略",
+              "enum": ["RATIO", "ALWAYS", "NEVER"],
+              "default": "RATIO"
+            },
+            "ratio": {
+              "type": "number",
+              "description": "采样率 (0.0-1.0)",
+              "default": 0.05,
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    },
+    "server": {
+      "type": "object",
+      "description": "服务器配置",
+      "additionalProperties": false,
+      "properties": {
+        "stop_delay": {
+          "type": "string",
+          "description": "停机延迟，等待服务发现更新",
+          "default": "0s",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "middleware": { "$ref": "#/$defs/serverMiddleware" },
+        "http": {
+          "type": "object",
+          "description": "HTTP 服务器配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": {
+              "type": "boolean",
+              "description": "是否禁用",
+              "default": false
+            },
+            "network": {
+              "type": "string",
+              "description": "网络类型",
+              "enum": ["tcp", "tcp4", "tcp6", "unix", "unixpacket"],
+              "default": "tcp"
+            },
+            "addr": {
+              "type": "string",
+              "description": "监听地址",
+              "default": "0.0.0.0:8000"
+            },
+            "endpoint": { "$ref": "#/$defs/endpoint" },
+            "disable_strict_slash": {
+              "type": "boolean",
+              "description": "是否禁用 StrictSlash",
+              "default": false
+            },
+            "path_prefix": {
+              "type": "string",
+              "description": "HTTP 路由前缀"
+            },
+            "metrics": {
+              "type": "object",
+              "description": "Metrics 端点配置",
+              "additionalProperties": false,
+              "properties": {
+                "disable": {
+                  "type": "boolean",
+                  "description": "是否禁用",
+                  "default": false
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Metrics 路由路径",
+                  "default": "/metrics"
+                }
+              }
+            }
+          }
+        },
+        "grpc": {
+          "type": "object",
+          "description": "gRPC 服务器配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": {
+              "type": "boolean",
+              "description": "是否禁用",
+              "default": false
+            },
+            "network": {
+              "type": "string",
+              "description": "网络类型",
+              "enum": ["tcp", "tcp4", "tcp6", "unix", "unixpacket"],
+              "default": "tcp"
+            },
+            "addr": {
+              "type": "string",
+              "description": "监听地址",
+              "default": "0.0.0.0:9000"
+            },
+            "endpoint": { "$ref": "#/$defs/endpoint" },
+            "custom_health": {
+              "type": "boolean",
+              "description": "是否自定义健康检查",
+              "default": false
+            },
+            "disable_reflection": {
+              "type": "boolean",
+              "description": "是否禁用服务反射",
+              "default": false
+            }
+          }
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    },
+    "database": {
+      "type": "object",
+      "description": "数据库配置",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "默认连接名",
+          "default": "default"
+        },
+        "connections": {
+          "type": "object",
+          "description": "数据库连接配置",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dsn"],
+            "properties": {
+              "driver": {
+                "type": "string",
+                "description": "数据库驱动",
+                "enum": ["mysql", "sqlite", "postgres"],
+                "default": "mysql"
+              },
+              "dsn": {
+                "type": "string",
+                "description": "DSN 连接字符串"
+              },
+              "replicas": {
+                "type": "array",
+                "description": "从库配置",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["dsn"],
+                  "properties": {
+                    "driver": {
+                      "type": "string",
+                      "enum": ["mysql", "sqlite", "postgres"],
+                      "default": "mysql"
+                    },
+                    "dsn": { "type": "string" }
+                  }
+                }
+              },
+              "datas": {
+                "type": "array",
+                "description": "自动切换数据源关联的表名",
+                "items": { "type": "string" }
+              },
+              "trace_resolver_mode": {
+                "type": "boolean",
+                "description": "是否在日志中打印 sources/replicas 模式",
+                "default": false
+              }
+            }
+          }
+        },
+        "gorm": {
+          "type": "object",
+          "description": "GORM 配置",
+          "additionalProperties": false,
+          "properties": {
+            "skip_default_transaction": { "type": "boolean", "default": false },
+            "default_transaction_timeout": { "type": "string", "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$" },
+            "default_context_timeout": { "type": "string", "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$" },
+            "full_save_associations": { "type": "boolean", "default": false },
+            "disable_automatic_ping": { "type": "boolean", "default": false },
+            "disable_foreign_key_constraint_when_migrating": { "type": "boolean", "default": false },
+            "ignore_relationships_when_migrating": { "type": "boolean", "default": false },
+            "disable_nested_transaction": { "type": "boolean", "default": false },
+            "allow_global_update": { "type": "boolean", "default": false },
+            "query_fields": { "type": "boolean", "default": false },
+            "create_batch_size": { "type": "integer", "minimum": 0 },
+            "translate_error": { "type": "boolean", "default": false },
+            "propagate_unscoped": { "type": "boolean", "default": false },
+            "logger": {
+              "type": "object",
+              "description": "日志配置",
+              "additionalProperties": false,
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "description": "日志级别",
+                  "enum": ["UNKNOWN", "SILENT", "ERROR", "WARN", "INFO"],
+                  "default": "WARN"
+                },
+                "slow_threshold": {
+                  "type": "string",
+                  "description": "慢查询阈值",
+                  "default": "200ms",
+                  "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+                },
+                "colorful": { "type": "boolean", "default": false },
+                "ignore_record_not_found_error": { "type": "boolean", "default": true },
+                "parameterized_queries": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        },
+        "tracing": {
+          "type": "object",
+          "description": "链路追踪配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": { "type": "boolean", "default": false },
+            "exclude_query_vars": { "type": "boolean", "default": false },
+            "exclude_metrics": { "type": "boolean", "default": false },
+            "record_stack_trace_in_span": { "type": "boolean", "default": false },
+            "exclude_server_address": { "type": "boolean", "default": false }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "description": "监控配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": { "type": "boolean", "default": false },
+            "refresh_interval": {
+              "type": "string",
+              "description": "刷新间隔",
+              "default": "15s",
+              "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "mysql": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "prefix": { "type": "string", "default": "gorm_status_" },
+                "interval": { "type": "string", "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$" },
+                "variable_names": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "description": "Redis 配置",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "默认连接名",
+          "default": "default"
+        },
+        "connections": {
+          "type": "object",
+          "description": "Redis 连接配置",
+          "additionalProperties": { "$ref": "#/$defs/redisOption" }
+        },
+        "tracing": {
+          "type": "object",
+          "description": "链路追踪配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": { "type": "boolean", "default": false },
+            "db_statement": { "type": "boolean", "default": true },
+            "caller_enabled": { "type": "boolean", "default": true },
+            "dial_filter": { "type": "boolean", "default": false }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "description": "监控配置",
+          "additionalProperties": false,
+          "properties": {
+            "disable": { "type": "boolean", "default": false }
+          }
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    },
+    "client": {
+      "type": "object",
+      "description": "服务客户端配置",
+      "additionalProperties": false,
+      "properties": {
+        "clients": {
+          "type": "object",
+          "description": "客户端配置",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "protocol": {
+                "type": "string",
+                "description": "协议",
+                "enum": ["GRPC", "HTTP", "GRPCS", "HTTPS"],
+                "default": "GRPC"
+              },
+              "target": {
+                "type": "string",
+                "description": "目标端点"
+              },
+              "middleware": { "$ref": "#/$defs/clientMiddleware" }
+            }
+          }
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    },
+    "job": {
+      "type": "object",
+      "description": "定时任务配置",
+      "additionalProperties": false,
+      "properties": {
+        "disable": {
+          "type": "boolean",
+          "description": "是否禁用",
+          "default": false
+        },
+        "timezone": {
+          "type": "string",
+          "description": "时区（默认系统时区）"
+        },
+        "tracing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "disable": { "type": "boolean", "default": false }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "disable": { "type": "boolean", "default": false }
+          }
+        },
+        "jobs": {
+          "type": "object",
+          "description": "任务定义",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "disable": {
+                "type": "boolean",
+                "description": "是否禁用",
+                "default": false
+              },
+              "schedule": {
+                "type": "string",
+                "description": "Cron 表达式"
+              },
+              "concurrent_policy": {
+                "type": "string",
+                "description": "并发策略",
+                "enum": ["OVERLAP", "DELAY", "SKIP"],
+                "default": "OVERLAP"
+              },
+              "immediately": {
+                "type": "boolean",
+                "description": "启动时是否立即执行一次",
+                "default": false
+              }
+            }
+          }
+        },
+        "log": { "$ref": "#/$defs/moduleLog" }
+      }
+    }
+  },
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+    },
+    "moduleLog": {
+      "type": "object",
+      "description": "模块日志配置",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error", "fatal"]
+        },
+        "filter_empty": { "type": "boolean" },
+        "filter_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "description": "端点配置",
+      "additionalProperties": false,
+      "properties": {
+        "scheme": { "type": "string" },
+        "host": { "type": "string" }
+      }
+    },
+    "timeoutMiddleware": {
+      "type": "object",
+      "description": "超时控制中间件配置",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "默认超时时间",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "routes": {
+          "type": "array",
+          "description": "路由级超时配置",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string", "description": "精确路径匹配" },
+              "prefix": { "type": "string", "description": "前缀匹配" },
+              "timeout": {
+                "type": "string",
+                "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadataMiddleware": {
+      "type": "object",
+      "description": "Metadata 中间件配置",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "type": "boolean", "default": false },
+        "prefix": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "constants": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "tracingMiddleware": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "type": "boolean", "default": false }
+      }
+    },
+    "metricsMiddleware": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "type": "boolean", "default": false }
+      }
+    },
+    "loggingMiddleware": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "type": "boolean", "default": false }
+      }
+    },
+    "validatorMiddleware": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disable": { "type": "boolean", "default": false }
+      }
+    },
+    "ratelimitMiddleware": {
+      "type": "object",
+      "description": "限流中间件配置",
+      "additionalProperties": false,
+      "properties": {
+        "enable": { "type": "boolean", "default": false },
+        "bbr_limiter": {
+          "type": "object",
+          "description": "BBR 限流器配置",
+          "additionalProperties": false,
+          "properties": {
+            "window": {
+              "type": "string",
+              "description": "窗口时间长度",
+              "default": "10s",
+              "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+            },
+            "bucket": {
+              "type": "integer",
+              "description": "每个窗口的桶数量",
+              "default": 100
+            },
+            "cpu_threshold": {
+              "type": "integer",
+              "description": "CPU 使用率阈值 (千分比)",
+              "default": 800
+            },
+            "cpu_quota": {
+              "type": "number",
+              "description": "容器环境 CPU 配额"
+            }
+          }
+        }
+      }
+    },
+    "circuitbreakerMiddleware": {
+      "type": "object",
+      "description": "熔断器中间件配置",
+      "additionalProperties": false,
+      "properties": {
+        "enable": { "type": "boolean", "default": false },
+        "sre": {
+          "type": "object",
+          "description": "SRE 熔断器配置",
+          "additionalProperties": false,
+          "properties": {
+            "success": {
+              "type": "number",
+              "description": "成功率阈值 (K = 1/success)",
+              "default": 0.6,
+              "minimum": 0,
+              "maximum": 1
+            },
+            "request": {
+              "type": "integer",
+              "description": "最小请求数",
+              "default": 100
+            },
+            "bucket": {
+              "type": "integer",
+              "description": "桶数量",
+              "default": 10
+            },
+            "window": {
+              "type": "string",
+              "description": "统计窗口时长",
+              "default": "3s",
+              "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+            }
+          }
+        }
+      }
+    },
+    "serverMiddleware": {
+      "type": "object",
+      "description": "服务端中间件配置",
+      "additionalProperties": false,
+      "properties": {
+        "timeout": { "$ref": "#/$defs/timeoutMiddleware" },
+        "metadata": { "$ref": "#/$defs/metadataMiddleware" },
+        "tracing": { "$ref": "#/$defs/tracingMiddleware" },
+        "metrics": { "$ref": "#/$defs/metricsMiddleware" },
+        "logging": { "$ref": "#/$defs/loggingMiddleware" },
+        "validator": { "$ref": "#/$defs/validatorMiddleware" },
+        "ratelimit": { "$ref": "#/$defs/ratelimitMiddleware" }
+      }
+    },
+    "clientMiddleware": {
+      "type": "object",
+      "description": "客户端中间件配置",
+      "additionalProperties": false,
+      "properties": {
+        "timeout": { "$ref": "#/$defs/timeoutMiddleware" },
+        "metadata": { "$ref": "#/$defs/metadataMiddleware" },
+        "tracing": { "$ref": "#/$defs/tracingMiddleware" },
+        "metrics": { "$ref": "#/$defs/metricsMiddleware" },
+        "logging": { "$ref": "#/$defs/loggingMiddleware" },
+        "circuitbreaker": { "$ref": "#/$defs/circuitbreakerMiddleware" }
+      }
+    },
+    "redisOption": {
+      "type": "object",
+      "description": "Redis 连接选项",
+      "additionalProperties": false,
+      "required": ["addr"],
+      "properties": {
+        "network": {
+          "type": "string",
+          "description": "网络类型",
+          "enum": ["tcp", "unix"],
+          "default": "tcp"
+        },
+        "addr": {
+          "type": "string",
+          "description": "地址 host:port"
+        },
+        "client_name": {
+          "type": "string",
+          "description": "客户端名称"
+        },
+        "protocol": {
+          "type": "integer",
+          "description": "RESP 协议版本",
+          "enum": [2, 3],
+          "default": 3
+        },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "db": {
+          "type": "integer",
+          "description": "数据库编号",
+          "default": 0,
+          "minimum": 0
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "最大重试次数，-1 禁用重试",
+          "default": 3
+        },
+        "min_retry_backoff": {
+          "type": "string",
+          "description": "最小重试退避时间",
+          "default": "8ms",
+          "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "max_retry_backoff": {
+          "type": "string",
+          "description": "最大重试退避时间",
+          "default": "512ms",
+          "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "dial_timeout": {
+          "type": "string",
+          "description": "连接超时",
+          "default": "5s",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "dialer_retries": {
+          "type": "integer",
+          "description": "连接重试次数",
+          "default": 5
+        },
+        "dialer_retry_timeout": {
+          "type": "string",
+          "description": "连接重试间隔",
+          "default": "100ms",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "read_timeout": {
+          "type": "string",
+          "description": "读取超时",
+          "default": "3s",
+          "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "write_timeout": {
+          "type": "string",
+          "description": "写入超时",
+          "default": "3s",
+          "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "context_timeout_enabled": { "type": "boolean", "default": false },
+        "read_buffer_size": { "type": "integer", "default": 32768 },
+        "write_buffer_size": { "type": "integer", "default": 32768 },
+        "pool_fifo": { "type": "boolean", "default": false },
+        "pool_size": { "type": "integer", "minimum": 1 },
+        "max_concurrent_dials": { "type": "integer", "minimum": 0 },
+        "pool_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "min_idle_conns": { "type": "integer", "default": 0, "minimum": 0 },
+        "max_idle_conns": { "type": "integer", "default": 0, "minimum": 0 },
+        "max_active_conns": { "type": "integer", "default": 0, "minimum": 0 },
+        "conn_max_idle_time": {
+          "type": "string",
+          "description": "连接最大空闲时间",
+          "default": "30m",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "conn_max_lifetime": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)+$"
+        },
+        "read_only": { "type": "boolean", "default": false },
+        "disable_identity": { "type": "boolean", "default": false },
+        "identity_suffix": { "type": "string" },
+        "unstable_resp3": { "type": "boolean", "default": false },
+        "failing_timeout_seconds": { "type": "integer", "default": 15 }
+      }
+    }
+  }
+}
