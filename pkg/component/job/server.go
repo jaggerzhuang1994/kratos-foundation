@@ -109,6 +109,11 @@ func NewServer(
 		}
 	}
 
+	if len(serverJobs) == 0 && len(cronJobs) == 0 {
+		// 没有任务，则不启动 job server
+		return nil, nil
+	}
+
 	return &Server{
 		log:        log,
 		cron:       cron_,
