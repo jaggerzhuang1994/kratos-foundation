@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
@@ -54,13 +55,17 @@ func NewMetrics(
 	if err != nil {
 		return nil, errors.WithMessage(err, "new prometheus failed")
 	}
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
-
 	serviceAttrs := []attribute.KeyValue{
 		semconv.ServiceNameKey.String(appInfo.GetName()),
 		semconv.ServiceInstanceIDKey.String(appInfo.GetId()),
 		semconv.ServiceVersionKey.String(appInfo.GetVersion()),
 	}
+	provider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(exporter),
+		sdkmetric.WithResource(resource.NewSchemaless(
+			serviceAttrs...,
+		)),
+	)
 
 	meterName := utils.Select(conf.GetMeterName(), appInfo.GetName())
 	meter := provider.Meter(meterName, metric.WithInstrumentationAttributes(serviceAttrs...))
