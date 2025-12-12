@@ -34,7 +34,7 @@ func mergeLabels(configLabels map[string]string, appAttrs []attribute.KeyValue) 
 		copyMap[k] = v
 	}
 	for _, attr := range appAttrs {
-		copyMap[string(attr.Key)] = attr.Value.AsString()
+		copyMap["otel_scope_"+string(attr.Key)] = attr.Value.AsString()
 	}
 	return copyMap
 }

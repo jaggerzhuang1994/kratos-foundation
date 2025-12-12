@@ -7,9 +7,11 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type Manager struct {
@@ -139,7 +141,7 @@ func (m *Manager) newConnection(name string) (*Client, error) {
 	if !m.conf.GetMetrics().GetDisable() {
 		err := redisotel.InstrumentMetrics(cc,
 			redisotel.WithMeterProvider(m.metrics.GetMeterProvider()),
-			redisotel.WithAttributes(m.metrics.ServiceAttrs()...),
+			redisotel.WithAttributes(addOtelScopePrefix(m.metrics.ServiceAttrs())...),
 		)
 		if err != nil {
 			m.log.Warn("redisotel.InstrumentMetrics error ", err)
@@ -147,6 +149,15 @@ func (m *Manager) newConnection(name string) (*Client, error) {
 	}
 
 	return cc, nil
+}
+
+func addOtelScopePrefix(attrs []attribute.KeyValue) []attribute.KeyValue {
+	return utils.Map(attrs, func(attr attribute.KeyValue) attribute.KeyValue {
+		return attribute.KeyValue{
+			Key:   "otel_scope_" + attr.Key,
+			Value: attr.Value,
+		}
+	})
 }
 
 func (m *Manager) release(after time.Duration) {
