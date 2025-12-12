@@ -4,7 +4,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(xargs ls:*)",
+      "Bash(git -C /Users/jagger/kratos-foundation log --oneline)"
     ],
     "deny": [],
     "ask": []
