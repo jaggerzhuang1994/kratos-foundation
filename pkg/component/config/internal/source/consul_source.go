@@ -1,10 +1,10 @@
-package config
+package source
 
 import (
 	"github.com/go-kratos/kratos/contrib/config/consul/v2"
 	"github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/log"
-	consul2 "github.com/jaggerzhuang1994/kratos-foundation/pkg/consul"
+	consul2 "github.com/jaggerzhuang1994/kratos-foundation/pkg/component/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 )
 
@@ -13,7 +13,11 @@ func NewConsulSource(
 	configPathList []string, // 配置列表
 ) config.Source {
 	if client == nil {
-		log.Warn("consul config source is nil")
+		log.Warn("consul is nil")
+		return nil
+	}
+	if len(configPathList) == 0 {
+		log.Warn("consul config list is empty")
 		return nil
 	}
 	log.Info("consul config list ", configPathList)

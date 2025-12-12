@@ -1,4 +1,4 @@
-package config
+package source
 
 import (
 	"github.com/go-kratos/kratos/v2/config"

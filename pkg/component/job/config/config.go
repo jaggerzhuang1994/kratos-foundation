@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"

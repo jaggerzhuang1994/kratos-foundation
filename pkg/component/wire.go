@@ -4,6 +4,8 @@ import (
 	"github.com/google/wire"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/client"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/database"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
@@ -17,6 +19,8 @@ import (
 var ProviderSet = wire.NewSet(
 	app.ProviderSet,
 	client.ProviderSet,
+	config.ProviderSet,
+	consul.ProviderSet,
 	database.ProviderSet,
 	job.ProviderSet,
 	log.ProviderSet,

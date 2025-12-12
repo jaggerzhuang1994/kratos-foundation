@@ -38,6 +38,6 @@ func (s *scheduleWrapper) Next(now time.Time) time.Time {
 	}
 
 	next := s.schedule.Next(now)
-	s.log.With("next", next.Format(time.RFC3339), "left", next.Sub(time.Now())).Debug("job schedule")
+	s.log.With("next", next.Format(time.RFC3339), "left", time.Until(next)).Debug("job schedule")
 	return next
 }

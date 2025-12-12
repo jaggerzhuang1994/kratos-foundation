@@ -3,7 +3,7 @@ package registry
 import (
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
 	"github.com/go-kratos/kratos/v2/registry"
-	consul2 "github.com/jaggerzhuang1994/kratos-foundation/pkg/consul"
+	consul2 "github.com/jaggerzhuang1994/kratos-foundation/pkg/component/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
 )
 

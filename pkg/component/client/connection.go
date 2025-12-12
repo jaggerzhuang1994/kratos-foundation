@@ -18,6 +18,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/internal/middleware/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/internal/middleware/timeout"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/internal/middleware/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/transport"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -91,6 +92,7 @@ func (f *Factory) newHttpClient(ctx context.Context, key clientKey) (HttpClient,
 	// 中间件
 	m := f.useMiddlewares(key)
 	opts = append(opts, http.WithMiddleware(m...))
+	opts = append(opts, http.WithErrorDecoder(transport.HttpErrorDecoder()))
 
 	conn, err := http.NewClient(
 		ctx, opts...,
