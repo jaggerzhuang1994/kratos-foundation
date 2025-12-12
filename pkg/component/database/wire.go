@@ -8,6 +8,7 @@ var ProviderSet = wire.NewSet(
 	NewGormConfig,
 	NewDefaultConnection,
 	NewTracingPlugin,
+	NewMetricsPlugin,
 	NewDbResolver,
 	NewManager,
 )

@@ -4,7 +4,6 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware"
 	metrics2 "github.com/go-kratos/kratos/v2/middleware/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"github.com/pkg/errors"
 )
@@ -43,14 +42,8 @@ func Client(metrics *metrics.Metrics, config *Config) (middleware.Middleware, er
 	return metrics2.Client(opts...), nil
 }
 
-func newOpts(metrics *metrics.Metrics, counterName, histogramName string, configs ...*Config) ([]metrics2.Option, error) {
-
-	// 按照 configs 倒序查找第一个不为空的 meter_name
-	// 兜底为 metrics.GetDefaultMeterName()
-	meterName := utils.Select(
-		append(utils.Map(utils.Reverse(configs), (*Config).GetMeterName), metrics.GetDefaultMeterName())...,
-	)
-	meter := metrics.GetMeterProvider().Meter(meterName)
+func newOpts(metrics *metrics.Metrics, counterName, histogramName string, _ ...*Config) ([]metrics2.Option, error) {
+	meter := metrics.GetMeter()
 	// server中间件指标初始化
 	requestsCounter, err := metrics2.DefaultRequestsCounter(meter, counterName)
 	if err != nil {

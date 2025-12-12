@@ -173,7 +173,7 @@ func (x DatabaseComponentConfig_Database_Gorm_Logger_Level) Number() protoreflec
 
 // Deprecated: Use DatabaseComponentConfig_Database_Gorm_Logger_Level.Descriptor instead.
 func (DatabaseComponentConfig_Database_Gorm_Logger_Level) EnumDescriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 2, 0, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 3, 0, 0}
 }
 
 type ClientComponentConfig_Client_ClientOption_Protocol int32
@@ -1699,8 +1699,6 @@ type MiddlewareConfig_Tracing struct {
 
 	// 是否禁用
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// tracer name
-	TracerName string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3" json:"tracer_name,omitempty"`
 }
 
 func (x *MiddlewareConfig_Tracing) Reset() {
@@ -1742,13 +1740,6 @@ func (x *MiddlewareConfig_Tracing) GetDisable() bool {
 	return false
 }
 
-func (x *MiddlewareConfig_Tracing) GetTracerName() string {
-	if x != nil {
-		return x.TracerName
-	}
-	return ""
-}
-
 // 监控配置
 type MiddlewareConfig_Metrics struct {
 	state         protoimpl.MessageState
@@ -1757,8 +1748,6 @@ type MiddlewareConfig_Metrics struct {
 
 	// 是否禁用
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// meter name
-	MeterName string `protobuf:"bytes,2,opt,name=meter_name,json=meterName,proto3" json:"meter_name,omitempty"`
 }
 
 func (x *MiddlewareConfig_Metrics) Reset() {
@@ -1798,13 +1787,6 @@ func (x *MiddlewareConfig_Metrics) GetDisable() bool {
 		return x.Disable
 	}
 	return false
-}
-
-func (x *MiddlewareConfig_Metrics) GetMeterName() string {
-	if x != nil {
-		return x.MeterName
-	}
-	return ""
 }
 
 // 日志配置
@@ -2805,6 +2787,8 @@ type DatabaseComponentConfig_Database struct {
 	Connections map[string]*DatabaseComponentConfig_Database_Connection `protobuf:"bytes,4,rep,name=connections,proto3" json:"connections,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// 链路追踪配置
 	Tracing *DatabaseComponentConfig_Database_Tracing `protobuf:"bytes,5,opt,name=tracing,proto3" json:"tracing,omitempty"`
+	// 监控
+	Metrics *DatabaseComponentConfig_Database_Metrics `protobuf:"bytes,6,opt,name=metrics,proto3" json:"metrics,omitempty"`
 }
 
 func (x *DatabaseComponentConfig_Database) Reset() {
@@ -2870,6 +2854,13 @@ func (x *DatabaseComponentConfig_Database) GetConnections() map[string]*Database
 func (x *DatabaseComponentConfig_Database) GetTracing() *DatabaseComponentConfig_Database_Tracing {
 	if x != nil {
 		return x.Tracing
+	}
+	return nil
+}
+
+func (x *DatabaseComponentConfig_Database) GetMetrics() *DatabaseComponentConfig_Database_Metrics {
+	if x != nil {
+		return x.Metrics
 	}
 	return nil
 }
@@ -2958,6 +2949,81 @@ func (x *DatabaseComponentConfig_Database_Tracing) GetExcludeServerAddress() boo
 	return false
 }
 
+type DatabaseComponentConfig_Database_Metrics struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// 禁用 gorm.metrics 插件
+	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
+	// 常量labels
+	Labels map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// 刷新间隔 默认15s
+	RefreshInterval *durationpb.Duration `protobuf:"bytes,3,opt,name=refresh_interval,json=refreshInterval,proto3" json:"refresh_interval,omitempty"`
+	// mysql 插件的配置
+	Mysql *DatabaseComponentConfig_Database_Metrics_Mysql `protobuf:"bytes,4,opt,name=mysql,proto3" json:"mysql,omitempty"`
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics) Reset() {
+	*x = DatabaseComponentConfig_Database_Metrics{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_config_proto_msgTypes[43]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DatabaseComponentConfig_Database_Metrics) ProtoMessage() {}
+
+func (x *DatabaseComponentConfig_Database_Metrics) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[43]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DatabaseComponentConfig_Database_Metrics.ProtoReflect.Descriptor instead.
+func (*DatabaseComponentConfig_Database_Metrics) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 2}
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics) GetDisable() bool {
+	if x != nil {
+		return x.Disable
+	}
+	return false
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics) GetRefreshInterval() *durationpb.Duration {
+	if x != nil {
+		return x.RefreshInterval
+	}
+	return nil
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics) GetMysql() *DatabaseComponentConfig_Database_Metrics_Mysql {
+	if x != nil {
+		return x.Mysql
+	}
+	return nil
+}
+
 type DatabaseComponentConfig_Database_Gorm struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2982,7 +3048,7 @@ type DatabaseComponentConfig_Database_Gorm struct {
 func (x *DatabaseComponentConfig_Database_Gorm) Reset() {
 	*x = DatabaseComponentConfig_Database_Gorm{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[43]
+		mi := &file_config_proto_msgTypes[44]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2995,7 +3061,7 @@ func (x *DatabaseComponentConfig_Database_Gorm) String() string {
 func (*DatabaseComponentConfig_Database_Gorm) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Gorm) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[43]
+	mi := &file_config_proto_msgTypes[44]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3008,7 +3074,7 @@ func (x *DatabaseComponentConfig_Database_Gorm) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use DatabaseComponentConfig_Database_Gorm.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Gorm) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 2}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 3}
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm) GetSkipDefaultTransaction() bool {
@@ -3129,7 +3195,7 @@ type DatabaseComponentConfig_Database_Connection struct {
 func (x *DatabaseComponentConfig_Database_Connection) Reset() {
 	*x = DatabaseComponentConfig_Database_Connection{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[44]
+		mi := &file_config_proto_msgTypes[45]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3142,7 +3208,7 @@ func (x *DatabaseComponentConfig_Database_Connection) String() string {
 func (*DatabaseComponentConfig_Database_Connection) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Connection) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[44]
+	mi := &file_config_proto_msgTypes[45]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3155,7 +3221,7 @@ func (x *DatabaseComponentConfig_Database_Connection) ProtoReflect() protoreflec
 
 // Deprecated: Use DatabaseComponentConfig_Database_Connection.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Connection) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 3}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 4}
 }
 
 func (x *DatabaseComponentConfig_Database_Connection) GetDriver() string {
@@ -3193,6 +3259,72 @@ func (x *DatabaseComponentConfig_Database_Connection) GetTraceResolverMode() boo
 	return false
 }
 
+type DatabaseComponentConfig_Database_Metrics_Mysql struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// 指标前缀，默认 gorm_status_
+	Prefix string `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	// 间隔 默认 refresh_interval
+	Interval *durationpb.Duration `protobuf:"bytes,2,opt,name=interval,proto3" json:"interval,omitempty"`
+	// 采集哪些指标，默认所有
+	VariableNames []string `protobuf:"bytes,3,rep,name=variable_names,json=variableNames,proto3" json:"variable_names,omitempty"`
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics_Mysql) Reset() {
+	*x = DatabaseComponentConfig_Database_Metrics_Mysql{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_config_proto_msgTypes[47]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics_Mysql) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DatabaseComponentConfig_Database_Metrics_Mysql) ProtoMessage() {}
+
+func (x *DatabaseComponentConfig_Database_Metrics_Mysql) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[47]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DatabaseComponentConfig_Database_Metrics_Mysql.ProtoReflect.Descriptor instead.
+func (*DatabaseComponentConfig_Database_Metrics_Mysql) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 2, 1}
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics_Mysql) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics_Mysql) GetInterval() *durationpb.Duration {
+	if x != nil {
+		return x.Interval
+	}
+	return nil
+}
+
+func (x *DatabaseComponentConfig_Database_Metrics_Mysql) GetVariableNames() []string {
+	if x != nil {
+		return x.VariableNames
+	}
+	return nil
+}
+
 type DatabaseComponentConfig_Database_Gorm_Logger struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -3212,7 +3344,7 @@ type DatabaseComponentConfig_Database_Gorm_Logger struct {
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) Reset() {
 	*x = DatabaseComponentConfig_Database_Gorm_Logger{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[45]
+		mi := &file_config_proto_msgTypes[48]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3225,7 +3357,7 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) String() string {
 func (*DatabaseComponentConfig_Database_Gorm_Logger) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[45]
+	mi := &file_config_proto_msgTypes[48]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3238,7 +3370,7 @@ func (x *DatabaseComponentConfig_Database_Gorm_Logger) ProtoReflect() protorefle
 
 // Deprecated: Use DatabaseComponentConfig_Database_Gorm_Logger.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Gorm_Logger) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 2, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 3, 0}
 }
 
 func (x *DatabaseComponentConfig_Database_Gorm_Logger) GetLevel() DatabaseComponentConfig_Database_Gorm_Logger_Level {
@@ -3291,7 +3423,7 @@ type DatabaseComponentConfig_Database_Connection_Dialector struct {
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) Reset() {
 	*x = DatabaseComponentConfig_Database_Connection_Dialector{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[46]
+		mi := &file_config_proto_msgTypes[49]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3304,7 +3436,7 @@ func (x *DatabaseComponentConfig_Database_Connection_Dialector) String() string 
 func (*DatabaseComponentConfig_Database_Connection_Dialector) ProtoMessage() {}
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[46]
+	mi := &file_config_proto_msgTypes[49]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3317,7 +3449,7 @@ func (x *DatabaseComponentConfig_Database_Connection_Dialector) ProtoReflect() p
 
 // Deprecated: Use DatabaseComponentConfig_Database_Connection_Dialector.ProtoReflect.Descriptor instead.
 func (*DatabaseComponentConfig_Database_Connection_Dialector) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6, 0, 3, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0, 4, 0}
 }
 
 func (x *DatabaseComponentConfig_Database_Connection_Dialector) GetDriver() string {
@@ -3354,7 +3486,7 @@ type RedisComponentConfig_RedisConfig struct {
 func (x *RedisComponentConfig_RedisConfig) Reset() {
 	*x = RedisComponentConfig_RedisConfig{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[47]
+		mi := &file_config_proto_msgTypes[50]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3367,7 +3499,7 @@ func (x *RedisComponentConfig_RedisConfig) String() string {
 func (*RedisComponentConfig_RedisConfig) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[47]
+	mi := &file_config_proto_msgTypes[50]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3435,7 +3567,7 @@ type RedisComponentConfig_RedisConfig_Tracing struct {
 func (x *RedisComponentConfig_RedisConfig_Tracing) Reset() {
 	*x = RedisComponentConfig_RedisConfig_Tracing{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[49]
+		mi := &file_config_proto_msgTypes[52]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3448,7 +3580,7 @@ func (x *RedisComponentConfig_RedisConfig_Tracing) String() string {
 func (*RedisComponentConfig_RedisConfig_Tracing) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[49]
+	mi := &file_config_proto_msgTypes[52]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3503,7 +3635,7 @@ type RedisComponentConfig_RedisConfig_Metrics struct {
 func (x *RedisComponentConfig_RedisConfig_Metrics) Reset() {
 	*x = RedisComponentConfig_RedisConfig_Metrics{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[50]
+		mi := &file_config_proto_msgTypes[53]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3516,7 +3648,7 @@ func (x *RedisComponentConfig_RedisConfig_Metrics) String() string {
 func (*RedisComponentConfig_RedisConfig_Metrics) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[50]
+	mi := &file_config_proto_msgTypes[53]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3672,7 +3804,7 @@ type RedisComponentConfig_RedisConfig_RedisOption struct {
 func (x *RedisComponentConfig_RedisConfig_RedisOption) Reset() {
 	*x = RedisComponentConfig_RedisConfig_RedisOption{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[51]
+		mi := &file_config_proto_msgTypes[54]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3685,7 +3817,7 @@ func (x *RedisComponentConfig_RedisConfig_RedisOption) String() string {
 func (*RedisComponentConfig_RedisConfig_RedisOption) ProtoMessage() {}
 
 func (x *RedisComponentConfig_RedisConfig_RedisOption) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[51]
+	mi := &file_config_proto_msgTypes[54]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3946,7 +4078,7 @@ type ClientComponentConfig_Client struct {
 func (x *ClientComponentConfig_Client) Reset() {
 	*x = ClientComponentConfig_Client{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[52]
+		mi := &file_config_proto_msgTypes[55]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3959,7 +4091,7 @@ func (x *ClientComponentConfig_Client) String() string {
 func (*ClientComponentConfig_Client) ProtoMessage() {}
 
 func (x *ClientComponentConfig_Client) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[52]
+	mi := &file_config_proto_msgTypes[55]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4007,7 +4139,7 @@ type ClientComponentConfig_Client_ClientOption struct {
 func (x *ClientComponentConfig_Client_ClientOption) Reset() {
 	*x = ClientComponentConfig_Client_ClientOption{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[54]
+		mi := &file_config_proto_msgTypes[57]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4020,7 +4152,7 @@ func (x *ClientComponentConfig_Client_ClientOption) String() string {
 func (*ClientComponentConfig_Client_ClientOption) ProtoMessage() {}
 
 func (x *ClientComponentConfig_Client_ClientOption) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[54]
+	mi := &file_config_proto_msgTypes[57]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4074,7 +4206,7 @@ type ClientComponentConfig_Client_ClientOption_ClientMiddleware struct {
 func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) Reset() {
 	*x = ClientComponentConfig_Client_ClientOption_ClientMiddleware{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[55]
+		mi := &file_config_proto_msgTypes[58]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4087,7 +4219,7 @@ func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) String() st
 func (*ClientComponentConfig_Client_ClientOption_ClientMiddleware) ProtoMessage() {}
 
 func (x *ClientComponentConfig_Client_ClientOption_ClientMiddleware) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[55]
+	mi := &file_config_proto_msgTypes[58]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4167,7 +4299,7 @@ type JobComponent_JobConfig struct {
 func (x *JobComponent_JobConfig) Reset() {
 	*x = JobComponent_JobConfig{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[56]
+		mi := &file_config_proto_msgTypes[59]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4180,7 +4312,7 @@ func (x *JobComponent_JobConfig) String() string {
 func (*JobComponent_JobConfig) ProtoMessage() {}
 
 func (x *JobComponent_JobConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[56]
+	mi := &file_config_proto_msgTypes[59]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4260,7 +4392,7 @@ type JobComponent_JobConfig_Job struct {
 func (x *JobComponent_JobConfig_Job) Reset() {
 	*x = JobComponent_JobConfig_Job{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[58]
+		mi := &file_config_proto_msgTypes[61]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4273,7 +4405,7 @@ func (x *JobComponent_JobConfig_Job) String() string {
 func (*JobComponent_JobConfig_Job) ProtoMessage() {}
 
 func (x *JobComponent_JobConfig_Job) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[58]
+	mi := &file_config_proto_msgTypes[61]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4325,14 +4457,12 @@ type JobComponent_JobConfig_Tracing struct {
 
 	// 是否禁用
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// tracer name
-	TracerName string `protobuf:"bytes,2,opt,name=tracer_name,json=tracerName,proto3" json:"tracer_name,omitempty"`
 }
 
 func (x *JobComponent_JobConfig_Tracing) Reset() {
 	*x = JobComponent_JobConfig_Tracing{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[59]
+		mi := &file_config_proto_msgTypes[62]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4345,7 +4475,7 @@ func (x *JobComponent_JobConfig_Tracing) String() string {
 func (*JobComponent_JobConfig_Tracing) ProtoMessage() {}
 
 func (x *JobComponent_JobConfig_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[59]
+	mi := &file_config_proto_msgTypes[62]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4368,13 +4498,6 @@ func (x *JobComponent_JobConfig_Tracing) GetDisable() bool {
 	return false
 }
 
-func (x *JobComponent_JobConfig_Tracing) GetTracerName() string {
-	if x != nil {
-		return x.TracerName
-	}
-	return ""
-}
-
 // 监控配置
 type JobComponent_JobConfig_Metrics struct {
 	state         protoimpl.MessageState
@@ -4383,14 +4506,12 @@ type JobComponent_JobConfig_Metrics struct {
 
 	// 是否禁用
 	Disable bool `protobuf:"varint,1,opt,name=disable,proto3" json:"disable,omitempty"`
-	// meter name
-	MeterName string `protobuf:"bytes,2,opt,name=meter_name,json=meterName,proto3" json:"meter_name,omitempty"`
 }
 
 func (x *JobComponent_JobConfig_Metrics) Reset() {
 	*x = JobComponent_JobConfig_Metrics{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_config_proto_msgTypes[60]
+		mi := &file_config_proto_msgTypes[63]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4403,7 +4524,7 @@ func (x *JobComponent_JobConfig_Metrics) String() string {
 func (*JobComponent_JobConfig_Metrics) ProtoMessage() {}
 
 func (x *JobComponent_JobConfig_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[60]
+	mi := &file_config_proto_msgTypes[63]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4424,13 +4545,6 @@ func (x *JobComponent_JobConfig_Metrics) GetDisable() bool {
 		return x.Disable
 	}
 	return false
-}
-
-func (x *JobComponent_JobConfig_Metrics) GetMeterName() string {
-	if x != nil {
-		return x.MeterName
-	}
-	return ""
 }
 
 var File_config_proto protoreflect.FileDescriptor
@@ -4637,7 +4751,7 @@ var file_config_proto_rawDesc = []byte{
 	0x01, 0x28, 0x01, 0x52, 0x05, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x22, 0x2a, 0x0a, 0x06, 0x53, 0x61,
 	0x6d, 0x70, 0x6c, 0x65, 0x12, 0x09, 0x0a, 0x05, 0x52, 0x41, 0x54, 0x49, 0x4f, 0x10, 0x00, 0x12,
 	0x0a, 0x0a, 0x06, 0x41, 0x4c, 0x57, 0x41, 0x59, 0x53, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x4e,
-	0x45, 0x56, 0x45, 0x52, 0x10, 0x02, 0x22, 0xfd, 0x0a, 0x0a, 0x10, 0x4d, 0x69, 0x64, 0x64, 0x6c,
+	0x45, 0x56, 0x45, 0x52, 0x10, 0x02, 0x22, 0xbd, 0x0a, 0x0a, 0x10, 0x4d, 0x69, 0x64, 0x64, 0x6c,
 	0x65, 0x77, 0x61, 0x72, 0x65, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x1a, 0xd8, 0x01, 0x0a, 0x08,
 	0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61,
 	0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62,
@@ -4652,15 +4766,11 @@ var file_config_proto_rawDesc = []byte{
 	0x74, 0x61, 0x6e, 0x74, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65,
 	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05,
 	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c,
-	0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x44, 0x0a, 0x07, 0x54, 0x72, 0x61, 0x63, 0x69, 0x6e,
+	0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x23, 0x0a, 0x07, 0x54, 0x72, 0x61, 0x63, 0x69, 0x6e,
 	0x67, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x74,
-	0x72, 0x61, 0x63, 0x65, 0x72, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x0a, 0x74, 0x72, 0x61, 0x63, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, 0x1a, 0x42, 0x0a, 0x07,
-	0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62,
-	0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c,
-	0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x6d, 0x65, 0x74, 0x65, 0x72, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x6d, 0x65, 0x74, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65,
+	0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x1a, 0x23, 0x0a, 0x07, 0x4d,
+	0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65,
 	0x1a, 0x23, 0x0a, 0x07, 0x4c, 0x6f, 0x67, 0x67, 0x69, 0x6e, 0x67, 0x12, 0x18, 0x0a, 0x07, 0x64,
 	0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x69,
 	0x73, 0x61, 0x62, 0x6c, 0x65, 0x1a, 0x25, 0x0a, 0x09, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
@@ -4839,14 +4949,14 @@ var file_config_proto_rawDesc = []byte{
 	0x61, 0x6c, 0x74, 0x68, 0x12, 0x2d, 0x0a, 0x12, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x5f,
 	0x72, 0x65, 0x66, 0x6c, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x08,
 	0x52, 0x11, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x66, 0x6c, 0x65, 0x63, 0x74,
-	0x69, 0x6f, 0x6e, 0x22, 0x81, 0x13, 0x0a, 0x17, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65,
+	0x69, 0x6f, 0x6e, 0x22, 0xc1, 0x17, 0x0a, 0x17, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65,
 	0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x12,
 	0x52, 0x0a, 0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x36, 0x2e, 0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73, 0x5f, 0x66, 0x6f, 0x75, 0x6e, 0x64,
 	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73,
 	0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67,
 	0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x52, 0x08, 0x64, 0x61, 0x74, 0x61, 0x62,
-	0x61, 0x73, 0x65, 0x1a, 0x91, 0x12, 0x0a, 0x08, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65,
+	0x61, 0x73, 0x65, 0x1a, 0xd1, 0x16, 0x0a, 0x08, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65,
 	0x12, 0x4f, 0x0a, 0x04, 0x67, 0x6f, 0x72, 0x6d, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x3b,
 	0x2e, 0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73, 0x5f, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69,
 	0x6f, 0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x43, 0x6f,
@@ -4870,30 +4980,66 @@ var file_config_proto_rawDesc = []byte{
 	0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x43, 0x6f, 0x6d,
 	0x70, 0x6f, 0x6e, 0x65, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2e, 0x44, 0x61, 0x74,
 	0x61, 0x62, 0x61, 0x73, 0x65, 0x2e, 0x54, 0x72, 0x61, 0x63, 0x69, 0x6e, 0x67, 0x52, 0x07, 0x74,
-	0x72, 0x61, 0x63, 0x69, 0x6e, 0x67, 0x1a, 0x81, 0x01, 0x0a, 0x10, 0x43, 0x6f, 0x6e, 0x6e, 0x65,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b,
-	0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x57, 0x0a,
-	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x41, 0x2e, 0x6b,
-	0x72, 0x61, 0x74, 0x6f, 0x73, 0x5f, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e,
-	0x5f, 0x70, 0x62, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x43, 0x6f, 0x6d, 0x70,
-	0x6f, 0x6e, 0x65, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2e, 0x44, 0x61, 0x74, 0x61,
-	0x62, 0x61, 0x73, 0x65, 0x2e, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52,
-	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0xec, 0x01, 0x0a, 0x07, 0x54,
-	0x72, 0x61, 0x63, 0x69, 0x6e, 0x67, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c,
-	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65,
-	0x12, 0x2c, 0x0a, 0x12, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x71, 0x75, 0x65, 0x72,
-	0x79, 0x5f, 0x76, 0x61, 0x72, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x10, 0x65, 0x78,
-	0x63, 0x6c, 0x75, 0x64, 0x65, 0x51, 0x75, 0x65, 0x72, 0x79, 0x56, 0x61, 0x72, 0x73, 0x12, 0x27,
-	0x0a, 0x0f, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63,
-	0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0e, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65,
-	0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12, 0x3a, 0x0a, 0x1a, 0x72, 0x65, 0x63, 0x6f, 0x72,
-	0x64, 0x5f, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x5f, 0x74, 0x72, 0x61, 0x63, 0x65, 0x5f, 0x69, 0x6e,
-	0x5f, 0x73, 0x70, 0x61, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x16, 0x72, 0x65, 0x63,
-	0x6f, 0x72, 0x64, 0x53, 0x74, 0x61, 0x63, 0x6b, 0x54, 0x72, 0x61, 0x63, 0x65, 0x49, 0x6e, 0x53,
-	0x70, 0x61, 0x6e, 0x12, 0x34, 0x0a, 0x16, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x73,
-	0x65, 0x72, 0x76, 0x65, 0x72, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x05, 0x20,
-	0x01, 0x28, 0x08, 0x52, 0x14, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x53, 0x65, 0x72, 0x76,
-	0x65, 0x72, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x1a, 0xfc, 0x09, 0x0a, 0x04, 0x47, 0x6f,
+	0x72, 0x61, 0x63, 0x69, 0x6e, 0x67, 0x12, 0x58, 0x0a, 0x07, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63,
+	0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x3e, 0x2e, 0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73,
+	0x5f, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x44,
+	0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65, 0x6e, 0x74,
+	0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x2e,
+	0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x52, 0x07, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73,
+	0x1a, 0x81, 0x01, 0x0a, 0x10, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x57, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x41, 0x2e, 0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73, 0x5f,
+	0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x44, 0x61,
+	0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65, 0x6e, 0x74, 0x43,
+	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x2e, 0x43,
+	0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x3a, 0x02, 0x38, 0x01, 0x1a, 0xec, 0x01, 0x0a, 0x07, 0x54, 0x72, 0x61, 0x63, 0x69, 0x6e, 0x67,
+	0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x2c, 0x0a, 0x12, 0x65, 0x78,
+	0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x71, 0x75, 0x65, 0x72, 0x79, 0x5f, 0x76, 0x61, 0x72, 0x73,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x10, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x51,
+	0x75, 0x65, 0x72, 0x79, 0x56, 0x61, 0x72, 0x73, 0x12, 0x27, 0x0a, 0x0f, 0x65, 0x78, 0x63, 0x6c,
+	0x75, 0x64, 0x65, 0x5f, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x0e, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63,
+	0x73, 0x12, 0x3a, 0x0a, 0x1a, 0x72, 0x65, 0x63, 0x6f, 0x72, 0x64, 0x5f, 0x73, 0x74, 0x61, 0x63,
+	0x6b, 0x5f, 0x74, 0x72, 0x61, 0x63, 0x65, 0x5f, 0x69, 0x6e, 0x5f, 0x73, 0x70, 0x61, 0x6e, 0x18,
+	0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x16, 0x72, 0x65, 0x63, 0x6f, 0x72, 0x64, 0x53, 0x74, 0x61,
+	0x63, 0x6b, 0x54, 0x72, 0x61, 0x63, 0x65, 0x49, 0x6e, 0x53, 0x70, 0x61, 0x6e, 0x12, 0x34, 0x0a,
+	0x16, 0x65, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x5f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x5f,
+	0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x14, 0x65,
+	0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x41, 0x64, 0x64, 0x72,
+	0x65, 0x73, 0x73, 0x1a, 0xe3, 0x03, 0x0a, 0x07, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12,
+	0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x62, 0x0a, 0x06, 0x6c, 0x61, 0x62,
+	0x65, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x4a, 0x2e, 0x6b, 0x72, 0x61, 0x74,
+	0x6f, 0x73, 0x5f, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x62,
+	0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65,
+	0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73,
+	0x65, 0x2e, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x2e, 0x4c, 0x61, 0x62, 0x65, 0x6c, 0x73,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x06, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x73, 0x12, 0x44, 0x0a,
+	0x10, 0x72, 0x65, 0x66, 0x72, 0x65, 0x73, 0x68, 0x5f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x76, 0x61,
+	0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
+	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x52, 0x0f, 0x72, 0x65, 0x66, 0x72, 0x65, 0x73, 0x68, 0x49, 0x6e, 0x74, 0x65, 0x72,
+	0x76, 0x61, 0x6c, 0x12, 0x5a, 0x0a, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x44, 0x2e, 0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73, 0x5f, 0x66, 0x6f, 0x75, 0x6e,
+	0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61,
+	0x73, 0x65, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69,
+	0x67, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x2e, 0x4d, 0x65, 0x74, 0x72, 0x69,
+	0x63, 0x73, 0x2e, 0x4d, 0x79, 0x73, 0x71, 0x6c, 0x52, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x1a,
+	0x39, 0x0a, 0x0b, 0x4c, 0x61, 0x62, 0x65, 0x6c, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10,
+	0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79,
+	0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x7d, 0x0a, 0x05, 0x4d, 0x79,
+	0x73, 0x71, 0x6c, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x12, 0x35, 0x0a, 0x08, 0x69,
+	0x6e, 0x74, 0x65, 0x72, 0x76, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e,
+	0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e,
+	0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x08, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x76,
+	0x61, 0x6c, 0x12, 0x25, 0x0a, 0x0e, 0x76, 0x61, 0x72, 0x69, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e,
+	0x61, 0x6d, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d, 0x76, 0x61, 0x72, 0x69,
+	0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x1a, 0xfc, 0x09, 0x0a, 0x04, 0x47, 0x6f,
 	0x72, 0x6d, 0x12, 0x38, 0x0a, 0x18, 0x73, 0x6b, 0x69, 0x70, 0x5f, 0x64, 0x65, 0x66, 0x61, 0x75,
 	0x6c, 0x74, 0x5f, 0x74, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x08, 0x52, 0x16, 0x73, 0x6b, 0x69, 0x70, 0x44, 0x65, 0x66, 0x61, 0x75, 0x6c,
@@ -5213,12 +5359,12 @@ var file_config_proto_rawDesc = []byte{
 	0x08, 0x0a, 0x04, 0x47, 0x52, 0x50, 0x43, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x48, 0x54, 0x54,
 	0x50, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x47, 0x52, 0x50, 0x43, 0x53, 0x10, 0x02, 0x12, 0x09,
 	0x0a, 0x05, 0x48, 0x54, 0x54, 0x50, 0x53, 0x10, 0x03, 0x42, 0x06, 0x0a, 0x04, 0x5f, 0x6c, 0x6f,
-	0x67, 0x22, 0xcc, 0x07, 0x0a, 0x0c, 0x4a, 0x6f, 0x62, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65,
+	0x67, 0x22, 0x8c, 0x07, 0x0a, 0x0c, 0x4a, 0x6f, 0x62, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e, 0x65,
 	0x6e, 0x74, 0x12, 0x3e, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
 	0x2c, 0x2e, 0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73, 0x5f, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74,
 	0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x62, 0x2e, 0x4a, 0x6f, 0x62, 0x43, 0x6f, 0x6d, 0x70, 0x6f, 0x6e,
 	0x65, 0x6e, 0x74, 0x2e, 0x4a, 0x6f, 0x62, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x03, 0x6a,
-	0x6f, 0x62, 0x1a, 0xfb, 0x06, 0x0a, 0x09, 0x4a, 0x6f, 0x62, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67,
+	0x6f, 0x62, 0x1a, 0xbb, 0x06, 0x0a, 0x09, 0x4a, 0x6f, 0x62, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67,
 	0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x74, 0x69,
 	0x6d, 0x65, 0x7a, 0x6f, 0x6e, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x74, 0x69,
@@ -5264,16 +5410,12 @@ var file_config_proto_rawDesc = []byte{
 	0x65, 0x64, 0x69, 0x61, 0x74, 0x65, 0x6c, 0x79, 0x22, 0x34, 0x0a, 0x10, 0x43, 0x6f, 0x6e, 0x63,
 	0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x12, 0x0b, 0x0a, 0x07,
 	0x4f, 0x56, 0x45, 0x52, 0x4c, 0x41, 0x50, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x44, 0x45, 0x4c,
-	0x41, 0x59, 0x10, 0x01, 0x12, 0x08, 0x0a, 0x04, 0x53, 0x4b, 0x49, 0x50, 0x10, 0x02, 0x1a, 0x44,
+	0x41, 0x59, 0x10, 0x01, 0x12, 0x08, 0x0a, 0x04, 0x53, 0x4b, 0x49, 0x50, 0x10, 0x02, 0x1a, 0x23,
 	0x0a, 0x07, 0x54, 0x72, 0x61, 0x63, 0x69, 0x6e, 0x67, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x73,
 	0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x69, 0x73, 0x61,
-	0x62, 0x6c, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x74, 0x72, 0x61, 0x63, 0x65, 0x72, 0x5f, 0x6e, 0x61,
-	0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x74, 0x72, 0x61, 0x63, 0x65, 0x72,
-	0x4e, 0x61, 0x6d, 0x65, 0x1a, 0x42, 0x0a, 0x07, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12,
-	0x18, 0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08,
-	0x52, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x6d, 0x65, 0x74,
-	0x65, 0x72, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x6d,
-	0x65, 0x74, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, 0x42, 0x06, 0x0a, 0x04, 0x5f, 0x6c, 0x6f, 0x67,
+	0x62, 0x6c, 0x65, 0x1a, 0x23, 0x0a, 0x07, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12, 0x18,
+	0x0a, 0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x07, 0x64, 0x69, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x42, 0x06, 0x0a, 0x04, 0x5f, 0x6c, 0x6f, 0x67,
 	0x42, 0x4a, 0x5a, 0x48, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6a,
 	0x61, 0x67, 0x67, 0x65, 0x72, 0x7a, 0x68, 0x75, 0x61, 0x6e, 0x67, 0x31, 0x39, 0x39, 0x34, 0x2f,
 	0x6b, 0x72, 0x61, 0x74, 0x6f, 0x73, 0x2d, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f,
@@ -5295,7 +5437,7 @@ func file_config_proto_rawDescGZIP() []byte {
 }
 
 var file_config_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
 var file_config_proto_goTypes = []interface{}{
 	(TracingComponentConfig_Tracing_Exporter_Compression)(0), // 0: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
 	(TracingComponentConfig_Tracing_Sampler_Sample)(0),       // 1: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
@@ -5323,47 +5465,50 @@ var file_config_proto_goTypes = []interface{}{
 	(*TracingComponentConfig_Tracing_Exporter)(nil),          // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter
 	(*TracingComponentConfig_Tracing_Sampler)(nil),           // 24: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler
 	nil, // 25: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
-	(*TracingComponentConfig_Tracing_Exporter_RetryConfig)(nil),        // 26: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
-	(*MiddlewareConfig_Metadata)(nil),                                  // 27: kratos_foundation_pb.MiddlewareConfig.Metadata
-	(*MiddlewareConfig_Tracing)(nil),                                   // 28: kratos_foundation_pb.MiddlewareConfig.Tracing
-	(*MiddlewareConfig_Metrics)(nil),                                   // 29: kratos_foundation_pb.MiddlewareConfig.Metrics
-	(*MiddlewareConfig_Logging)(nil),                                   // 30: kratos_foundation_pb.MiddlewareConfig.Logging
-	(*MiddlewareConfig_Validator)(nil),                                 // 31: kratos_foundation_pb.MiddlewareConfig.Validator
-	(*MiddlewareConfig_Ratelimit)(nil),                                 // 32: kratos_foundation_pb.MiddlewareConfig.Ratelimit
-	(*MiddlewareConfig_Circuitbreaker)(nil),                            // 33: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker
-	(*MiddlewareConfig_Timeout)(nil),                                   // 34: kratos_foundation_pb.MiddlewareConfig.Timeout
-	nil,                                                                // 35: kratos_foundation_pb.MiddlewareConfig.Metadata.ConstantsEntry
-	(*MiddlewareConfig_Ratelimit_BBRLimiter)(nil),                      // 36: kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter
-	(*MiddlewareConfig_Circuitbreaker_SREBreaker)(nil),                 // 37: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker
-	(*MiddlewareConfig_Timeout_RouteRule)(nil),                         // 38: kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule
-	(*ServerComponentConfig_Server)(nil),                               // 39: kratos_foundation_pb.ServerComponentConfig.Server
-	(*ServerComponentConfig_Server_Endpoint)(nil),                      // 40: kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
-	(*ServerComponentConfig_Server_ServerMiddleware)(nil),              // 41: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware
-	(*ServerComponentConfig_Server_HttpServerOption)(nil),              // 42: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption
-	(*ServerComponentConfig_Server_GrpcServerOption)(nil),              // 43: kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption
-	(*ServerComponentConfig_Server_HttpServerOption_Metrics)(nil),      // 44: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.Metrics
-	(*DatabaseComponentConfig_Database)(nil),                           // 45: kratos_foundation_pb.DatabaseComponentConfig.Database
-	nil,                                                                // 46: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
-	(*DatabaseComponentConfig_Database_Tracing)(nil),                   // 47: kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
-	(*DatabaseComponentConfig_Database_Gorm)(nil),                      // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
-	(*DatabaseComponentConfig_Database_Connection)(nil),                // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
-	(*DatabaseComponentConfig_Database_Gorm_Logger)(nil),               // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
-	(*DatabaseComponentConfig_Database_Connection_Dialector)(nil),      // 51: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
-	(*RedisComponentConfig_RedisConfig)(nil),                           // 52: kratos_foundation_pb.RedisComponentConfig.RedisConfig
-	nil,                                                                // 53: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
-	(*RedisComponentConfig_RedisConfig_Tracing)(nil),                   // 54: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
-	(*RedisComponentConfig_RedisConfig_Metrics)(nil),                   // 55: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
-	(*RedisComponentConfig_RedisConfig_RedisOption)(nil),               // 56: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
-	(*ClientComponentConfig_Client)(nil),                               // 57: kratos_foundation_pb.ClientComponentConfig.Client
-	nil,                                                                // 58: kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry
-	(*ClientComponentConfig_Client_ClientOption)(nil),                  // 59: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption
-	(*ClientComponentConfig_Client_ClientOption_ClientMiddleware)(nil), // 60: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware
-	(*JobComponent_JobConfig)(nil),                                     // 61: kratos_foundation_pb.JobComponent.JobConfig
-	nil,                                                                // 62: kratos_foundation_pb.JobComponent.JobConfig.JobsEntry
-	(*JobComponent_JobConfig_Job)(nil),                                 // 63: kratos_foundation_pb.JobComponent.JobConfig.Job
-	(*JobComponent_JobConfig_Tracing)(nil),                             // 64: kratos_foundation_pb.JobComponent.JobConfig.Tracing
-	(*JobComponent_JobConfig_Metrics)(nil),                             // 65: kratos_foundation_pb.JobComponent.JobConfig.Metrics
-	(*durationpb.Duration)(nil),                                        // 66: google.protobuf.Duration
+	(*TracingComponentConfig_Tracing_Exporter_RetryConfig)(nil),   // 26: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
+	(*MiddlewareConfig_Metadata)(nil),                             // 27: kratos_foundation_pb.MiddlewareConfig.Metadata
+	(*MiddlewareConfig_Tracing)(nil),                              // 28: kratos_foundation_pb.MiddlewareConfig.Tracing
+	(*MiddlewareConfig_Metrics)(nil),                              // 29: kratos_foundation_pb.MiddlewareConfig.Metrics
+	(*MiddlewareConfig_Logging)(nil),                              // 30: kratos_foundation_pb.MiddlewareConfig.Logging
+	(*MiddlewareConfig_Validator)(nil),                            // 31: kratos_foundation_pb.MiddlewareConfig.Validator
+	(*MiddlewareConfig_Ratelimit)(nil),                            // 32: kratos_foundation_pb.MiddlewareConfig.Ratelimit
+	(*MiddlewareConfig_Circuitbreaker)(nil),                       // 33: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker
+	(*MiddlewareConfig_Timeout)(nil),                              // 34: kratos_foundation_pb.MiddlewareConfig.Timeout
+	nil,                                                           // 35: kratos_foundation_pb.MiddlewareConfig.Metadata.ConstantsEntry
+	(*MiddlewareConfig_Ratelimit_BBRLimiter)(nil),                 // 36: kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter
+	(*MiddlewareConfig_Circuitbreaker_SREBreaker)(nil),            // 37: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker
+	(*MiddlewareConfig_Timeout_RouteRule)(nil),                    // 38: kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule
+	(*ServerComponentConfig_Server)(nil),                          // 39: kratos_foundation_pb.ServerComponentConfig.Server
+	(*ServerComponentConfig_Server_Endpoint)(nil),                 // 40: kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
+	(*ServerComponentConfig_Server_ServerMiddleware)(nil),         // 41: kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware
+	(*ServerComponentConfig_Server_HttpServerOption)(nil),         // 42: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption
+	(*ServerComponentConfig_Server_GrpcServerOption)(nil),         // 43: kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption
+	(*ServerComponentConfig_Server_HttpServerOption_Metrics)(nil), // 44: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.Metrics
+	(*DatabaseComponentConfig_Database)(nil),                      // 45: kratos_foundation_pb.DatabaseComponentConfig.Database
+	nil,                                                           // 46: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
+	(*DatabaseComponentConfig_Database_Tracing)(nil),              // 47: kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
+	(*DatabaseComponentConfig_Database_Metrics)(nil),              // 48: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics
+	(*DatabaseComponentConfig_Database_Gorm)(nil),                 // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
+	(*DatabaseComponentConfig_Database_Connection)(nil),           // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
+	nil, // 51: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.LabelsEntry
+	(*DatabaseComponentConfig_Database_Metrics_Mysql)(nil),             // 52: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.Mysql
+	(*DatabaseComponentConfig_Database_Gorm_Logger)(nil),               // 53: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
+	(*DatabaseComponentConfig_Database_Connection_Dialector)(nil),      // 54: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
+	(*RedisComponentConfig_RedisConfig)(nil),                           // 55: kratos_foundation_pb.RedisComponentConfig.RedisConfig
+	nil,                                                                // 56: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
+	(*RedisComponentConfig_RedisConfig_Tracing)(nil),                   // 57: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
+	(*RedisComponentConfig_RedisConfig_Metrics)(nil),                   // 58: kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	(*RedisComponentConfig_RedisConfig_RedisOption)(nil),               // 59: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
+	(*ClientComponentConfig_Client)(nil),                               // 60: kratos_foundation_pb.ClientComponentConfig.Client
+	nil,                                                                // 61: kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry
+	(*ClientComponentConfig_Client_ClientOption)(nil),                  // 62: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption
+	(*ClientComponentConfig_Client_ClientOption_ClientMiddleware)(nil), // 63: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware
+	(*JobComponent_JobConfig)(nil),                                     // 64: kratos_foundation_pb.JobComponent.JobConfig
+	nil,                                                                // 65: kratos_foundation_pb.JobComponent.JobConfig.JobsEntry
+	(*JobComponent_JobConfig_Job)(nil),                                 // 66: kratos_foundation_pb.JobComponent.JobConfig.Job
+	(*JobComponent_JobConfig_Tracing)(nil),                             // 67: kratos_foundation_pb.JobComponent.JobConfig.Tracing
+	(*JobComponent_JobConfig_Metrics)(nil),                             // 68: kratos_foundation_pb.JobComponent.JobConfig.Metrics
+	(*durationpb.Duration)(nil),                                        // 69: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
 	15, // 0: kratos_foundation_pb.AppComponentConfig.app:type_name -> kratos_foundation_pb.AppComponentConfig.App
@@ -5372,11 +5517,11 @@ var file_config_proto_depIdxs = []int32{
 	22, // 3: kratos_foundation_pb.TracingComponentConfig.tracing:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing
 	39, // 4: kratos_foundation_pb.ServerComponentConfig.server:type_name -> kratos_foundation_pb.ServerComponentConfig.Server
 	45, // 5: kratos_foundation_pb.DatabaseComponentConfig.database:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database
-	52, // 6: kratos_foundation_pb.RedisComponentConfig.redis:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig
-	57, // 7: kratos_foundation_pb.ClientComponentConfig.client:type_name -> kratos_foundation_pb.ClientComponentConfig.Client
-	61, // 8: kratos_foundation_pb.JobComponent.job:type_name -> kratos_foundation_pb.JobComponent.JobConfig
-	66, // 9: kratos_foundation_pb.AppComponentConfig.App.registrar_timeout:type_name -> google.protobuf.Duration
-	66, // 10: kratos_foundation_pb.AppComponentConfig.App.stop_timeout:type_name -> google.protobuf.Duration
+	55, // 6: kratos_foundation_pb.RedisComponentConfig.redis:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig
+	60, // 7: kratos_foundation_pb.ClientComponentConfig.client:type_name -> kratos_foundation_pb.ClientComponentConfig.Client
+	64, // 8: kratos_foundation_pb.JobComponent.job:type_name -> kratos_foundation_pb.JobComponent.JobConfig
+	69, // 9: kratos_foundation_pb.AppComponentConfig.App.registrar_timeout:type_name -> google.protobuf.Duration
+	69, // 10: kratos_foundation_pb.AppComponentConfig.App.stop_timeout:type_name -> google.protobuf.Duration
 	18, // 11: kratos_foundation_pb.LogComponentConfig.Log.std:type_name -> kratos_foundation_pb.LogComponentConfig.Log.StdLogger
 	19, // 12: kratos_foundation_pb.LogComponentConfig.Log.file:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger
 	20, // 13: kratos_foundation_pb.LogComponentConfig.Log.FileLogger.rotating:type_name -> kratos_foundation_pb.LogComponentConfig.Log.FileLogger.Rotating
@@ -5386,21 +5531,21 @@ var file_config_proto_depIdxs = []int32{
 	16, // 17: kratos_foundation_pb.TracingComponentConfig.Tracing.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
 	0,  // 18: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.compression:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.Compression
 	25, // 19: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.headers:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.HeadersEntry
-	66, // 20: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.timeout:type_name -> google.protobuf.Duration
+	69, // 20: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.timeout:type_name -> google.protobuf.Duration
 	26, // 21: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.retry:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig
 	1,  // 22: kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.sample:type_name -> kratos_foundation_pb.TracingComponentConfig.Tracing.Sampler.Sample
-	66, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.initial_interval:type_name -> google.protobuf.Duration
-	66, // 24: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_interval:type_name -> google.protobuf.Duration
-	66, // 25: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_elapsed_time:type_name -> google.protobuf.Duration
+	69, // 23: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.initial_interval:type_name -> google.protobuf.Duration
+	69, // 24: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_interval:type_name -> google.protobuf.Duration
+	69, // 25: kratos_foundation_pb.TracingComponentConfig.Tracing.Exporter.RetryConfig.max_elapsed_time:type_name -> google.protobuf.Duration
 	35, // 26: kratos_foundation_pb.MiddlewareConfig.Metadata.constants:type_name -> kratos_foundation_pb.MiddlewareConfig.Metadata.ConstantsEntry
 	36, // 27: kratos_foundation_pb.MiddlewareConfig.Ratelimit.bbr_limiter:type_name -> kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter
 	37, // 28: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.sre:type_name -> kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker
-	66, // 29: kratos_foundation_pb.MiddlewareConfig.Timeout.default:type_name -> google.protobuf.Duration
+	69, // 29: kratos_foundation_pb.MiddlewareConfig.Timeout.default:type_name -> google.protobuf.Duration
 	38, // 30: kratos_foundation_pb.MiddlewareConfig.Timeout.routes:type_name -> kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule
-	66, // 31: kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter.window:type_name -> google.protobuf.Duration
-	66, // 32: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker.window:type_name -> google.protobuf.Duration
-	66, // 33: kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule.timeout:type_name -> google.protobuf.Duration
-	66, // 34: kratos_foundation_pb.ServerComponentConfig.Server.stop_delay:type_name -> google.protobuf.Duration
+	69, // 31: kratos_foundation_pb.MiddlewareConfig.Ratelimit.BBRLimiter.window:type_name -> google.protobuf.Duration
+	69, // 32: kratos_foundation_pb.MiddlewareConfig.Circuitbreaker.SREBreaker.window:type_name -> google.protobuf.Duration
+	69, // 33: kratos_foundation_pb.MiddlewareConfig.Timeout.RouteRule.timeout:type_name -> google.protobuf.Duration
+	69, // 34: kratos_foundation_pb.ServerComponentConfig.Server.stop_delay:type_name -> google.protobuf.Duration
 	41, // 35: kratos_foundation_pb.ServerComponentConfig.Server.middleware:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.ServerMiddleware
 	42, // 36: kratos_foundation_pb.ServerComponentConfig.Server.http:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption
 	43, // 37: kratos_foundation_pb.ServerComponentConfig.Server.grpc:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption
@@ -5415,53 +5560,58 @@ var file_config_proto_depIdxs = []int32{
 	40, // 46: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
 	44, // 47: kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.metrics:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.HttpServerOption.Metrics
 	40, // 48: kratos_foundation_pb.ServerComponentConfig.Server.GrpcServerOption.endpoint:type_name -> kratos_foundation_pb.ServerComponentConfig.Server.Endpoint
-	48, // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.gorm:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
+	49, // 49: kratos_foundation_pb.DatabaseComponentConfig.Database.gorm:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm
 	16, // 50: kratos_foundation_pb.DatabaseComponentConfig.Database.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
 	46, // 51: kratos_foundation_pb.DatabaseComponentConfig.Database.connections:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry
 	47, // 52: kratos_foundation_pb.DatabaseComponentConfig.Database.tracing:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Tracing
-	49, // 53: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry.value:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
-	66, // 54: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_transaction_timeout:type_name -> google.protobuf.Duration
-	66, // 55: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_context_timeout:type_name -> google.protobuf.Duration
-	50, // 56: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.logger:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
-	51, // 57: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.replicas:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
-	2,  // 58: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.level:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
-	66, // 59: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.slow_threshold:type_name -> google.protobuf.Duration
-	53, // 60: kratos_foundation_pb.RedisComponentConfig.RedisConfig.connections:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
-	16, // 61: kratos_foundation_pb.RedisComponentConfig.RedisConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	54, // 62: kratos_foundation_pb.RedisComponentConfig.RedisConfig.tracing:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
-	55, // 63: kratos_foundation_pb.RedisComponentConfig.RedisConfig.metrics:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
-	56, // 64: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry.value:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
-	66, // 65: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.min_retry_backoff:type_name -> google.protobuf.Duration
-	66, // 66: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.max_retry_backoff:type_name -> google.protobuf.Duration
-	66, // 67: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dial_timeout:type_name -> google.protobuf.Duration
-	66, // 68: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dialer_retry_timeout:type_name -> google.protobuf.Duration
-	66, // 69: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.read_timeout:type_name -> google.protobuf.Duration
-	66, // 70: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.write_timeout:type_name -> google.protobuf.Duration
-	66, // 71: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.pool_timeout:type_name -> google.protobuf.Duration
-	66, // 72: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_idle_time:type_name -> google.protobuf.Duration
-	66, // 73: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_lifetime:type_name -> google.protobuf.Duration
-	58, // 74: kratos_foundation_pb.ClientComponentConfig.Client.clients:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry
-	16, // 75: kratos_foundation_pb.ClientComponentConfig.Client.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	59, // 76: kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry.value:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption
-	3,  // 77: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.protocol:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.Protocol
-	60, // 78: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.middleware:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware
-	34, // 79: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.timeout:type_name -> kratos_foundation_pb.MiddlewareConfig.Timeout
-	27, // 80: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.metadata:type_name -> kratos_foundation_pb.MiddlewareConfig.Metadata
-	28, // 81: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.tracing:type_name -> kratos_foundation_pb.MiddlewareConfig.Tracing
-	29, // 82: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.metrics:type_name -> kratos_foundation_pb.MiddlewareConfig.Metrics
-	30, // 83: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.logging:type_name -> kratos_foundation_pb.MiddlewareConfig.Logging
-	33, // 84: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.circuitbreaker:type_name -> kratos_foundation_pb.MiddlewareConfig.Circuitbreaker
-	16, // 85: kratos_foundation_pb.JobComponent.JobConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
-	64, // 86: kratos_foundation_pb.JobComponent.JobConfig.tracing:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Tracing
-	65, // 87: kratos_foundation_pb.JobComponent.JobConfig.metrics:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Metrics
-	62, // 88: kratos_foundation_pb.JobComponent.JobConfig.jobs:type_name -> kratos_foundation_pb.JobComponent.JobConfig.JobsEntry
-	63, // 89: kratos_foundation_pb.JobComponent.JobConfig.JobsEntry.value:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Job
-	4,  // 90: kratos_foundation_pb.JobComponent.JobConfig.Job.concurrent_policy:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Job.ConcurrentPolicy
-	91, // [91:91] is the sub-list for method output_type
-	91, // [91:91] is the sub-list for method input_type
-	91, // [91:91] is the sub-list for extension type_name
-	91, // [91:91] is the sub-list for extension extendee
-	0,  // [0:91] is the sub-list for field type_name
+	48, // 53: kratos_foundation_pb.DatabaseComponentConfig.Database.metrics:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics
+	50, // 54: kratos_foundation_pb.DatabaseComponentConfig.Database.ConnectionsEntry.value:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection
+	51, // 55: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.labels:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.LabelsEntry
+	69, // 56: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.refresh_interval:type_name -> google.protobuf.Duration
+	52, // 57: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.mysql:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.Mysql
+	69, // 58: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_transaction_timeout:type_name -> google.protobuf.Duration
+	69, // 59: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.default_context_timeout:type_name -> google.protobuf.Duration
+	53, // 60: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.logger:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger
+	54, // 61: kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.replicas:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Connection.Dialector
+	69, // 62: kratos_foundation_pb.DatabaseComponentConfig.Database.Metrics.Mysql.interval:type_name -> google.protobuf.Duration
+	2,  // 63: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.level:type_name -> kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.Level
+	69, // 64: kratos_foundation_pb.DatabaseComponentConfig.Database.Gorm.Logger.slow_threshold:type_name -> google.protobuf.Duration
+	56, // 65: kratos_foundation_pb.RedisComponentConfig.RedisConfig.connections:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry
+	16, // 66: kratos_foundation_pb.RedisComponentConfig.RedisConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	57, // 67: kratos_foundation_pb.RedisComponentConfig.RedisConfig.tracing:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Tracing
+	58, // 68: kratos_foundation_pb.RedisComponentConfig.RedisConfig.metrics:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.Metrics
+	59, // 69: kratos_foundation_pb.RedisComponentConfig.RedisConfig.ConnectionsEntry.value:type_name -> kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption
+	69, // 70: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.min_retry_backoff:type_name -> google.protobuf.Duration
+	69, // 71: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.max_retry_backoff:type_name -> google.protobuf.Duration
+	69, // 72: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dial_timeout:type_name -> google.protobuf.Duration
+	69, // 73: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.dialer_retry_timeout:type_name -> google.protobuf.Duration
+	69, // 74: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.read_timeout:type_name -> google.protobuf.Duration
+	69, // 75: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.write_timeout:type_name -> google.protobuf.Duration
+	69, // 76: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.pool_timeout:type_name -> google.protobuf.Duration
+	69, // 77: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_idle_time:type_name -> google.protobuf.Duration
+	69, // 78: kratos_foundation_pb.RedisComponentConfig.RedisConfig.RedisOption.conn_max_lifetime:type_name -> google.protobuf.Duration
+	61, // 79: kratos_foundation_pb.ClientComponentConfig.Client.clients:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry
+	16, // 80: kratos_foundation_pb.ClientComponentConfig.Client.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	62, // 81: kratos_foundation_pb.ClientComponentConfig.Client.ClientsEntry.value:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption
+	3,  // 82: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.protocol:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.Protocol
+	63, // 83: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.middleware:type_name -> kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware
+	34, // 84: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.timeout:type_name -> kratos_foundation_pb.MiddlewareConfig.Timeout
+	27, // 85: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.metadata:type_name -> kratos_foundation_pb.MiddlewareConfig.Metadata
+	28, // 86: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.tracing:type_name -> kratos_foundation_pb.MiddlewareConfig.Tracing
+	29, // 87: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.metrics:type_name -> kratos_foundation_pb.MiddlewareConfig.Metrics
+	30, // 88: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.logging:type_name -> kratos_foundation_pb.MiddlewareConfig.Logging
+	33, // 89: kratos_foundation_pb.ClientComponentConfig.Client.ClientOption.ClientMiddleware.circuitbreaker:type_name -> kratos_foundation_pb.MiddlewareConfig.Circuitbreaker
+	16, // 90: kratos_foundation_pb.JobComponent.JobConfig.log:type_name -> kratos_foundation_pb.LogComponentConfig.ModuleLog
+	67, // 91: kratos_foundation_pb.JobComponent.JobConfig.tracing:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Tracing
+	68, // 92: kratos_foundation_pb.JobComponent.JobConfig.metrics:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Metrics
+	65, // 93: kratos_foundation_pb.JobComponent.JobConfig.jobs:type_name -> kratos_foundation_pb.JobComponent.JobConfig.JobsEntry
+	66, // 94: kratos_foundation_pb.JobComponent.JobConfig.JobsEntry.value:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Job
+	4,  // 95: kratos_foundation_pb.JobComponent.JobConfig.Job.concurrent_policy:type_name -> kratos_foundation_pb.JobComponent.JobConfig.Job.ConcurrentPolicy
+	96, // [96:96] is the sub-list for method output_type
+	96, // [96:96] is the sub-list for method input_type
+	96, // [96:96] is the sub-list for extension type_name
+	96, // [96:96] is the sub-list for extension extendee
+	0,  // [0:96] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -5951,7 +6101,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DatabaseComponentConfig_Database_Gorm); i {
+			switch v := v.(*DatabaseComponentConfig_Database_Metrics); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5963,7 +6113,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DatabaseComponentConfig_Database_Connection); i {
+			switch v := v.(*DatabaseComponentConfig_Database_Gorm); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5975,19 +6125,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[45].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DatabaseComponentConfig_Database_Gorm_Logger); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_config_proto_msgTypes[46].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DatabaseComponentConfig_Database_Connection_Dialector); i {
+			switch v := v.(*DatabaseComponentConfig_Database_Connection); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5999,7 +6137,19 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[47].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisComponentConfig_RedisConfig); i {
+			switch v := v.(*DatabaseComponentConfig_Database_Metrics_Mysql); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_config_proto_msgTypes[48].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DatabaseComponentConfig_Database_Gorm_Logger); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6011,7 +6161,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[49].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisComponentConfig_RedisConfig_Tracing); i {
+			switch v := v.(*DatabaseComponentConfig_Database_Connection_Dialector); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6023,19 +6173,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[50].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisComponentConfig_RedisConfig_Metrics); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_config_proto_msgTypes[51].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisComponentConfig_RedisConfig_RedisOption); i {
+			switch v := v.(*RedisComponentConfig_RedisConfig); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6047,7 +6185,19 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClientComponentConfig_Client); i {
+			switch v := v.(*RedisComponentConfig_RedisConfig_Tracing); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_config_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RedisComponentConfig_RedisConfig_Metrics); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6059,7 +6209,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClientComponentConfig_Client_ClientOption); i {
+			switch v := v.(*RedisComponentConfig_RedisConfig_RedisOption); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6071,7 +6221,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClientComponentConfig_Client_ClientOption_ClientMiddleware); i {
+			switch v := v.(*ClientComponentConfig_Client); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6082,8 +6232,8 @@ func file_config_proto_init() {
 				return nil
 			}
 		}
-		file_config_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*JobComponent_JobConfig); i {
+		file_config_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ClientComponentConfig_Client_ClientOption); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6095,7 +6245,7 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*JobComponent_JobConfig_Job); i {
+			switch v := v.(*ClientComponentConfig_Client_ClientOption_ClientMiddleware); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6107,6 +6257,30 @@ func file_config_proto_init() {
 			}
 		}
 		file_config_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*JobComponent_JobConfig); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_config_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*JobComponent_JobConfig_Job); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_config_proto_msgTypes[62].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*JobComponent_JobConfig_Tracing); i {
 			case 0:
 				return &v.state
@@ -6118,7 +6292,7 @@ func file_config_proto_init() {
 				return nil
 			}
 		}
-		file_config_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
+		file_config_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*JobComponent_JobConfig_Metrics); i {
 			case 0:
 				return &v.state
@@ -6137,16 +6311,16 @@ func file_config_proto_init() {
 	file_config_proto_msgTypes[14].OneofWrappers = []interface{}{}
 	file_config_proto_msgTypes[31].OneofWrappers = []interface{}{}
 	file_config_proto_msgTypes[32].OneofWrappers = []interface{}{}
-	file_config_proto_msgTypes[47].OneofWrappers = []interface{}{}
-	file_config_proto_msgTypes[52].OneofWrappers = []interface{}{}
-	file_config_proto_msgTypes[56].OneofWrappers = []interface{}{}
+	file_config_proto_msgTypes[50].OneofWrappers = []interface{}{}
+	file_config_proto_msgTypes[55].OneofWrappers = []interface{}{}
+	file_config_proto_msgTypes[59].OneofWrappers = []interface{}{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_config_proto_rawDesc,
 			NumEnums:      5,
-			NumMessages:   61,
+			NumMessages:   64,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

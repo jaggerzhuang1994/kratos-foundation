@@ -19,6 +19,7 @@ func NewTracingPlugin(
 
 	var opts []tracing2.Option
 	opts = append(opts, tracing2.WithTracerProvider(tracing.GetTracerProvider()))
+	opts = append(opts, tracing2.WithAttributes(tracing.ServiceAttrs()...))
 
 	if cfg.GetExcludeQueryVars() {
 		opts = append(opts, tracing2.WithoutQueryVariables())

@@ -27,6 +27,14 @@ init:
 	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+.PHONY: generate
+generate:
+	@echo "> 生成 generate..."
+	@go mod tidy
+	@go generate ./...
+	@go mod tidy
+	@echo "done"
+
 PROTO_OUT=./proto/kratos_foundation_pb
 
 .PHONY: proto
@@ -41,17 +49,11 @@ proto:
 			--validate_out=paths=source_relative,lang=go:$(PROTO_OUT) \
 			$(PROTO_FILES) && echo 'done'
 
-.PHONY: generate
-generate:
-	@echo "> 生成 generate..."
-	@go mod tidy
-	@go generate ./...
-	@go mod tidy
-
-.PHONY: all
-all: generate proto lint
-
 .PHONY: lint
 # 代码审查
 lint:
-	@golangci-lint run
+	@echo "> lint..."
+	@golangci-lint run && echo 'lint ok'
+
+.PHONY: all
+all: generate proto lint

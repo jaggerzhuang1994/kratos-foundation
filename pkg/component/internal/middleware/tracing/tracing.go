@@ -4,7 +4,6 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware"
 	tracing2 "github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
@@ -26,22 +25,12 @@ func Client(tracing *tracing.Tracing, config *Config) middleware.Middleware {
 	return tracing2.Client(opts...)
 }
 
-func newOpts(tracing *tracing.Tracing, configs ...*Config) []tracing2.Option {
+func newOpts(tracing *tracing.Tracing, _ ...*Config) []tracing2.Option {
 	var opts = []tracing2.Option{
 		tracing2.WithTracerProvider(tracing.GetTracerProvider()),
 	}
 
-	// 按照 configs 倒序查找第一个不为空的 tracer_name
-	// 兜底为 defaultTracerName
-	tracerName := utils.Select(
-		append(
-			utils.Map(utils.Reverse(configs), (*Config).GetTracerName),
-			tracing.GetDefaultTracerName(),
-		)...,
-	)
-	if tracerName != "" {
-		opts = append(opts, tracing2.WithTracerName(tracerName))
-	}
+	opts = append(opts, tracing2.WithTracerName(tracing.GetDefaultTracerName()))
 
 	return opts
 }

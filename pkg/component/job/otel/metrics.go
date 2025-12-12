@@ -40,7 +40,7 @@ func NewMetricsProvider(
 	}
 	mp.disable = false
 
-	meter := metrics.GetMeter(config.GetMetrics().GetMeterName())
+	meter := metrics.GetMeter()
 
 	mp.cronJobRunsTotal, err = meter.Int64Counter(
 		"cron_job_runs_total",

@@ -1,0 +1,312 @@
+# yaml-language-server: $schema=./config.schema.json
+#
+# Kratos Foundation 配置示例
+# 此文件展示了所有可配置项及其默认值
+#
+
+# =============================================================================
+# 应用生命周期配置
+# =============================================================================
+app:
+  # 是否禁用服务注册（默认 false）
+  disable_registrar: false
+  # 注册中心超时时间（默认 10s）
+  registrar_timeout: 10s
+  # 停机超时时间，必须大于 server.stop_delay（默认 30s）
+  stop_timeout: 30s
+
+# =============================================================================
+# 日志配置
+# =============================================================================
+log:
+  # 最小日志级别（本地/debug 环境默认 debug，其他环境默认 info）
+  level: info
+  # 是否过滤空值 KV（默认 true）
+  filter_empty: true
+  # 过滤指定的 keys（敏感信息脱敏）
+  filter_keys:
+    - password
+    - token
+    - secret
+  # 时间格式（默认 RFC3339）
+  time_format: "2006-01-02T15:04:05.000Z07:00"
+  # 预置字段
+  preset:
+    - ts
+    - service.id
+    - service.name
+    - service.version
+    - trace.id
+    - span.id
+    - caller
+
+  # 标准输出日志配置
+  std:
+    disable: false
+    # level: debug  # 可覆盖全局 level
+
+  # 文件日志配置
+  file:
+    disable: true  # 默认禁用文件日志
+    path: ./logs/app.log
+    rotating:
+      disable: false
+      max_size: 100        # MB
+      max_file_age: 7      # 天
+      max_files: 10        # 保留数量
+      local_time: true
+      compress: true
+
+# =============================================================================
+# 指标配置
+# =============================================================================
+metrics:
+  # 指标命名空间（默认为应用名）
+  # meter_name: my-service
+  # Map 初始容量（优化预分配）
+  counter_map_size: 64
+  gauge_map_size: 64
+  histogram_map_size: 64
+
+# =============================================================================
+# 链路追踪配置
+# =============================================================================
+tracing:
+  disable: false
+  # tracer_name: my-service  # 默认为应用名
+  exporter:
+    # OTLP HTTP 端点
+    endpoint_url: http://localhost:4318/v1/traces
+    compression: GZIP  # NO 或 GZIP
+    timeout: 10s
+    headers:
+      # Authorization: Bearer xxx
+    retry:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 60s
+  sampler:
+    sample: RATIO  # RATIO, ALWAYS, NEVER
+    ratio: 0.05    # 5% 采样率
+
+# =============================================================================
+# 服务器配置
+# =============================================================================
+server:
+  # 停机延迟（等待服务发现更新，默认 0s）
+  stop_delay: 3s
+
+  # 通用中间件配置
+  middleware:
+    timeout:
+      default: 1s  # 服务端默认超时
+      routes:
+        # 路由级超时配置
+        - path: /api.v1.LongRunning/Process
+          timeout: 30s
+        - prefix: /api.v1.Upload
+          timeout: 60s
+    metadata:
+      disable: false
+      prefix:
+        - x-md-
+      constants:
+        x-md-service-version: v1.0.0
+    tracing:
+      disable: false
+    metrics:
+      disable: false
+    logging:
+      disable: false
+    validator:
+      disable: false
+    ratelimit:
+      enable: false
+      bbr_limiter:
+        window: 10s
+        bucket: 100
+        cpu_threshold: 800
+        # cpu_quota: 2.0  # 容器环境设置 CPU 配额
+
+  # HTTP 服务器配置
+  http:
+    disable: false
+    addr: :8080
+    # network: tcp
+    # path_prefix: /api
+    # disable_strict_slash: false
+    endpoint:
+      scheme: http
+      host: localhost:8080
+    metrics:
+      disable: false
+      path: /metrics
+
+  # gRPC 服务器配置
+  grpc:
+    disable: false
+    addr: :9090
+    endpoint:
+      scheme: grpc
+      host: localhost:9090
+    # custom_health: false
+    # disable_reflection: false
+
+# =============================================================================
+# 数据库配置
+# =============================================================================
+database:
+  default: main
+  connections:
+    main:
+      driver: mysql
+      dsn: "user:password@tcp(localhost:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+      # 从库配置（可选）
+      replicas:
+        - driver: mysql
+          dsn: "user:password@tcp(replica1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+        - driver: mysql
+          dsn: "user:password@tcp(replica2:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+      # 自动切换的表名
+      # datas:
+      #   - users
+      #   - orders
+
+  gorm:
+    skip_default_transaction: false
+    # default_transaction_timeout: 30s
+    # default_context_timeout: 10s
+    logger:
+      level: WARN  # SILENT, ERROR, WARN, INFO
+      slow_threshold: 200ms
+      ignore_record_not_found_error: true
+      parameterized_queries: false
+
+  tracing:
+    disable: false
+    exclude_query_vars: false
+    exclude_metrics: false
+    # record_stack_trace_in_span: false
+
+  metrics:
+    disable: false
+    refresh_interval: 15s
+    labels:
+      env: production
+    mysql:
+      prefix: gorm_status_
+      # variable_names:
+      #   - Threads_connected
+      #   - Threads_running
+
+# =============================================================================
+# Redis 配置
+# =============================================================================
+redis:
+  default: main
+  connections:
+    main:
+      addr: localhost:6379
+      password: ""
+      db: 0
+      # 连接池配置
+      pool_size: 100
+      min_idle_conns: 10
+      max_idle_conns: 50
+      conn_max_idle_time: 30m
+      # 超时配置
+      dial_timeout: 5s
+      read_timeout: 3s
+      write_timeout: 3s
+      # 重试配置
+      max_retries: 3
+      min_retry_backoff: 8ms
+      max_retry_backoff: 512ms
+
+    cache:
+      addr: localhost:6380
+      db: 1
+
+  tracing:
+    disable: false
+    db_statement: false
+    caller_enabled: false
+
+  metrics:
+    disable: false
+
+# =============================================================================
+# 服务客户端配置
+# =============================================================================
+client:
+  clients:
+    # 服务发现模式
+    user-service:
+      protocol: GRPC
+      target: discovery:///user-service
+      middleware:
+        timeout:
+          default: 2s
+          routes:
+            - path: /api.user.v1.UserService/GetProfile
+              timeout: 5s
+        metadata:
+          prefix:
+            - x-md-global-
+        tracing:
+          disable: false
+        metrics:
+          disable: false
+        logging:
+          disable: false
+        circuitbreaker:
+          enable: true
+          sre:
+            success: 0.6
+            request: 100
+            bucket: 10
+            window: 3s
+
+    # 直连模式
+    external-api:
+      protocol: HTTPS
+      target: api.example.com:443
+      middleware:
+        timeout:
+          default: 10s
+        circuitbreaker:
+          enable: true
+
+# =============================================================================
+# 定时任务配置
+# =============================================================================
+job:
+  disable: false
+  timezone: Asia/Shanghai
+  tracing:
+    disable: false
+  metrics:
+    disable: false
+  jobs:
+    # 每分钟执行一次
+    sync-data:
+      schedule: "0 * * * * *"  # 秒 分 时 日 月 周
+      concurrent_policy: SKIP
+      immediately: false
+
+    # 每小时执行
+    cleanup:
+      schedule: "@hourly"
+      concurrent_policy: OVERLAP
+
+    # 每 30 秒执行
+    health-check:
+      schedule: "@every 30s"
+      concurrent_policy: SKIP
+      immediately: true
+
+    # 指定时区
+    report:
+      schedule: "TZ=America/New_York 0 9 * * 1-5"  # 工作日上午 9 点
+      concurrent_policy: DELAY

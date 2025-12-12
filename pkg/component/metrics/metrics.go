@@ -4,13 +4,15 @@ import (
 	"context"
 	"sync"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 var (
@@ -23,8 +25,10 @@ type Metrics struct {
 	*log.Helper
 	meterProvider metric.MeterProvider
 	// 默认 meter
-	meterName string
-	meter     metric.Meter
+	meter metric.Meter
+
+	// 应用的属性
+	serviceAttrs []attribute.KeyValue
 
 	// 累积量
 	counterMux sync.RWMutex
@@ -42,8 +46,8 @@ type Metrics struct {
 const logModule = "metrics"
 
 func NewMetrics(
-	cfg *Config,
-	appInfo *kratos_foundation_pb.AppInfo,
+	conf *Config,
+	appInfo *app_info.AppInfo,
 	log *log.Log,
 ) (*Metrics, error) {
 	exporter, err := prometheus.New()
@@ -52,37 +56,36 @@ func NewMetrics(
 	}
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
 
-	meterName := utils.Select(cfg.GetMeterName(), appInfo.GetName())
-	meter := provider.Meter(meterName)
+	serviceAttrs := []attribute.KeyValue{
+		semconv.ServiceNameKey.String(appInfo.GetName()),
+		semconv.ServiceInstanceIDKey.String(appInfo.GetId()),
+		semconv.ServiceVersionKey.String(appInfo.GetVersion()),
+	}
+
+	meterName := utils.Select(conf.GetMeterName(), appInfo.GetName())
+	meter := provider.Meter(meterName, metric.WithInstrumentationAttributes(serviceAttrs...))
 
 	return &Metrics{
-		Helper:        log.WithModule(logModule, cfg.GetLog()).NewHelper(),
+		Helper:        log.WithModule(logModule, conf.GetLog()).NewHelper(),
 		meterProvider: provider,
 		meter:         meter,
-		meterName:     meterName,
-		counterMap:    make(map[string]metric.Int64Counter, cfg.GetCounterMapSize()),
-		gaugeMap:      make(map[string]metric.Int64Gauge, cfg.GetGaugeMapSize()),
-		histogramMap:  make(map[string]metric.Float64Histogram, cfg.GetHistogramMapSize()),
+		serviceAttrs:  serviceAttrs,
+		counterMap:    make(map[string]metric.Int64Counter, conf.GetCounterMapSize()),
+		gaugeMap:      make(map[string]metric.Int64Gauge, conf.GetGaugeMapSize()),
+		histogramMap:  make(map[string]metric.Float64Histogram, conf.GetHistogramMapSize()),
 	}, nil
+}
+
+func (m *Metrics) ServiceAttrs() []attribute.KeyValue {
+	return m.serviceAttrs
 }
 
 func (m *Metrics) GetMeterProvider() metric.MeterProvider {
 	return m.meterProvider
 }
 
-func (m *Metrics) GetMeter(meterName string, options ...metric.MeterOption) metric.Meter {
-	if meterName == "" {
-		meterName = m.meterName
-	}
-	return m.meterProvider.Meter(meterName, options...)
-}
-
-func (m *Metrics) GetDefaultMeter() metric.Meter {
+func (m *Metrics) GetMeter() metric.Meter {
 	return m.meter
-}
-
-func (m *Metrics) GetDefaultMeterName() string {
-	return m.meterName
 }
 
 // RegisterCounter 注册一个 counter

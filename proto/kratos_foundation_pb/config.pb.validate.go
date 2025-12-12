@@ -3078,8 +3078,6 @@ func (m *MiddlewareConfig_Tracing) validate(all bool) error {
 
 	// no validation rules for Disable
 
-	// no validation rules for TracerName
-
 	if len(errors) > 0 {
 		return MiddlewareConfig_TracingMultiError(errors)
 	}
@@ -3183,8 +3181,6 @@ func (m *MiddlewareConfig_Metrics) validate(all bool) error {
 	var errors []error
 
 	// no validation rules for Disable
-
-	// no validation rules for MeterName
 
 	if len(errors) > 0 {
 		return MiddlewareConfig_MetricsMultiError(errors)
@@ -5619,6 +5615,35 @@ func (m *DatabaseComponentConfig_Database) validate(all bool) error {
 		}
 	}
 
+	if all {
+		switch v := interface{}(m.GetMetrics()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_DatabaseValidationError{
+				field:  "Metrics",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	if len(errors) > 0 {
 		return DatabaseComponentConfig_DatabaseMultiError(errors)
 	}
@@ -5816,6 +5841,174 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = DatabaseComponentConfig_Database_TracingValidationError{}
+
+// Validate checks the field values on DatabaseComponentConfig_Database_Metrics
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the first error encountered is returned, or nil if
+// there are no violations.
+func (m *DatabaseComponentConfig_Database_Metrics) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on
+// DatabaseComponentConfig_Database_Metrics with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in
+// DatabaseComponentConfig_Database_MetricsMultiError, or nil if none found.
+func (m *DatabaseComponentConfig_Database_Metrics) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Disable
+
+	// no validation rules for Labels
+
+	if all {
+		switch v := interface{}(m.GetRefreshInterval()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					field:  "RefreshInterval",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					field:  "RefreshInterval",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRefreshInterval()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_MetricsValidationError{
+				field:  "RefreshInterval",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetMysql()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					field:  "Mysql",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					field:  "Mysql",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetMysql()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_MetricsValidationError{
+				field:  "Mysql",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return DatabaseComponentConfig_Database_MetricsMultiError(errors)
+	}
+
+	return nil
+}
+
+// DatabaseComponentConfig_Database_MetricsMultiError is an error wrapping
+// multiple validation errors returned by
+// DatabaseComponentConfig_Database_Metrics.ValidateAll() if the designated
+// constraints aren't met.
+type DatabaseComponentConfig_Database_MetricsMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DatabaseComponentConfig_Database_MetricsMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DatabaseComponentConfig_Database_MetricsMultiError) AllErrors() []error { return m }
+
+// DatabaseComponentConfig_Database_MetricsValidationError is the validation
+// error returned by DatabaseComponentConfig_Database_Metrics.Validate if the
+// designated constraints aren't met.
+type DatabaseComponentConfig_Database_MetricsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DatabaseComponentConfig_Database_MetricsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DatabaseComponentConfig_Database_MetricsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DatabaseComponentConfig_Database_MetricsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DatabaseComponentConfig_Database_MetricsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DatabaseComponentConfig_Database_MetricsValidationError) ErrorName() string {
+	return "DatabaseComponentConfig_Database_MetricsValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DatabaseComponentConfig_Database_MetricsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDatabaseComponentConfig_Database_Metrics.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DatabaseComponentConfig_Database_MetricsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DatabaseComponentConfig_Database_MetricsValidationError{}
 
 // Validate checks the field values on DatabaseComponentConfig_Database_Gorm
 // with the rules defined in the proto definition for this message. If any
@@ -6176,6 +6369,146 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = DatabaseComponentConfig_Database_ConnectionValidationError{}
+
+// Validate checks the field values on
+// DatabaseComponentConfig_Database_Metrics_Mysql with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *DatabaseComponentConfig_Database_Metrics_Mysql) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on
+// DatabaseComponentConfig_Database_Metrics_Mysql with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in
+// DatabaseComponentConfig_Database_Metrics_MysqlMultiError, or nil if none found.
+func (m *DatabaseComponentConfig_Database_Metrics_Mysql) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Prefix
+
+	if all {
+		switch v := interface{}(m.GetInterval()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+					field:  "Interval",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+					field:  "Interval",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetInterval()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+				field:  "Interval",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return DatabaseComponentConfig_Database_Metrics_MysqlMultiError(errors)
+	}
+
+	return nil
+}
+
+// DatabaseComponentConfig_Database_Metrics_MysqlMultiError is an error
+// wrapping multiple validation errors returned by
+// DatabaseComponentConfig_Database_Metrics_Mysql.ValidateAll() if the
+// designated constraints aren't met.
+type DatabaseComponentConfig_Database_Metrics_MysqlMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DatabaseComponentConfig_Database_Metrics_MysqlMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DatabaseComponentConfig_Database_Metrics_MysqlMultiError) AllErrors() []error { return m }
+
+// DatabaseComponentConfig_Database_Metrics_MysqlValidationError is the
+// validation error returned by
+// DatabaseComponentConfig_Database_Metrics_Mysql.Validate if the designated
+// constraints aren't met.
+type DatabaseComponentConfig_Database_Metrics_MysqlValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Reason() string {
+	return e.reason
+}
+
+// Cause function returns cause value.
+func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) ErrorName() string {
+	return "DatabaseComponentConfig_Database_Metrics_MysqlValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDatabaseComponentConfig_Database_Metrics_Mysql.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DatabaseComponentConfig_Database_Metrics_MysqlValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DatabaseComponentConfig_Database_Metrics_MysqlValidationError{}
 
 // Validate checks the field values on
 // DatabaseComponentConfig_Database_Gorm_Logger with the rules defined in the
@@ -8315,8 +8648,6 @@ func (m *JobComponent_JobConfig_Tracing) validate(all bool) error {
 
 	// no validation rules for Disable
 
-	// no validation rules for TracerName
-
 	if len(errors) > 0 {
 		return JobComponent_JobConfig_TracingMultiError(errors)
 	}
@@ -8421,8 +8752,6 @@ func (m *JobComponent_JobConfig_Metrics) validate(all bool) error {
 	var errors []error
 
 	// no validation rules for Disable
-
-	// no validation rules for MeterName
 
 	if len(errors) > 0 {
 		return JobComponent_JobConfig_MetricsMultiError(errors)

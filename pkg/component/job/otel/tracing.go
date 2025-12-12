@@ -21,9 +21,9 @@ func NewTracingProvider(
 ) (provider *TracingProvider) {
 	provider = &TracingProvider{}
 	if config.GetTracing().GetDisable() {
-		provider.tracer = noop.NewTracerProvider().Tracer(config.GetTracing().GetTracerName())
+		provider.tracer = noop.NewTracerProvider().Tracer("")
 	} else {
-		provider.tracer = tracing.GetTracer(config.GetTracing().GetTracerName())
+		provider.tracer = tracing.GetTracer()
 	}
 	return
 }

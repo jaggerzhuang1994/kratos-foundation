@@ -177,16 +177,12 @@ message MiddlewareConfig {
   message Tracing {
     // 是否禁用
     bool disable = 1;
-    // tracer name
-    string tracer_name = 2;
   }
 
   // 监控配置
   message Metrics {
     // 是否禁用
     bool disable = 1;
-    // meter name
-    string meter_name = 2;
   }
 
   // 日志配置
@@ -353,6 +349,8 @@ message DatabaseComponentConfig {
     map<string, Connection> connections = 4;
     // 链路追踪配置
     Tracing tracing = 5;
+    // 监控
+    Metrics metrics = 6;
 
     message Tracing {
       // 禁用 gorm.tracing 插件
@@ -365,6 +363,26 @@ message DatabaseComponentConfig {
       bool record_stack_trace_in_span = 4;
       // 排除 db.server_address 属性
       bool exclude_server_address = 5;
+    }
+
+    message Metrics {
+      // 禁用 gorm.metrics 插件
+      bool disable = 1;
+      // 常量labels
+      map<string, string> labels = 2;
+      // 刷新间隔 默认15s
+      google.protobuf.Duration refresh_interval = 3;
+      // mysql 插件的配置
+      Mysql mysql = 4;
+
+      message Mysql {
+        // 指标前缀，默认 gorm_status_
+        string prefix = 1;
+        // 间隔 默认 refresh_interval
+        google.protobuf.Duration interval = 2;
+        // 采集哪些指标，默认所有
+        repeated string variable_names = 3;
+      }
     }
 
     message Gorm {
@@ -673,16 +691,12 @@ message JobComponent {
     message Tracing {
       // 是否禁用
       bool disable = 1;
-      // tracer name
-      string tracer_name = 2;
     }
 
     // 监控配置
     message Metrics {
       // 是否禁用
       bool disable = 1;
-      // meter name
-      string meter_name = 2;
     }
   }
 }

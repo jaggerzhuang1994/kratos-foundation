@@ -6,6 +6,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -20,8 +21,9 @@ import (
 type Tracing struct {
 	*log.Helper
 	tp                trace.TracerProvider
-	defaultTracerName string
 	defaultTracer     trace.Tracer
+	defaultTracerName string
+	serviceAttrs      []attribute.KeyValue
 }
 
 const logModule = "tracing"
@@ -44,13 +46,17 @@ func NewTracing(cfg *Config, appInfo *app_info.AppInfo, log *log.Log) (*Tracing,
 		return nil, nil, err
 	}
 
+	serviceAttrs := []attribute.KeyValue{
+		semconv.ServiceNameKey.String(appInfo.GetName()),
+		semconv.ServiceInstanceIDKey.String(appInfo.GetId()),
+		semconv.ServiceVersionKey.String(appInfo.GetVersion()),
+	}
+
 	tp := tracesdk.NewTracerProvider(
 		tracesdk.WithSampler(sampler),
 		tracesdk.WithBatcher(exporter),
 		tracesdk.WithResource(resource.NewSchemaless(
-			semconv.ServiceNameKey.String(appInfo.GetName()),
-			semconv.ServiceInstanceIDKey.String(appInfo.GetId()),
-			semconv.ServiceVersionKey.String(appInfo.GetVersion()),
+			serviceAttrs...,
 		)),
 	)
 
@@ -59,8 +65,9 @@ func NewTracing(cfg *Config, appInfo *app_info.AppInfo, log *log.Log) (*Tracing,
 	return &Tracing{
 			Helper:            l,
 			tp:                tp,
+			defaultTracer:     tp.Tracer(defaultTracerName, trace.WithInstrumentationAttributes(serviceAttrs...)),
 			defaultTracerName: defaultTracerName,
-			defaultTracer:     tp.Tracer(defaultTracerName),
+			serviceAttrs:      serviceAttrs,
 		}, func() {
 			defer cancel()
 			err := tp.Shutdown(context.Background())
@@ -78,11 +85,12 @@ func (t *Tracing) GetDefaultTracerName() string {
 	return t.defaultTracerName
 }
 
-func (t *Tracing) GetTracer(tracerName string, options ...trace.TracerOption) trace.Tracer {
-	if tracerName == "" {
-		tracerName = t.defaultTracerName
-	}
-	return t.tp.Tracer(tracerName, options...)
+func (t *Tracing) GetTracer() trace.Tracer {
+	return t.defaultTracer
+}
+
+func (t *Tracing) ServiceAttrs() []attribute.KeyValue {
+	return t.serviceAttrs
 }
 
 func (t *Tracing) SimpleTrace(ctx context.Context, spanName string, logic func(context.Context)) {

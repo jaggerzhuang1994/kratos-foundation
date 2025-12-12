@@ -126,6 +126,7 @@ func (m *Manager) newConnection(name string) (*Client, error) {
 	if !tracingCfg.GetDisable() {
 		err := redisotel.InstrumentTracing(cc,
 			redisotel.WithTracerProvider(m.tracing.GetTracerProvider()),
+			redisotel.WithAttributes(m.tracing.ServiceAttrs()...),
 			redisotel.WithDBStatement(tracingCfg.GetDbStatement()),
 			redisotel.WithCallerEnabled(tracingCfg.GetCallerEnabled()),
 			redisotel.WithDialFilter(tracingCfg.GetDialFilter()),
@@ -136,7 +137,10 @@ func (m *Manager) newConnection(name string) (*Client, error) {
 	}
 
 	if !m.conf.GetMetrics().GetDisable() {
-		err := redisotel.InstrumentMetrics(cc, redisotel.WithMeterProvider(m.metrics.GetMeterProvider()))
+		err := redisotel.InstrumentMetrics(cc,
+			redisotel.WithMeterProvider(m.metrics.GetMeterProvider()),
+			redisotel.WithAttributes(m.metrics.ServiceAttrs()...),
+		)
 		if err != nil {
 			m.log.Warn("redisotel.InstrumentMetrics error ", err)
 		}

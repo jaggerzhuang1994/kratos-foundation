@@ -5,9 +5,8 @@ import (
 	"database/sql"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
-	"gorm.io/plugin/dbresolver"
-
 	"gorm.io/gorm"
+	"gorm.io/plugin/dbresolver"
 )
 
 type Manager struct {
@@ -20,6 +19,7 @@ func NewManager(
 	log *log.Log,
 	gormConfig *gorm.Config,
 	tracingPlugin TracingPlugin,
+	metricsPlugin *MetricsPlugin,
 	defaultConnection DefaultConnection,
 	dbResolver DbResolver,
 ) (*Manager, error) {
@@ -35,7 +35,12 @@ func NewManager(
 		}
 	}
 
-	// todo metrics
+	// metrics plugin
+	if metricsPlugin != nil {
+		if err = db.Use(metricsPlugin); err != nil {
+			return nil, err
+		}
+	}
 
 	// dbresolver
 	if dbResolver != nil {
