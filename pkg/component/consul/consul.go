@@ -2,6 +2,7 @@ package consul
 
 import (
 	"net"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -28,12 +29,17 @@ func NewConsul() (*Client, error) {
 	config := api.DefaultConfig()
 
 	// 获取host
-	host, err := parseHost(config.Address)
-	if err != nil {
-		return nil, errors.WithMessage(err, "无法解析consul address host")
+	var host = config.Address
+	var err error
+	if strings.Contains(config.Address, "://") {
+		host, err = parseHost(config.Address)
+		if err != nil {
+			return nil, errors.WithMessage(err, "无法解析consul address host")
+		}
 	}
 
 	// 如果host不是ip，则解析ip
+	// 这里的目的是为了固定 host => ip
 	if !isIP(host) {
 		var ips []net.IP
 		ips, err = DefaultIPResolver(host)
