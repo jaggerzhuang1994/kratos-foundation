@@ -30,21 +30,9 @@ const logModule = "tracing"
 
 func NewTracing(cfg *Config, appInfo *app_info.AppInfo, log *log.Log) (*Tracing, func(), error) {
 	l := log.WithModule(logModule, cfg.GetLog()).NewHelper()
-
-	if cfg.GetDisable() {
-		l.Info("tracing disabled")
-		tp := noop.NewTracerProvider()
-		return &Tracing{Helper: l, tp: tp}, func() {}, nil
-	}
+	var tp trace.TracerProvider
+	var defaultTracerName = cfg.GetTracerName()
 	ctx, cancel := context.WithCancel(context.Background())
-
-	sampler := newSampler(l, cfg.GetSampler())
-	exporter, err := newExporter(ctx, cfg.GetExporter())
-	if err != nil {
-		l.Error("failed to create span exporter error ", err)
-		cancel()
-		return nil, nil, err
-	}
 
 	serviceAttrs := []attribute.KeyValue{
 		semconv.ServiceNameKey.String(appInfo.GetName()),
@@ -52,16 +40,35 @@ func NewTracing(cfg *Config, appInfo *app_info.AppInfo, log *log.Log) (*Tracing,
 		semconv.ServiceVersionKey.String(appInfo.GetVersion()),
 	}
 
-	tp := tracesdk.NewTracerProvider(
-		tracesdk.WithSampler(sampler),
-		tracesdk.WithBatcher(exporter),
-		tracesdk.WithResource(resource.NewSchemaless(
-			serviceAttrs...,
-		)),
-	)
-
-	defaultTracerName := cfg.GetTracerName()
-
+	if cfg.GetDisable() {
+		l.Info("tracing disabled")
+		tp = noop.NewTracerProvider()
+	} else {
+		exporter, err := newExporter(ctx, cfg.GetExporter())
+		if err != nil {
+			l.Error("failed to create span exporter error ", err)
+			cancel()
+			return nil, nil, err
+		}
+		sampler := newSampler(l, cfg.GetSampler())
+		tplInstance := tracesdk.NewTracerProvider(
+			tracesdk.WithSampler(sampler),
+			tracesdk.WithBatcher(exporter),
+			tracesdk.WithResource(resource.NewSchemaless(
+				serviceAttrs...,
+			)),
+		)
+		tp = tplInstance
+		cancel = func(oldCancel context.CancelFunc) context.CancelFunc {
+			return func() {
+				oldCancel()
+				err := tplInstance.Shutdown(context.Background())
+				if err != nil {
+					l.Error("failed to shutdown tracing error ", err)
+				}
+			}
+		}(cancel)
+	}
 	return &Tracing{
 			Helper:            l,
 			tp:                tp,
@@ -69,11 +76,7 @@ func NewTracing(cfg *Config, appInfo *app_info.AppInfo, log *log.Log) (*Tracing,
 			defaultTracerName: defaultTracerName,
 			serviceAttrs:      serviceAttrs,
 		}, func() {
-			defer cancel()
-			err := tp.Shutdown(context.Background())
-			if err != nil {
-				l.Error("failed to shutdown tracing error ", err)
-			}
+			cancel()
 		}, nil
 }
 
