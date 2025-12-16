@@ -8,12 +8,38 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type redisSubscribeOption struct {
+	chSize    int
+	errChSize int
+}
+
+type RedisSubscribeOption func(*redisSubscribeOption)
+
+func WithChannelSize(chSize int) RedisSubscribeOption {
+	return func(option *redisSubscribeOption) {
+		option.chSize = chSize
+	}
+}
+
+func WithErrorChannelSize(errChSize int) RedisSubscribeOption {
+	return func(option *redisSubscribeOption) {
+		option.errChSize = errChSize
+	}
+}
+
 // RedisSubscribe 封装 Redis 发布订阅逻辑，并将消息解析为类型 T。
 func RedisSubscribe[T any](rdb interface {
 	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
-}, ctx context.Context, channel string, parser func(message *redis.Message) (T, error)) (<-chan T, <-chan error) {
-	ch := make(chan T)
-	errCh := make(chan error, 1)
+}, ctx context.Context, channel string, parser func(message *redis.Message) (T, error), options ...RedisSubscribeOption) (<-chan T, <-chan error) {
+	opt := &redisSubscribeOption{
+		chSize:    100,
+		errChSize: 10,
+	}
+	for _, fn := range options {
+		fn(opt)
+	}
+	ch := make(chan T, opt.chSize)
+	errCh := make(chan error, opt.errChSize)
 	go func() {
 		defer close(errCh)
 		defer close(ch)
