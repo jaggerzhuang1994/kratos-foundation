@@ -11,10 +11,10 @@ type Config = kratos_foundation_pb.RedisComponentConfig_RedisConfig
 type RedisOption = kratos_foundation_pb.RedisComponentConfig_RedisConfig_RedisOption
 
 var defaultConfig = &Config{
-	Default: "default",
+	Default: proto.String("default"),
 	Tracing: &kratos_foundation_pb.RedisComponentConfig_RedisConfig_Tracing{
-		DbStatement:   true,
-		CallerEnabled: true,
+		DbStatement:   proto.Bool(true),
+		CallerEnabled: proto.Bool(true),
 	},
 }
 

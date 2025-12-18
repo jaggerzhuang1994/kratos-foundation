@@ -14,24 +14,24 @@ var defaultConfig = &Config{
 	StopDelay:  durationpb.New(0),
 	Middleware: nil,
 	Http: &kratos_foundation_pb.ServerComponentConfig_Server_HttpServerOption{
-		Disable:            false,
-		Network:            "tcp",
-		Addr:               "0.0.0.0:8000",
+		Disable:            proto.Bool(false),
+		Network:            proto.String("tcp"),
+		Addr:               proto.String("0.0.0.0:8000"),
 		Endpoint:           nil, // 默认使用服务暴露的 host:port
-		DisableStrictSlash: false,
-		PathPrefix:         "",
+		DisableStrictSlash: proto.Bool(false),
+		PathPrefix:         proto.String(""),
 		Metrics: &kratos_foundation_pb.ServerComponentConfig_Server_HttpServerOption_Metrics{
-			Disable: false,
-			Path:    "/metrics",
+			Disable: proto.Bool(false),
+			Path:    proto.String("/metrics"),
 		},
 	},
 	Grpc: &kratos_foundation_pb.ServerComponentConfig_Server_GrpcServerOption{
-		Disable:           false,
-		Network:           "tcp",
-		Addr:              "0.0.0.0:9000",
+		Disable:           proto.Bool(false),
+		Network:           proto.String("tcp"),
+		Addr:              proto.String("0.0.0.0:9000"),
 		Endpoint:          nil, // 默认使用服务暴露的 host:port
-		CustomHealth:      false,
-		DisableReflection: false,
+		CustomHealth:      proto.Bool(false),
+		DisableReflection: proto.Bool(false),
 	},
 }
 

@@ -5,21 +5,33 @@ package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
 
+message EntrypointMessage {
+  AppComponentConfig.App app = 1;
+  LogComponentConfig.Log log = 2;
+  MetricComponentConfig.Metrics metrics = 3;
+  TracingComponentConfig.Tracing tracing = 4;
+  ServerComponentConfig.Server server = 5;
+  DatabaseComponentConfig.Database database = 6;
+  RedisComponentConfig.RedisConfig redis = 7;
+  ClientComponentConfig.Client client = 8;
+  JobComponent.JobConfig job = 9;
+}
+
 message AppComponentConfig {
-  App app = 1;
+  optional App app = 1;
 
   message App {
     // 是否禁用服务注册
-    bool disable_registrar = 1;
+    optional bool disable_registrar = 1;
     // 注册中心超时时间（默认10s）
-    google.protobuf.Duration registrar_timeout = 2;
+    optional google.protobuf.Duration registrar_timeout = 2;
     // stop timeout 必须大于 server.stop_delay （默认30s）
-    google.protobuf.Duration stop_timeout = 3;
+    optional google.protobuf.Duration stop_timeout = 3;
   }
 }
 
 message LogComponentConfig {
-  Log log = 1;
+  optional Log log = 1;
 
   // 模块使用的 log 结构
   message ModuleLog {
@@ -33,23 +45,23 @@ message LogComponentConfig {
 
   message Log {
     // 最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)
-    string level = 1;
+    optional string level = 1;
     // 是否过滤掉空值的kv(默认true)
     optional bool filter_empty = 2;
     // 打印日志过滤哪些keys
     repeated string filter_keys = 3;
     // 时间格式化 默认为 time.RFC3339
-    string time_format = 4;
+    optional string time_format = 4;
     // 标准输出流日志
-    StdLogger std = 5;
+    optional StdLogger std = 5;
     // 文件日志
-    FileLogger file = 6;
+    optional FileLogger file = 6;
     // 预置哪些 kv，默认 ts, service.id, service.name, service.version, trace.id, span.id, caller
     repeated string preset = 7;
 
     message StdLogger {
       // 是否禁用std logger(默认不禁用)
-      bool disable = 1;
+      optional bool disable = 1;
       // 最小日志级别（默认继承上层level）
       optional string level = 2;
       // 是否过滤掉空值的kv
@@ -60,7 +72,7 @@ message LogComponentConfig {
 
     message FileLogger {
       // 禁用file logger(默认不禁用)
-      bool disable = 1;
+      optional bool disable = 1;
       // 最小日志级别（默认继承上层level）
       optional string level = 2;
       // 是否过滤掉空值的kv
@@ -68,95 +80,111 @@ message LogComponentConfig {
       // 打印日志过滤哪些keys，会合并上层 filter_keys
       repeated string filter_keys = 4;
       // 日志路径 (默认 ./app.log)
-      string path = 5;
+      optional string path = 5;
       // 文件拆分
-      Rotating rotating = 6;
+      optional Rotating rotating = 6;
 
       message Rotating {
         // 禁用文件拆分(默认不禁用)
-        bool disable = 1;
+        optional bool disable = 1;
         // 日志文件在轮转前允许的最大大小。默认为 100 MB。
-        int64 max_size = 2;
+        optional int64 max_size = 2;
         // 是根据备份文件名中编码的时间戳来保留旧日志文件的最大天数。
         // 注意：一天被定义为 24 小时，可能与日历中的自然日不完全对应，
         // 比如受到夏令时、闰秒等影响。默认不会因为时间而删除旧日志文件。
         // 默认会保留所有文件。
-        int32 max_file_age = 3;
+        optional int32 max_file_age = 3;
         // 要保留的旧日志文件的最大数量。
         // 默认会保留所有旧日志文件（但 MaxAge 仍可能导致旧文件被删除）。
-        int32 max_files = 4;
+        optional int32 max_files = 4;
         // 决定备份文件名中的时间戳是否使用本地时间。默认使用 UTC 时间。
-        bool local_time = 5;
+        optional bool local_time = 5;
         // 决定轮转后的日志文件是否使用 gzip 压缩。默认不压缩。
-        bool compress = 6;
+        optional bool compress = 6;
       }
     }
   }
 }
 
 message MetricComponentConfig {
-  Metrics metrics = 1;
+  optional Metrics metrics = 1;
 
   message Metrics {
     // 指标命名空间（默认为启动的应用名）
-    string meter_name = 1;
+    optional string meter_name = 1;
     // 初始 counter map 容量（默认 64）
     // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
-    int32 counter_map_size = 2;
+    optional int32 counter_map_size = 2;
     // 初始 gauge map 容量（默认 64）
     // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
-    int32 gauge_map_size = 3;
+    optional int32 gauge_map_size = 3;
     // 初始 histogram map 容量（默认 64）
     // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
-    int32 histogram_map_size = 4;
+    optional int32 histogram_map_size = 4;
     // log
-    LogComponentConfig.ModuleLog log = 5;
+    optional LogComponentConfig.ModuleLog log = 5;
   }
 }
 
 message TracingComponentConfig {
-  Tracing tracing = 1;
+  optional Tracing tracing = 1;
 
   message Tracing {
     // 是否禁用链路追踪
-    bool disable = 1;
+    optional bool disable = 1;
     // 默认 tracer name，默认值为 appinfo.name
-    string tracer_name = 2;
+    optional string tracer_name = 2;
     // 导出配置
-    Exporter exporter = 3;
+    optional Exporter exporter = 3;
     // 采样率设置
-    Sampler sampler = 4;
+    optional Sampler sampler = 4;
     // log
-    LogComponentConfig.ModuleLog log = 5;
+    optional LogComponentConfig.ModuleLog log = 5;
 
     message Exporter {
-      string endpoint_url = 1;
-      Compression compression = 2;
+      // 导出器的地址 http://host:port/path
+      optional string endpoint_url = 1;
+      // 是否压缩
+      optional Compression compression = 2;
+      // 额外请求头
       map<string, string> headers = 3;
-      google.protobuf.Duration timeout = 4;
-      RetryConfig retry = 5;
+      // 超时
+      optional google.protobuf.Duration timeout = 4;
+      // 重试策略
+      optional RetryConfig retry = 5;
 
       enum Compression {
+        // 不压缩
         NO = 0;
+        // gzip压缩
         GZIP = 1;
       }
 
       message RetryConfig {
-        bool enabled = 1;
-        google.protobuf.Duration initial_interval = 2;
-        google.protobuf.Duration max_interval = 3;
-        google.protobuf.Duration max_elapsed_time = 4;
+        // 是否启用重试
+        optional bool enabled = 1;
+        // 初始间隔
+        optional google.protobuf.Duration initial_interval = 2;
+        // 最大间隔
+        optional google.protobuf.Duration max_interval = 3;
+        // 单次执行允许的最大耗时
+        optional google.protobuf.Duration max_elapsed_time = 4;
       }
     }
+
     message Sampler {
       enum Sample {
-        RATIO = 0; // 按照采样率采样
-        ALWAYS = 1; // 总是采样
-        NEVER = 2; // 总是不采样
+        // 按照采样率采样
+        RATIO = 0;
+        // 总是采样
+        ALWAYS = 1;
+        // 总是不采样
+        NEVER = 2;
       }
-      Sample sample = 1;
+      // 采样配置
+      optional Sample sample = 1;
       // 采样率(默认采样率0.05)
-      double ratio = 2;
+      optional double ratio = 2;
     }
   }
 }
@@ -165,7 +193,7 @@ message MiddlewareConfig {
   // metadata 中间件配置
   message Metadata {
     // 是否启用
-    bool disable = 1;
+    optional bool disable = 1;
     // server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
     // client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-global-
     repeated string prefix = 2;
@@ -176,33 +204,33 @@ message MiddlewareConfig {
   // 链路追踪配置
   message Tracing {
     // 是否禁用
-    bool disable = 1;
+    optional bool disable = 1;
   }
 
   // 监控配置
   message Metrics {
     // 是否禁用
-    bool disable = 1;
+    optional bool disable = 1;
   }
 
   // 日志配置
   message Logging {
     // 是否禁用
-    bool disable = 1;
+    optional bool disable = 1;
   }
 
   // 表单校验配置
   message Validator {
     // 是否禁用
-    bool disable = 1;
+    optional bool disable = 1;
   }
 
   // 限流器
   message Ratelimit {
     // 是否禁用
-    bool enable = 1;
+    optional bool enable = 1;
     // 默认使用bbr limiter
-    BBRLimiter bbr_limiter = 2;
+    optional BBRLimiter bbr_limiter = 2;
 
     message BBRLimiter {
       // 每个窗口的时间长度。默认值 10s
@@ -220,9 +248,9 @@ message MiddlewareConfig {
   // 熔断器
   message Circuitbreaker {
     // 是否禁用
-    bool enable = 1;
+    optional bool enable = 1;
     // 默认使用 sre 熔断器
-    SREBreaker sre = 2;
+    optional SREBreaker sre = 2;
 
     message SREBreaker {
       // 设置 SRE 熔断器中的 K 值（K = 1 / Success），默认 Success 为 0.6。
@@ -245,15 +273,17 @@ message MiddlewareConfig {
     // 默认超时时间
     // 服务端默认超时 1s
     // 客户端默认超时 2s
-    google.protobuf.Duration default = 1;
+    optional google.protobuf.Duration default = 1;
     // 指定路由规则
     repeated RouteRule routes = 2;
 
     message RouteRule {
-      // 路径匹配，例如 /pb_package.Service/Rpc
-      string path = 1;
-      // 前缀匹配，例如 /pb_package.Se
-      string prefix = 2;
+      oneof rule {
+        // 路径匹配，例如 /pb_package.Service/Rpc
+        string path = 1;
+        // 前缀匹配，例如 /pb_package.Se
+        string prefix = 2;
+      }
       // 超时
       google.protobuf.Duration timeout = 3;
     }
@@ -263,21 +293,21 @@ message MiddlewareConfig {
 // 服务组件配置
 message ServerComponentConfig {
   // 服务端配置
-  Server server = 1;
+  optional Server server = 1;
 
   message Server {
     // consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
     // 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。
     // 因此给servers套上一个wrapper用于延迟停止服务。
-    google.protobuf.Duration stop_delay = 1;
+    optional google.protobuf.Duration stop_delay = 1;
     // 通用中间件配置
-    ServerMiddleware middleware = 2;
+    optional ServerMiddleware middleware = 2;
     // http 服务器配置
-    HttpServerOption http = 3;
+    optional HttpServerOption http = 3;
     // grpc 服务器配置
-    GrpcServerOption grpc = 4;
+    optional GrpcServerOption grpc = 4;
     // logger 配置
-    LogComponentConfig.ModuleLog log = 5;
+    optional LogComponentConfig.ModuleLog log = 5;
 
     // 端点配置
     message Endpoint {
@@ -287,130 +317,145 @@ message ServerComponentConfig {
 
     // 中间件配置
     message ServerMiddleware {
-      MiddlewareConfig.Timeout timeout = 1;
-      MiddlewareConfig.Metadata metadata = 2;
-      MiddlewareConfig.Tracing tracing = 3;
-      MiddlewareConfig.Metrics metrics = 4;
-      MiddlewareConfig.Logging logging = 5;
-      MiddlewareConfig.Validator validator = 6;
-      MiddlewareConfig.Ratelimit ratelimit = 7;
+      optional MiddlewareConfig.Timeout timeout = 1;
+      optional MiddlewareConfig.Metadata metadata = 2;
+      optional MiddlewareConfig.Tracing tracing = 3;
+      optional MiddlewareConfig.Metrics metrics = 4;
+      optional MiddlewareConfig.Logging logging = 5;
+      optional MiddlewareConfig.Validator validator = 6;
+      optional MiddlewareConfig.Ratelimit ratelimit = 7;
     }
 
     message HttpServerOption {
-      bool disable = 1;
+      optional bool disable = 1;
       // 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
-      string network = 2;
+      optional string network = 2;
       // 服务监听地址，host:port 或者 unix文件地址
-      string addr = 3;
+      optional string addr = 3;
       // 对外暴露端点
-      Endpoint endpoint = 4;
+      optional Endpoint endpoint = 4;
       // 禁用strictSlash（如果禁用strictSlash，则 /path/ 和 /path 是2个不同的路由，否则会自动重定向到另一个路由）
-      bool disable_strict_slash = 5;
+      optional bool disable_strict_slash = 5;
       // http 路由前缀
-      string path_prefix = 6;
+      optional string path_prefix = 6;
       // metrics 路由
-      Metrics metrics = 7;
+      optional Metrics metrics = 7;
 
       message Metrics {
         // 禁用
-        bool disable = 1;
+        optional bool disable = 1;
         // metrics 路由，默认 /metrics
-        string path = 2;
+        optional string path = 2;
       }
     }
 
     message GrpcServerOption {
-      bool disable = 1;
+      optional bool disable = 1;
       // 一般不需要指定，默认(tcp)
-      string network = 2;
+      optional string network = 2;
       // 服务监听地址，host:port
-      string addr = 3;
+      optional string addr = 3;
       // 对外暴露端点
-      Endpoint endpoint = 4;
+      optional Endpoint endpoint = 4;
       // customHealth 是否自定义健康检查，默认否（使用 grpc 自带的健康端点）
-      bool custom_health = 5;
+      optional bool custom_health = 5;
       // disableReflection 是否禁用服务反射
-      bool disable_reflection = 6;
+      optional bool disable_reflection = 6;
     }
   }
 }
 
 message DatabaseComponentConfig {
-  Database database = 1;
+  optional Database database = 1;
 
   message Database {
     // gorm 配置
-    Gorm gorm = 1;
+    optional Gorm gorm = 1;
     // logger 配置
-    LogComponentConfig.ModuleLog log = 2;
+    optional LogComponentConfig.ModuleLog log = 2;
     // 默认连接
-    string default = 3;
+    optional string default = 3;
     // 连接
     map<string, Connection> connections = 4;
     // 链路追踪配置
-    Tracing tracing = 5;
+    optional Tracing tracing = 5;
     // 监控
-    Metrics metrics = 6;
+    optional Metrics metrics = 6;
 
     message Tracing {
       // 禁用 gorm.tracing 插件
-      bool disable = 1;
+      optional bool disable = 1;
       // 排除 db.statement SQL 的变量部分
-      bool exclude_query_vars = 2;
+      optional bool exclude_query_vars = 2;
       // 排除 DBStats 指标被上报
-      bool exclude_metrics = 3;
+      optional bool exclude_metrics = 3;
       // 在异常事件中包含堆栈追踪
-      bool record_stack_trace_in_span = 4;
+      optional bool record_stack_trace_in_span = 4;
       // 排除 db.server_address 属性
-      bool exclude_server_address = 5;
+      optional bool exclude_server_address = 5;
     }
 
     message Metrics {
       // 禁用 gorm.metrics 插件
-      bool disable = 1;
+      optional bool disable = 1;
       // 常量labels
       map<string, string> labels = 2;
       // 刷新间隔 默认15s
-      google.protobuf.Duration refresh_interval = 3;
+      optional google.protobuf.Duration refresh_interval = 3;
       // mysql 插件的配置
-      Mysql mysql = 4;
+      optional Mysql mysql = 4;
 
       message Mysql {
         // 指标前缀，默认 gorm_status_
-        string prefix = 1;
+        optional string prefix = 1;
         // 间隔 默认 refresh_interval
-        google.protobuf.Duration interval = 2;
+        optional google.protobuf.Duration interval = 2;
         // 采集哪些指标，默认所有
         repeated string variable_names = 3;
       }
     }
 
     message Gorm {
-      bool skip_default_transaction = 1;
-      google.protobuf.Duration default_transaction_timeout = 2;
-      google.protobuf.Duration default_context_timeout = 3;
-      bool full_save_associations = 4;
-      Logger logger = 5;
-      bool disable_automatic_ping = 6;
-      bool disable_foreign_key_constraint_when_migrating = 7;
-      bool ignore_relationships_when_migrating = 8;
-      bool disable_nested_transaction = 9;
-      bool allow_global_update = 10;
-      bool query_fields = 11;
-      int32 create_batch_size = 12;
-      bool translate_error = 13;
-      bool propagate_unscoped = 14;
+      // 跳过 GORM 默认的“每次写操作自动包一层事务”行为。
+      optional bool skip_default_transaction = 1;
+      // “显式/默认事务”统一的超时上限
+      optional google.protobuf.Duration default_transaction_timeout = 2;
+      // 普通 DB 操作（非事务）默认 context 超时
+      optional google.protobuf.Duration default_context_timeout = 3;
+      // 更新/保存时，是否把关联对象（associations）也“完整保存”（包含更新已有关联）。
+      optional bool full_save_associations = 4;
+      // gormLogger配置
+      optional Logger logger = 5;
+      // 禁用 GORM 初始化/打开连接时的自动 Ping
+      optional bool disable_automatic_ping = 6;
+      // AutoMigrate 时不创建外键约束
+      optional bool disable_foreign_key_constraint_when_migrating = 7;
+      // AutoMigrate 时忽略关系（不处理关联表/关系字段）
+      optional bool ignore_relationships_when_migrating = 8;
+      // 禁用嵌套事务（GORM 嵌套事务通常通过 savepoint 实现）。
+      optional bool disable_nested_transaction = 9;
+      // 允许无 WHERE 的全表更新/删除（GORM 默认会拦截）。
+      optional bool allow_global_update = 10;
+      // select 时倾向显式列（避免 SELECT *），某些场景会根据模型字段生成查询列。
+      optional bool query_fields = 11;
+      // 批量创建时每批插入的条数（GORM CreateInBatches / Create 的批量行为）。
+      optional int32 create_batch_size = 12;
+      // 将驱动/数据库错误翻译成 GORM 统一错误（比如重复键、外键错误等），便于业务判断。
+      optional bool translate_error = 13;
+      // 当你使用 Unscoped() 时，是否把 unscoped 行为传播到关联（association）操作。
+      optional bool propagate_unscoped = 14;
 
       message Logger {
-        Level level = 1;
-        // gorm 慢日志设置
-        google.protobuf.Duration slow_threshold = 2;
-        // Colorful
-        bool colorful = 3;
-        // IgnoreRecordNotFoundError
-        bool ignore_record_not_found_error = 4;
+        // 默认 Silent
+        optional Level level = 1;
+        // gorm 慢日志门限
+        optional google.protobuf.Duration slow_threshold = 2;
+        // 输出是否彩色
+        optional bool colorful = 3;
+        // 日志是否忽略record not found错误
+        optional bool ignore_record_not_found_error = 4;
         // ParameterizedQueries
-        bool parameterized_queries = 5;
+        optional bool parameterized_queries = 5;
 
         enum Level {
           // default to Silent
@@ -429,7 +474,7 @@ message DatabaseComponentConfig {
 
     message Connection {
       // 数据库驱动，默认mysql
-      string driver = 1;
+      optional string driver = 1;
       // dsn
       string dsn = 2;
       // 从库
@@ -437,7 +482,7 @@ message DatabaseComponentConfig {
       // 自动切换数据源关联表
       repeated string datas = 4;
       // print sources/replicas mode in logger
-      bool trace_resolver_mode = 5;
+      optional bool trace_resolver_mode = 5;
       // 用于设置连接池中空闲连接的最大数量
       // 如果 MaxOpenConns > 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。
       // 如果 n ≤ 0，则不保留任何空闲连接。
@@ -452,17 +497,17 @@ message DatabaseComponentConfig {
       // 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
       // 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。
       // 默认值是 0，也就是无限制。
-      google.protobuf.Duration conn_max_lifetime = 8;
+      optional google.protobuf.Duration conn_max_lifetime = 8;
       // 用于设置连接在空闲状态下允许存在的最长时间。
       // 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
       // 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。
       // 默认值是 0，也就是无限制。
-      google.protobuf.Duration conn_max_idle_time = 9;
+      optional google.protobuf.Duration conn_max_idle_time = 9;
 
       // 数据库方言
       message Dialector {
         // 数据库驱动，默认mysql
-        string driver = 1;
+        optional string driver = 1;
         // dsn
         string dsn = 2;
         // 用于设置连接池中空闲连接的最大数量
@@ -479,13 +524,12 @@ message DatabaseComponentConfig {
         // 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
         // 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。
         // 默认值是 0，也就是无限制。
-        google.protobuf.Duration conn_max_lifetime = 5;
+        optional google.protobuf.Duration conn_max_lifetime = 5;
         // 用于设置连接在空闲状态下允许存在的最长时间。
         // 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
         // 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。
         // 默认值是 0，也就是无限制。
-        google.protobuf.Duration conn_max_idle_time = 6;
-
+        optional google.protobuf.Duration conn_max_idle_time = 6;
       }
     }
   }
@@ -493,163 +537,165 @@ message DatabaseComponentConfig {
 
 // redis组件
 message RedisComponentConfig {
-  RedisConfig redis = 1;
+  optional RedisConfig redis = 1;
 
   message RedisConfig {
     // 默认连接
-    string default = 1;
+    optional string default = 1;
     // 连接配置
     map<string, RedisOption> connections = 2;
     // logger 配置
     optional LogComponentConfig.ModuleLog log = 3;
     // tracing
-    Tracing tracing = 4;
+    optional Tracing tracing = 4;
     // Metrics
-    Metrics metrics = 5;
+    optional Metrics metrics = 5;
 
     message Tracing {
-      bool disable = 1;
+      // 是否禁用
+      optional bool disable = 1;
       // DBStatement tells the tracing hook to log raw redis commands.
-      bool db_statement = 2;
+      optional bool db_statement = 2;
       // CallerEnabled tells the tracing hook to log the calling function, file and line.
-      bool caller_enabled = 3;
+      optional bool caller_enabled = 3;
       // DialFilter enables or disables filtering of dial commands.
-      bool dial_filter = 4;
+      optional bool dial_filter = 4;
     }
 
     message Metrics {
-      bool disable = 1;
+      // 是否禁用
+      optional bool disable = 1;
     }
 
     message RedisOption {
       // Network type, either tcp or unix.
       //
       // default: tcp
-      string network = 1;
+      optional string network = 1;
       // Addr is the address formatted as host:port
-      string addr = 2;
+      optional string addr = 2;
       // ClientName will execute the `CLIENT SETNAME ClientName` command for each conn.
-      string client_name = 3;
+      optional string client_name = 3;
       // Protocol 2 or 3. Use the version to negotiate RESP version with redis-server.
       //
       // default: 3
-      int32 protocol = 4;
+      optional int32 protocol = 4;
       // Username is used to authenticate the current connection.
-      string username = 5;
+      optional string username = 5;
       // Password is an optional password.
-      string password = 6;
+      optional string password = 6;
       // DB is the database to be selected after connecting to the server.
-      int32 db = 7;
+      optional int32 db = 7;
       // MaxRetries is the maximum number of retries before giving up.
       // -1 (not 0) disables retries.
       //
       // default: 3 retries
-      int32 max_retries = 8;
+      optional int32 max_retries = 8;
       // MinRetryBackoff is the minimum backoff between each retry.
       // -1 disables backoff.
       //
       // default: 8 milliseconds
-      google.protobuf.Duration min_retry_backoff = 9;
+      optional google.protobuf.Duration min_retry_backoff = 9;
       // MaxRetryBackoff is the maximum backoff between each retry.
       // -1 disables backoff.
       //
       // default: 512 milliseconds;
-      google.protobuf.Duration max_retry_backoff = 10;
+      optional google.protobuf.Duration max_retry_backoff = 10;
       // DialTimeout for establishing new connections.
       //
       // default: 5 seconds
-      google.protobuf.Duration dial_timeout = 11;
+      optional google.protobuf.Duration dial_timeout = 11;
       // DialerRetries is the maximum number of retry attempts when dialing fails.
       //
       // default: 5
-      int32 dialer_retries = 12;
+      optional int32 dialer_retries = 12;
       // DialerRetryTimeout is the backoff duration between retry attempts.
       //
       // default: 100 milliseconds
-      google.protobuf.Duration dialer_retry_timeout = 13;
+      optional google.protobuf.Duration dialer_retry_timeout = 13;
       // ReadTimeout for socket reads.
       //
       //  - -1  no timeout (block indefinitely)
       //  - -2  disables SetReadDeadline calls completely
       //
       // default: 3 seconds
-      google.protobuf.Duration read_timeout = 14;
+      optional google.protobuf.Duration read_timeout = 14;
       // WriteTimeout for socket writes.
       //
       //  - -1  no timeout (block indefinitely)
       //  - -2  disables SetWriteDeadline calls completely
       //
       // default: 3 seconds
-      google.protobuf.Duration write_timeout = 15;
+      optional google.protobuf.Duration write_timeout = 15;
       // ContextTimeoutEnabled controls whether the client respects context timeouts and deadlines.
-      bool context_timeout_enabled = 16;
+      optional bool context_timeout_enabled = 16;
       // ReadBufferSize is the size of the bufio.Reader buffer for each connection.
       //
       // default: 32KiB (32768 bytes)
-      int32 read_buffer_size = 17;
+      optional int32 read_buffer_size = 17;
       // WriteBufferSize is the size of the bufio.Writer buffer for each connection.
       //
       // default: 32KiB (32768 bytes)
-      int32 write_buffer_size = 18;
+      optional int32 write_buffer_size = 18;
       // PoolFIFO type of connection pool.
       //
       //  - true  FIFO pool
       //  - false LIFO pool
-      bool pool_fifo = 19;
+      optional bool pool_fifo = 19;
       // PoolSize is the base number of socket connections.
       //
       // default: 10 * runtime.GOMAXPROCS(0)
-      int32 pool_size = 20;
+      optional int32 pool_size = 20;
       // MaxConcurrentDials is the maximum number of concurrent connection creation goroutines.
-      int32 max_concurrent_dials = 21;
+      optional int32 max_concurrent_dials = 21;
       // PoolTimeout is the amount of time client waits for connection if all connections
       // are busy before returning an error.
       //
       // default: ReadTimeout + 1 second
-      google.protobuf.Duration pool_timeout = 22;
+      optional google.protobuf.Duration pool_timeout = 22;
       // MinIdleConns is the minimum number of idle connections.
       //
       // default: 0
-      int32 min_idle_conns = 23;
+      optional int32 min_idle_conns = 23;
       // MaxIdleConns is the maximum number of idle connections.
       //
       // default: 0
-      int32 max_idle_conns = 24;
+      optional int32 max_idle_conns = 24;
       // MaxActiveConns is the maximum number of connections allocated by the pool at a given time.
       //
       // 0 = no limit
-      int32 max_active_conns = 25;
+      optional int32 max_active_conns = 25;
       // ConnMaxIdleTime is the maximum amount of time a connection may be idle.
       //
       // default: 30 minutes
-      google.protobuf.Duration conn_max_idle_time = 26;
+      optional google.protobuf.Duration conn_max_idle_time = 26;
       // ConnMaxLifetime is the maximum amount of time a connection may be reused.
       //
       // default: 0
-      google.protobuf.Duration conn_max_lifetime = 27;
+      optional google.protobuf.Duration conn_max_lifetime = 27;
       // readOnly enables read only queries on slave/follower nodes.
-      bool read_only = 28;
+      optional bool read_only = 28;
       // DisableIndentity - Disable set-lib on connect.
       //
       // Deprecated: Use DisableIdentity instead.
-      bool disable_indentity = 29 [deprecated = true];
+      optional bool disable_indentity = 29 [deprecated = true];
       // DisableIdentity is used to disable CLIENT SETINFO command on connect.
-      bool disable_identity = 30;
+      optional bool disable_identity = 30;
       // Add suffix to client name. Default is empty.
-      string identity_suffix = 31;
+      optional string identity_suffix = 31;
       // UnstableResp3 enables Unstable mode for Redis Search module with RESP3.
-      bool unstable_resp3 = 32;
+      optional bool unstable_resp3 = 32;
       // FailingTimeoutSeconds is the timeout in seconds for marking a cluster node as failing.
       //
       // default: 15
-      int32 failing_timeout_seconds = 33;
+      optional int32 failing_timeout_seconds = 33;
     }
   }
 }
 
 // 客户端组件
 message ClientComponentConfig {
-  Client client = 1;
+  optional Client client = 1;
 
   message Client {
     map<string, ClientOption> clients = 1;
@@ -658,54 +704,58 @@ message ClientComponentConfig {
 
     message ClientOption {
       // 协议 默认为 GRPC
-      Protocol protocol = 1;
+      optional Protocol protocol = 1;
       // 目标端点 支持服务发现/直连:
       // 默认为 discovery:///{client_key}
       // 也可以指定直连 host:port
       string target = 2;
       // 中间件
-      ClientMiddleware middleware = 3;
+      optional ClientMiddleware middleware = 3;
 
       enum Protocol {
+        // grpc请求
         GRPC = 0;
+        // http请求
         HTTP = 1;
+        // grpcs请求
         GRPCS = 2;
+        // https请求
         HTTPS = 3;
       }
 
       // 客户端中间件配置
       message ClientMiddleware {
-        MiddlewareConfig.Timeout timeout = 1;
-        MiddlewareConfig.Metadata metadata = 2;
-        MiddlewareConfig.Tracing tracing = 3;
-        MiddlewareConfig.Metrics metrics = 4;
-        MiddlewareConfig.Logging logging = 5;
-        MiddlewareConfig.Circuitbreaker circuitbreaker = 6;
+        optional MiddlewareConfig.Timeout timeout = 1;
+        optional MiddlewareConfig.Metadata metadata = 2;
+        optional MiddlewareConfig.Tracing tracing = 3;
+        optional MiddlewareConfig.Metrics metrics = 4;
+        optional MiddlewareConfig.Logging logging = 5;
+        optional MiddlewareConfig.Circuitbreaker circuitbreaker = 6;
       }
     }
   }
 }
 
 message JobComponent {
-  JobConfig job = 1;
+  optional JobConfig job = 1;
 
   message JobConfig {
-    // 禁用
-    bool disable = 1;
+    // 是否禁用
+    optional bool disable = 1;
     // cron定时器的时区(默认为当前时区)
-    string timezone = 2;
+    optional string timezone = 2;
     // log info则会输出详细日志
     optional LogComponentConfig.ModuleLog log = 3;
     // tracing
-    Tracing tracing = 4;
+    optional Tracing tracing = 4;
     // Metrics
-    Metrics metrics = 5;
-    // 任务定义
+    optional Metrics metrics = 5;
+    // 任务配置
     map<string, Job> jobs = 6;
 
     message Job {
       // 是否禁用任务
-      bool disable = 1;
+      optional bool disable = 1;
       // 【定时任务】定时表达式
       // 支持在表达式之前指定时区，格式为 TZ=Asia/Tokyo {cron}
       // 支持 cron 表达式（当有6组数字则表示支持秒，5组表示不支持秒）： [Sec(0-59,*), ]Min(0-59,*) Hour(0-23,*) DayOfMonth(1-31,*,?) Month(1-12,*) DayOfWeek(0-6,JUN-SAT,*,?)
@@ -713,9 +763,9 @@ message JobComponent {
       // 支持 @every {duration}，例如 @every 1s, @every 1m2s
       string schedule = 2;
       // 【定时任务】任务并行策略
-      ConcurrentPolicy concurrent_policy = 3;
+      optional ConcurrentPolicy concurrent_policy = 3;
       // 【定时任务】启动是否立刻调度一次
-      bool immediately = 4;
+      optional bool immediately = 4;
 
       // 并行策略
       enum ConcurrentPolicy {
@@ -731,13 +781,13 @@ message JobComponent {
     // 链路追踪配置
     message Tracing {
       // 是否禁用
-      bool disable = 1;
+      optional bool disable = 1;
     }
 
     // 监控配置
     message Metrics {
       // 是否禁用
-      bool disable = 1;
+      optional bool disable = 1;
     }
   }
 }

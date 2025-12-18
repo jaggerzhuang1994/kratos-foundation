@@ -17,30 +17,32 @@ type ModuleConfig interface {
 	GetFilterKeys() []string
 }
 
+var defaultLevel = DefaultLevel()
+
 var defaultConfig = &Config{
-	Level:       DefaultLevel(),
+	Level:       &defaultLevel,
 	FilterEmpty: proto.Bool(true),
 	FilterKeys:  []string{},
-	TimeFormat:  time.RFC3339,
+	TimeFormat:  proto.String(time.RFC3339),
 	Std: &kratos_foundation_pb.LogComponentConfig_Log_StdLogger{
-		Disable:     false,
+		Disable:     proto.Bool(false),
 		Level:       nil, // default to log.level
 		FilterEmpty: nil, // default to log.FilterEmpty
 		FilterKeys:  []string{},
 	},
 	File: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger{
-		Disable:     false,
+		Disable:     proto.Bool(false),
 		Level:       nil, // default to log.level
 		FilterEmpty: nil, // default to log.FilterEmpty
 		FilterKeys:  []string{},
-		Path:        "./app.log",
+		Path:        proto.String("./app.log"),
 		Rotating: &kratos_foundation_pb.LogComponentConfig_Log_FileLogger_Rotating{
-			Disable:    false,
-			MaxSize:    100,
-			MaxFileAge: 0,
-			MaxFiles:   0,
-			LocalTime:  false,
-			Compress:   false,
+			Disable:    proto.Bool(false),
+			MaxSize:    proto.Int64(100),
+			MaxFileAge: proto.Int32(0),
+			MaxFiles:   proto.Int32(0),
+			LocalTime:  proto.Bool(false),
+			Compress:   proto.Bool(false),
 		},
 	},
 	Preset: nil, // 为空默认全部

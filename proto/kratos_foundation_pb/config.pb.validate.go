@@ -35,6 +35,369 @@ var (
 	_ = sort.Sort
 )
 
+// Validate checks the field values on EntrypointMessage with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *EntrypointMessage) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on EntrypointMessage with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// EntrypointMessageMultiError, or nil if none found.
+func (m *EntrypointMessage) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *EntrypointMessage) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetApp()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "App",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "App",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "App",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetLog()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Log",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetMetrics()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Metrics",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetTracing()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Tracing",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetServer()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Server",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Server",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Server",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetDatabase()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Database",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Database",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Database",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetRedis()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Redis",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Redis",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Redis",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetClient()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Client",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Client",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Client",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetJob()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Job",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EntrypointMessageValidationError{
+					field:  "Job",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EntrypointMessageValidationError{
+				field:  "Job",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return EntrypointMessageMultiError(errors)
+	}
+
+	return nil
+}
+
+// EntrypointMessageMultiError is an error wrapping multiple validation errors
+// returned by EntrypointMessage.ValidateAll() if the designated constraints
+// aren't met.
+type EntrypointMessageMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m EntrypointMessageMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m EntrypointMessageMultiError) AllErrors() []error { return m }
+
+// EntrypointMessageValidationError is the validation error returned by
+// EntrypointMessage.Validate if the designated constraints aren't met.
+type EntrypointMessageValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e EntrypointMessageValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e EntrypointMessageValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e EntrypointMessageValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e EntrypointMessageValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e EntrypointMessageValidationError) ErrorName() string {
+	return "EntrypointMessageValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e EntrypointMessageValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sEntrypointMessage.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = EntrypointMessageValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = EntrypointMessageValidationError{}
+
 // Validate checks the field values on AppComponentConfig with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -57,33 +420,37 @@ func (m *AppComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetApp()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, AppComponentConfigValidationError{
-					field:  "App",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.App != nil {
+
+		if all {
+			switch v := interface{}(m.GetApp()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, AppComponentConfigValidationError{
+						field:  "App",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, AppComponentConfigValidationError{
+						field:  "App",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, AppComponentConfigValidationError{
+				return AppComponentConfigValidationError{
 					field:  "App",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return AppComponentConfigValidationError{
-				field:  "App",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -188,33 +555,37 @@ func (m *LogComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetLog()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, LogComponentConfigValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LogComponentConfigValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LogComponentConfigValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, LogComponentConfigValidationError{
+				return LogComponentConfigValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return LogComponentConfigValidationError{
-				field:  "Log",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -319,33 +690,37 @@ func (m *MetricComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, MetricComponentConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, MetricComponentConfigValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, MetricComponentConfigValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, MetricComponentConfigValidationError{
+				return MetricComponentConfigValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return MetricComponentConfigValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -450,33 +825,37 @@ func (m *TracingComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfigValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfigValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfigValidationError{
+				return TracingComponentConfigValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfigValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -681,33 +1060,37 @@ func (m *ServerComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetServer()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfigValidationError{
-					field:  "Server",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Server != nil {
+
+		if all {
+			switch v := interface{}(m.GetServer()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfigValidationError{
+						field:  "Server",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfigValidationError{
+						field:  "Server",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfigValidationError{
+				return ServerComponentConfigValidationError{
 					field:  "Server",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfigValidationError{
-				field:  "Server",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -812,33 +1195,37 @@ func (m *DatabaseComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetDatabase()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfigValidationError{
-					field:  "Database",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Database != nil {
+
+		if all {
+			switch v := interface{}(m.GetDatabase()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfigValidationError{
+						field:  "Database",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfigValidationError{
+						field:  "Database",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfigValidationError{
+				return DatabaseComponentConfigValidationError{
 					field:  "Database",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfigValidationError{
-				field:  "Database",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -943,33 +1330,37 @@ func (m *RedisComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetRedis()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfigValidationError{
-					field:  "Redis",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Redis != nil {
+
+		if all {
+			switch v := interface{}(m.GetRedis()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfigValidationError{
+						field:  "Redis",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfigValidationError{
+						field:  "Redis",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfigValidationError{
+				return RedisComponentConfigValidationError{
 					field:  "Redis",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfigValidationError{
-				field:  "Redis",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -1074,33 +1465,37 @@ func (m *ClientComponentConfig) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetClient()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfigValidationError{
-					field:  "Client",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Client != nil {
+
+		if all {
+			switch v := interface{}(m.GetClient()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfigValidationError{
+						field:  "Client",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfigValidationError{
+						field:  "Client",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfigValidationError{
+				return ClientComponentConfigValidationError{
 					field:  "Client",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfigValidationError{
-				field:  "Client",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -1205,33 +1600,37 @@ func (m *JobComponent) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetJob()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, JobComponentValidationError{
-					field:  "Job",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Job != nil {
+
+		if all {
+			switch v := interface{}(m.GetJob()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobComponentValidationError{
+						field:  "Job",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobComponentValidationError{
+						field:  "Job",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, JobComponentValidationError{
+				return JobComponentValidationError{
 					field:  "Job",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return JobComponentValidationError{
-				field:  "Job",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -1333,64 +1732,74 @@ func (m *AppComponentConfig_App) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for DisableRegistrar
-
-	if all {
-		switch v := interface{}(m.GetRegistrarTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, AppComponentConfig_AppValidationError{
-					field:  "RegistrarTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, AppComponentConfig_AppValidationError{
-					field:  "RegistrarTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetRegistrarTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return AppComponentConfig_AppValidationError{
-				field:  "RegistrarTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.DisableRegistrar != nil {
+		// no validation rules for DisableRegistrar
 	}
 
-	if all {
-		switch v := interface{}(m.GetStopTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, AppComponentConfig_AppValidationError{
-					field:  "StopTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.RegistrarTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetRegistrarTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, AppComponentConfig_AppValidationError{
+						field:  "RegistrarTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, AppComponentConfig_AppValidationError{
+						field:  "RegistrarTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetRegistrarTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, AppComponentConfig_AppValidationError{
+				return AppComponentConfig_AppValidationError{
+					field:  "RegistrarTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.StopTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetStopTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, AppComponentConfig_AppValidationError{
+						field:  "StopTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, AppComponentConfig_AppValidationError{
+						field:  "StopTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetStopTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return AppComponentConfig_AppValidationError{
 					field:  "StopTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetStopTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return AppComponentConfig_AppValidationError{
-				field:  "StopTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -1606,70 +2015,82 @@ func (m *LogComponentConfig_Log) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Level
-
-	// no validation rules for TimeFormat
-
-	if all {
-		switch v := interface{}(m.GetStd()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, LogComponentConfig_LogValidationError{
-					field:  "Std",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, LogComponentConfig_LogValidationError{
-					field:  "Std",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetStd()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return LogComponentConfig_LogValidationError{
-				field:  "Std",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if all {
-		switch v := interface{}(m.GetFile()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, LogComponentConfig_LogValidationError{
-					field:  "File",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, LogComponentConfig_LogValidationError{
-					field:  "File",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetFile()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return LogComponentConfig_LogValidationError{
-				field:  "File",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Level != nil {
+		// no validation rules for Level
 	}
 
 	if m.FilterEmpty != nil {
 		// no validation rules for FilterEmpty
+	}
+
+	if m.TimeFormat != nil {
+		// no validation rules for TimeFormat
+	}
+
+	if m.Std != nil {
+
+		if all {
+			switch v := interface{}(m.GetStd()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LogComponentConfig_LogValidationError{
+						field:  "Std",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LogComponentConfig_LogValidationError{
+						field:  "Std",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetStd()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LogComponentConfig_LogValidationError{
+					field:  "Std",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.File != nil {
+
+		if all {
+			switch v := interface{}(m.GetFile()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LogComponentConfig_LogValidationError{
+						field:  "File",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LogComponentConfig_LogValidationError{
+						field:  "File",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetFile()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LogComponentConfig_LogValidationError{
+					field:  "File",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	if len(errors) > 0 {
@@ -1775,7 +2196,9 @@ func (m *LogComponentConfig_Log_StdLogger) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if m.Level != nil {
 		// no validation rules for Level
@@ -1890,37 +2313,8 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
-
-	// no validation rules for Path
-
-	if all {
-		switch v := interface{}(m.GetRotating()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, LogComponentConfig_Log_FileLoggerValidationError{
-					field:  "Rotating",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, LogComponentConfig_Log_FileLoggerValidationError{
-					field:  "Rotating",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetRotating()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return LogComponentConfig_Log_FileLoggerValidationError{
-				field:  "Rotating",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Disable != nil {
+		// no validation rules for Disable
 	}
 
 	if m.Level != nil {
@@ -1929,6 +2323,43 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 
 	if m.FilterEmpty != nil {
 		// no validation rules for FilterEmpty
+	}
+
+	if m.Path != nil {
+		// no validation rules for Path
+	}
+
+	if m.Rotating != nil {
+
+		if all {
+			switch v := interface{}(m.GetRotating()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LogComponentConfig_Log_FileLoggerValidationError{
+						field:  "Rotating",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LogComponentConfig_Log_FileLoggerValidationError{
+						field:  "Rotating",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRotating()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LogComponentConfig_Log_FileLoggerValidationError{
+					field:  "Rotating",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	if len(errors) > 0 {
@@ -2037,17 +2468,29 @@ func (m *LogComponentConfig_Log_FileLogger_Rotating) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
-	// no validation rules for MaxSize
+	if m.MaxSize != nil {
+		// no validation rules for MaxSize
+	}
 
-	// no validation rules for MaxFileAge
+	if m.MaxFileAge != nil {
+		// no validation rules for MaxFileAge
+	}
 
-	// no validation rules for MaxFiles
+	if m.MaxFiles != nil {
+		// no validation rules for MaxFiles
+	}
 
-	// no validation rules for LocalTime
+	if m.LocalTime != nil {
+		// no validation rules for LocalTime
+	}
 
-	// no validation rules for Compress
+	if m.Compress != nil {
+		// no validation rules for Compress
+	}
 
 	if len(errors) > 0 {
 		return LogComponentConfig_Log_FileLogger_RotatingMultiError(errors)
@@ -2153,41 +2596,53 @@ func (m *MetricComponentConfig_Metrics) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for MeterName
+	if m.MeterName != nil {
+		// no validation rules for MeterName
+	}
 
-	// no validation rules for CounterMapSize
+	if m.CounterMapSize != nil {
+		// no validation rules for CounterMapSize
+	}
 
-	// no validation rules for GaugeMapSize
+	if m.GaugeMapSize != nil {
+		// no validation rules for GaugeMapSize
+	}
 
-	// no validation rules for HistogramMapSize
+	if m.HistogramMapSize != nil {
+		// no validation rules for HistogramMapSize
+	}
 
-	if all {
-		switch v := interface{}(m.GetLog()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, MetricComponentConfig_MetricsValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, MetricComponentConfig_MetricsValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, MetricComponentConfig_MetricsValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, MetricComponentConfig_MetricsValidationError{
+				return MetricComponentConfig_MetricsValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return MetricComponentConfig_MetricsValidationError{
-				field:  "Log",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -2293,95 +2748,111 @@ func (m *TracingComponentConfig_Tracing) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
-	// no validation rules for TracerName
+	if m.TracerName != nil {
+		// no validation rules for TracerName
+	}
 
-	if all {
-		switch v := interface{}(m.GetExporter()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_TracingValidationError{
+	if m.Exporter != nil {
+
+		if all {
+			switch v := interface{}(m.GetExporter()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_TracingValidationError{
+						field:  "Exporter",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_TracingValidationError{
+						field:  "Exporter",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetExporter()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingComponentConfig_TracingValidationError{
 					field:  "Exporter",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_TracingValidationError{
-					field:  "Exporter",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetExporter()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_TracingValidationError{
-				field:  "Exporter",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetSampler()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_TracingValidationError{
+	if m.Sampler != nil {
+
+		if all {
+			switch v := interface{}(m.GetSampler()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_TracingValidationError{
+						field:  "Sampler",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_TracingValidationError{
+						field:  "Sampler",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetSampler()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingComponentConfig_TracingValidationError{
 					field:  "Sampler",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_TracingValidationError{
-					field:  "Sampler",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetSampler()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_TracingValidationError{
-				field:  "Sampler",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetLog()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_TracingValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_TracingValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_TracingValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_TracingValidationError{
+				return TracingComponentConfig_TracingValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_TracingValidationError{
-				field:  "Log",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -2489,68 +2960,80 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for EndpointUrl
-
-	// no validation rules for Compression
-
 	// no validation rules for Headers
 
-	if all {
-		switch v := interface{}(m.GetTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
-					field:  "Timeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
-					field:  "Timeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_Tracing_ExporterValidationError{
-				field:  "Timeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.EndpointUrl != nil {
+		// no validation rules for EndpointUrl
 	}
 
-	if all {
-		switch v := interface{}(m.GetRetry()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
-					field:  "Retry",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Compression != nil {
+		// no validation rules for Compression
+	}
+
+	if m.Timeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+				return TracingComponentConfig_Tracing_ExporterValidationError{
+					field:  "Timeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Retry != nil {
+
+		if all {
+			switch v := interface{}(m.GetRetry()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+						field:  "Retry",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+						field:  "Retry",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRetry()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingComponentConfig_Tracing_ExporterValidationError{
 					field:  "Retry",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetRetry()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_Tracing_ExporterValidationError{
-				field:  "Retry",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -2659,9 +3142,13 @@ func (m *TracingComponentConfig_Tracing_Sampler) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Sample
+	if m.Sample != nil {
+		// no validation rules for Sample
+	}
 
-	// no validation rules for Ratio
+	if m.Ratio != nil {
+		// no validation rules for Ratio
+	}
 
 	if len(errors) > 0 {
 		return TracingComponentConfig_Tracing_SamplerMultiError(errors)
@@ -2770,93 +3257,107 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 
 	var errors []error
 
-	// no validation rules for Enabled
+	if m.Enabled != nil {
+		// no validation rules for Enabled
+	}
 
-	if all {
-		switch v := interface{}(m.GetInitialInterval()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+	if m.InitialInterval != nil {
+
+		if all {
+			switch v := interface{}(m.GetInitialInterval()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+						field:  "InitialInterval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+						field:  "InitialInterval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetInitialInterval()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
 					field:  "InitialInterval",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
-					field:  "InitialInterval",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetInitialInterval()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
-				field:  "InitialInterval",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMaxInterval()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+	if m.MaxInterval != nil {
+
+		if all {
+			switch v := interface{}(m.GetMaxInterval()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+						field:  "MaxInterval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+						field:  "MaxInterval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMaxInterval()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
 					field:  "MaxInterval",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
-					field:  "MaxInterval",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMaxInterval()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
-				field:  "MaxInterval",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMaxElapsedTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
-					field:  "MaxElapsedTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.MaxElapsedTime != nil {
+
+		if all {
+			switch v := interface{}(m.GetMaxElapsedTime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+						field:  "MaxElapsedTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+						field:  "MaxElapsedTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetMaxElapsedTime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+				return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
 					field:  "MaxElapsedTime",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMaxElapsedTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
-				field:  "MaxElapsedTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -2970,9 +3471,11 @@ func (m *MiddlewareConfig_Metadata) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
-
 	// no validation rules for Constants
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return MiddlewareConfig_MetadataMultiError(errors)
@@ -3076,7 +3579,9 @@ func (m *MiddlewareConfig_Tracing) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return MiddlewareConfig_TracingMultiError(errors)
@@ -3180,7 +3685,9 @@ func (m *MiddlewareConfig_Metrics) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return MiddlewareConfig_MetricsMultiError(errors)
@@ -3284,7 +3791,9 @@ func (m *MiddlewareConfig_Logging) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return MiddlewareConfig_LoggingMultiError(errors)
@@ -3388,7 +3897,9 @@ func (m *MiddlewareConfig_Validator) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return MiddlewareConfig_ValidatorMultiError(errors)
@@ -3492,35 +4003,41 @@ func (m *MiddlewareConfig_Ratelimit) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Enable
+	if m.Enable != nil {
+		// no validation rules for Enable
+	}
 
-	if all {
-		switch v := interface{}(m.GetBbrLimiter()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, MiddlewareConfig_RatelimitValidationError{
-					field:  "BbrLimiter",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.BbrLimiter != nil {
+
+		if all {
+			switch v := interface{}(m.GetBbrLimiter()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, MiddlewareConfig_RatelimitValidationError{
+						field:  "BbrLimiter",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, MiddlewareConfig_RatelimitValidationError{
+						field:  "BbrLimiter",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetBbrLimiter()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, MiddlewareConfig_RatelimitValidationError{
+				return MiddlewareConfig_RatelimitValidationError{
 					field:  "BbrLimiter",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetBbrLimiter()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return MiddlewareConfig_RatelimitValidationError{
-				field:  "BbrLimiter",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -3625,35 +4142,41 @@ func (m *MiddlewareConfig_Circuitbreaker) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Enable
+	if m.Enable != nil {
+		// no validation rules for Enable
+	}
 
-	if all {
-		switch v := interface{}(m.GetSre()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, MiddlewareConfig_CircuitbreakerValidationError{
-					field:  "Sre",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Sre != nil {
+
+		if all {
+			switch v := interface{}(m.GetSre()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, MiddlewareConfig_CircuitbreakerValidationError{
+						field:  "Sre",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, MiddlewareConfig_CircuitbreakerValidationError{
+						field:  "Sre",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetSre()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, MiddlewareConfig_CircuitbreakerValidationError{
+				return MiddlewareConfig_CircuitbreakerValidationError{
 					field:  "Sre",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetSre()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return MiddlewareConfig_CircuitbreakerValidationError{
-				field:  "Sre",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -3759,35 +4282,6 @@ func (m *MiddlewareConfig_Timeout) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetDefault()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, MiddlewareConfig_TimeoutValidationError{
-					field:  "Default",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, MiddlewareConfig_TimeoutValidationError{
-					field:  "Default",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetDefault()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return MiddlewareConfig_TimeoutValidationError{
-				field:  "Default",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
 	for idx, item := range m.GetRoutes() {
 		_, _ = idx, item
 
@@ -3814,6 +4308,39 @@ func (m *MiddlewareConfig_Timeout) validate(all bool) error {
 			if err := v.Validate(); err != nil {
 				return MiddlewareConfig_TimeoutValidationError{
 					field:  fmt.Sprintf("Routes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Default != nil {
+
+		if all {
+			switch v := interface{}(m.GetDefault()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, MiddlewareConfig_TimeoutValidationError{
+						field:  "Default",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, MiddlewareConfig_TimeoutValidationError{
+						field:  "Default",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDefault()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return MiddlewareConfig_TimeoutValidationError{
+					field:  "Default",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -4226,10 +4753,6 @@ func (m *MiddlewareConfig_Timeout_RouteRule) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Path
-
-	// no validation rules for Prefix
-
 	if all {
 		switch v := interface{}(m.GetTimeout()).(type) {
 		case interface{ ValidateAll() error }:
@@ -4257,6 +4780,35 @@ func (m *MiddlewareConfig_Timeout_RouteRule) validate(all bool) error {
 				cause:  err,
 			}
 		}
+	}
+
+	switch v := m.Rule.(type) {
+	case *MiddlewareConfig_Timeout_RouteRule_Path:
+		if v == nil {
+			err := MiddlewareConfig_Timeout_RouteRuleValidationError{
+				field:  "Rule",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+		// no validation rules for Path
+	case *MiddlewareConfig_Timeout_RouteRule_Prefix:
+		if v == nil {
+			err := MiddlewareConfig_Timeout_RouteRuleValidationError{
+				field:  "Rule",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+		// no validation rules for Prefix
+	default:
+		_ = v // ensures v is used
 	}
 
 	if len(errors) > 0 {
@@ -4363,149 +4915,169 @@ func (m *ServerComponentConfig_Server) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetStopDelay()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
+	if m.StopDelay != nil {
+
+		if all {
+			switch v := interface{}(m.GetStopDelay()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "StopDelay",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "StopDelay",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetStopDelay()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_ServerValidationError{
 					field:  "StopDelay",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
-					field:  "StopDelay",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetStopDelay()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_ServerValidationError{
-				field:  "StopDelay",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMiddleware()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
+	if m.Middleware != nil {
+
+		if all {
+			switch v := interface{}(m.GetMiddleware()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Middleware",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Middleware",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_ServerValidationError{
 					field:  "Middleware",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
-					field:  "Middleware",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_ServerValidationError{
-				field:  "Middleware",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetHttp()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
+	if m.Http != nil {
+
+		if all {
+			switch v := interface{}(m.GetHttp()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Http",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Http",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetHttp()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_ServerValidationError{
 					field:  "Http",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
-					field:  "Http",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetHttp()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_ServerValidationError{
-				field:  "Http",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetGrpc()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
+	if m.Grpc != nil {
+
+		if all {
+			switch v := interface{}(m.GetGrpc()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Grpc",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Grpc",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetGrpc()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_ServerValidationError{
 					field:  "Grpc",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
-					field:  "Grpc",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetGrpc()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_ServerValidationError{
-				field:  "Grpc",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetLog()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_ServerValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_ServerValidationError{
+				return ServerComponentConfig_ServerValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_ServerValidationError{
-				field:  "Log",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -4722,207 +5294,235 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+	if m.Timeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Timeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Timeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Timeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMetadata()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+	if m.Metadata != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetadata()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Metadata",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Metadata",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Metadata",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Metadata",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Metadata",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetLogging()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+	if m.Logging != nil {
+
+		if all {
+			switch v := interface{}(m.GetLogging()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Logging",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Logging",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Logging",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Logging",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Logging",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetValidator()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+	if m.Validator != nil {
+
+		if all {
+			switch v := interface{}(m.GetValidator()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Validator",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Validator",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetValidator()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Validator",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Validator",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetValidator()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Validator",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetRatelimit()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
-					field:  "Ratelimit",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Ratelimit != nil {
+
+		if all {
+			switch v := interface{}(m.GetRatelimit()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Ratelimit",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+						field:  "Ratelimit",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetRatelimit()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
 					field:  "Ratelimit",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetRatelimit()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_ServerMiddlewareValidationError{
-				field:  "Ratelimit",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -5034,72 +5634,90 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 
 	var errors []error
 
-	// no validation rules for Disable
-
-	// no validation rules for Network
-
-	// no validation rules for Addr
-
-	if all {
-		switch v := interface{}(m.GetEndpoint()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
-					field:  "Endpoint",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
-					field:  "Endpoint",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_HttpServerOptionValidationError{
-				field:  "Endpoint",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Disable != nil {
+		// no validation rules for Disable
 	}
 
-	// no validation rules for DisableStrictSlash
+	if m.Network != nil {
+		// no validation rules for Network
+	}
 
-	// no validation rules for PathPrefix
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
 
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Endpoint != nil {
+
+		if all {
+			switch v := interface{}(m.GetEndpoint()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+				return ServerComponentConfig_Server_HttpServerOptionValidationError{
+					field:  "Endpoint",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.DisableStrictSlash != nil {
+		// no validation rules for DisableStrictSlash
+	}
+
+	if m.PathPrefix != nil {
+		// no validation rules for PathPrefix
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_HttpServerOptionValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_HttpServerOptionValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -5211,44 +5829,58 @@ func (m *ServerComponentConfig_Server_GrpcServerOption) validate(all bool) error
 
 	var errors []error
 
-	// no validation rules for Disable
-
-	// no validation rules for Network
-
-	// no validation rules for Addr
-
-	if all {
-		switch v := interface{}(m.GetEndpoint()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_GrpcServerOptionValidationError{
-					field:  "Endpoint",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ServerComponentConfig_Server_GrpcServerOptionValidationError{
-					field:  "Endpoint",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ServerComponentConfig_Server_GrpcServerOptionValidationError{
-				field:  "Endpoint",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Disable != nil {
+		// no validation rules for Disable
 	}
 
-	// no validation rules for CustomHealth
+	if m.Network != nil {
+		// no validation rules for Network
+	}
 
-	// no validation rules for DisableReflection
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
+
+	if m.Endpoint != nil {
+
+		if all {
+			switch v := interface{}(m.GetEndpoint()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_GrpcServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerComponentConfig_Server_GrpcServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerComponentConfig_Server_GrpcServerOptionValidationError{
+					field:  "Endpoint",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.CustomHealth != nil {
+		// no validation rules for CustomHealth
+	}
+
+	if m.DisableReflection != nil {
+		// no validation rules for DisableReflection
+	}
 
 	if len(errors) > 0 {
 		return ServerComponentConfig_Server_GrpcServerOptionMultiError(errors)
@@ -5360,9 +5992,13 @@ func (m *ServerComponentConfig_Server_HttpServerOption_Metrics) validate(all boo
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
-	// no validation rules for Path
+	if m.Path != nil {
+		// no validation rules for Path
+	}
 
 	if len(errors) > 0 {
 		return ServerComponentConfig_Server_HttpServerOption_MetricsMultiError(errors)
@@ -5480,66 +6116,6 @@ func (m *DatabaseComponentConfig_Database) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetGorm()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Gorm",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Gorm",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetGorm()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_DatabaseValidationError{
-				field:  "Gorm",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if all {
-		switch v := interface{}(m.GetLog()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_DatabaseValidationError{
-				field:  "Log",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	// no validation rules for Default
-
 	{
 		sorted_keys := make([]string, len(m.GetConnections()))
 		i := 0
@@ -5586,62 +6162,140 @@ func (m *DatabaseComponentConfig_Database) validate(all bool) error {
 		}
 	}
 
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Gorm != nil {
+
+		if all {
+			switch v := interface{}(m.GetGorm()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Gorm",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Gorm",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetGorm()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Tracing",
+				return DatabaseComponentConfig_DatabaseValidationError{
+					field:  "Gorm",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_DatabaseValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+				return DatabaseComponentConfig_DatabaseValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Default != nil {
+		// no validation rules for Default
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_DatabaseValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_DatabaseValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_DatabaseValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -5750,15 +6404,25 @@ func (m *DatabaseComponentConfig_Database_Tracing) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
-	// no validation rules for ExcludeQueryVars
+	if m.ExcludeQueryVars != nil {
+		// no validation rules for ExcludeQueryVars
+	}
 
-	// no validation rules for ExcludeMetrics
+	if m.ExcludeMetrics != nil {
+		// no validation rules for ExcludeMetrics
+	}
 
-	// no validation rules for RecordStackTraceInSpan
+	if m.RecordStackTraceInSpan != nil {
+		// no validation rules for RecordStackTraceInSpan
+	}
 
-	// no validation rules for ExcludeServerAddress
+	if m.ExcludeServerAddress != nil {
+		// no validation rules for ExcludeServerAddress
+	}
 
 	if len(errors) > 0 {
 		return DatabaseComponentConfig_Database_TracingMultiError(errors)
@@ -5866,66 +6530,76 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
-
 	// no validation rules for Labels
 
-	if all {
-		switch v := interface{}(m.GetRefreshInterval()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
-					field:  "RefreshInterval",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
-					field:  "RefreshInterval",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetRefreshInterval()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_MetricsValidationError{
-				field:  "RefreshInterval",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Disable != nil {
+		// no validation rules for Disable
 	}
 
-	if all {
-		switch v := interface{}(m.GetMysql()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
-					field:  "Mysql",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.RefreshInterval != nil {
+
+		if all {
+			switch v := interface{}(m.GetRefreshInterval()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+						field:  "RefreshInterval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+						field:  "RefreshInterval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetRefreshInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+				return DatabaseComponentConfig_Database_MetricsValidationError{
+					field:  "RefreshInterval",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Mysql != nil {
+
+		if all {
+			switch v := interface{}(m.GetMysql()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+						field:  "Mysql",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+						field:  "Mysql",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMysql()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_MetricsValidationError{
 					field:  "Mysql",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMysql()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_MetricsValidationError{
-				field:  "Mysql",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -6033,114 +6707,148 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for SkipDefaultTransaction
+	if m.SkipDefaultTransaction != nil {
+		// no validation rules for SkipDefaultTransaction
+	}
 
-	if all {
-		switch v := interface{}(m.GetDefaultTransactionTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+	if m.DefaultTransactionTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetDefaultTransactionTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+						field:  "DefaultTransactionTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+						field:  "DefaultTransactionTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDefaultTransactionTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_GormValidationError{
 					field:  "DefaultTransactionTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
-					field:  "DefaultTransactionTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetDefaultTransactionTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_GormValidationError{
-				field:  "DefaultTransactionTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetDefaultContextTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+	if m.DefaultContextTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetDefaultContextTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+						field:  "DefaultContextTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+						field:  "DefaultContextTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDefaultContextTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_GormValidationError{
 					field:  "DefaultContextTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
-					field:  "DefaultContextTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetDefaultContextTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_GormValidationError{
-				field:  "DefaultContextTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	// no validation rules for FullSaveAssociations
+	if m.FullSaveAssociations != nil {
+		// no validation rules for FullSaveAssociations
+	}
 
-	if all {
-		switch v := interface{}(m.GetLogger()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+	if m.Logger != nil {
+
+		if all {
+			switch v := interface{}(m.GetLogger()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+						field:  "Logger",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+						field:  "Logger",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLogger()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_GormValidationError{
 					field:  "Logger",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
-					field:  "Logger",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLogger()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_GormValidationError{
-				field:  "Logger",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	// no validation rules for DisableAutomaticPing
+	if m.DisableAutomaticPing != nil {
+		// no validation rules for DisableAutomaticPing
+	}
 
-	// no validation rules for DisableForeignKeyConstraintWhenMigrating
+	if m.DisableForeignKeyConstraintWhenMigrating != nil {
+		// no validation rules for DisableForeignKeyConstraintWhenMigrating
+	}
 
-	// no validation rules for IgnoreRelationshipsWhenMigrating
+	if m.IgnoreRelationshipsWhenMigrating != nil {
+		// no validation rules for IgnoreRelationshipsWhenMigrating
+	}
 
-	// no validation rules for DisableNestedTransaction
+	if m.DisableNestedTransaction != nil {
+		// no validation rules for DisableNestedTransaction
+	}
 
-	// no validation rules for AllowGlobalUpdate
+	if m.AllowGlobalUpdate != nil {
+		// no validation rules for AllowGlobalUpdate
+	}
 
-	// no validation rules for QueryFields
+	if m.QueryFields != nil {
+		// no validation rules for QueryFields
+	}
 
-	// no validation rules for CreateBatchSize
+	if m.CreateBatchSize != nil {
+		// no validation rules for CreateBatchSize
+	}
 
-	// no validation rules for TranslateError
+	if m.TranslateError != nil {
+		// no validation rules for TranslateError
+	}
 
-	// no validation rules for PropagateUnscoped
+	if m.PropagateUnscoped != nil {
+		// no validation rules for PropagateUnscoped
+	}
 
 	if len(errors) > 0 {
 		return DatabaseComponentConfig_Database_GormMultiError(errors)
@@ -6248,8 +6956,6 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Driver
-
 	// no validation rules for Dsn
 
 	for idx, item := range m.GetReplicas() {
@@ -6286,64 +6992,12 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 
 	}
 
-	// no validation rules for TraceResolverMode
-
-	if all {
-		switch v := interface{}(m.GetConnMaxLifetime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
-					field:  "ConnMaxLifetime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
-					field:  "ConnMaxLifetime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_ConnectionValidationError{
-				field:  "ConnMaxLifetime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Driver != nil {
+		// no validation rules for Driver
 	}
 
-	if all {
-		switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
-					field:  "ConnMaxIdleTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
-					field:  "ConnMaxIdleTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_ConnectionValidationError{
-				field:  "ConnMaxIdleTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.TraceResolverMode != nil {
+		// no validation rules for TraceResolverMode
 	}
 
 	if m.MaxIdleConns != nil {
@@ -6352,6 +7006,72 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 
 	if m.MaxOpenConns != nil {
 		// no validation rules for MaxOpenConns
+	}
+
+	if m.ConnMaxLifetime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_ConnectionValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.ConnMaxIdleTime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_ConnectionValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	if len(errors) > 0 {
@@ -6460,35 +7180,41 @@ func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) erro
 
 	var errors []error
 
-	// no validation rules for Prefix
+	if m.Prefix != nil {
+		// no validation rules for Prefix
+	}
 
-	if all {
-		switch v := interface{}(m.GetInterval()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
-					field:  "Interval",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Interval != nil {
+
+		if all {
+			switch v := interface{}(m.GetInterval()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+						field:  "Interval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+						field:  "Interval",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+				return DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
 					field:  "Interval",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetInterval()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
-				field:  "Interval",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -6600,42 +7326,54 @@ func (m *DatabaseComponentConfig_Database_Gorm_Logger) validate(all bool) error 
 
 	var errors []error
 
-	// no validation rules for Level
-
-	if all {
-		switch v := interface{}(m.GetSlowThreshold()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
-					field:  "SlowThreshold",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
-					field:  "SlowThreshold",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetSlowThreshold()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
-				field:  "SlowThreshold",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Level != nil {
+		// no validation rules for Level
 	}
 
-	// no validation rules for Colorful
+	if m.SlowThreshold != nil {
 
-	// no validation rules for IgnoreRecordNotFoundError
+		if all {
+			switch v := interface{}(m.GetSlowThreshold()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
+						field:  "SlowThreshold",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
+						field:  "SlowThreshold",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetSlowThreshold()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
+					field:  "SlowThreshold",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
 
-	// no validation rules for ParameterizedQueries
+	}
+
+	if m.Colorful != nil {
+		// no validation rules for Colorful
+	}
+
+	if m.IgnoreRecordNotFoundError != nil {
+		// no validation rules for IgnoreRecordNotFoundError
+	}
+
+	if m.ParameterizedQueries != nil {
+		// no validation rules for ParameterizedQueries
+	}
 
 	if len(errors) > 0 {
 		return DatabaseComponentConfig_Database_Gorm_LoggerMultiError(errors)
@@ -6745,66 +7483,10 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 
 	var errors []error
 
-	// no validation rules for Driver
-
 	// no validation rules for Dsn
 
-	if all {
-		switch v := interface{}(m.GetConnMaxLifetime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
-					field:  "ConnMaxLifetime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
-					field:  "ConnMaxLifetime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
-				field:  "ConnMaxLifetime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if all {
-		switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
-					field:  "ConnMaxIdleTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
-					field:  "ConnMaxIdleTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
-				field:  "ConnMaxIdleTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Driver != nil {
+		// no validation rules for Driver
 	}
 
 	if m.MaxIdleConns != nil {
@@ -6813,6 +7495,72 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 
 	if m.MaxOpenConns != nil {
 		// no validation rules for MaxOpenConns
+	}
+
+	if m.ConnMaxLifetime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.ConnMaxIdleTime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	if len(errors) > 0 {
@@ -6931,8 +7679,6 @@ func (m *RedisComponentConfig_RedisConfig) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Default
-
 	{
 		sorted_keys := make([]string, len(m.GetConnections()))
 		i := 0
@@ -6979,62 +7725,8 @@ func (m *RedisComponentConfig_RedisConfig) validate(all bool) error {
 		}
 	}
 
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfigValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfigValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+	if m.Default != nil {
+		// no validation rules for Default
 	}
 
 	if m.Log != nil {
@@ -7062,6 +7754,72 @@ func (m *RedisComponentConfig_RedisConfig) validate(all bool) error {
 			if err := v.Validate(); err != nil {
 				return RedisComponentConfig_RedisConfigValidationError{
 					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfigValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfigValidationError{
+					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -7176,13 +7934,21 @@ func (m *RedisComponentConfig_RedisConfig_Tracing) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
-	// no validation rules for DbStatement
+	if m.DbStatement != nil {
+		// no validation rules for DbStatement
+	}
 
-	// no validation rules for CallerEnabled
+	if m.CallerEnabled != nil {
+		// no validation rules for CallerEnabled
+	}
 
-	// no validation rules for DialFilter
+	if m.DialFilter != nil {
+		// no validation rules for DialFilter
+	}
 
 	if len(errors) > 0 {
 		return RedisComponentConfig_RedisConfig_TracingMultiError(errors)
@@ -7290,7 +8056,9 @@ func (m *RedisComponentConfig_RedisConfig_Metrics) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return RedisComponentConfig_RedisConfig_MetricsMultiError(errors)
@@ -7398,314 +8166,398 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 
 	var errors []error
 
-	// no validation rules for Network
+	if m.Network != nil {
+		// no validation rules for Network
+	}
 
-	// no validation rules for Addr
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
 
-	// no validation rules for ClientName
+	if m.ClientName != nil {
+		// no validation rules for ClientName
+	}
 
-	// no validation rules for Protocol
+	if m.Protocol != nil {
+		// no validation rules for Protocol
+	}
 
-	// no validation rules for Username
+	if m.Username != nil {
+		// no validation rules for Username
+	}
 
-	// no validation rules for Password
+	if m.Password != nil {
+		// no validation rules for Password
+	}
 
-	// no validation rules for Db
+	if m.Db != nil {
+		// no validation rules for Db
+	}
 
-	// no validation rules for MaxRetries
+	if m.MaxRetries != nil {
+		// no validation rules for MaxRetries
+	}
 
-	if all {
-		switch v := interface{}(m.GetMinRetryBackoff()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.MinRetryBackoff != nil {
+
+		if all {
+			switch v := interface{}(m.GetMinRetryBackoff()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "MinRetryBackoff",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "MinRetryBackoff",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMinRetryBackoff()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "MinRetryBackoff",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "MinRetryBackoff",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMinRetryBackoff()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "MinRetryBackoff",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMaxRetryBackoff()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.MaxRetryBackoff != nil {
+
+		if all {
+			switch v := interface{}(m.GetMaxRetryBackoff()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "MaxRetryBackoff",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "MaxRetryBackoff",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMaxRetryBackoff()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "MaxRetryBackoff",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "MaxRetryBackoff",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMaxRetryBackoff()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "MaxRetryBackoff",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetDialTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.DialTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetDialTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "DialTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "DialTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDialTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "DialTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "DialTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetDialTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "DialTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	// no validation rules for DialerRetries
+	if m.DialerRetries != nil {
+		// no validation rules for DialerRetries
+	}
 
-	if all {
-		switch v := interface{}(m.GetDialerRetryTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.DialerRetryTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetDialerRetryTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "DialerRetryTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "DialerRetryTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDialerRetryTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "DialerRetryTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "DialerRetryTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetDialerRetryTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "DialerRetryTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetReadTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.ReadTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetReadTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "ReadTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "ReadTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetReadTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "ReadTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "ReadTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetReadTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "ReadTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetWriteTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.WriteTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetWriteTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "WriteTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "WriteTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetWriteTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "WriteTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "WriteTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetWriteTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "WriteTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	// no validation rules for ContextTimeoutEnabled
+	if m.ContextTimeoutEnabled != nil {
+		// no validation rules for ContextTimeoutEnabled
+	}
 
-	// no validation rules for ReadBufferSize
+	if m.ReadBufferSize != nil {
+		// no validation rules for ReadBufferSize
+	}
 
-	// no validation rules for WriteBufferSize
+	if m.WriteBufferSize != nil {
+		// no validation rules for WriteBufferSize
+	}
 
-	// no validation rules for PoolFifo
+	if m.PoolFifo != nil {
+		// no validation rules for PoolFifo
+	}
 
-	// no validation rules for PoolSize
+	if m.PoolSize != nil {
+		// no validation rules for PoolSize
+	}
 
-	// no validation rules for MaxConcurrentDials
+	if m.MaxConcurrentDials != nil {
+		// no validation rules for MaxConcurrentDials
+	}
 
-	if all {
-		switch v := interface{}(m.GetPoolTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.PoolTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetPoolTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "PoolTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "PoolTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetPoolTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "PoolTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "PoolTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetPoolTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "PoolTimeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	// no validation rules for MinIdleConns
+	if m.MinIdleConns != nil {
+		// no validation rules for MinIdleConns
+	}
 
-	// no validation rules for MaxIdleConns
+	if m.MaxIdleConns != nil {
+		// no validation rules for MaxIdleConns
+	}
 
-	// no validation rules for MaxActiveConns
+	if m.MaxActiveConns != nil {
+		// no validation rules for MaxActiveConns
+	}
 
-	if all {
-		switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.ConnMaxIdleTime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "ConnMaxIdleTime",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "ConnMaxIdleTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "ConnMaxIdleTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetConnMaxLifetime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+	if m.ConnMaxLifetime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
 					field:  "ConnMaxLifetime",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-					field:  "ConnMaxLifetime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
-				field:  "ConnMaxLifetime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	// no validation rules for ReadOnly
+	if m.ReadOnly != nil {
+		// no validation rules for ReadOnly
+	}
 
-	// no validation rules for DisableIndentity
+	if m.DisableIndentity != nil {
+		// no validation rules for DisableIndentity
+	}
 
-	// no validation rules for DisableIdentity
+	if m.DisableIdentity != nil {
+		// no validation rules for DisableIdentity
+	}
 
-	// no validation rules for IdentitySuffix
+	if m.IdentitySuffix != nil {
+		// no validation rules for IdentitySuffix
+	}
 
-	// no validation rules for UnstableResp3
+	if m.UnstableResp3 != nil {
+		// no validation rules for UnstableResp3
+	}
 
-	// no validation rules for FailingTimeoutSeconds
+	if m.FailingTimeoutSeconds != nil {
+		// no validation rules for FailingTimeoutSeconds
+	}
 
 	if len(errors) > 0 {
 		return RedisComponentConfig_RedisConfig_RedisOptionMultiError(errors)
@@ -7996,37 +8848,43 @@ func (m *ClientComponentConfig_Client_ClientOption) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Protocol
-
 	// no validation rules for Target
 
-	if all {
-		switch v := interface{}(m.GetMiddleware()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOptionValidationError{
-					field:  "Middleware",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Protocol != nil {
+		// no validation rules for Protocol
+	}
+
+	if m.Middleware != nil {
+
+		if all {
+			switch v := interface{}(m.GetMiddleware()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOptionValidationError{
+						field:  "Middleware",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOptionValidationError{
+						field:  "Middleware",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOptionValidationError{
+				return ClientComponentConfig_Client_ClientOptionValidationError{
 					field:  "Middleware",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOptionValidationError{
-				field:  "Middleware",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -8136,178 +8994,202 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetTimeout()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+	if m.Timeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Timeout",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-					field:  "Timeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-				field:  "Timeout",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMetadata()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+	if m.Metadata != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetadata()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Metadata",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Metadata",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Metadata",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-					field:  "Metadata",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-				field:  "Metadata",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetLogging()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+	if m.Logging != nil {
+
+		if all {
+			switch v := interface{}(m.GetLogging()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Logging",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Logging",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Logging",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-					field:  "Logging",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-				field:  "Logging",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetCircuitbreaker()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-					field:  "Circuitbreaker",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Circuitbreaker != nil {
+
+		if all {
+			switch v := interface{}(m.GetCircuitbreaker()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Circuitbreaker",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+						field:  "Circuitbreaker",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetCircuitbreaker()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Circuitbreaker",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetCircuitbreaker()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
-				field:  "Circuitbreaker",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -8425,68 +9307,6 @@ func (m *JobComponent_JobConfig) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
-
-	// no validation rules for Timezone
-
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, JobComponent_JobConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, JobComponent_JobConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return JobComponent_JobConfigValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, JobComponent_JobConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, JobComponent_JobConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return JobComponent_JobConfigValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
 	{
 		sorted_keys := make([]string, len(m.GetJobs()))
 		i := 0
@@ -8533,6 +9353,14 @@ func (m *JobComponent_JobConfig) validate(all bool) error {
 		}
 	}
 
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.Timezone != nil {
+		// no validation rules for Timezone
+	}
+
 	if m.Log != nil {
 
 		if all {
@@ -8558,6 +9386,72 @@ func (m *JobComponent_JobConfig) validate(all bool) error {
 			if err := v.Validate(); err != nil {
 				return JobComponent_JobConfigValidationError{
 					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobComponent_JobConfigValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobComponent_JobConfigValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return JobComponent_JobConfigValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobComponent_JobConfigValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobComponent_JobConfigValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return JobComponent_JobConfigValidationError{
+					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -8668,13 +9562,19 @@ func (m *JobComponent_JobConfig_Job) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
-
 	// no validation rules for Schedule
 
-	// no validation rules for ConcurrentPolicy
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
-	// no validation rules for Immediately
+	if m.ConcurrentPolicy != nil {
+		// no validation rules for ConcurrentPolicy
+	}
+
+	if m.Immediately != nil {
+		// no validation rules for Immediately
+	}
 
 	if len(errors) > 0 {
 		return JobComponent_JobConfig_JobMultiError(errors)
@@ -8778,7 +9678,9 @@ func (m *JobComponent_JobConfig_Tracing) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return JobComponent_JobConfig_TracingMultiError(errors)
@@ -8883,7 +9785,9 @@ func (m *JobComponent_JobConfig_Metrics) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Disable
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
 
 	if len(errors) > 0 {
 		return JobComponent_JobConfig_MetricsMultiError(errors)

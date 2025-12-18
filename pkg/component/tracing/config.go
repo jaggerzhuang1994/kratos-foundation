@@ -13,24 +13,27 @@ import (
 
 type Config = kratos_foundation_pb.TracingComponentConfig_Tracing
 
+var defaultCompression = kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter_NO
+var defaultSample = kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_RATIO
+
 var defaultConfig = &kratos_foundation_pb.TracingComponentConfig_Tracing{
-	Disable:    false,
-	TracerName: "",
+	Disable:    proto.Bool(false),
+	TracerName: proto.String(""),
 	Exporter: &kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter{
-		EndpointUrl: "http://localhost:4318/v1/traces",
-		Compression: kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter_NO,
+		EndpointUrl: proto.String("http://localhost:4318/v1/traces"),
+		Compression: &defaultCompression,
 		Headers:     nil,
 		Timeout:     durationpb.New(10 * time.Second),
 		Retry: &kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter_RetryConfig{
-			Enabled:         true,
+			Enabled:         proto.Bool(true),
 			InitialInterval: durationpb.New(5 * time.Second),
 			MaxInterval:     durationpb.New(30 * time.Second),
 			MaxElapsedTime:  durationpb.New(time.Minute),
 		},
 	},
 	Sampler: &kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler{
-		Sample: kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_RATIO,
-		Ratio:  0.05,
+		Sample: &defaultSample,
+		Ratio:  proto.Float64(0.05),
 	},
 }
 
@@ -45,7 +48,7 @@ func NewConfig(cfg config.Config, appInfo *app_info.AppInfo) (*Config, error) {
 	proto.Merge(tracingConfig, scc.GetTracing())
 
 	if tracingConfig.GetTracerName() == "" {
-		tracingConfig.TracerName = appInfo.GetName()
+		tracingConfig.TracerName = proto.String(appInfo.GetName())
 	}
 
 	return tracingConfig, nil

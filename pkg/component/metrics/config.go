@@ -10,9 +10,9 @@ import (
 type Config = kratos_foundation_pb.MetricComponentConfig_Metrics
 
 var defaultConfig = &Config{
-	CounterMapSize:   64,
-	GaugeMapSize:     64,
-	HistogramMapSize: 64,
+	CounterMapSize:   proto.Int32(64),
+	GaugeMapSize:     proto.Int32(64),
+	HistogramMapSize: proto.Int32(64),
 }
 
 func NewConfig(cfg config.Config) (*Config, error) {

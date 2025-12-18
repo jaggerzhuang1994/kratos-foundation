@@ -33,10 +33,11 @@ func GetJobConfig(
 		jobConf.Schedule = t.Schedule()
 	}
 	if t, ok := job.(ImmediatelyConfiguration); ok {
-		jobConf.Immediately = t.Immediately()
+		jobConf.Immediately = proto.Bool(t.Immediately())
 	}
 	if t, ok := job.(ConcurrentPolicyConfiguration); ok {
-		jobConf.ConcurrentPolicy = t.ConcurrentPolicy()
+		var concurrentPolicy = t.ConcurrentPolicy()
+		jobConf.ConcurrentPolicy = &concurrentPolicy
 	}
 
 	// 如果存在配置文件的配置，则覆盖

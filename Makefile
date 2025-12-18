@@ -10,6 +10,9 @@ else
 	PROTO_FILES=$(shell find proto -name *.proto)
 endif
 
+PROTO_OUT=./proto/kratos_foundation_pb
+CONFIG_PROTO=proto/config.proto
+
 GO_MODULE=$(shell go list -m)
 VERSION=$(shell git describe --tags --always)
 
@@ -26,6 +29,7 @@ init:
 	go install github.com/envoyproxy/protoc-gen-validate@latest
 	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/pubg/protoc-gen-jsonschema@latest
 
 .PHONY: generate
 generate:
@@ -34,8 +38,6 @@ generate:
 	@go generate ./...
 	@go mod tidy
 	@echo "done"
-
-PROTO_OUT=./proto/kratos_foundation_pb
 
 .PHONY: proto
 # 生成内部 proto
@@ -48,6 +50,16 @@ proto:
 			--kratos-foundation-errors_out=paths=source_relative:$(PROTO_OUT) \
 			--validate_out=paths=source_relative,lang=go:$(PROTO_OUT) \
 			$(PROTO_FILES) && echo 'done'
+	@echo "> 生成 config.schema.json..."
+	@protoc \
+			--proto_path=./proto \
+			--proto_path=./third_party \
+			--jsonschema_out=. \
+			--jsonschema_opt=entrypoint_message=EntrypointMessage \
+			--jsonschema_opt=output_file_suffix=.schema.json \
+			--jsonschema_opt=preserve_proto_field_names=true \
+			--jsonschema_opt=additional_properties=DefaultFalse \
+			$(CONFIG_PROTO) && echo 'done'
 
 .PHONY: lint
 # 代码审查
