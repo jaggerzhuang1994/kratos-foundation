@@ -5,28 +5,56 @@ import (
 	"fmt"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 	"gorm.io/gorm"
 	"gorm.io/plugin/dbresolver"
 )
 
 type DbResolver gorm.Plugin
 
-func NewDbResolver(cfg *Config) DbResolver {
-	resolver := &dbresolver.DBResolver{}
+func NewDbResolver(cfg *Config, defaultConnection DefaultConnection) (resolver DbResolver, clean func(), err error) {
+	var rcs []func()
+	clean = func() {
+		for _, rc := range rcs {
+			rc()
+		}
+	}
+	defer func() {
+		if err != nil {
+			clean()
+		}
+	}()
+
+	resolver = &dbresolver.DBResolver{}
 	for name, connConf := range cfg.GetConnections() {
+		var rc func()
+		var dialector gorm.Dialector
+		if name == cfg.GetDefault() {
+			dialector = defaultConnection
+		} else {
+			dialector, rc, err = newConnection(connConf)
+			if err != nil {
+				return
+			}
+			rcs = append(rcs, rc)
+		}
 		resolverConf := dbresolver.Config{
 			TraceResolverMode: connConf.GetTraceResolverMode(),
 		}
-		resolverConf.Sources = []gorm.Dialector{newConnection(connConf)}
-		resolverConf.Replicas = utils.Map(connConf.GetReplicas(), func(conf *kratos_foundation_pb.DatabaseComponentConfig_Database_Connection_Dialector) gorm.Dialector {
-			return newConnection(conf)
-		})
-		datas := append(connConf.GetDatas(), connName(name)) // 关联这个数据库链接，之后可以通过 dbresolver.Use(connName(connName)) 来指定链接
-		resolver.Register(resolverConf, utils.MapToAny(datas)...)
-	}
+		resolverConf.Sources = []gorm.Dialector{dialector}
 
-	return resolver
+		for _, conf := range connConf.GetReplicas() {
+			dialector, rc, err = newConnection(conf)
+			if err != nil {
+				return
+			}
+			rcs = append(rcs, rc)
+			resolverConf.Replicas = append(resolverConf.Replicas, dialector)
+		}
+
+		datas := append(connConf.GetDatas(), connName(name)) // 关联这个数据库链接，之后可以通过 dbresolver.Use(connName(connName)) 来指定链接
+		resolver.(*dbresolver.DBResolver).Register(resolverConf, utils.MapToAny(datas)...)
+	}
+	return
 }
 
 func connName(name string) string {

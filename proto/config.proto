@@ -438,6 +438,26 @@ message DatabaseComponentConfig {
       repeated string datas = 4;
       // print sources/replicas mode in logger
       bool trace_resolver_mode = 5;
+      // 用于设置连接池中空闲连接的最大数量
+      // 如果 MaxOpenConns > 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。
+      // 如果 n ≤ 0，则不保留任何空闲连接。
+      // 默认的最大空闲连接数目前是 2，这个默认值在未来的 Go 版本中可能会发生变化(sql.defaultMaxIdleConns)。
+      optional int32 max_idle_conns = 6;
+      // 用于设置数据库最大打开连接数。
+      // 如果 MaxIdleConns > 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。
+      // 如果 n ≤ 0，表示不限制打开连接的数量。
+      // 默认值是 0，也就是无限制。
+      optional int32 max_open_conns = 7;
+      // 用于设置单个连接可被重复使用的最长时间。
+      // 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
+      // 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。
+      // 默认值是 0，也就是无限制。
+      google.protobuf.Duration conn_max_lifetime = 8;
+      // 用于设置连接在空闲状态下允许存在的最长时间。
+      // 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
+      // 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。
+      // 默认值是 0，也就是无限制。
+      google.protobuf.Duration conn_max_idle_time = 9;
 
       // 数据库方言
       message Dialector {
@@ -445,6 +465,27 @@ message DatabaseComponentConfig {
         string driver = 1;
         // dsn
         string dsn = 2;
+        // 用于设置连接池中空闲连接的最大数量
+        // 如果 MaxOpenConns > 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。
+        // 如果 n ≤ 0，则不保留任何空闲连接。
+        // 默认的最大空闲连接数目前是 2，这个默认值在未来的 Go 版本中可能会发生变化(sql.defaultMaxIdleConns)。
+        optional int32 max_idle_conns = 3;
+        // 用于设置数据库最大打开连接数。
+        // 如果 MaxIdleConns > 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。
+        // 如果 n ≤ 0，表示不限制打开连接的数量。
+        // 默认值是 0，也就是无限制。
+        optional int32 max_open_conns = 4;
+        // 用于设置单个连接可被重复使用的最长时间。
+        // 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
+        // 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。
+        // 默认值是 0，也就是无限制。
+        google.protobuf.Duration conn_max_lifetime = 5;
+        // 用于设置连接在空闲状态下允许存在的最长时间。
+        // 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。
+        // 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。
+        // 默认值是 0，也就是无限制。
+        google.protobuf.Duration conn_max_idle_time = 6;
+
       }
     }
   }

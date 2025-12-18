@@ -6288,6 +6288,72 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 
 	// no validation rules for TraceResolverMode
 
+	if all {
+		switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_ConnectionValidationError{
+				field:  "ConnMaxLifetime",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_ConnectionValidationError{
+				field:  "ConnMaxIdleTime",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if m.MaxIdleConns != nil {
+		// no validation rules for MaxIdleConns
+	}
+
+	if m.MaxOpenConns != nil {
+		// no validation rules for MaxOpenConns
+	}
+
 	if len(errors) > 0 {
 		return DatabaseComponentConfig_Database_ConnectionMultiError(errors)
 	}
@@ -6682,6 +6748,72 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 	// no validation rules for Driver
 
 	// no validation rules for Dsn
+
+	if all {
+		switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+				field:  "ConnMaxLifetime",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+				field:  "ConnMaxIdleTime",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if m.MaxIdleConns != nil {
+		// no validation rules for MaxIdleConns
+	}
+
+	if m.MaxOpenConns != nil {
+		// no validation rules for MaxOpenConns
+	}
 
 	if len(errors) > 0 {
 		return DatabaseComponentConfig_Database_Connection_DialectorMultiError(errors)
