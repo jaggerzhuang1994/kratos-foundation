@@ -6,15 +6,15 @@ package kratos_foundation_pb;
 import "google/protobuf/duration.proto";
 
 message EntrypointMessage {
-  AppComponentConfig.App app = 1;
-  LogComponentConfig.Log log = 2;
-  MetricComponentConfig.Metrics metrics = 3;
-  TracingComponentConfig.Tracing tracing = 4;
-  ServerComponentConfig.Server server = 5;
-  DatabaseComponentConfig.Database database = 6;
-  RedisComponentConfig.RedisConfig redis = 7;
-  ClientComponentConfig.Client client = 8;
-  JobComponent.JobConfig job = 9;
+  optional AppComponentConfig.App app = 1;
+  optional LogComponentConfig.Log log = 2;
+  optional MetricComponentConfig.Metrics metrics = 3;
+  optional TracingComponentConfig.Tracing tracing = 4;
+  optional ServerComponentConfig.Server server = 5;
+  optional DatabaseComponentConfig.Database database = 6;
+  optional RedisComponentConfig.RedisConfig redis = 7;
+  optional ClientComponentConfig.Client client = 8;
+  optional JobComponent.JobConfig job = 9;
 }
 
 message AppComponentConfig {

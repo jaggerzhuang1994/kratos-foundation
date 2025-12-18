@@ -2179,50 +2179,284 @@
       "description": "链路追踪配置"
     },
     ".kratos_foundation_pb.EntrypointMessage": {
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": [
+                "app"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "app"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "log"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "log"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "metrics"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "metrics"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "tracing"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "tracing"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "server"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "server"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "database"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "database"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "redis"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "redis"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "client"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "client"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "job"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "job"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
       "properties": {
         "app": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.app"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.app"
+            }
+          ]
         },
         "log": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.log"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.log"
+            }
+          ]
         },
         "metrics": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.metrics"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.metrics"
+            }
+          ]
         },
         "tracing": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.tracing"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.tracing"
+            }
+          ]
         },
         "server": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.server"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.server"
+            }
+          ]
         },
         "database": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.database"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.database"
+            }
+          ]
         },
         "redis": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.redis"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.redis"
+            }
+          ]
         },
         "client": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.client"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.client"
+            }
+          ]
         },
         "job": {
-          "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.job"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/.kratos_foundation_pb.EntrypointMessage.job"
+            }
+          ]
         }
       },
       "additionalProperties": {
         "not": {}
       },
-      "type": "object",
-      "required": [
-        "app",
-        "log",
-        "metrics",
-        "tracing",
-        "server",
-        "database",
-        "redis",
-        "client",
-        "job"
-      ]
+      "type": "object"
     },
     ".kratos_foundation_pb.EntrypointMessage.app": {
       "$ref": "#/$defs/.kratos_foundation_pb.AppComponentConfig.App"

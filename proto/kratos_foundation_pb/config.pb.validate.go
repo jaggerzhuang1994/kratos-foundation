@@ -57,265 +57,301 @@ func (m *EntrypointMessage) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetApp()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.App != nil {
+
+		if all {
+			switch v := interface{}(m.GetApp()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "App",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "App",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "App",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "App",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "App",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetLog()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Log",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetMetrics()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Metrics",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetTracing()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Tracing",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetServer()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Server != nil {
+
+		if all {
+			switch v := interface{}(m.GetServer()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Server",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Server",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Server",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Server",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Server",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetDatabase()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Database != nil {
+
+		if all {
+			switch v := interface{}(m.GetDatabase()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Database",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Database",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Database",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Database",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Database",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetRedis()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Redis != nil {
+
+		if all {
+			switch v := interface{}(m.GetRedis()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Redis",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Redis",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Redis",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Redis",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Redis",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetClient()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+	if m.Client != nil {
+
+		if all {
+			switch v := interface{}(m.GetClient()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Client",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Client",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return EntrypointMessageValidationError{
 					field:  "Client",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Client",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Client",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
-	if all {
-		switch v := interface{}(m.GetJob()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
-					field:  "Job",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	if m.Job != nil {
+
+		if all {
+			switch v := interface{}(m.GetJob()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Job",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, EntrypointMessageValidationError{
+						field:  "Job",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, EntrypointMessageValidationError{
+				return EntrypointMessageValidationError{
 					field:  "Job",
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return EntrypointMessageValidationError{
-				field:  "Job",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
