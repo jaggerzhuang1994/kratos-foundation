@@ -43,21 +43,25 @@ log:
 
   # 标准输出日志配置
   std:
+    # 最小日志级别，可覆盖全局 level [默认: 继承 log.level]
+    level: info
+    # 是否过滤空值 KV [默认: 继承 log.filter_empty]
+    filter_empty: false
     # 是否禁用 [默认: false]
     disable: false
-    # 最小日志级别，可覆盖全局 level [默认: 继承 log.level]
-    # level: debug
-    # 是否过滤空值 KV [默认: 继承 log.filter_empty]
-    # filter_empty: true
     # 过滤指定的 keys，会合并 log.filter_keys [默认: []]
-    # filter_keys: []
+    filter_keys: [ ]
 
   # 文件日志配置
   file:
     # 是否禁用 [默认: false]
     disable: true
     # 最小日志级别 [默认: 继承 log.level]
-    # level: info
+    level: info
+    # 是否过滤空值 KV [默认: 继承 log.filter_empty]
+    filter_empty: true
+    # 过滤指定的 keys，会合并 log.filter_keys [默认: []]
+    filter_keys: [ ]
     # 日志文件路径 [默认: ./app.log]
     path: ./logs/app.log
     # 文件轮转配置
@@ -80,14 +84,14 @@ log:
 # =============================================================================
 metrics:
   # 指标命名空间 [默认: 应用名]
-  # meter_name: my-service
+  meter_name: my-service
   # Map 初始容量（优化预分配）[默认: 64]
   counter_map_size: 64
   gauge_map_size: 64
   histogram_map_size: 64
   # 模块日志配置
-  # log:
-  #   level: info
+  log:
+    level: debug
 
 # =============================================================================
 # 链路追踪配置
@@ -293,7 +297,7 @@ database:
       # 日志级别: UNKNOWN, SILENT, ERROR, WARN, INFO [默认: WARN]
       level: WARN
       # 慢查询阈值 [默认: 200ms]
-      slow_threshold: 200ms
+      slow_threshold: 0.2s
       # 是否彩色输出 [默认: false]
       colorful: false
       # 是否忽略 RecordNotFound 错误 [默认: true]
@@ -365,15 +369,15 @@ redis:
       # 最大重试次数，-1 禁用重试 [默认: 3]
       max_retries: 3
       # 最小重试退避时间，-1 禁用退避 [默认: 8ms]
-      min_retry_backoff: 8ms
+      min_retry_backoff: 0.008s
       # 最大重试退避时间，-1 禁用退避 [默认: 512ms]
-      max_retry_backoff: 512ms
+      max_retry_backoff: 0.512s
       # 连接超时 [默认: 5s]
       dial_timeout: 5s
       # 连接重试次数 [默认: 5]
       dialer_retries: 5
       # 连接重试间隔 [默认: 100ms]
-      dialer_retry_timeout: 100ms
+      dialer_retry_timeout: 100.0001s
       # 读取超时，-1 无限，-2 禁用 [默认: 3s]
       read_timeout: 3s
       # 写入超时，-1 无限，-2 禁用 [默认: 3s]
@@ -399,7 +403,7 @@ redis:
       # 最大活跃连接数，0 表示无限制 [默认: 0]
       # max_active_conns: 0
       # 连接最大空闲时间 [默认: 30m]
-      conn_max_idle_time: 30m
+      conn_max_idle_time: 1800s
       # 连接最大生命周期，0 表示无限制 [默认: 0]
       # conn_max_lifetime: 0
       # 是否只读模式 [默认: false]

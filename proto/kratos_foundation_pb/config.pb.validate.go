@@ -35,22 +35,21 @@ var (
 	_ = sort.Sort
 )
 
-// Validate checks the field values on EntrypointMessage with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *EntrypointMessage) Validate() error {
+// Validate checks the field values on Config with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Config) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on EntrypointMessage with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// EntrypointMessageMultiError, or nil if none found.
-func (m *EntrypointMessage) ValidateAll() error {
+// ValidateAll checks the field values on Config with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in ConfigMultiError, or nil if none found.
+func (m *Config) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *EntrypointMessage) validate(all bool) error {
+func (m *Config) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -63,7 +62,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetApp()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "App",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -71,7 +70,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "App",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -80,7 +79,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "App",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -96,7 +95,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetLog()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -104,7 +103,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -113,7 +112,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -129,7 +128,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetMetrics()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -137,7 +136,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -146,7 +145,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -162,7 +161,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetTracing()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Tracing",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -170,7 +169,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Tracing",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -179,7 +178,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -195,7 +194,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetServer()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Server",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -203,7 +202,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Server",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -212,7 +211,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Server",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -228,7 +227,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetDatabase()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Database",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -236,7 +235,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Database",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -245,7 +244,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Database",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -261,7 +260,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetRedis()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Redis",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -269,7 +268,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Redis",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -278,7 +277,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Redis",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -294,7 +293,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetClient()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Client",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -302,7 +301,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Client",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -311,7 +310,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Client",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -327,7 +326,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			switch v := interface{}(m.GetJob()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Job",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -335,7 +334,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, EntrypointMessageValidationError{
+					errors = append(errors, ConfigValidationError{
 						field:  "Job",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -344,7 +343,7 @@ func (m *EntrypointMessage) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return EntrypointMessageValidationError{
+				return ConfigValidationError{
 					field:  "Job",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -355,19 +354,18 @@ func (m *EntrypointMessage) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return EntrypointMessageMultiError(errors)
+		return ConfigMultiError(errors)
 	}
 
 	return nil
 }
 
-// EntrypointMessageMultiError is an error wrapping multiple validation errors
-// returned by EntrypointMessage.ValidateAll() if the designated constraints
-// aren't met.
-type EntrypointMessageMultiError []error
+// ConfigMultiError is an error wrapping multiple validation errors returned by
+// Config.ValidateAll() if the designated constraints aren't met.
+type ConfigMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m EntrypointMessageMultiError) Error() string {
+func (m ConfigMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -376,11 +374,11 @@ func (m EntrypointMessageMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m EntrypointMessageMultiError) AllErrors() []error { return m }
+func (m ConfigMultiError) AllErrors() []error { return m }
 
-// EntrypointMessageValidationError is the validation error returned by
-// EntrypointMessage.Validate if the designated constraints aren't met.
-type EntrypointMessageValidationError struct {
+// ConfigValidationError is the validation error returned by Config.Validate if
+// the designated constraints aren't met.
+type ConfigValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -388,24 +386,22 @@ type EntrypointMessageValidationError struct {
 }
 
 // Field function returns field value.
-func (e EntrypointMessageValidationError) Field() string { return e.field }
+func (e ConfigValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e EntrypointMessageValidationError) Reason() string { return e.reason }
+func (e ConfigValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e EntrypointMessageValidationError) Cause() error { return e.cause }
+func (e ConfigValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e EntrypointMessageValidationError) Key() bool { return e.key }
+func (e ConfigValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e EntrypointMessageValidationError) ErrorName() string {
-	return "EntrypointMessageValidationError"
-}
+func (e ConfigValidationError) ErrorName() string { return "ConfigValidationError" }
 
 // Error satisfies the builtin error interface
-func (e EntrypointMessageValidationError) Error() string {
+func (e ConfigValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -417,14 +413,14 @@ func (e EntrypointMessageValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sEntrypointMessage.%s: %s%s",
+		"invalid %sConfig.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = EntrypointMessageValidationError{}
+var _ error = ConfigValidationError{}
 
 var _ interface {
 	Field() string
@@ -432,55 +428,91 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = EntrypointMessageValidationError{}
+} = ConfigValidationError{}
 
-// Validate checks the field values on AppComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *AppComponentConfig) Validate() error {
+// Validate checks the field values on App with the rules defined in the proto
+// definition for this message. If any rules are violated, the first error
+// encountered is returned, or nil if there are no violations.
+func (m *App) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on AppComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// AppComponentConfigMultiError, or nil if none found.
-func (m *AppComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on App with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in AppMultiError, or nil if none found.
+func (m *App) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *AppComponentConfig) validate(all bool) error {
+func (m *App) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.App != nil {
+	if m.DisableRegistrar != nil {
+		// no validation rules for DisableRegistrar
+	}
+
+	if m.RegistrarTimeout != nil {
 
 		if all {
-			switch v := interface{}(m.GetApp()).(type) {
+			switch v := interface{}(m.GetRegistrarTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, AppComponentConfigValidationError{
-						field:  "App",
+					errors = append(errors, AppValidationError{
+						field:  "RegistrarTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, AppComponentConfigValidationError{
-						field:  "App",
+					errors = append(errors, AppValidationError{
+						field:  "RegistrarTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetApp()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetRegistrarTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return AppComponentConfigValidationError{
-					field:  "App",
+				return AppValidationError{
+					field:  "RegistrarTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.StopTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetStopTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, AppValidationError{
+						field:  "StopTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, AppValidationError{
+						field:  "StopTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetStopTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return AppValidationError{
+					field:  "StopTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -490,19 +522,18 @@ func (m *AppComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return AppComponentConfigMultiError(errors)
+		return AppMultiError(errors)
 	}
 
 	return nil
 }
 
-// AppComponentConfigMultiError is an error wrapping multiple validation errors
-// returned by AppComponentConfig.ValidateAll() if the designated constraints
-// aren't met.
-type AppComponentConfigMultiError []error
+// AppMultiError is an error wrapping multiple validation errors returned by
+// App.ValidateAll() if the designated constraints aren't met.
+type AppMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m AppComponentConfigMultiError) Error() string {
+func (m AppMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -511,11 +542,11 @@ func (m AppComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m AppComponentConfigMultiError) AllErrors() []error { return m }
+func (m AppMultiError) AllErrors() []error { return m }
 
-// AppComponentConfigValidationError is the validation error returned by
-// AppComponentConfig.Validate if the designated constraints aren't met.
-type AppComponentConfigValidationError struct {
+// AppValidationError is the validation error returned by App.Validate if the
+// designated constraints aren't met.
+type AppValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -523,24 +554,22 @@ type AppComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e AppComponentConfigValidationError) Field() string { return e.field }
+func (e AppValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e AppComponentConfigValidationError) Reason() string { return e.reason }
+func (e AppValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e AppComponentConfigValidationError) Cause() error { return e.cause }
+func (e AppValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e AppComponentConfigValidationError) Key() bool { return e.key }
+func (e AppValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e AppComponentConfigValidationError) ErrorName() string {
-	return "AppComponentConfigValidationError"
-}
+func (e AppValidationError) ErrorName() string { return "AppValidationError" }
 
 // Error satisfies the builtin error interface
-func (e AppComponentConfigValidationError) Error() string {
+func (e AppValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -552,14 +581,14 @@ func (e AppComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sAppComponentConfig.%s: %s%s",
+		"invalid %sApp.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = AppComponentConfigValidationError{}
+var _ error = AppValidationError{}
 
 var _ interface {
 	Field() string
@@ -567,29 +596,327 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = AppComponentConfigValidationError{}
+} = AppValidationError{}
 
-// Validate checks the field values on LogComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *LogComponentConfig) Validate() error {
+// Validate checks the field values on Log with the rules defined in the proto
+// definition for this message. If any rules are violated, the first error
+// encountered is returned, or nil if there are no violations.
+func (m *Log) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on LogComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// LogComponentConfigMultiError, or nil if none found.
-func (m *LogComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on Log with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in LogMultiError, or nil if none found.
+func (m *Log) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *LogComponentConfig) validate(all bool) error {
+func (m *Log) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
+
+	if m.Level != nil {
+		// no validation rules for Level
+	}
+
+	if m.FilterEmpty != nil {
+		// no validation rules for FilterEmpty
+	}
+
+	if m.TimeFormat != nil {
+		// no validation rules for TimeFormat
+	}
+
+	if m.Std != nil {
+
+		if all {
+			switch v := interface{}(m.GetStd()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LogValidationError{
+						field:  "Std",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LogValidationError{
+						field:  "Std",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetStd()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LogValidationError{
+					field:  "Std",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.File != nil {
+
+		if all {
+			switch v := interface{}(m.GetFile()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LogValidationError{
+						field:  "File",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LogValidationError{
+						field:  "File",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetFile()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LogValidationError{
+					field:  "File",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return LogMultiError(errors)
+	}
+
+	return nil
+}
+
+// LogMultiError is an error wrapping multiple validation errors returned by
+// Log.ValidateAll() if the designated constraints aren't met.
+type LogMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m LogMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m LogMultiError) AllErrors() []error { return m }
+
+// LogValidationError is the validation error returned by Log.Validate if the
+// designated constraints aren't met.
+type LogValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e LogValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e LogValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e LogValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e LogValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e LogValidationError) ErrorName() string { return "LogValidationError" }
+
+// Error satisfies the builtin error interface
+func (e LogValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sLog.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = LogValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = LogValidationError{}
+
+// Validate checks the field values on ModuleLog with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *ModuleLog) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ModuleLog with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in ModuleLogMultiError, or nil
+// if none found.
+func (m *ModuleLog) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ModuleLog) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Level != nil {
+		// no validation rules for Level
+	}
+
+	if m.FilterEmpty != nil {
+		// no validation rules for FilterEmpty
+	}
+
+	if len(errors) > 0 {
+		return ModuleLogMultiError(errors)
+	}
+
+	return nil
+}
+
+// ModuleLogMultiError is an error wrapping multiple validation errors returned
+// by ModuleLog.ValidateAll() if the designated constraints aren't met.
+type ModuleLogMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ModuleLogMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ModuleLogMultiError) AllErrors() []error { return m }
+
+// ModuleLogValidationError is the validation error returned by
+// ModuleLog.Validate if the designated constraints aren't met.
+type ModuleLogValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ModuleLogValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ModuleLogValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ModuleLogValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ModuleLogValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ModuleLogValidationError) ErrorName() string { return "ModuleLogValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ModuleLogValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sModuleLog.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ModuleLogValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ModuleLogValidationError{}
+
+// Validate checks the field values on Metrics with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Metrics) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Metrics with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in MetricsMultiError, or nil if none found.
+func (m *Metrics) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Metrics) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.MeterName != nil {
+		// no validation rules for MeterName
+	}
+
+	if m.CounterMapSize != nil {
+		// no validation rules for CounterMapSize
+	}
+
+	if m.GaugeMapSize != nil {
+		// no validation rules for GaugeMapSize
+	}
+
+	if m.HistogramMapSize != nil {
+		// no validation rules for HistogramMapSize
+	}
 
 	if m.Log != nil {
 
@@ -597,7 +924,7 @@ func (m *LogComponentConfig) validate(all bool) error {
 			switch v := interface{}(m.GetLog()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, LogComponentConfigValidationError{
+					errors = append(errors, MetricsValidationError{
 						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -605,7 +932,7 @@ func (m *LogComponentConfig) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, LogComponentConfigValidationError{
+					errors = append(errors, MetricsValidationError{
 						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -614,7 +941,7 @@ func (m *LogComponentConfig) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return LogComponentConfigValidationError{
+				return MetricsValidationError{
 					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -625,19 +952,18 @@ func (m *LogComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return LogComponentConfigMultiError(errors)
+		return MetricsMultiError(errors)
 	}
 
 	return nil
 }
 
-// LogComponentConfigMultiError is an error wrapping multiple validation errors
-// returned by LogComponentConfig.ValidateAll() if the designated constraints
-// aren't met.
-type LogComponentConfigMultiError []error
+// MetricsMultiError is an error wrapping multiple validation errors returned
+// by Metrics.ValidateAll() if the designated constraints aren't met.
+type MetricsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m LogComponentConfigMultiError) Error() string {
+func (m MetricsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -646,11 +972,11 @@ func (m LogComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m LogComponentConfigMultiError) AllErrors() []error { return m }
+func (m MetricsMultiError) AllErrors() []error { return m }
 
-// LogComponentConfigValidationError is the validation error returned by
-// LogComponentConfig.Validate if the designated constraints aren't met.
-type LogComponentConfigValidationError struct {
+// MetricsValidationError is the validation error returned by Metrics.Validate
+// if the designated constraints aren't met.
+type MetricsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -658,24 +984,22 @@ type LogComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e LogComponentConfigValidationError) Field() string { return e.field }
+func (e MetricsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e LogComponentConfigValidationError) Reason() string { return e.reason }
+func (e MetricsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e LogComponentConfigValidationError) Cause() error { return e.cause }
+func (e MetricsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e LogComponentConfigValidationError) Key() bool { return e.key }
+func (e MetricsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e LogComponentConfigValidationError) ErrorName() string {
-	return "LogComponentConfigValidationError"
-}
+func (e MetricsValidationError) ErrorName() string { return "MetricsValidationError" }
 
 // Error satisfies the builtin error interface
-func (e LogComponentConfigValidationError) Error() string {
+func (e MetricsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -687,14 +1011,14 @@ func (e LogComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sLogComponentConfig.%s: %s%s",
+		"invalid %sMetrics.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = LogComponentConfigValidationError{}
+var _ error = MetricsValidationError{}
 
 var _ interface {
 	Field() string
@@ -702,55 +1026,128 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = LogComponentConfigValidationError{}
+} = MetricsValidationError{}
 
-// Validate checks the field values on MetricComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *MetricComponentConfig) Validate() error {
+// Validate checks the field values on Tracing with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Tracing) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on MetricComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// MetricComponentConfigMultiError, or nil if none found.
-func (m *MetricComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on Tracing with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in TracingMultiError, or nil if none found.
+func (m *Tracing) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *MetricComponentConfig) validate(all bool) error {
+func (m *Tracing) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.Metrics != nil {
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.TracerName != nil {
+		// no validation rules for TracerName
+	}
+
+	if m.Exporter != nil {
 
 		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
+			switch v := interface{}(m.GetExporter()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, MetricComponentConfigValidationError{
-						field:  "Metrics",
+					errors = append(errors, TracingValidationError{
+						field:  "Exporter",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, MetricComponentConfigValidationError{
-						field:  "Metrics",
+					errors = append(errors, TracingValidationError{
+						field:  "Exporter",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetExporter()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return MetricComponentConfigValidationError{
-					field:  "Metrics",
+				return TracingValidationError{
+					field:  "Exporter",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Sampler != nil {
+
+		if all {
+			switch v := interface{}(m.GetSampler()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingValidationError{
+						field:  "Sampler",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingValidationError{
+						field:  "Sampler",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetSampler()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingValidationError{
+					field:  "Sampler",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TracingValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TracingValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TracingValidationError{
+					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -760,19 +1157,18 @@ func (m *MetricComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return MetricComponentConfigMultiError(errors)
+		return TracingMultiError(errors)
 	}
 
 	return nil
 }
 
-// MetricComponentConfigMultiError is an error wrapping multiple validation
-// errors returned by MetricComponentConfig.ValidateAll() if the designated
-// constraints aren't met.
-type MetricComponentConfigMultiError []error
+// TracingMultiError is an error wrapping multiple validation errors returned
+// by Tracing.ValidateAll() if the designated constraints aren't met.
+type TracingMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m MetricComponentConfigMultiError) Error() string {
+func (m TracingMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -781,11 +1177,11 @@ func (m MetricComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m MetricComponentConfigMultiError) AllErrors() []error { return m }
+func (m TracingMultiError) AllErrors() []error { return m }
 
-// MetricComponentConfigValidationError is the validation error returned by
-// MetricComponentConfig.Validate if the designated constraints aren't met.
-type MetricComponentConfigValidationError struct {
+// TracingValidationError is the validation error returned by Tracing.Validate
+// if the designated constraints aren't met.
+type TracingValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -793,24 +1189,22 @@ type MetricComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e MetricComponentConfigValidationError) Field() string { return e.field }
+func (e TracingValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e MetricComponentConfigValidationError) Reason() string { return e.reason }
+func (e TracingValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e MetricComponentConfigValidationError) Cause() error { return e.cause }
+func (e TracingValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e MetricComponentConfigValidationError) Key() bool { return e.key }
+func (e TracingValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e MetricComponentConfigValidationError) ErrorName() string {
-	return "MetricComponentConfigValidationError"
-}
+func (e TracingValidationError) ErrorName() string { return "TracingValidationError" }
 
 // Error satisfies the builtin error interface
-func (e MetricComponentConfigValidationError) Error() string {
+func (e TracingValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -822,14 +1216,14 @@ func (e MetricComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sMetricComponentConfig.%s: %s%s",
+		"invalid %sTracing.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = MetricComponentConfigValidationError{}
+var _ error = TracingValidationError{}
 
 var _ interface {
 	Field() string
@@ -837,142 +1231,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = MetricComponentConfigValidationError{}
-
-// Validate checks the field values on TracingComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *TracingComponentConfig) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on TracingComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// TracingComponentConfigMultiError, or nil if none found.
-func (m *TracingComponentConfig) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *TracingComponentConfig) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Tracing != nil {
-
-		if all {
-			switch v := interface{}(m.GetTracing()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfigValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfigValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return TracingComponentConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return TracingComponentConfigMultiError(errors)
-	}
-
-	return nil
-}
-
-// TracingComponentConfigMultiError is an error wrapping multiple validation
-// errors returned by TracingComponentConfig.ValidateAll() if the designated
-// constraints aren't met.
-type TracingComponentConfigMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m TracingComponentConfigMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m TracingComponentConfigMultiError) AllErrors() []error { return m }
-
-// TracingComponentConfigValidationError is the validation error returned by
-// TracingComponentConfig.Validate if the designated constraints aren't met.
-type TracingComponentConfigValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e TracingComponentConfigValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e TracingComponentConfigValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e TracingComponentConfigValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e TracingComponentConfigValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e TracingComponentConfigValidationError) ErrorName() string {
-	return "TracingComponentConfigValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e TracingComponentConfigValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sTracingComponentConfig.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = TracingComponentConfigValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = TracingComponentConfigValidationError{}
+} = TracingValidationError{}
 
 // Validate checks the field values on MiddlewareConfig with the rules defined
 // in the proto definition for this message. If any rules are violated, the
@@ -1074,53 +1333,184 @@ var _ interface {
 	ErrorName() string
 } = MiddlewareConfigValidationError{}
 
-// Validate checks the field values on ServerComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ServerComponentConfig) Validate() error {
+// Validate checks the field values on Server with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Server) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on ServerComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ServerComponentConfigMultiError, or nil if none found.
-func (m *ServerComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on Server with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in ServerMultiError, or nil if none found.
+func (m *Server) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ServerComponentConfig) validate(all bool) error {
+func (m *Server) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.Server != nil {
+	if m.StopDelay != nil {
 
 		if all {
-			switch v := interface{}(m.GetServer()).(type) {
+			switch v := interface{}(m.GetStopDelay()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfigValidationError{
-						field:  "Server",
+					errors = append(errors, ServerValidationError{
+						field:  "StopDelay",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfigValidationError{
-						field:  "Server",
+					errors = append(errors, ServerValidationError{
+						field:  "StopDelay",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetServer()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetStopDelay()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfigValidationError{
-					field:  "Server",
+				return ServerValidationError{
+					field:  "StopDelay",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Middleware != nil {
+
+		if all {
+			switch v := interface{}(m.GetMiddleware()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Middleware",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Middleware",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Middleware",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Http != nil {
+
+		if all {
+			switch v := interface{}(m.GetHttp()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Http",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Http",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetHttp()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Http",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Grpc != nil {
+
+		if all {
+			switch v := interface{}(m.GetGrpc()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Grpc",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Grpc",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetGrpc()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Grpc",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1130,19 +1520,18 @@ func (m *ServerComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return ServerComponentConfigMultiError(errors)
+		return ServerMultiError(errors)
 	}
 
 	return nil
 }
 
-// ServerComponentConfigMultiError is an error wrapping multiple validation
-// errors returned by ServerComponentConfig.ValidateAll() if the designated
-// constraints aren't met.
-type ServerComponentConfigMultiError []error
+// ServerMultiError is an error wrapping multiple validation errors returned by
+// Server.ValidateAll() if the designated constraints aren't met.
+type ServerMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfigMultiError) Error() string {
+func (m ServerMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1151,11 +1540,11 @@ func (m ServerComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfigMultiError) AllErrors() []error { return m }
+func (m ServerMultiError) AllErrors() []error { return m }
 
-// ServerComponentConfigValidationError is the validation error returned by
-// ServerComponentConfig.Validate if the designated constraints aren't met.
-type ServerComponentConfigValidationError struct {
+// ServerValidationError is the validation error returned by Server.Validate if
+// the designated constraints aren't met.
+type ServerValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1163,24 +1552,22 @@ type ServerComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e ServerComponentConfigValidationError) Field() string { return e.field }
+func (e ServerValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ServerComponentConfigValidationError) Reason() string { return e.reason }
+func (e ServerValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ServerComponentConfigValidationError) Cause() error { return e.cause }
+func (e ServerValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ServerComponentConfigValidationError) Key() bool { return e.key }
+func (e ServerValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ServerComponentConfigValidationError) ErrorName() string {
-	return "ServerComponentConfigValidationError"
-}
+func (e ServerValidationError) ErrorName() string { return "ServerValidationError" }
 
 // Error satisfies the builtin error interface
-func (e ServerComponentConfigValidationError) Error() string {
+func (e ServerValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1192,14 +1579,14 @@ func (e ServerComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sServerComponentConfig.%s: %s%s",
+		"invalid %sServer.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ServerComponentConfigValidationError{}
+var _ error = ServerValidationError{}
 
 var _ interface {
 	Field() string
@@ -1207,55 +1594,204 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ServerComponentConfigValidationError{}
+} = ServerValidationError{}
 
-// Validate checks the field values on DatabaseComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *DatabaseComponentConfig) Validate() error {
+// Validate checks the field values on Database with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Database) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on DatabaseComponentConfig with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// DatabaseComponentConfigMultiError, or nil if none found.
-func (m *DatabaseComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on Database with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DatabaseMultiError, or nil
+// if none found.
+func (m *Database) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig) validate(all bool) error {
+func (m *Database) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.Database != nil {
+	{
+		sorted_keys := make([]string, len(m.GetConnections()))
+		i := 0
+		for key := range m.GetConnections() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetConnections()[key]
+			_ = val
+
+			// no validation rules for Connections[key]
+
+			if all {
+				switch v := interface{}(val).(type) {
+				case interface{ ValidateAll() error }:
+					if err := v.ValidateAll(); err != nil {
+						errors = append(errors, DatabaseValidationError{
+							field:  fmt.Sprintf("Connections[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				case interface{ Validate() error }:
+					if err := v.Validate(); err != nil {
+						errors = append(errors, DatabaseValidationError{
+							field:  fmt.Sprintf("Connections[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				}
+			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
+				if err := v.Validate(); err != nil {
+					return DatabaseValidationError{
+						field:  fmt.Sprintf("Connections[%v]", key),
+						reason: "embedded message failed validation",
+						cause:  err,
+					}
+				}
+			}
+
+		}
+	}
+
+	if m.Gorm != nil {
 
 		if all {
-			switch v := interface{}(m.GetDatabase()).(type) {
+			switch v := interface{}(m.GetGorm()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfigValidationError{
-						field:  "Database",
+					errors = append(errors, DatabaseValidationError{
+						field:  "Gorm",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfigValidationError{
-						field:  "Database",
+					errors = append(errors, DatabaseValidationError{
+						field:  "Gorm",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetDatabase()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetGorm()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfigValidationError{
-					field:  "Database",
+				return DatabaseValidationError{
+					field:  "Gorm",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Default != nil {
+		// no validation rules for Default
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DatabaseValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DatabaseValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DatabaseValidationError{
+					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1265,19 +1801,18 @@ func (m *DatabaseComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfigMultiError(errors)
+		return DatabaseMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfigMultiError is an error wrapping multiple validation
-// errors returned by DatabaseComponentConfig.ValidateAll() if the designated
-// constraints aren't met.
-type DatabaseComponentConfigMultiError []error
+// DatabaseMultiError is an error wrapping multiple validation errors returned
+// by Database.ValidateAll() if the designated constraints aren't met.
+type DatabaseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfigMultiError) Error() string {
+func (m DatabaseMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1286,11 +1821,11 @@ func (m DatabaseComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfigMultiError) AllErrors() []error { return m }
+func (m DatabaseMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfigValidationError is the validation error returned by
-// DatabaseComponentConfig.Validate if the designated constraints aren't met.
-type DatabaseComponentConfigValidationError struct {
+// DatabaseValidationError is the validation error returned by
+// Database.Validate if the designated constraints aren't met.
+type DatabaseValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1298,24 +1833,22 @@ type DatabaseComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfigValidationError) Field() string { return e.field }
+func (e DatabaseValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfigValidationError) Reason() string { return e.reason }
+func (e DatabaseValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfigValidationError) Cause() error { return e.cause }
+func (e DatabaseValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfigValidationError) Key() bool { return e.key }
+func (e DatabaseValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfigValidationError) ErrorName() string {
-	return "DatabaseComponentConfigValidationError"
-}
+func (e DatabaseValidationError) ErrorName() string { return "DatabaseValidationError" }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfigValidationError) Error() string {
+func (e DatabaseValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1327,14 +1860,14 @@ func (e DatabaseComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig.%s: %s%s",
+		"invalid %sDatabase.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfigValidationError{}
+var _ error = DatabaseValidationError{}
 
 var _ interface {
 	Field() string
@@ -1342,55 +1875,170 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfigValidationError{}
+} = DatabaseValidationError{}
 
-// Validate checks the field values on RedisComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *RedisComponentConfig) Validate() error {
+// Validate checks the field values on Redis with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Redis) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on RedisComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// RedisComponentConfigMultiError, or nil if none found.
-func (m *RedisComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on Redis with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in RedisMultiError, or nil if none found.
+func (m *Redis) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RedisComponentConfig) validate(all bool) error {
+func (m *Redis) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.Redis != nil {
+	{
+		sorted_keys := make([]string, len(m.GetConnections()))
+		i := 0
+		for key := range m.GetConnections() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetConnections()[key]
+			_ = val
+
+			// no validation rules for Connections[key]
+
+			if all {
+				switch v := interface{}(val).(type) {
+				case interface{ ValidateAll() error }:
+					if err := v.ValidateAll(); err != nil {
+						errors = append(errors, RedisValidationError{
+							field:  fmt.Sprintf("Connections[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				case interface{ Validate() error }:
+					if err := v.Validate(); err != nil {
+						errors = append(errors, RedisValidationError{
+							field:  fmt.Sprintf("Connections[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				}
+			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
+				if err := v.Validate(); err != nil {
+					return RedisValidationError{
+						field:  fmt.Sprintf("Connections[%v]", key),
+						reason: "embedded message failed validation",
+						cause:  err,
+					}
+				}
+			}
+
+		}
+	}
+
+	if m.Default != nil {
+		// no validation rules for Default
+	}
+
+	if m.Log != nil {
 
 		if all {
-			switch v := interface{}(m.GetRedis()).(type) {
+			switch v := interface{}(m.GetLog()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfigValidationError{
-						field:  "Redis",
+					errors = append(errors, RedisValidationError{
+						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfigValidationError{
-						field:  "Redis",
+					errors = append(errors, RedisValidationError{
+						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetRedis()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfigValidationError{
-					field:  "Redis",
+				return RedisValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, RedisValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, RedisValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return RedisValidationError{
+					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1400,19 +2048,18 @@ func (m *RedisComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return RedisComponentConfigMultiError(errors)
+		return RedisMultiError(errors)
 	}
 
 	return nil
 }
 
-// RedisComponentConfigMultiError is an error wrapping multiple validation
-// errors returned by RedisComponentConfig.ValidateAll() if the designated
-// constraints aren't met.
-type RedisComponentConfigMultiError []error
+// RedisMultiError is an error wrapping multiple validation errors returned by
+// Redis.ValidateAll() if the designated constraints aren't met.
+type RedisMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m RedisComponentConfigMultiError) Error() string {
+func (m RedisMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1421,11 +2068,11 @@ func (m RedisComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m RedisComponentConfigMultiError) AllErrors() []error { return m }
+func (m RedisMultiError) AllErrors() []error { return m }
 
-// RedisComponentConfigValidationError is the validation error returned by
-// RedisComponentConfig.Validate if the designated constraints aren't met.
-type RedisComponentConfigValidationError struct {
+// RedisValidationError is the validation error returned by Redis.Validate if
+// the designated constraints aren't met.
+type RedisValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1433,24 +2080,22 @@ type RedisComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e RedisComponentConfigValidationError) Field() string { return e.field }
+func (e RedisValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e RedisComponentConfigValidationError) Reason() string { return e.reason }
+func (e RedisValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e RedisComponentConfigValidationError) Cause() error { return e.cause }
+func (e RedisValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e RedisComponentConfigValidationError) Key() bool { return e.key }
+func (e RedisValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e RedisComponentConfigValidationError) ErrorName() string {
-	return "RedisComponentConfigValidationError"
-}
+func (e RedisValidationError) ErrorName() string { return "RedisValidationError" }
 
 // Error satisfies the builtin error interface
-func (e RedisComponentConfigValidationError) Error() string {
+func (e RedisValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1462,14 +2107,14 @@ func (e RedisComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sRedisComponentConfig.%s: %s%s",
+		"invalid %sRedis.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = RedisComponentConfigValidationError{}
+var _ error = RedisValidationError{}
 
 var _ interface {
 	Field() string
@@ -1477,55 +2122,100 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = RedisComponentConfigValidationError{}
+} = RedisValidationError{}
 
-// Validate checks the field values on ClientComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ClientComponentConfig) Validate() error {
+// Validate checks the field values on Client with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Client) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on ClientComponentConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ClientComponentConfigMultiError, or nil if none found.
-func (m *ClientComponentConfig) ValidateAll() error {
+// ValidateAll checks the field values on Client with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in ClientMultiError, or nil if none found.
+func (m *Client) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ClientComponentConfig) validate(all bool) error {
+func (m *Client) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.Client != nil {
+	{
+		sorted_keys := make([]string, len(m.GetClients()))
+		i := 0
+		for key := range m.GetClients() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetClients()[key]
+			_ = val
+
+			// no validation rules for Clients[key]
+
+			if all {
+				switch v := interface{}(val).(type) {
+				case interface{ ValidateAll() error }:
+					if err := v.ValidateAll(); err != nil {
+						errors = append(errors, ClientValidationError{
+							field:  fmt.Sprintf("Clients[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				case interface{ Validate() error }:
+					if err := v.Validate(); err != nil {
+						errors = append(errors, ClientValidationError{
+							field:  fmt.Sprintf("Clients[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				}
+			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
+				if err := v.Validate(); err != nil {
+					return ClientValidationError{
+						field:  fmt.Sprintf("Clients[%v]", key),
+						reason: "embedded message failed validation",
+						cause:  err,
+					}
+				}
+			}
+
+		}
+	}
+
+	if m.Log != nil {
 
 		if all {
-			switch v := interface{}(m.GetClient()).(type) {
+			switch v := interface{}(m.GetLog()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfigValidationError{
-						field:  "Client",
+					errors = append(errors, ClientValidationError{
+						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfigValidationError{
-						field:  "Client",
+					errors = append(errors, ClientValidationError{
+						field:  "Log",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetClient()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfigValidationError{
-					field:  "Client",
+				return ClientValidationError{
+					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1535,19 +2225,18 @@ func (m *ClientComponentConfig) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return ClientComponentConfigMultiError(errors)
+		return ClientMultiError(errors)
 	}
 
 	return nil
 }
 
-// ClientComponentConfigMultiError is an error wrapping multiple validation
-// errors returned by ClientComponentConfig.ValidateAll() if the designated
-// constraints aren't met.
-type ClientComponentConfigMultiError []error
+// ClientMultiError is an error wrapping multiple validation errors returned by
+// Client.ValidateAll() if the designated constraints aren't met.
+type ClientMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ClientComponentConfigMultiError) Error() string {
+func (m ClientMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1556,11 +2245,11 @@ func (m ClientComponentConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ClientComponentConfigMultiError) AllErrors() []error { return m }
+func (m ClientMultiError) AllErrors() []error { return m }
 
-// ClientComponentConfigValidationError is the validation error returned by
-// ClientComponentConfig.Validate if the designated constraints aren't met.
-type ClientComponentConfigValidationError struct {
+// ClientValidationError is the validation error returned by Client.Validate if
+// the designated constraints aren't met.
+type ClientValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1568,24 +2257,22 @@ type ClientComponentConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e ClientComponentConfigValidationError) Field() string { return e.field }
+func (e ClientValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ClientComponentConfigValidationError) Reason() string { return e.reason }
+func (e ClientValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ClientComponentConfigValidationError) Cause() error { return e.cause }
+func (e ClientValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ClientComponentConfigValidationError) Key() bool { return e.key }
+func (e ClientValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ClientComponentConfigValidationError) ErrorName() string {
-	return "ClientComponentConfigValidationError"
-}
+func (e ClientValidationError) ErrorName() string { return "ClientValidationError" }
 
 // Error satisfies the builtin error interface
-func (e ClientComponentConfigValidationError) Error() string {
+func (e ClientValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1597,14 +2284,14 @@ func (e ClientComponentConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sClientComponentConfig.%s: %s%s",
+		"invalid %sClient.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ClientComponentConfigValidationError{}
+var _ error = ClientValidationError{}
 
 var _ interface {
 	Field() string
@@ -1612,620 +2299,275 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ClientComponentConfigValidationError{}
+} = ClientValidationError{}
 
-// Validate checks the field values on JobComponent with the rules defined in
+// Validate checks the field values on Job with the rules defined in the proto
+// definition for this message. If any rules are violated, the first error
+// encountered is returned, or nil if there are no violations.
+func (m *Job) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Job with the rules defined in the
+// proto definition for this message. If any rules are violated, the result is
+// a list of violation errors wrapped in JobMultiError, or nil if none found.
+func (m *Job) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Job) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	{
+		sorted_keys := make([]string, len(m.GetJobs()))
+		i := 0
+		for key := range m.GetJobs() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetJobs()[key]
+			_ = val
+
+			// no validation rules for Jobs[key]
+
+			if all {
+				switch v := interface{}(val).(type) {
+				case interface{ ValidateAll() error }:
+					if err := v.ValidateAll(); err != nil {
+						errors = append(errors, JobValidationError{
+							field:  fmt.Sprintf("Jobs[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				case interface{ Validate() error }:
+					if err := v.Validate(); err != nil {
+						errors = append(errors, JobValidationError{
+							field:  fmt.Sprintf("Jobs[%v]", key),
+							reason: "embedded message failed validation",
+							cause:  err,
+						})
+					}
+				}
+			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
+				if err := v.Validate(); err != nil {
+					return JobValidationError{
+						field:  fmt.Sprintf("Jobs[%v]", key),
+						reason: "embedded message failed validation",
+						cause:  err,
+					}
+				}
+			}
+
+		}
+	}
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.Timezone != nil {
+		// no validation rules for Timezone
+	}
+
+	if m.Log != nil {
+
+		if all {
+			switch v := interface{}(m.GetLog()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobValidationError{
+						field:  "Log",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return JobValidationError{
+					field:  "Log",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return JobValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, JobValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, JobValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return JobValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return JobMultiError(errors)
+	}
+
+	return nil
+}
+
+// JobMultiError is an error wrapping multiple validation errors returned by
+// Job.ValidateAll() if the designated constraints aren't met.
+type JobMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m JobMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m JobMultiError) AllErrors() []error { return m }
+
+// JobValidationError is the validation error returned by Job.Validate if the
+// designated constraints aren't met.
+type JobValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e JobValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e JobValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e JobValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e JobValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e JobValidationError) ErrorName() string { return "JobValidationError" }
+
+// Error satisfies the builtin error interface
+func (e JobValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sJob.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = JobValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = JobValidationError{}
+
+// Validate checks the field values on Log_StdLogger with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *JobComponent) Validate() error {
+func (m *Log_StdLogger) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on JobComponent with the rules defined
+// ValidateAll checks the field values on Log_StdLogger with the rules defined
 // in the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in JobComponentMultiError, or
+// result is a list of violation errors wrapped in Log_StdLoggerMultiError, or
 // nil if none found.
-func (m *JobComponent) ValidateAll() error {
+func (m *Log_StdLogger) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *JobComponent) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Job != nil {
-
-		if all {
-			switch v := interface{}(m.GetJob()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, JobComponentValidationError{
-						field:  "Job",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, JobComponentValidationError{
-						field:  "Job",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return JobComponentValidationError{
-					field:  "Job",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return JobComponentMultiError(errors)
-	}
-
-	return nil
-}
-
-// JobComponentMultiError is an error wrapping multiple validation errors
-// returned by JobComponent.ValidateAll() if the designated constraints aren't met.
-type JobComponentMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m JobComponentMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m JobComponentMultiError) AllErrors() []error { return m }
-
-// JobComponentValidationError is the validation error returned by
-// JobComponent.Validate if the designated constraints aren't met.
-type JobComponentValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e JobComponentValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e JobComponentValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e JobComponentValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e JobComponentValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e JobComponentValidationError) ErrorName() string { return "JobComponentValidationError" }
-
-// Error satisfies the builtin error interface
-func (e JobComponentValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sJobComponent.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = JobComponentValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = JobComponentValidationError{}
-
-// Validate checks the field values on AppComponentConfig_App with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *AppComponentConfig_App) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on AppComponentConfig_App with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// AppComponentConfig_AppMultiError, or nil if none found.
-func (m *AppComponentConfig_App) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *AppComponentConfig_App) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.DisableRegistrar != nil {
-		// no validation rules for DisableRegistrar
-	}
-
-	if m.RegistrarTimeout != nil {
-
-		if all {
-			switch v := interface{}(m.GetRegistrarTimeout()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, AppComponentConfig_AppValidationError{
-						field:  "RegistrarTimeout",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, AppComponentConfig_AppValidationError{
-						field:  "RegistrarTimeout",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetRegistrarTimeout()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return AppComponentConfig_AppValidationError{
-					field:  "RegistrarTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.StopTimeout != nil {
-
-		if all {
-			switch v := interface{}(m.GetStopTimeout()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, AppComponentConfig_AppValidationError{
-						field:  "StopTimeout",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, AppComponentConfig_AppValidationError{
-						field:  "StopTimeout",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetStopTimeout()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return AppComponentConfig_AppValidationError{
-					field:  "StopTimeout",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return AppComponentConfig_AppMultiError(errors)
-	}
-
-	return nil
-}
-
-// AppComponentConfig_AppMultiError is an error wrapping multiple validation
-// errors returned by AppComponentConfig_App.ValidateAll() if the designated
-// constraints aren't met.
-type AppComponentConfig_AppMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m AppComponentConfig_AppMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m AppComponentConfig_AppMultiError) AllErrors() []error { return m }
-
-// AppComponentConfig_AppValidationError is the validation error returned by
-// AppComponentConfig_App.Validate if the designated constraints aren't met.
-type AppComponentConfig_AppValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e AppComponentConfig_AppValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e AppComponentConfig_AppValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e AppComponentConfig_AppValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e AppComponentConfig_AppValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e AppComponentConfig_AppValidationError) ErrorName() string {
-	return "AppComponentConfig_AppValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e AppComponentConfig_AppValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sAppComponentConfig_App.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = AppComponentConfig_AppValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = AppComponentConfig_AppValidationError{}
-
-// Validate checks the field values on LogComponentConfig_ModuleLog with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *LogComponentConfig_ModuleLog) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on LogComponentConfig_ModuleLog with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// LogComponentConfig_ModuleLogMultiError, or nil if none found.
-func (m *LogComponentConfig_ModuleLog) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *LogComponentConfig_ModuleLog) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Level != nil {
-		// no validation rules for Level
-	}
-
-	if m.FilterEmpty != nil {
-		// no validation rules for FilterEmpty
-	}
-
-	if len(errors) > 0 {
-		return LogComponentConfig_ModuleLogMultiError(errors)
-	}
-
-	return nil
-}
-
-// LogComponentConfig_ModuleLogMultiError is an error wrapping multiple
-// validation errors returned by LogComponentConfig_ModuleLog.ValidateAll() if
-// the designated constraints aren't met.
-type LogComponentConfig_ModuleLogMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m LogComponentConfig_ModuleLogMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m LogComponentConfig_ModuleLogMultiError) AllErrors() []error { return m }
-
-// LogComponentConfig_ModuleLogValidationError is the validation error returned
-// by LogComponentConfig_ModuleLog.Validate if the designated constraints
-// aren't met.
-type LogComponentConfig_ModuleLogValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e LogComponentConfig_ModuleLogValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e LogComponentConfig_ModuleLogValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e LogComponentConfig_ModuleLogValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e LogComponentConfig_ModuleLogValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e LogComponentConfig_ModuleLogValidationError) ErrorName() string {
-	return "LogComponentConfig_ModuleLogValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e LogComponentConfig_ModuleLogValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sLogComponentConfig_ModuleLog.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = LogComponentConfig_ModuleLogValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = LogComponentConfig_ModuleLogValidationError{}
-
-// Validate checks the field values on LogComponentConfig_Log with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *LogComponentConfig_Log) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on LogComponentConfig_Log with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// LogComponentConfig_LogMultiError, or nil if none found.
-func (m *LogComponentConfig_Log) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *LogComponentConfig_Log) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Level != nil {
-		// no validation rules for Level
-	}
-
-	if m.FilterEmpty != nil {
-		// no validation rules for FilterEmpty
-	}
-
-	if m.TimeFormat != nil {
-		// no validation rules for TimeFormat
-	}
-
-	if m.Std != nil {
-
-		if all {
-			switch v := interface{}(m.GetStd()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, LogComponentConfig_LogValidationError{
-						field:  "Std",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, LogComponentConfig_LogValidationError{
-						field:  "Std",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetStd()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return LogComponentConfig_LogValidationError{
-					field:  "Std",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.File != nil {
-
-		if all {
-			switch v := interface{}(m.GetFile()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, LogComponentConfig_LogValidationError{
-						field:  "File",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, LogComponentConfig_LogValidationError{
-						field:  "File",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetFile()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return LogComponentConfig_LogValidationError{
-					field:  "File",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return LogComponentConfig_LogMultiError(errors)
-	}
-
-	return nil
-}
-
-// LogComponentConfig_LogMultiError is an error wrapping multiple validation
-// errors returned by LogComponentConfig_Log.ValidateAll() if the designated
-// constraints aren't met.
-type LogComponentConfig_LogMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m LogComponentConfig_LogMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m LogComponentConfig_LogMultiError) AllErrors() []error { return m }
-
-// LogComponentConfig_LogValidationError is the validation error returned by
-// LogComponentConfig_Log.Validate if the designated constraints aren't met.
-type LogComponentConfig_LogValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e LogComponentConfig_LogValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e LogComponentConfig_LogValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e LogComponentConfig_LogValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e LogComponentConfig_LogValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e LogComponentConfig_LogValidationError) ErrorName() string {
-	return "LogComponentConfig_LogValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e LogComponentConfig_LogValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sLogComponentConfig_Log.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = LogComponentConfig_LogValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = LogComponentConfig_LogValidationError{}
-
-// Validate checks the field values on LogComponentConfig_Log_StdLogger with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the first error encountered is returned, or nil if there are
-// no violations.
-func (m *LogComponentConfig_Log_StdLogger) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on LogComponentConfig_Log_StdLogger with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// LogComponentConfig_Log_StdLoggerMultiError, or nil if none found.
-func (m *LogComponentConfig_Log_StdLogger) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *LogComponentConfig_Log_StdLogger) validate(all bool) error {
+func (m *Log_StdLogger) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -2245,20 +2587,19 @@ func (m *LogComponentConfig_Log_StdLogger) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return LogComponentConfig_Log_StdLoggerMultiError(errors)
+		return Log_StdLoggerMultiError(errors)
 	}
 
 	return nil
 }
 
-// LogComponentConfig_Log_StdLoggerMultiError is an error wrapping multiple
-// validation errors returned by
-// LogComponentConfig_Log_StdLogger.ValidateAll() if the designated
-// constraints aren't met.
-type LogComponentConfig_Log_StdLoggerMultiError []error
+// Log_StdLoggerMultiError is an error wrapping multiple validation errors
+// returned by Log_StdLogger.ValidateAll() if the designated constraints
+// aren't met.
+type Log_StdLoggerMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m LogComponentConfig_Log_StdLoggerMultiError) Error() string {
+func (m Log_StdLoggerMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -2267,12 +2608,11 @@ func (m LogComponentConfig_Log_StdLoggerMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m LogComponentConfig_Log_StdLoggerMultiError) AllErrors() []error { return m }
+func (m Log_StdLoggerMultiError) AllErrors() []error { return m }
 
-// LogComponentConfig_Log_StdLoggerValidationError is the validation error
-// returned by LogComponentConfig_Log_StdLogger.Validate if the designated
-// constraints aren't met.
-type LogComponentConfig_Log_StdLoggerValidationError struct {
+// Log_StdLoggerValidationError is the validation error returned by
+// Log_StdLogger.Validate if the designated constraints aren't met.
+type Log_StdLoggerValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -2280,24 +2620,22 @@ type LogComponentConfig_Log_StdLoggerValidationError struct {
 }
 
 // Field function returns field value.
-func (e LogComponentConfig_Log_StdLoggerValidationError) Field() string { return e.field }
+func (e Log_StdLoggerValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e LogComponentConfig_Log_StdLoggerValidationError) Reason() string { return e.reason }
+func (e Log_StdLoggerValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e LogComponentConfig_Log_StdLoggerValidationError) Cause() error { return e.cause }
+func (e Log_StdLoggerValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e LogComponentConfig_Log_StdLoggerValidationError) Key() bool { return e.key }
+func (e Log_StdLoggerValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e LogComponentConfig_Log_StdLoggerValidationError) ErrorName() string {
-	return "LogComponentConfig_Log_StdLoggerValidationError"
-}
+func (e Log_StdLoggerValidationError) ErrorName() string { return "Log_StdLoggerValidationError" }
 
 // Error satisfies the builtin error interface
-func (e LogComponentConfig_Log_StdLoggerValidationError) Error() string {
+func (e Log_StdLoggerValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -2309,14 +2647,14 @@ func (e LogComponentConfig_Log_StdLoggerValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sLogComponentConfig_Log_StdLogger.%s: %s%s",
+		"invalid %sLog_StdLogger.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = LogComponentConfig_Log_StdLoggerValidationError{}
+var _ error = Log_StdLoggerValidationError{}
 
 var _ interface {
 	Field() string
@@ -2324,25 +2662,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = LogComponentConfig_Log_StdLoggerValidationError{}
+} = Log_StdLoggerValidationError{}
 
-// Validate checks the field values on LogComponentConfig_Log_FileLogger with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the first error encountered is returned, or nil if there are
-// no violations.
-func (m *LogComponentConfig_Log_FileLogger) Validate() error {
+// Validate checks the field values on Log_FileLogger with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Log_FileLogger) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on LogComponentConfig_Log_FileLogger
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the result is a list of violation errors wrapped in
-// LogComponentConfig_Log_FileLoggerMultiError, or nil if none found.
-func (m *LogComponentConfig_Log_FileLogger) ValidateAll() error {
+// ValidateAll checks the field values on Log_FileLogger with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Log_FileLoggerMultiError,
+// or nil if none found.
+func (m *Log_FileLogger) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
+func (m *Log_FileLogger) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -2371,7 +2708,7 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 			switch v := interface{}(m.GetRotating()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, LogComponentConfig_Log_FileLoggerValidationError{
+					errors = append(errors, Log_FileLoggerValidationError{
 						field:  "Rotating",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -2379,7 +2716,7 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, LogComponentConfig_Log_FileLoggerValidationError{
+					errors = append(errors, Log_FileLoggerValidationError{
 						field:  "Rotating",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -2388,7 +2725,7 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetRotating()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return LogComponentConfig_Log_FileLoggerValidationError{
+				return Log_FileLoggerValidationError{
 					field:  "Rotating",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -2399,20 +2736,19 @@ func (m *LogComponentConfig_Log_FileLogger) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return LogComponentConfig_Log_FileLoggerMultiError(errors)
+		return Log_FileLoggerMultiError(errors)
 	}
 
 	return nil
 }
 
-// LogComponentConfig_Log_FileLoggerMultiError is an error wrapping multiple
-// validation errors returned by
-// LogComponentConfig_Log_FileLogger.ValidateAll() if the designated
-// constraints aren't met.
-type LogComponentConfig_Log_FileLoggerMultiError []error
+// Log_FileLoggerMultiError is an error wrapping multiple validation errors
+// returned by Log_FileLogger.ValidateAll() if the designated constraints
+// aren't met.
+type Log_FileLoggerMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m LogComponentConfig_Log_FileLoggerMultiError) Error() string {
+func (m Log_FileLoggerMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -2421,12 +2757,11 @@ func (m LogComponentConfig_Log_FileLoggerMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m LogComponentConfig_Log_FileLoggerMultiError) AllErrors() []error { return m }
+func (m Log_FileLoggerMultiError) AllErrors() []error { return m }
 
-// LogComponentConfig_Log_FileLoggerValidationError is the validation error
-// returned by LogComponentConfig_Log_FileLogger.Validate if the designated
-// constraints aren't met.
-type LogComponentConfig_Log_FileLoggerValidationError struct {
+// Log_FileLoggerValidationError is the validation error returned by
+// Log_FileLogger.Validate if the designated constraints aren't met.
+type Log_FileLoggerValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -2434,24 +2769,22 @@ type LogComponentConfig_Log_FileLoggerValidationError struct {
 }
 
 // Field function returns field value.
-func (e LogComponentConfig_Log_FileLoggerValidationError) Field() string { return e.field }
+func (e Log_FileLoggerValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e LogComponentConfig_Log_FileLoggerValidationError) Reason() string { return e.reason }
+func (e Log_FileLoggerValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e LogComponentConfig_Log_FileLoggerValidationError) Cause() error { return e.cause }
+func (e Log_FileLoggerValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e LogComponentConfig_Log_FileLoggerValidationError) Key() bool { return e.key }
+func (e Log_FileLoggerValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e LogComponentConfig_Log_FileLoggerValidationError) ErrorName() string {
-	return "LogComponentConfig_Log_FileLoggerValidationError"
-}
+func (e Log_FileLoggerValidationError) ErrorName() string { return "Log_FileLoggerValidationError" }
 
 // Error satisfies the builtin error interface
-func (e LogComponentConfig_Log_FileLoggerValidationError) Error() string {
+func (e Log_FileLoggerValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -2463,14 +2796,14 @@ func (e LogComponentConfig_Log_FileLoggerValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sLogComponentConfig_Log_FileLogger.%s: %s%s",
+		"invalid %sLog_FileLogger.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = LogComponentConfig_Log_FileLoggerValidationError{}
+var _ error = Log_FileLoggerValidationError{}
 
 var _ interface {
 	Field() string
@@ -2478,26 +2811,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = LogComponentConfig_Log_FileLoggerValidationError{}
+} = Log_FileLoggerValidationError{}
 
-// Validate checks the field values on
-// LogComponentConfig_Log_FileLogger_Rotating with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *LogComponentConfig_Log_FileLogger_Rotating) Validate() error {
+// Validate checks the field values on Log_FileLogger_Rotating with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Log_FileLogger_Rotating) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// LogComponentConfig_Log_FileLogger_Rotating with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// LogComponentConfig_Log_FileLogger_RotatingMultiError, or nil if none found.
-func (m *LogComponentConfig_Log_FileLogger_Rotating) ValidateAll() error {
+// ValidateAll checks the field values on Log_FileLogger_Rotating with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Log_FileLogger_RotatingMultiError, or nil if none found.
+func (m *Log_FileLogger_Rotating) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *LogComponentConfig_Log_FileLogger_Rotating) validate(all bool) error {
+func (m *Log_FileLogger_Rotating) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -2529,20 +2860,19 @@ func (m *LogComponentConfig_Log_FileLogger_Rotating) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return LogComponentConfig_Log_FileLogger_RotatingMultiError(errors)
+		return Log_FileLogger_RotatingMultiError(errors)
 	}
 
 	return nil
 }
 
-// LogComponentConfig_Log_FileLogger_RotatingMultiError is an error wrapping
-// multiple validation errors returned by
-// LogComponentConfig_Log_FileLogger_Rotating.ValidateAll() if the designated
+// Log_FileLogger_RotatingMultiError is an error wrapping multiple validation
+// errors returned by Log_FileLogger_Rotating.ValidateAll() if the designated
 // constraints aren't met.
-type LogComponentConfig_Log_FileLogger_RotatingMultiError []error
+type Log_FileLogger_RotatingMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m LogComponentConfig_Log_FileLogger_RotatingMultiError) Error() string {
+func (m Log_FileLogger_RotatingMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -2551,12 +2881,11 @@ func (m LogComponentConfig_Log_FileLogger_RotatingMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m LogComponentConfig_Log_FileLogger_RotatingMultiError) AllErrors() []error { return m }
+func (m Log_FileLogger_RotatingMultiError) AllErrors() []error { return m }
 
-// LogComponentConfig_Log_FileLogger_RotatingValidationError is the validation
-// error returned by LogComponentConfig_Log_FileLogger_Rotating.Validate if
-// the designated constraints aren't met.
-type LogComponentConfig_Log_FileLogger_RotatingValidationError struct {
+// Log_FileLogger_RotatingValidationError is the validation error returned by
+// Log_FileLogger_Rotating.Validate if the designated constraints aren't met.
+type Log_FileLogger_RotatingValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -2564,24 +2893,24 @@ type LogComponentConfig_Log_FileLogger_RotatingValidationError struct {
 }
 
 // Field function returns field value.
-func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) Field() string { return e.field }
+func (e Log_FileLogger_RotatingValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) Reason() string { return e.reason }
+func (e Log_FileLogger_RotatingValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) Cause() error { return e.cause }
+func (e Log_FileLogger_RotatingValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) Key() bool { return e.key }
+func (e Log_FileLogger_RotatingValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) ErrorName() string {
-	return "LogComponentConfig_Log_FileLogger_RotatingValidationError"
+func (e Log_FileLogger_RotatingValidationError) ErrorName() string {
+	return "Log_FileLogger_RotatingValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) Error() string {
+func (e Log_FileLogger_RotatingValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -2593,14 +2922,14 @@ func (e LogComponentConfig_Log_FileLogger_RotatingValidationError) Error() strin
 	}
 
 	return fmt.Sprintf(
-		"invalid %sLogComponentConfig_Log_FileLogger_Rotating.%s: %s%s",
+		"invalid %sLog_FileLogger_Rotating.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = LogComponentConfig_Log_FileLogger_RotatingValidationError{}
+var _ error = Log_FileLogger_RotatingValidationError{}
 
 var _ interface {
 	Field() string
@@ -2608,388 +2937,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = LogComponentConfig_Log_FileLogger_RotatingValidationError{}
+} = Log_FileLogger_RotatingValidationError{}
 
-// Validate checks the field values on MetricComponentConfig_Metrics with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *MetricComponentConfig_Metrics) Validate() error {
+// Validate checks the field values on Tracing_Exporter with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Tracing_Exporter) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on MetricComponentConfig_Metrics with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// MetricComponentConfig_MetricsMultiError, or nil if none found.
-func (m *MetricComponentConfig_Metrics) ValidateAll() error {
+// ValidateAll checks the field values on Tracing_Exporter with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Tracing_ExporterMultiError, or nil if none found.
+func (m *Tracing_Exporter) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *MetricComponentConfig_Metrics) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.MeterName != nil {
-		// no validation rules for MeterName
-	}
-
-	if m.CounterMapSize != nil {
-		// no validation rules for CounterMapSize
-	}
-
-	if m.GaugeMapSize != nil {
-		// no validation rules for GaugeMapSize
-	}
-
-	if m.HistogramMapSize != nil {
-		// no validation rules for HistogramMapSize
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, MetricComponentConfig_MetricsValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, MetricComponentConfig_MetricsValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return MetricComponentConfig_MetricsValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return MetricComponentConfig_MetricsMultiError(errors)
-	}
-
-	return nil
-}
-
-// MetricComponentConfig_MetricsMultiError is an error wrapping multiple
-// validation errors returned by MetricComponentConfig_Metrics.ValidateAll()
-// if the designated constraints aren't met.
-type MetricComponentConfig_MetricsMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m MetricComponentConfig_MetricsMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m MetricComponentConfig_MetricsMultiError) AllErrors() []error { return m }
-
-// MetricComponentConfig_MetricsValidationError is the validation error
-// returned by MetricComponentConfig_Metrics.Validate if the designated
-// constraints aren't met.
-type MetricComponentConfig_MetricsValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e MetricComponentConfig_MetricsValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e MetricComponentConfig_MetricsValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e MetricComponentConfig_MetricsValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e MetricComponentConfig_MetricsValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e MetricComponentConfig_MetricsValidationError) ErrorName() string {
-	return "MetricComponentConfig_MetricsValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e MetricComponentConfig_MetricsValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sMetricComponentConfig_Metrics.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = MetricComponentConfig_MetricsValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = MetricComponentConfig_MetricsValidationError{}
-
-// Validate checks the field values on TracingComponentConfig_Tracing with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *TracingComponentConfig_Tracing) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on TracingComponentConfig_Tracing with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// TracingComponentConfig_TracingMultiError, or nil if none found.
-func (m *TracingComponentConfig_Tracing) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *TracingComponentConfig_Tracing) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if m.TracerName != nil {
-		// no validation rules for TracerName
-	}
-
-	if m.Exporter != nil {
-
-		if all {
-			switch v := interface{}(m.GetExporter()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_TracingValidationError{
-						field:  "Exporter",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_TracingValidationError{
-						field:  "Exporter",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetExporter()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_TracingValidationError{
-					field:  "Exporter",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Sampler != nil {
-
-		if all {
-			switch v := interface{}(m.GetSampler()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_TracingValidationError{
-						field:  "Sampler",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_TracingValidationError{
-						field:  "Sampler",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetSampler()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_TracingValidationError{
-					field:  "Sampler",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_TracingValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_TracingValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_TracingValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return TracingComponentConfig_TracingMultiError(errors)
-	}
-
-	return nil
-}
-
-// TracingComponentConfig_TracingMultiError is an error wrapping multiple
-// validation errors returned by TracingComponentConfig_Tracing.ValidateAll()
-// if the designated constraints aren't met.
-type TracingComponentConfig_TracingMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m TracingComponentConfig_TracingMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m TracingComponentConfig_TracingMultiError) AllErrors() []error { return m }
-
-// TracingComponentConfig_TracingValidationError is the validation error
-// returned by TracingComponentConfig_Tracing.Validate if the designated
-// constraints aren't met.
-type TracingComponentConfig_TracingValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e TracingComponentConfig_TracingValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e TracingComponentConfig_TracingValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e TracingComponentConfig_TracingValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e TracingComponentConfig_TracingValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e TracingComponentConfig_TracingValidationError) ErrorName() string {
-	return "TracingComponentConfig_TracingValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e TracingComponentConfig_TracingValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sTracingComponentConfig_Tracing.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = TracingComponentConfig_TracingValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = TracingComponentConfig_TracingValidationError{}
-
-// Validate checks the field values on TracingComponentConfig_Tracing_Exporter
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *TracingComponentConfig_Tracing_Exporter) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on
-// TracingComponentConfig_Tracing_Exporter with the rules defined in the proto
-// definition for this message. If any rules are violated, the result is a
-// list of violation errors wrapped in
-// TracingComponentConfig_Tracing_ExporterMultiError, or nil if none found.
-func (m *TracingComponentConfig_Tracing_Exporter) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
+func (m *Tracing_Exporter) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -3012,7 +2977,7 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 			switch v := interface{}(m.GetTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+					errors = append(errors, Tracing_ExporterValidationError{
 						field:  "Timeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3020,7 +2985,7 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+					errors = append(errors, Tracing_ExporterValidationError{
 						field:  "Timeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3029,7 +2994,7 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_Tracing_ExporterValidationError{
+				return Tracing_ExporterValidationError{
 					field:  "Timeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -3045,7 +3010,7 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 			switch v := interface{}(m.GetRetry()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+					errors = append(errors, Tracing_ExporterValidationError{
 						field:  "Retry",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3053,7 +3018,7 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_ExporterValidationError{
+					errors = append(errors, Tracing_ExporterValidationError{
 						field:  "Retry",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3062,7 +3027,7 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetRetry()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_Tracing_ExporterValidationError{
+				return Tracing_ExporterValidationError{
 					field:  "Retry",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -3073,20 +3038,19 @@ func (m *TracingComponentConfig_Tracing_Exporter) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return TracingComponentConfig_Tracing_ExporterMultiError(errors)
+		return Tracing_ExporterMultiError(errors)
 	}
 
 	return nil
 }
 
-// TracingComponentConfig_Tracing_ExporterMultiError is an error wrapping
-// multiple validation errors returned by
-// TracingComponentConfig_Tracing_Exporter.ValidateAll() if the designated
-// constraints aren't met.
-type TracingComponentConfig_Tracing_ExporterMultiError []error
+// Tracing_ExporterMultiError is an error wrapping multiple validation errors
+// returned by Tracing_Exporter.ValidateAll() if the designated constraints
+// aren't met.
+type Tracing_ExporterMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m TracingComponentConfig_Tracing_ExporterMultiError) Error() string {
+func (m Tracing_ExporterMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -3095,12 +3059,11 @@ func (m TracingComponentConfig_Tracing_ExporterMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m TracingComponentConfig_Tracing_ExporterMultiError) AllErrors() []error { return m }
+func (m Tracing_ExporterMultiError) AllErrors() []error { return m }
 
-// TracingComponentConfig_Tracing_ExporterValidationError is the validation
-// error returned by TracingComponentConfig_Tracing_Exporter.Validate if the
-// designated constraints aren't met.
-type TracingComponentConfig_Tracing_ExporterValidationError struct {
+// Tracing_ExporterValidationError is the validation error returned by
+// Tracing_Exporter.Validate if the designated constraints aren't met.
+type Tracing_ExporterValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -3108,24 +3071,22 @@ type TracingComponentConfig_Tracing_ExporterValidationError struct {
 }
 
 // Field function returns field value.
-func (e TracingComponentConfig_Tracing_ExporterValidationError) Field() string { return e.field }
+func (e Tracing_ExporterValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e TracingComponentConfig_Tracing_ExporterValidationError) Reason() string { return e.reason }
+func (e Tracing_ExporterValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e TracingComponentConfig_Tracing_ExporterValidationError) Cause() error { return e.cause }
+func (e Tracing_ExporterValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e TracingComponentConfig_Tracing_ExporterValidationError) Key() bool { return e.key }
+func (e Tracing_ExporterValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e TracingComponentConfig_Tracing_ExporterValidationError) ErrorName() string {
-	return "TracingComponentConfig_Tracing_ExporterValidationError"
-}
+func (e Tracing_ExporterValidationError) ErrorName() string { return "Tracing_ExporterValidationError" }
 
 // Error satisfies the builtin error interface
-func (e TracingComponentConfig_Tracing_ExporterValidationError) Error() string {
+func (e Tracing_ExporterValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -3137,14 +3098,14 @@ func (e TracingComponentConfig_Tracing_ExporterValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sTracingComponentConfig_Tracing_Exporter.%s: %s%s",
+		"invalid %sTracing_Exporter.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = TracingComponentConfig_Tracing_ExporterValidationError{}
+var _ error = Tracing_ExporterValidationError{}
 
 var _ interface {
 	Field() string
@@ -3152,26 +3113,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = TracingComponentConfig_Tracing_ExporterValidationError{}
+} = Tracing_ExporterValidationError{}
 
-// Validate checks the field values on TracingComponentConfig_Tracing_Sampler
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *TracingComponentConfig_Tracing_Sampler) Validate() error {
+// Validate checks the field values on Tracing_Sampler with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Tracing_Sampler) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// TracingComponentConfig_Tracing_Sampler with the rules defined in the proto
-// definition for this message. If any rules are violated, the result is a
-// list of violation errors wrapped in
-// TracingComponentConfig_Tracing_SamplerMultiError, or nil if none found.
-func (m *TracingComponentConfig_Tracing_Sampler) ValidateAll() error {
+// ValidateAll checks the field values on Tracing_Sampler with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Tracing_SamplerMultiError, or nil if none found.
+func (m *Tracing_Sampler) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *TracingComponentConfig_Tracing_Sampler) validate(all bool) error {
+func (m *Tracing_Sampler) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -3187,20 +3146,19 @@ func (m *TracingComponentConfig_Tracing_Sampler) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return TracingComponentConfig_Tracing_SamplerMultiError(errors)
+		return Tracing_SamplerMultiError(errors)
 	}
 
 	return nil
 }
 
-// TracingComponentConfig_Tracing_SamplerMultiError is an error wrapping
-// multiple validation errors returned by
-// TracingComponentConfig_Tracing_Sampler.ValidateAll() if the designated
-// constraints aren't met.
-type TracingComponentConfig_Tracing_SamplerMultiError []error
+// Tracing_SamplerMultiError is an error wrapping multiple validation errors
+// returned by Tracing_Sampler.ValidateAll() if the designated constraints
+// aren't met.
+type Tracing_SamplerMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m TracingComponentConfig_Tracing_SamplerMultiError) Error() string {
+func (m Tracing_SamplerMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -3209,12 +3167,11 @@ func (m TracingComponentConfig_Tracing_SamplerMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m TracingComponentConfig_Tracing_SamplerMultiError) AllErrors() []error { return m }
+func (m Tracing_SamplerMultiError) AllErrors() []error { return m }
 
-// TracingComponentConfig_Tracing_SamplerValidationError is the validation
-// error returned by TracingComponentConfig_Tracing_Sampler.Validate if the
-// designated constraints aren't met.
-type TracingComponentConfig_Tracing_SamplerValidationError struct {
+// Tracing_SamplerValidationError is the validation error returned by
+// Tracing_Sampler.Validate if the designated constraints aren't met.
+type Tracing_SamplerValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -3222,24 +3179,22 @@ type TracingComponentConfig_Tracing_SamplerValidationError struct {
 }
 
 // Field function returns field value.
-func (e TracingComponentConfig_Tracing_SamplerValidationError) Field() string { return e.field }
+func (e Tracing_SamplerValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e TracingComponentConfig_Tracing_SamplerValidationError) Reason() string { return e.reason }
+func (e Tracing_SamplerValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e TracingComponentConfig_Tracing_SamplerValidationError) Cause() error { return e.cause }
+func (e Tracing_SamplerValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e TracingComponentConfig_Tracing_SamplerValidationError) Key() bool { return e.key }
+func (e Tracing_SamplerValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e TracingComponentConfig_Tracing_SamplerValidationError) ErrorName() string {
-	return "TracingComponentConfig_Tracing_SamplerValidationError"
-}
+func (e Tracing_SamplerValidationError) ErrorName() string { return "Tracing_SamplerValidationError" }
 
 // Error satisfies the builtin error interface
-func (e TracingComponentConfig_Tracing_SamplerValidationError) Error() string {
+func (e Tracing_SamplerValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -3251,14 +3206,14 @@ func (e TracingComponentConfig_Tracing_SamplerValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sTracingComponentConfig_Tracing_Sampler.%s: %s%s",
+		"invalid %sTracing_Sampler.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = TracingComponentConfig_Tracing_SamplerValidationError{}
+var _ error = Tracing_SamplerValidationError{}
 
 var _ interface {
 	Field() string
@@ -3266,27 +3221,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = TracingComponentConfig_Tracing_SamplerValidationError{}
+} = Tracing_SamplerValidationError{}
 
-// Validate checks the field values on
-// TracingComponentConfig_Tracing_Exporter_RetryConfig with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) Validate() error {
+// Validate checks the field values on Tracing_Exporter_RetryConfig with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Tracing_Exporter_RetryConfig) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// TracingComponentConfig_Tracing_Exporter_RetryConfig with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in
-// TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError, or nil if
-// none found.
-func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) ValidateAll() error {
+// ValidateAll checks the field values on Tracing_Exporter_RetryConfig with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Tracing_Exporter_RetryConfigMultiError, or nil if none found.
+func (m *Tracing_Exporter_RetryConfig) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool) error {
+func (m *Tracing_Exporter_RetryConfig) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -3303,7 +3255,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 			switch v := interface{}(m.GetInitialInterval()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+					errors = append(errors, Tracing_Exporter_RetryConfigValidationError{
 						field:  "InitialInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3311,7 +3263,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+					errors = append(errors, Tracing_Exporter_RetryConfigValidationError{
 						field:  "InitialInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3320,7 +3272,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 			}
 		} else if v, ok := interface{}(m.GetInitialInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+				return Tracing_Exporter_RetryConfigValidationError{
 					field:  "InitialInterval",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -3336,7 +3288,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 			switch v := interface{}(m.GetMaxInterval()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+					errors = append(errors, Tracing_Exporter_RetryConfigValidationError{
 						field:  "MaxInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3344,7 +3296,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+					errors = append(errors, Tracing_Exporter_RetryConfigValidationError{
 						field:  "MaxInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3353,7 +3305,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 			}
 		} else if v, ok := interface{}(m.GetMaxInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+				return Tracing_Exporter_RetryConfigValidationError{
 					field:  "MaxInterval",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -3369,7 +3321,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 			switch v := interface{}(m.GetMaxElapsedTime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+					errors = append(errors, Tracing_Exporter_RetryConfigValidationError{
 						field:  "MaxElapsedTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3377,7 +3329,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+					errors = append(errors, Tracing_Exporter_RetryConfigValidationError{
 						field:  "MaxElapsedTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -3386,7 +3338,7 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 			}
 		} else if v, ok := interface{}(m.GetMaxElapsedTime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{
+				return Tracing_Exporter_RetryConfigValidationError{
 					field:  "MaxElapsedTime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -3397,20 +3349,19 @@ func (m *TracingComponentConfig_Tracing_Exporter_RetryConfig) validate(all bool)
 	}
 
 	if len(errors) > 0 {
-		return TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError(errors)
+		return Tracing_Exporter_RetryConfigMultiError(errors)
 	}
 
 	return nil
 }
 
-// TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError is an error
-// wrapping multiple validation errors returned by
-// TracingComponentConfig_Tracing_Exporter_RetryConfig.ValidateAll() if the
-// designated constraints aren't met.
-type TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError []error
+// Tracing_Exporter_RetryConfigMultiError is an error wrapping multiple
+// validation errors returned by Tracing_Exporter_RetryConfig.ValidateAll() if
+// the designated constraints aren't met.
+type Tracing_Exporter_RetryConfigMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError) Error() string {
+func (m Tracing_Exporter_RetryConfigMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -3419,13 +3370,12 @@ func (m TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError) Error() s
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m TracingComponentConfig_Tracing_Exporter_RetryConfigMultiError) AllErrors() []error { return m }
+func (m Tracing_Exporter_RetryConfigMultiError) AllErrors() []error { return m }
 
-// TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError is the
-// validation error returned by
-// TracingComponentConfig_Tracing_Exporter_RetryConfig.Validate if the
-// designated constraints aren't met.
-type TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError struct {
+// Tracing_Exporter_RetryConfigValidationError is the validation error returned
+// by Tracing_Exporter_RetryConfig.Validate if the designated constraints
+// aren't met.
+type Tracing_Exporter_RetryConfigValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -3433,30 +3383,24 @@ type TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) Field() string {
-	return e.field
-}
+func (e Tracing_Exporter_RetryConfigValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) Reason() string {
-	return e.reason
-}
+func (e Tracing_Exporter_RetryConfigValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) Cause() error {
-	return e.cause
-}
+func (e Tracing_Exporter_RetryConfigValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) Key() bool { return e.key }
+func (e Tracing_Exporter_RetryConfigValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) ErrorName() string {
-	return "TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError"
+func (e Tracing_Exporter_RetryConfigValidationError) ErrorName() string {
+	return "Tracing_Exporter_RetryConfigValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) Error() string {
+func (e Tracing_Exporter_RetryConfigValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -3468,14 +3412,14 @@ func (e TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError) Erro
 	}
 
 	return fmt.Sprintf(
-		"invalid %sTracingComponentConfig_Tracing_Exporter_RetryConfig.%s: %s%s",
+		"invalid %sTracing_Exporter_RetryConfig.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{}
+var _ error = Tracing_Exporter_RetryConfigValidationError{}
 
 var _ interface {
 	Field() string
@@ -3483,7 +3427,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = TracingComponentConfig_Tracing_Exporter_RetryConfigValidationError{}
+} = Tracing_Exporter_RetryConfigValidationError{}
 
 // Validate checks the field values on MiddlewareConfig_Metadata with the rules
 // defined in the proto definition for this message. If any rules are
@@ -4929,291 +4873,22 @@ var _ interface {
 	ErrorName() string
 } = MiddlewareConfig_Timeout_RouteRuleValidationError{}
 
-// Validate checks the field values on ServerComponentConfig_Server with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ServerComponentConfig_Server) Validate() error {
+// Validate checks the field values on Server_Endpoint with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Server_Endpoint) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on ServerComponentConfig_Server with the
-// rules defined in the proto definition for this message. If any rules are
+// ValidateAll checks the field values on Server_Endpoint with the rules
+// defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// ServerComponentConfig_ServerMultiError, or nil if none found.
-func (m *ServerComponentConfig_Server) ValidateAll() error {
+// Server_EndpointMultiError, or nil if none found.
+func (m *Server_Endpoint) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ServerComponentConfig_Server) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.StopDelay != nil {
-
-		if all {
-			switch v := interface{}(m.GetStopDelay()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "StopDelay",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "StopDelay",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetStopDelay()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_ServerValidationError{
-					field:  "StopDelay",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Middleware != nil {
-
-		if all {
-			switch v := interface{}(m.GetMiddleware()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Middleware",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Middleware",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_ServerValidationError{
-					field:  "Middleware",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Http != nil {
-
-		if all {
-			switch v := interface{}(m.GetHttp()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Http",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Http",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetHttp()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_ServerValidationError{
-					field:  "Http",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Grpc != nil {
-
-		if all {
-			switch v := interface{}(m.GetGrpc()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Grpc",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Grpc",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetGrpc()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_ServerValidationError{
-					field:  "Grpc",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_ServerValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_ServerValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return ServerComponentConfig_ServerMultiError(errors)
-	}
-
-	return nil
-}
-
-// ServerComponentConfig_ServerMultiError is an error wrapping multiple
-// validation errors returned by ServerComponentConfig_Server.ValidateAll() if
-// the designated constraints aren't met.
-type ServerComponentConfig_ServerMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfig_ServerMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfig_ServerMultiError) AllErrors() []error { return m }
-
-// ServerComponentConfig_ServerValidationError is the validation error returned
-// by ServerComponentConfig_Server.Validate if the designated constraints
-// aren't met.
-type ServerComponentConfig_ServerValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ServerComponentConfig_ServerValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ServerComponentConfig_ServerValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ServerComponentConfig_ServerValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ServerComponentConfig_ServerValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ServerComponentConfig_ServerValidationError) ErrorName() string {
-	return "ServerComponentConfig_ServerValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e ServerComponentConfig_ServerValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sServerComponentConfig_Server.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ServerComponentConfig_ServerValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ServerComponentConfig_ServerValidationError{}
-
-// Validate checks the field values on ServerComponentConfig_Server_Endpoint
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *ServerComponentConfig_Server_Endpoint) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on ServerComponentConfig_Server_Endpoint
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the result is a list of violation errors wrapped in
-// ServerComponentConfig_Server_EndpointMultiError, or nil if none found.
-func (m *ServerComponentConfig_Server_Endpoint) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *ServerComponentConfig_Server_Endpoint) validate(all bool) error {
+func (m *Server_Endpoint) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -5225,20 +4900,19 @@ func (m *ServerComponentConfig_Server_Endpoint) validate(all bool) error {
 	// no validation rules for Host
 
 	if len(errors) > 0 {
-		return ServerComponentConfig_Server_EndpointMultiError(errors)
+		return Server_EndpointMultiError(errors)
 	}
 
 	return nil
 }
 
-// ServerComponentConfig_Server_EndpointMultiError is an error wrapping
-// multiple validation errors returned by
-// ServerComponentConfig_Server_Endpoint.ValidateAll() if the designated
-// constraints aren't met.
-type ServerComponentConfig_Server_EndpointMultiError []error
+// Server_EndpointMultiError is an error wrapping multiple validation errors
+// returned by Server_Endpoint.ValidateAll() if the designated constraints
+// aren't met.
+type Server_EndpointMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfig_Server_EndpointMultiError) Error() string {
+func (m Server_EndpointMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -5247,12 +4921,11 @@ func (m ServerComponentConfig_Server_EndpointMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfig_Server_EndpointMultiError) AllErrors() []error { return m }
+func (m Server_EndpointMultiError) AllErrors() []error { return m }
 
-// ServerComponentConfig_Server_EndpointValidationError is the validation error
-// returned by ServerComponentConfig_Server_Endpoint.Validate if the
-// designated constraints aren't met.
-type ServerComponentConfig_Server_EndpointValidationError struct {
+// Server_EndpointValidationError is the validation error returned by
+// Server_Endpoint.Validate if the designated constraints aren't met.
+type Server_EndpointValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -5260,24 +4933,22 @@ type ServerComponentConfig_Server_EndpointValidationError struct {
 }
 
 // Field function returns field value.
-func (e ServerComponentConfig_Server_EndpointValidationError) Field() string { return e.field }
+func (e Server_EndpointValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ServerComponentConfig_Server_EndpointValidationError) Reason() string { return e.reason }
+func (e Server_EndpointValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ServerComponentConfig_Server_EndpointValidationError) Cause() error { return e.cause }
+func (e Server_EndpointValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ServerComponentConfig_Server_EndpointValidationError) Key() bool { return e.key }
+func (e Server_EndpointValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ServerComponentConfig_Server_EndpointValidationError) ErrorName() string {
-	return "ServerComponentConfig_Server_EndpointValidationError"
-}
+func (e Server_EndpointValidationError) ErrorName() string { return "Server_EndpointValidationError" }
 
 // Error satisfies the builtin error interface
-func (e ServerComponentConfig_Server_EndpointValidationError) Error() string {
+func (e Server_EndpointValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -5289,14 +4960,14 @@ func (e ServerComponentConfig_Server_EndpointValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sServerComponentConfig_Server_Endpoint.%s: %s%s",
+		"invalid %sServer_Endpoint.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ServerComponentConfig_Server_EndpointValidationError{}
+var _ error = Server_EndpointValidationError{}
 
 var _ interface {
 	Field() string
@@ -5304,26 +4975,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ServerComponentConfig_Server_EndpointValidationError{}
+} = Server_EndpointValidationError{}
 
-// Validate checks the field values on
-// ServerComponentConfig_Server_ServerMiddleware with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *ServerComponentConfig_Server_ServerMiddleware) Validate() error {
+// Validate checks the field values on Server_ServerMiddleware with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Server_ServerMiddleware) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// ServerComponentConfig_Server_ServerMiddleware with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// ServerComponentConfig_Server_ServerMiddlewareMultiError, or nil if none found.
-func (m *ServerComponentConfig_Server_ServerMiddleware) ValidateAll() error {
+// ValidateAll checks the field values on Server_ServerMiddleware with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Server_ServerMiddlewareMultiError, or nil if none found.
+func (m *Server_ServerMiddleware) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error {
+func (m *Server_ServerMiddleware) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -5336,7 +5005,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Timeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5344,7 +5013,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Timeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5353,7 +5022,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Timeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5369,7 +5038,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetMetadata()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Metadata",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5377,7 +5046,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Metadata",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5386,7 +5055,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Metadata",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5402,7 +5071,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetTracing()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Tracing",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5410,7 +5079,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Tracing",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5419,7 +5088,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5435,7 +5104,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetMetrics()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5443,7 +5112,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5452,7 +5121,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5468,7 +5137,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetLogging()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Logging",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5476,7 +5145,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Logging",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5485,7 +5154,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Logging",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5501,7 +5170,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetValidator()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Validator",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5509,7 +5178,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Validator",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5518,7 +5187,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetValidator()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Validator",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5534,7 +5203,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			switch v := interface{}(m.GetRatelimit()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Ratelimit",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5542,7 +5211,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_ServerMiddlewareValidationError{
+					errors = append(errors, Server_ServerMiddlewareValidationError{
 						field:  "Ratelimit",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5551,7 +5220,7 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetRatelimit()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_ServerMiddlewareValidationError{
+				return Server_ServerMiddlewareValidationError{
 					field:  "Ratelimit",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5562,20 +5231,19 @@ func (m *ServerComponentConfig_Server_ServerMiddleware) validate(all bool) error
 	}
 
 	if len(errors) > 0 {
-		return ServerComponentConfig_Server_ServerMiddlewareMultiError(errors)
+		return Server_ServerMiddlewareMultiError(errors)
 	}
 
 	return nil
 }
 
-// ServerComponentConfig_Server_ServerMiddlewareMultiError is an error wrapping
-// multiple validation errors returned by
-// ServerComponentConfig_Server_ServerMiddleware.ValidateAll() if the
-// designated constraints aren't met.
-type ServerComponentConfig_Server_ServerMiddlewareMultiError []error
+// Server_ServerMiddlewareMultiError is an error wrapping multiple validation
+// errors returned by Server_ServerMiddleware.ValidateAll() if the designated
+// constraints aren't met.
+type Server_ServerMiddlewareMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfig_Server_ServerMiddlewareMultiError) Error() string {
+func (m Server_ServerMiddlewareMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -5584,13 +5252,11 @@ func (m ServerComponentConfig_Server_ServerMiddlewareMultiError) Error() string 
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfig_Server_ServerMiddlewareMultiError) AllErrors() []error { return m }
+func (m Server_ServerMiddlewareMultiError) AllErrors() []error { return m }
 
-// ServerComponentConfig_Server_ServerMiddlewareValidationError is the
-// validation error returned by
-// ServerComponentConfig_Server_ServerMiddleware.Validate if the designated
-// constraints aren't met.
-type ServerComponentConfig_Server_ServerMiddlewareValidationError struct {
+// Server_ServerMiddlewareValidationError is the validation error returned by
+// Server_ServerMiddleware.Validate if the designated constraints aren't met.
+type Server_ServerMiddlewareValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -5598,26 +5264,24 @@ type ServerComponentConfig_Server_ServerMiddlewareValidationError struct {
 }
 
 // Field function returns field value.
-func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) Field() string { return e.field }
+func (e Server_ServerMiddlewareValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) Reason() string {
-	return e.reason
-}
+func (e Server_ServerMiddlewareValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) Cause() error { return e.cause }
+func (e Server_ServerMiddlewareValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) Key() bool { return e.key }
+func (e Server_ServerMiddlewareValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) ErrorName() string {
-	return "ServerComponentConfig_Server_ServerMiddlewareValidationError"
+func (e Server_ServerMiddlewareValidationError) ErrorName() string {
+	return "Server_ServerMiddlewareValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) Error() string {
+func (e Server_ServerMiddlewareValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -5629,14 +5293,14 @@ func (e ServerComponentConfig_Server_ServerMiddlewareValidationError) Error() st
 	}
 
 	return fmt.Sprintf(
-		"invalid %sServerComponentConfig_Server_ServerMiddleware.%s: %s%s",
+		"invalid %sServer_ServerMiddleware.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ServerComponentConfig_Server_ServerMiddlewareValidationError{}
+var _ error = Server_ServerMiddlewareValidationError{}
 
 var _ interface {
 	Field() string
@@ -5644,26 +5308,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ServerComponentConfig_Server_ServerMiddlewareValidationError{}
+} = Server_ServerMiddlewareValidationError{}
 
-// Validate checks the field values on
-// ServerComponentConfig_Server_HttpServerOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *ServerComponentConfig_Server_HttpServerOption) Validate() error {
+// Validate checks the field values on Server_HttpServerOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Server_HttpServerOption) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// ServerComponentConfig_Server_HttpServerOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// ServerComponentConfig_Server_HttpServerOptionMultiError, or nil if none found.
-func (m *ServerComponentConfig_Server_HttpServerOption) ValidateAll() error {
+// ValidateAll checks the field values on Server_HttpServerOption with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Server_HttpServerOptionMultiError, or nil if none found.
+func (m *Server_HttpServerOption) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error {
+func (m *Server_HttpServerOption) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -5688,7 +5350,7 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 			switch v := interface{}(m.GetEndpoint()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+					errors = append(errors, Server_HttpServerOptionValidationError{
 						field:  "Endpoint",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5696,7 +5358,7 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+					errors = append(errors, Server_HttpServerOptionValidationError{
 						field:  "Endpoint",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5705,7 +5367,7 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_HttpServerOptionValidationError{
+				return Server_HttpServerOptionValidationError{
 					field:  "Endpoint",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5729,7 +5391,7 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 			switch v := interface{}(m.GetMetrics()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+					errors = append(errors, Server_HttpServerOptionValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5737,7 +5399,7 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_HttpServerOptionValidationError{
+					errors = append(errors, Server_HttpServerOptionValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5746,7 +5408,7 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_HttpServerOptionValidationError{
+				return Server_HttpServerOptionValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5757,20 +5419,19 @@ func (m *ServerComponentConfig_Server_HttpServerOption) validate(all bool) error
 	}
 
 	if len(errors) > 0 {
-		return ServerComponentConfig_Server_HttpServerOptionMultiError(errors)
+		return Server_HttpServerOptionMultiError(errors)
 	}
 
 	return nil
 }
 
-// ServerComponentConfig_Server_HttpServerOptionMultiError is an error wrapping
-// multiple validation errors returned by
-// ServerComponentConfig_Server_HttpServerOption.ValidateAll() if the
-// designated constraints aren't met.
-type ServerComponentConfig_Server_HttpServerOptionMultiError []error
+// Server_HttpServerOptionMultiError is an error wrapping multiple validation
+// errors returned by Server_HttpServerOption.ValidateAll() if the designated
+// constraints aren't met.
+type Server_HttpServerOptionMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfig_Server_HttpServerOptionMultiError) Error() string {
+func (m Server_HttpServerOptionMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -5779,13 +5440,11 @@ func (m ServerComponentConfig_Server_HttpServerOptionMultiError) Error() string 
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfig_Server_HttpServerOptionMultiError) AllErrors() []error { return m }
+func (m Server_HttpServerOptionMultiError) AllErrors() []error { return m }
 
-// ServerComponentConfig_Server_HttpServerOptionValidationError is the
-// validation error returned by
-// ServerComponentConfig_Server_HttpServerOption.Validate if the designated
-// constraints aren't met.
-type ServerComponentConfig_Server_HttpServerOptionValidationError struct {
+// Server_HttpServerOptionValidationError is the validation error returned by
+// Server_HttpServerOption.Validate if the designated constraints aren't met.
+type Server_HttpServerOptionValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -5793,26 +5452,24 @@ type ServerComponentConfig_Server_HttpServerOptionValidationError struct {
 }
 
 // Field function returns field value.
-func (e ServerComponentConfig_Server_HttpServerOptionValidationError) Field() string { return e.field }
+func (e Server_HttpServerOptionValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ServerComponentConfig_Server_HttpServerOptionValidationError) Reason() string {
-	return e.reason
-}
+func (e Server_HttpServerOptionValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ServerComponentConfig_Server_HttpServerOptionValidationError) Cause() error { return e.cause }
+func (e Server_HttpServerOptionValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ServerComponentConfig_Server_HttpServerOptionValidationError) Key() bool { return e.key }
+func (e Server_HttpServerOptionValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ServerComponentConfig_Server_HttpServerOptionValidationError) ErrorName() string {
-	return "ServerComponentConfig_Server_HttpServerOptionValidationError"
+func (e Server_HttpServerOptionValidationError) ErrorName() string {
+	return "Server_HttpServerOptionValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ServerComponentConfig_Server_HttpServerOptionValidationError) Error() string {
+func (e Server_HttpServerOptionValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -5824,14 +5481,14 @@ func (e ServerComponentConfig_Server_HttpServerOptionValidationError) Error() st
 	}
 
 	return fmt.Sprintf(
-		"invalid %sServerComponentConfig_Server_HttpServerOption.%s: %s%s",
+		"invalid %sServer_HttpServerOption.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ServerComponentConfig_Server_HttpServerOptionValidationError{}
+var _ error = Server_HttpServerOptionValidationError{}
 
 var _ interface {
 	Field() string
@@ -5839,26 +5496,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ServerComponentConfig_Server_HttpServerOptionValidationError{}
+} = Server_HttpServerOptionValidationError{}
 
-// Validate checks the field values on
-// ServerComponentConfig_Server_GrpcServerOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *ServerComponentConfig_Server_GrpcServerOption) Validate() error {
+// Validate checks the field values on Server_GrpcServerOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Server_GrpcServerOption) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// ServerComponentConfig_Server_GrpcServerOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// ServerComponentConfig_Server_GrpcServerOptionMultiError, or nil if none found.
-func (m *ServerComponentConfig_Server_GrpcServerOption) ValidateAll() error {
+// ValidateAll checks the field values on Server_GrpcServerOption with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Server_GrpcServerOptionMultiError, or nil if none found.
+func (m *Server_GrpcServerOption) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ServerComponentConfig_Server_GrpcServerOption) validate(all bool) error {
+func (m *Server_GrpcServerOption) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -5883,7 +5538,7 @@ func (m *ServerComponentConfig_Server_GrpcServerOption) validate(all bool) error
 			switch v := interface{}(m.GetEndpoint()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_GrpcServerOptionValidationError{
+					errors = append(errors, Server_GrpcServerOptionValidationError{
 						field:  "Endpoint",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5891,7 +5546,7 @@ func (m *ServerComponentConfig_Server_GrpcServerOption) validate(all bool) error
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerComponentConfig_Server_GrpcServerOptionValidationError{
+					errors = append(errors, Server_GrpcServerOptionValidationError{
 						field:  "Endpoint",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -5900,7 +5555,7 @@ func (m *ServerComponentConfig_Server_GrpcServerOption) validate(all bool) error
 			}
 		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ServerComponentConfig_Server_GrpcServerOptionValidationError{
+				return Server_GrpcServerOptionValidationError{
 					field:  "Endpoint",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -5919,20 +5574,19 @@ func (m *ServerComponentConfig_Server_GrpcServerOption) validate(all bool) error
 	}
 
 	if len(errors) > 0 {
-		return ServerComponentConfig_Server_GrpcServerOptionMultiError(errors)
+		return Server_GrpcServerOptionMultiError(errors)
 	}
 
 	return nil
 }
 
-// ServerComponentConfig_Server_GrpcServerOptionMultiError is an error wrapping
-// multiple validation errors returned by
-// ServerComponentConfig_Server_GrpcServerOption.ValidateAll() if the
-// designated constraints aren't met.
-type ServerComponentConfig_Server_GrpcServerOptionMultiError []error
+// Server_GrpcServerOptionMultiError is an error wrapping multiple validation
+// errors returned by Server_GrpcServerOption.ValidateAll() if the designated
+// constraints aren't met.
+type Server_GrpcServerOptionMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfig_Server_GrpcServerOptionMultiError) Error() string {
+func (m Server_GrpcServerOptionMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -5941,13 +5595,11 @@ func (m ServerComponentConfig_Server_GrpcServerOptionMultiError) Error() string 
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfig_Server_GrpcServerOptionMultiError) AllErrors() []error { return m }
+func (m Server_GrpcServerOptionMultiError) AllErrors() []error { return m }
 
-// ServerComponentConfig_Server_GrpcServerOptionValidationError is the
-// validation error returned by
-// ServerComponentConfig_Server_GrpcServerOption.Validate if the designated
-// constraints aren't met.
-type ServerComponentConfig_Server_GrpcServerOptionValidationError struct {
+// Server_GrpcServerOptionValidationError is the validation error returned by
+// Server_GrpcServerOption.Validate if the designated constraints aren't met.
+type Server_GrpcServerOptionValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -5955,26 +5607,24 @@ type ServerComponentConfig_Server_GrpcServerOptionValidationError struct {
 }
 
 // Field function returns field value.
-func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) Field() string { return e.field }
+func (e Server_GrpcServerOptionValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) Reason() string {
-	return e.reason
-}
+func (e Server_GrpcServerOptionValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) Cause() error { return e.cause }
+func (e Server_GrpcServerOptionValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) Key() bool { return e.key }
+func (e Server_GrpcServerOptionValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) ErrorName() string {
-	return "ServerComponentConfig_Server_GrpcServerOptionValidationError"
+func (e Server_GrpcServerOptionValidationError) ErrorName() string {
+	return "Server_GrpcServerOptionValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) Error() string {
+func (e Server_GrpcServerOptionValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -5986,14 +5636,14 @@ func (e ServerComponentConfig_Server_GrpcServerOptionValidationError) Error() st
 	}
 
 	return fmt.Sprintf(
-		"invalid %sServerComponentConfig_Server_GrpcServerOption.%s: %s%s",
+		"invalid %sServer_GrpcServerOption.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ServerComponentConfig_Server_GrpcServerOptionValidationError{}
+var _ error = Server_GrpcServerOptionValidationError{}
 
 var _ interface {
 	Field() string
@@ -6001,27 +5651,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ServerComponentConfig_Server_GrpcServerOptionValidationError{}
+} = Server_GrpcServerOptionValidationError{}
 
-// Validate checks the field values on
-// ServerComponentConfig_Server_HttpServerOption_Metrics with the rules
-// defined in the proto definition for this message. If any rules are
+// Validate checks the field values on Server_HttpServerOption_Metrics with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ServerComponentConfig_Server_HttpServerOption_Metrics) Validate() error {
+func (m *Server_HttpServerOption_Metrics) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// ServerComponentConfig_Server_HttpServerOption_Metrics with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ServerComponentConfig_Server_HttpServerOption_MetricsMultiError, or nil if
-// none found.
-func (m *ServerComponentConfig_Server_HttpServerOption_Metrics) ValidateAll() error {
+// ValidateAll checks the field values on Server_HttpServerOption_Metrics with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// Server_HttpServerOption_MetricsMultiError, or nil if none found.
+func (m *Server_HttpServerOption_Metrics) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ServerComponentConfig_Server_HttpServerOption_Metrics) validate(all bool) error {
+func (m *Server_HttpServerOption_Metrics) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -6037,20 +5684,19 @@ func (m *ServerComponentConfig_Server_HttpServerOption_Metrics) validate(all boo
 	}
 
 	if len(errors) > 0 {
-		return ServerComponentConfig_Server_HttpServerOption_MetricsMultiError(errors)
+		return Server_HttpServerOption_MetricsMultiError(errors)
 	}
 
 	return nil
 }
 
-// ServerComponentConfig_Server_HttpServerOption_MetricsMultiError is an error
-// wrapping multiple validation errors returned by
-// ServerComponentConfig_Server_HttpServerOption_Metrics.ValidateAll() if the
-// designated constraints aren't met.
-type ServerComponentConfig_Server_HttpServerOption_MetricsMultiError []error
+// Server_HttpServerOption_MetricsMultiError is an error wrapping multiple
+// validation errors returned by Server_HttpServerOption_Metrics.ValidateAll()
+// if the designated constraints aren't met.
+type Server_HttpServerOption_MetricsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ServerComponentConfig_Server_HttpServerOption_MetricsMultiError) Error() string {
+func (m Server_HttpServerOption_MetricsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -6059,15 +5705,12 @@ func (m ServerComponentConfig_Server_HttpServerOption_MetricsMultiError) Error()
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ServerComponentConfig_Server_HttpServerOption_MetricsMultiError) AllErrors() []error {
-	return m
-}
+func (m Server_HttpServerOption_MetricsMultiError) AllErrors() []error { return m }
 
-// ServerComponentConfig_Server_HttpServerOption_MetricsValidationError is the
-// validation error returned by
-// ServerComponentConfig_Server_HttpServerOption_Metrics.Validate if the
-// designated constraints aren't met.
-type ServerComponentConfig_Server_HttpServerOption_MetricsValidationError struct {
+// Server_HttpServerOption_MetricsValidationError is the validation error
+// returned by Server_HttpServerOption_Metrics.Validate if the designated
+// constraints aren't met.
+type Server_HttpServerOption_MetricsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -6075,32 +5718,24 @@ type ServerComponentConfig_Server_HttpServerOption_MetricsValidationError struct
 }
 
 // Field function returns field value.
-func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) Field() string {
-	return e.field
-}
+func (e Server_HttpServerOption_MetricsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) Reason() string {
-	return e.reason
-}
+func (e Server_HttpServerOption_MetricsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) Cause() error {
-	return e.cause
-}
+func (e Server_HttpServerOption_MetricsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) Key() bool {
-	return e.key
-}
+func (e Server_HttpServerOption_MetricsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) ErrorName() string {
-	return "ServerComponentConfig_Server_HttpServerOption_MetricsValidationError"
+func (e Server_HttpServerOption_MetricsValidationError) ErrorName() string {
+	return "Server_HttpServerOption_MetricsValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) Error() string {
+func (e Server_HttpServerOption_MetricsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -6112,14 +5747,14 @@ func (e ServerComponentConfig_Server_HttpServerOption_MetricsValidationError) Er
 	}
 
 	return fmt.Sprintf(
-		"invalid %sServerComponentConfig_Server_HttpServerOption_Metrics.%s: %s%s",
+		"invalid %sServer_HttpServerOption_Metrics.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ServerComponentConfig_Server_HttpServerOption_MetricsValidationError{}
+var _ error = Server_HttpServerOption_MetricsValidationError{}
 
 var _ interface {
 	Field() string
@@ -6127,313 +5762,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ServerComponentConfig_Server_HttpServerOption_MetricsValidationError{}
+} = Server_HttpServerOption_MetricsValidationError{}
 
-// Validate checks the field values on DatabaseComponentConfig_Database with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the first error encountered is returned, or nil if there are
-// no violations.
-func (m *DatabaseComponentConfig_Database) Validate() error {
+// Validate checks the field values on Database_Tracing with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Database_Tracing) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on DatabaseComponentConfig_Database with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// DatabaseComponentConfig_DatabaseMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database) ValidateAll() error {
+// ValidateAll checks the field values on Database_Tracing with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Database_TracingMultiError, or nil if none found.
+func (m *Database_Tracing) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	{
-		sorted_keys := make([]string, len(m.GetConnections()))
-		i := 0
-		for key := range m.GetConnections() {
-			sorted_keys[i] = key
-			i++
-		}
-		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
-		for _, key := range sorted_keys {
-			val := m.GetConnections()[key]
-			_ = val
-
-			// no validation rules for Connections[key]
-
-			if all {
-				switch v := interface{}(val).(type) {
-				case interface{ ValidateAll() error }:
-					if err := v.ValidateAll(); err != nil {
-						errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-							field:  fmt.Sprintf("Connections[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				case interface{ Validate() error }:
-					if err := v.Validate(); err != nil {
-						errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-							field:  fmt.Sprintf("Connections[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				}
-			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
-				if err := v.Validate(); err != nil {
-					return DatabaseComponentConfig_DatabaseValidationError{
-						field:  fmt.Sprintf("Connections[%v]", key),
-						reason: "embedded message failed validation",
-						cause:  err,
-					}
-				}
-			}
-
-		}
-	}
-
-	if m.Gorm != nil {
-
-		if all {
-			switch v := interface{}(m.GetGorm()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Gorm",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Gorm",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetGorm()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Gorm",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Default != nil {
-		// no validation rules for Default
-	}
-
-	if m.Tracing != nil {
-
-		if all {
-			switch v := interface{}(m.GetTracing()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Metrics != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_DatabaseValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_DatabaseValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return DatabaseComponentConfig_DatabaseMultiError(errors)
-	}
-
-	return nil
-}
-
-// DatabaseComponentConfig_DatabaseMultiError is an error wrapping multiple
-// validation errors returned by
-// DatabaseComponentConfig_Database.ValidateAll() if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_DatabaseMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_DatabaseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_DatabaseMultiError) AllErrors() []error { return m }
-
-// DatabaseComponentConfig_DatabaseValidationError is the validation error
-// returned by DatabaseComponentConfig_Database.Validate if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_DatabaseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e DatabaseComponentConfig_DatabaseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e DatabaseComponentConfig_DatabaseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e DatabaseComponentConfig_DatabaseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e DatabaseComponentConfig_DatabaseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e DatabaseComponentConfig_DatabaseValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_DatabaseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_DatabaseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = DatabaseComponentConfig_DatabaseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = DatabaseComponentConfig_DatabaseValidationError{}
-
-// Validate checks the field values on DatabaseComponentConfig_Database_Tracing
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *DatabaseComponentConfig_Database_Tracing) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on
-// DatabaseComponentConfig_Database_Tracing with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_TracingMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database_Tracing) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *DatabaseComponentConfig_Database_Tracing) validate(all bool) error {
+func (m *Database_Tracing) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -6461,20 +5807,19 @@ func (m *DatabaseComponentConfig_Database_Tracing) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_TracingMultiError(errors)
+		return Database_TracingMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_TracingMultiError is an error wrapping
-// multiple validation errors returned by
-// DatabaseComponentConfig_Database_Tracing.ValidateAll() if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_Database_TracingMultiError []error
+// Database_TracingMultiError is an error wrapping multiple validation errors
+// returned by Database_Tracing.ValidateAll() if the designated constraints
+// aren't met.
+type Database_TracingMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_TracingMultiError) Error() string {
+func (m Database_TracingMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -6483,12 +5828,11 @@ func (m DatabaseComponentConfig_Database_TracingMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_TracingMultiError) AllErrors() []error { return m }
+func (m Database_TracingMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_TracingValidationError is the validation
-// error returned by DatabaseComponentConfig_Database_Tracing.Validate if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_TracingValidationError struct {
+// Database_TracingValidationError is the validation error returned by
+// Database_Tracing.Validate if the designated constraints aren't met.
+type Database_TracingValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -6496,24 +5840,22 @@ type DatabaseComponentConfig_Database_TracingValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_TracingValidationError) Field() string { return e.field }
+func (e Database_TracingValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_TracingValidationError) Reason() string { return e.reason }
+func (e Database_TracingValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_TracingValidationError) Cause() error { return e.cause }
+func (e Database_TracingValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_TracingValidationError) Key() bool { return e.key }
+func (e Database_TracingValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_TracingValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_TracingValidationError"
-}
+func (e Database_TracingValidationError) ErrorName() string { return "Database_TracingValidationError" }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_TracingValidationError) Error() string {
+func (e Database_TracingValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -6525,14 +5867,14 @@ func (e DatabaseComponentConfig_Database_TracingValidationError) Error() string 
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Tracing.%s: %s%s",
+		"invalid %sDatabase_Tracing.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_TracingValidationError{}
+var _ error = Database_TracingValidationError{}
 
 var _ interface {
 	Field() string
@@ -6540,26 +5882,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_TracingValidationError{}
+} = Database_TracingValidationError{}
 
-// Validate checks the field values on DatabaseComponentConfig_Database_Metrics
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *DatabaseComponentConfig_Database_Metrics) Validate() error {
+// Validate checks the field values on Database_Metrics with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Database_Metrics) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// DatabaseComponentConfig_Database_Metrics with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_MetricsMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database_Metrics) ValidateAll() error {
+// ValidateAll checks the field values on Database_Metrics with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Database_MetricsMultiError, or nil if none found.
+func (m *Database_Metrics) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
+func (m *Database_Metrics) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -6578,7 +5918,7 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 			switch v := interface{}(m.GetRefreshInterval()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					errors = append(errors, Database_MetricsValidationError{
 						field:  "RefreshInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6586,7 +5926,7 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					errors = append(errors, Database_MetricsValidationError{
 						field:  "RefreshInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6595,7 +5935,7 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetRefreshInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_MetricsValidationError{
+				return Database_MetricsValidationError{
 					field:  "RefreshInterval",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -6611,7 +5951,7 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 			switch v := interface{}(m.GetMysql()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					errors = append(errors, Database_MetricsValidationError{
 						field:  "Mysql",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6619,7 +5959,7 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_MetricsValidationError{
+					errors = append(errors, Database_MetricsValidationError{
 						field:  "Mysql",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6628,7 +5968,7 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetMysql()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_MetricsValidationError{
+				return Database_MetricsValidationError{
 					field:  "Mysql",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -6639,20 +5979,19 @@ func (m *DatabaseComponentConfig_Database_Metrics) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_MetricsMultiError(errors)
+		return Database_MetricsMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_MetricsMultiError is an error wrapping
-// multiple validation errors returned by
-// DatabaseComponentConfig_Database_Metrics.ValidateAll() if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_Database_MetricsMultiError []error
+// Database_MetricsMultiError is an error wrapping multiple validation errors
+// returned by Database_Metrics.ValidateAll() if the designated constraints
+// aren't met.
+type Database_MetricsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_MetricsMultiError) Error() string {
+func (m Database_MetricsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -6661,12 +6000,11 @@ func (m DatabaseComponentConfig_Database_MetricsMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_MetricsMultiError) AllErrors() []error { return m }
+func (m Database_MetricsMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_MetricsValidationError is the validation
-// error returned by DatabaseComponentConfig_Database_Metrics.Validate if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_MetricsValidationError struct {
+// Database_MetricsValidationError is the validation error returned by
+// Database_Metrics.Validate if the designated constraints aren't met.
+type Database_MetricsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -6674,24 +6012,22 @@ type DatabaseComponentConfig_Database_MetricsValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_MetricsValidationError) Field() string { return e.field }
+func (e Database_MetricsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_MetricsValidationError) Reason() string { return e.reason }
+func (e Database_MetricsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_MetricsValidationError) Cause() error { return e.cause }
+func (e Database_MetricsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_MetricsValidationError) Key() bool { return e.key }
+func (e Database_MetricsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_MetricsValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_MetricsValidationError"
-}
+func (e Database_MetricsValidationError) ErrorName() string { return "Database_MetricsValidationError" }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_MetricsValidationError) Error() string {
+func (e Database_MetricsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -6703,14 +6039,14 @@ func (e DatabaseComponentConfig_Database_MetricsValidationError) Error() string 
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Metrics.%s: %s%s",
+		"invalid %sDatabase_Metrics.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_MetricsValidationError{}
+var _ error = Database_MetricsValidationError{}
 
 var _ interface {
 	Field() string
@@ -6718,25 +6054,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_MetricsValidationError{}
+} = Database_MetricsValidationError{}
 
-// Validate checks the field values on DatabaseComponentConfig_Database_Gorm
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *DatabaseComponentConfig_Database_Gorm) Validate() error {
+// Validate checks the field values on Database_Gorm with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Database_Gorm) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on DatabaseComponentConfig_Database_Gorm
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the result is a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_GormMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database_Gorm) ValidateAll() error {
+// ValidateAll checks the field values on Database_Gorm with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Database_GormMultiError, or
+// nil if none found.
+func (m *Database_Gorm) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
+func (m *Database_Gorm) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -6753,7 +6088,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 			switch v := interface{}(m.GetDefaultTransactionTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+					errors = append(errors, Database_GormValidationError{
 						field:  "DefaultTransactionTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6761,7 +6096,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+					errors = append(errors, Database_GormValidationError{
 						field:  "DefaultTransactionTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6770,7 +6105,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetDefaultTransactionTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_GormValidationError{
+				return Database_GormValidationError{
 					field:  "DefaultTransactionTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -6786,7 +6121,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 			switch v := interface{}(m.GetDefaultContextTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+					errors = append(errors, Database_GormValidationError{
 						field:  "DefaultContextTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6794,7 +6129,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+					errors = append(errors, Database_GormValidationError{
 						field:  "DefaultContextTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6803,7 +6138,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetDefaultContextTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_GormValidationError{
+				return Database_GormValidationError{
 					field:  "DefaultContextTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -6823,7 +6158,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 			switch v := interface{}(m.GetLogger()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+					errors = append(errors, Database_GormValidationError{
 						field:  "Logger",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6831,7 +6166,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_GormValidationError{
+					errors = append(errors, Database_GormValidationError{
 						field:  "Logger",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -6840,7 +6175,7 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetLogger()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_GormValidationError{
+				return Database_GormValidationError{
 					field:  "Logger",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -6887,20 +6222,19 @@ func (m *DatabaseComponentConfig_Database_Gorm) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_GormMultiError(errors)
+		return Database_GormMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_GormMultiError is an error wrapping
-// multiple validation errors returned by
-// DatabaseComponentConfig_Database_Gorm.ValidateAll() if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_Database_GormMultiError []error
+// Database_GormMultiError is an error wrapping multiple validation errors
+// returned by Database_Gorm.ValidateAll() if the designated constraints
+// aren't met.
+type Database_GormMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_GormMultiError) Error() string {
+func (m Database_GormMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -6909,12 +6243,11 @@ func (m DatabaseComponentConfig_Database_GormMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_GormMultiError) AllErrors() []error { return m }
+func (m Database_GormMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_GormValidationError is the validation error
-// returned by DatabaseComponentConfig_Database_Gorm.Validate if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_GormValidationError struct {
+// Database_GormValidationError is the validation error returned by
+// Database_Gorm.Validate if the designated constraints aren't met.
+type Database_GormValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -6922,24 +6255,22 @@ type DatabaseComponentConfig_Database_GormValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_GormValidationError) Field() string { return e.field }
+func (e Database_GormValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_GormValidationError) Reason() string { return e.reason }
+func (e Database_GormValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_GormValidationError) Cause() error { return e.cause }
+func (e Database_GormValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_GormValidationError) Key() bool { return e.key }
+func (e Database_GormValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_GormValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_GormValidationError"
-}
+func (e Database_GormValidationError) ErrorName() string { return "Database_GormValidationError" }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_GormValidationError) Error() string {
+func (e Database_GormValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -6951,14 +6282,14 @@ func (e DatabaseComponentConfig_Database_GormValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Gorm.%s: %s%s",
+		"invalid %sDatabase_Gorm.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_GormValidationError{}
+var _ error = Database_GormValidationError{}
 
 var _ interface {
 	Field() string
@@ -6966,26 +6297,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_GormValidationError{}
+} = Database_GormValidationError{}
 
-// Validate checks the field values on
-// DatabaseComponentConfig_Database_Connection with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *DatabaseComponentConfig_Database_Connection) Validate() error {
+// Validate checks the field values on Database_Connection with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Database_Connection) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// DatabaseComponentConfig_Database_Connection with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_ConnectionMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database_Connection) ValidateAll() error {
+// ValidateAll checks the field values on Database_Connection with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Database_ConnectionMultiError, or nil if none found.
+func (m *Database_Connection) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
+func (m *Database_Connection) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -7001,7 +6330,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 			switch v := interface{}(item).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					errors = append(errors, Database_ConnectionValidationError{
 						field:  fmt.Sprintf("Replicas[%v]", idx),
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7009,7 +6338,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					errors = append(errors, Database_ConnectionValidationError{
 						field:  fmt.Sprintf("Replicas[%v]", idx),
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7018,7 +6347,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_ConnectionValidationError{
+				return Database_ConnectionValidationError{
 					field:  fmt.Sprintf("Replicas[%v]", idx),
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7050,7 +6379,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					errors = append(errors, Database_ConnectionValidationError{
 						field:  "ConnMaxLifetime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7058,7 +6387,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					errors = append(errors, Database_ConnectionValidationError{
 						field:  "ConnMaxLifetime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7067,7 +6396,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_ConnectionValidationError{
+				return Database_ConnectionValidationError{
 					field:  "ConnMaxLifetime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7083,7 +6412,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					errors = append(errors, Database_ConnectionValidationError{
 						field:  "ConnMaxIdleTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7091,7 +6420,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_ConnectionValidationError{
+					errors = append(errors, Database_ConnectionValidationError{
 						field:  "ConnMaxIdleTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7100,7 +6429,7 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_ConnectionValidationError{
+				return Database_ConnectionValidationError{
 					field:  "ConnMaxIdleTime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7111,20 +6440,19 @@ func (m *DatabaseComponentConfig_Database_Connection) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_ConnectionMultiError(errors)
+		return Database_ConnectionMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_ConnectionMultiError is an error wrapping
-// multiple validation errors returned by
-// DatabaseComponentConfig_Database_Connection.ValidateAll() if the designated
+// Database_ConnectionMultiError is an error wrapping multiple validation
+// errors returned by Database_Connection.ValidateAll() if the designated
 // constraints aren't met.
-type DatabaseComponentConfig_Database_ConnectionMultiError []error
+type Database_ConnectionMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_ConnectionMultiError) Error() string {
+func (m Database_ConnectionMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -7133,12 +6461,11 @@ func (m DatabaseComponentConfig_Database_ConnectionMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_ConnectionMultiError) AllErrors() []error { return m }
+func (m Database_ConnectionMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_ConnectionValidationError is the validation
-// error returned by DatabaseComponentConfig_Database_Connection.Validate if
-// the designated constraints aren't met.
-type DatabaseComponentConfig_Database_ConnectionValidationError struct {
+// Database_ConnectionValidationError is the validation error returned by
+// Database_Connection.Validate if the designated constraints aren't met.
+type Database_ConnectionValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -7146,24 +6473,24 @@ type DatabaseComponentConfig_Database_ConnectionValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_ConnectionValidationError) Field() string { return e.field }
+func (e Database_ConnectionValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_ConnectionValidationError) Reason() string { return e.reason }
+func (e Database_ConnectionValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_ConnectionValidationError) Cause() error { return e.cause }
+func (e Database_ConnectionValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_ConnectionValidationError) Key() bool { return e.key }
+func (e Database_ConnectionValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_ConnectionValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_ConnectionValidationError"
+func (e Database_ConnectionValidationError) ErrorName() string {
+	return "Database_ConnectionValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_ConnectionValidationError) Error() string {
+func (e Database_ConnectionValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -7175,14 +6502,14 @@ func (e DatabaseComponentConfig_Database_ConnectionValidationError) Error() stri
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Connection.%s: %s%s",
+		"invalid %sDatabase_Connection.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_ConnectionValidationError{}
+var _ error = Database_ConnectionValidationError{}
 
 var _ interface {
 	Field() string
@@ -7190,26 +6517,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_ConnectionValidationError{}
+} = Database_ConnectionValidationError{}
 
-// Validate checks the field values on
-// DatabaseComponentConfig_Database_Metrics_Mysql with the rules defined in
-// the proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *DatabaseComponentConfig_Database_Metrics_Mysql) Validate() error {
+// Validate checks the field values on Database_Metrics_Mysql with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Database_Metrics_Mysql) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// DatabaseComponentConfig_Database_Metrics_Mysql with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_Metrics_MysqlMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database_Metrics_Mysql) ValidateAll() error {
+// ValidateAll checks the field values on Database_Metrics_Mysql with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Database_Metrics_MysqlMultiError, or nil if none found.
+func (m *Database_Metrics_Mysql) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) error {
+func (m *Database_Metrics_Mysql) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -7226,7 +6551,7 @@ func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) erro
 			switch v := interface{}(m.GetInterval()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+					errors = append(errors, Database_Metrics_MysqlValidationError{
 						field:  "Interval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7234,7 +6559,7 @@ func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) erro
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+					errors = append(errors, Database_Metrics_MysqlValidationError{
 						field:  "Interval",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7243,7 +6568,7 @@ func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) erro
 			}
 		} else if v, ok := interface{}(m.GetInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_Metrics_MysqlValidationError{
+				return Database_Metrics_MysqlValidationError{
 					field:  "Interval",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7254,20 +6579,19 @@ func (m *DatabaseComponentConfig_Database_Metrics_Mysql) validate(all bool) erro
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_Metrics_MysqlMultiError(errors)
+		return Database_Metrics_MysqlMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_Metrics_MysqlMultiError is an error
-// wrapping multiple validation errors returned by
-// DatabaseComponentConfig_Database_Metrics_Mysql.ValidateAll() if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_Metrics_MysqlMultiError []error
+// Database_Metrics_MysqlMultiError is an error wrapping multiple validation
+// errors returned by Database_Metrics_Mysql.ValidateAll() if the designated
+// constraints aren't met.
+type Database_Metrics_MysqlMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_Metrics_MysqlMultiError) Error() string {
+func (m Database_Metrics_MysqlMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -7276,13 +6600,11 @@ func (m DatabaseComponentConfig_Database_Metrics_MysqlMultiError) Error() string
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_Metrics_MysqlMultiError) AllErrors() []error { return m }
+func (m Database_Metrics_MysqlMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_Metrics_MysqlValidationError is the
-// validation error returned by
-// DatabaseComponentConfig_Database_Metrics_Mysql.Validate if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_Database_Metrics_MysqlValidationError struct {
+// Database_Metrics_MysqlValidationError is the validation error returned by
+// Database_Metrics_Mysql.Validate if the designated constraints aren't met.
+type Database_Metrics_MysqlValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -7290,26 +6612,24 @@ type DatabaseComponentConfig_Database_Metrics_MysqlValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Field() string { return e.field }
+func (e Database_Metrics_MysqlValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Reason() string {
-	return e.reason
-}
+func (e Database_Metrics_MysqlValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Cause() error { return e.cause }
+func (e Database_Metrics_MysqlValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Key() bool { return e.key }
+func (e Database_Metrics_MysqlValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_Metrics_MysqlValidationError"
+func (e Database_Metrics_MysqlValidationError) ErrorName() string {
+	return "Database_Metrics_MysqlValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Error() string {
+func (e Database_Metrics_MysqlValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -7321,14 +6641,14 @@ func (e DatabaseComponentConfig_Database_Metrics_MysqlValidationError) Error() s
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Metrics_Mysql.%s: %s%s",
+		"invalid %sDatabase_Metrics_Mysql.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_Metrics_MysqlValidationError{}
+var _ error = Database_Metrics_MysqlValidationError{}
 
 var _ interface {
 	Field() string
@@ -7336,26 +6656,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_Metrics_MysqlValidationError{}
+} = Database_Metrics_MysqlValidationError{}
 
-// Validate checks the field values on
-// DatabaseComponentConfig_Database_Gorm_Logger with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *DatabaseComponentConfig_Database_Gorm_Logger) Validate() error {
+// Validate checks the field values on Database_Gorm_Logger with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Database_Gorm_Logger) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// DatabaseComponentConfig_Database_Gorm_Logger with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_Gorm_LoggerMultiError, or nil if none found.
-func (m *DatabaseComponentConfig_Database_Gorm_Logger) ValidateAll() error {
+// ValidateAll checks the field values on Database_Gorm_Logger with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Database_Gorm_LoggerMultiError, or nil if none found.
+func (m *Database_Gorm_Logger) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database_Gorm_Logger) validate(all bool) error {
+func (m *Database_Gorm_Logger) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -7372,7 +6690,7 @@ func (m *DatabaseComponentConfig_Database_Gorm_Logger) validate(all bool) error 
 			switch v := interface{}(m.GetSlowThreshold()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
+					errors = append(errors, Database_Gorm_LoggerValidationError{
 						field:  "SlowThreshold",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7380,7 +6698,7 @@ func (m *DatabaseComponentConfig_Database_Gorm_Logger) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
+					errors = append(errors, Database_Gorm_LoggerValidationError{
 						field:  "SlowThreshold",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7389,7 +6707,7 @@ func (m *DatabaseComponentConfig_Database_Gorm_Logger) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetSlowThreshold()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_Gorm_LoggerValidationError{
+				return Database_Gorm_LoggerValidationError{
 					field:  "SlowThreshold",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7412,20 +6730,19 @@ func (m *DatabaseComponentConfig_Database_Gorm_Logger) validate(all bool) error 
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_Gorm_LoggerMultiError(errors)
+		return Database_Gorm_LoggerMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_Gorm_LoggerMultiError is an error wrapping
-// multiple validation errors returned by
-// DatabaseComponentConfig_Database_Gorm_Logger.ValidateAll() if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_Gorm_LoggerMultiError []error
+// Database_Gorm_LoggerMultiError is an error wrapping multiple validation
+// errors returned by Database_Gorm_Logger.ValidateAll() if the designated
+// constraints aren't met.
+type Database_Gorm_LoggerMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_Gorm_LoggerMultiError) Error() string {
+func (m Database_Gorm_LoggerMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -7434,13 +6751,11 @@ func (m DatabaseComponentConfig_Database_Gorm_LoggerMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_Gorm_LoggerMultiError) AllErrors() []error { return m }
+func (m Database_Gorm_LoggerMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_Gorm_LoggerValidationError is the
-// validation error returned by
-// DatabaseComponentConfig_Database_Gorm_Logger.Validate if the designated
-// constraints aren't met.
-type DatabaseComponentConfig_Database_Gorm_LoggerValidationError struct {
+// Database_Gorm_LoggerValidationError is the validation error returned by
+// Database_Gorm_Logger.Validate if the designated constraints aren't met.
+type Database_Gorm_LoggerValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -7448,24 +6763,24 @@ type DatabaseComponentConfig_Database_Gorm_LoggerValidationError struct {
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) Field() string { return e.field }
+func (e Database_Gorm_LoggerValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) Reason() string { return e.reason }
+func (e Database_Gorm_LoggerValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) Cause() error { return e.cause }
+func (e Database_Gorm_LoggerValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) Key() bool { return e.key }
+func (e Database_Gorm_LoggerValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_Gorm_LoggerValidationError"
+func (e Database_Gorm_LoggerValidationError) ErrorName() string {
+	return "Database_Gorm_LoggerValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) Error() string {
+func (e Database_Gorm_LoggerValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -7477,14 +6792,14 @@ func (e DatabaseComponentConfig_Database_Gorm_LoggerValidationError) Error() str
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Gorm_Logger.%s: %s%s",
+		"invalid %sDatabase_Gorm_Logger.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_Gorm_LoggerValidationError{}
+var _ error = Database_Gorm_LoggerValidationError{}
 
 var _ interface {
 	Field() string
@@ -7492,27 +6807,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_Gorm_LoggerValidationError{}
+} = Database_Gorm_LoggerValidationError{}
 
-// Validate checks the field values on
-// DatabaseComponentConfig_Database_Connection_Dialector with the rules
-// defined in the proto definition for this message. If any rules are
+// Validate checks the field values on Database_Connection_Dialector with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *DatabaseComponentConfig_Database_Connection_Dialector) Validate() error {
+func (m *Database_Connection_Dialector) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// DatabaseComponentConfig_Database_Connection_Dialector with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// DatabaseComponentConfig_Database_Connection_DialectorMultiError, or nil if
-// none found.
-func (m *DatabaseComponentConfig_Database_Connection_Dialector) ValidateAll() error {
+// ValidateAll checks the field values on Database_Connection_Dialector with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// Database_Connection_DialectorMultiError, or nil if none found.
+func (m *Database_Connection_Dialector) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all bool) error {
+func (m *Database_Connection_Dialector) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -7539,7 +6851,7 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					errors = append(errors, Database_Connection_DialectorValidationError{
 						field:  "ConnMaxLifetime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7547,7 +6859,7 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					errors = append(errors, Database_Connection_DialectorValidationError{
 						field:  "ConnMaxLifetime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7556,7 +6868,7 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 			}
 		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+				return Database_Connection_DialectorValidationError{
 					field:  "ConnMaxLifetime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7572,7 +6884,7 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					errors = append(errors, Database_Connection_DialectorValidationError{
 						field:  "ConnMaxIdleTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7580,7 +6892,7 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+					errors = append(errors, Database_Connection_DialectorValidationError{
 						field:  "ConnMaxIdleTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -7589,7 +6901,7 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 			}
 		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return DatabaseComponentConfig_Database_Connection_DialectorValidationError{
+				return Database_Connection_DialectorValidationError{
 					field:  "ConnMaxIdleTime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -7600,20 +6912,19 @@ func (m *DatabaseComponentConfig_Database_Connection_Dialector) validate(all boo
 	}
 
 	if len(errors) > 0 {
-		return DatabaseComponentConfig_Database_Connection_DialectorMultiError(errors)
+		return Database_Connection_DialectorMultiError(errors)
 	}
 
 	return nil
 }
 
-// DatabaseComponentConfig_Database_Connection_DialectorMultiError is an error
-// wrapping multiple validation errors returned by
-// DatabaseComponentConfig_Database_Connection_Dialector.ValidateAll() if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_Connection_DialectorMultiError []error
+// Database_Connection_DialectorMultiError is an error wrapping multiple
+// validation errors returned by Database_Connection_Dialector.ValidateAll()
+// if the designated constraints aren't met.
+type Database_Connection_DialectorMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DatabaseComponentConfig_Database_Connection_DialectorMultiError) Error() string {
+func (m Database_Connection_DialectorMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -7622,15 +6933,12 @@ func (m DatabaseComponentConfig_Database_Connection_DialectorMultiError) Error()
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DatabaseComponentConfig_Database_Connection_DialectorMultiError) AllErrors() []error {
-	return m
-}
+func (m Database_Connection_DialectorMultiError) AllErrors() []error { return m }
 
-// DatabaseComponentConfig_Database_Connection_DialectorValidationError is the
-// validation error returned by
-// DatabaseComponentConfig_Database_Connection_Dialector.Validate if the
-// designated constraints aren't met.
-type DatabaseComponentConfig_Database_Connection_DialectorValidationError struct {
+// Database_Connection_DialectorValidationError is the validation error
+// returned by Database_Connection_Dialector.Validate if the designated
+// constraints aren't met.
+type Database_Connection_DialectorValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -7638,32 +6946,24 @@ type DatabaseComponentConfig_Database_Connection_DialectorValidationError struct
 }
 
 // Field function returns field value.
-func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) Field() string {
-	return e.field
-}
+func (e Database_Connection_DialectorValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) Reason() string {
-	return e.reason
-}
+func (e Database_Connection_DialectorValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) Cause() error {
-	return e.cause
-}
+func (e Database_Connection_DialectorValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) Key() bool {
-	return e.key
-}
+func (e Database_Connection_DialectorValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) ErrorName() string {
-	return "DatabaseComponentConfig_Database_Connection_DialectorValidationError"
+func (e Database_Connection_DialectorValidationError) ErrorName() string {
+	return "Database_Connection_DialectorValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) Error() string {
+func (e Database_Connection_DialectorValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -7675,14 +6975,14 @@ func (e DatabaseComponentConfig_Database_Connection_DialectorValidationError) Er
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDatabaseComponentConfig_Database_Connection_Dialector.%s: %s%s",
+		"invalid %sDatabase_Connection_Dialector.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DatabaseComponentConfig_Database_Connection_DialectorValidationError{}
+var _ error = Database_Connection_DialectorValidationError{}
 
 var _ interface {
 	Field() string
@@ -7690,280 +6990,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DatabaseComponentConfig_Database_Connection_DialectorValidationError{}
+} = Database_Connection_DialectorValidationError{}
 
-// Validate checks the field values on RedisComponentConfig_RedisConfig with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the first error encountered is returned, or nil if there are
-// no violations.
-func (m *RedisComponentConfig_RedisConfig) Validate() error {
+// Validate checks the field values on Redis_Tracing with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Redis_Tracing) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on RedisComponentConfig_RedisConfig with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// RedisComponentConfig_RedisConfigMultiError, or nil if none found.
-func (m *RedisComponentConfig_RedisConfig) ValidateAll() error {
+// ValidateAll checks the field values on Redis_Tracing with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Redis_TracingMultiError, or
+// nil if none found.
+func (m *Redis_Tracing) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RedisComponentConfig_RedisConfig) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	{
-		sorted_keys := make([]string, len(m.GetConnections()))
-		i := 0
-		for key := range m.GetConnections() {
-			sorted_keys[i] = key
-			i++
-		}
-		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
-		for _, key := range sorted_keys {
-			val := m.GetConnections()[key]
-			_ = val
-
-			// no validation rules for Connections[key]
-
-			if all {
-				switch v := interface{}(val).(type) {
-				case interface{ ValidateAll() error }:
-					if err := v.ValidateAll(); err != nil {
-						errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-							field:  fmt.Sprintf("Connections[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				case interface{ Validate() error }:
-					if err := v.Validate(); err != nil {
-						errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-							field:  fmt.Sprintf("Connections[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				}
-			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
-				if err := v.Validate(); err != nil {
-					return RedisComponentConfig_RedisConfigValidationError{
-						field:  fmt.Sprintf("Connections[%v]", key),
-						reason: "embedded message failed validation",
-						cause:  err,
-					}
-				}
-			}
-
-		}
-	}
-
-	if m.Default != nil {
-		// no validation rules for Default
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfigValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Tracing != nil {
-
-		if all {
-			switch v := interface{}(m.GetTracing()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Metrics != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfigValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return RedisComponentConfig_RedisConfigMultiError(errors)
-	}
-
-	return nil
-}
-
-// RedisComponentConfig_RedisConfigMultiError is an error wrapping multiple
-// validation errors returned by
-// RedisComponentConfig_RedisConfig.ValidateAll() if the designated
-// constraints aren't met.
-type RedisComponentConfig_RedisConfigMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m RedisComponentConfig_RedisConfigMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m RedisComponentConfig_RedisConfigMultiError) AllErrors() []error { return m }
-
-// RedisComponentConfig_RedisConfigValidationError is the validation error
-// returned by RedisComponentConfig_RedisConfig.Validate if the designated
-// constraints aren't met.
-type RedisComponentConfig_RedisConfigValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e RedisComponentConfig_RedisConfigValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e RedisComponentConfig_RedisConfigValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e RedisComponentConfig_RedisConfigValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e RedisComponentConfig_RedisConfigValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e RedisComponentConfig_RedisConfigValidationError) ErrorName() string {
-	return "RedisComponentConfig_RedisConfigValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e RedisComponentConfig_RedisConfigValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sRedisComponentConfig_RedisConfig.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = RedisComponentConfig_RedisConfigValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = RedisComponentConfig_RedisConfigValidationError{}
-
-// Validate checks the field values on RedisComponentConfig_RedisConfig_Tracing
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *RedisComponentConfig_RedisConfig_Tracing) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on
-// RedisComponentConfig_RedisConfig_Tracing with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// RedisComponentConfig_RedisConfig_TracingMultiError, or nil if none found.
-func (m *RedisComponentConfig_RedisConfig_Tracing) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *RedisComponentConfig_RedisConfig_Tracing) validate(all bool) error {
+func (m *Redis_Tracing) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -7987,20 +7031,19 @@ func (m *RedisComponentConfig_RedisConfig_Tracing) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return RedisComponentConfig_RedisConfig_TracingMultiError(errors)
+		return Redis_TracingMultiError(errors)
 	}
 
 	return nil
 }
 
-// RedisComponentConfig_RedisConfig_TracingMultiError is an error wrapping
-// multiple validation errors returned by
-// RedisComponentConfig_RedisConfig_Tracing.ValidateAll() if the designated
-// constraints aren't met.
-type RedisComponentConfig_RedisConfig_TracingMultiError []error
+// Redis_TracingMultiError is an error wrapping multiple validation errors
+// returned by Redis_Tracing.ValidateAll() if the designated constraints
+// aren't met.
+type Redis_TracingMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m RedisComponentConfig_RedisConfig_TracingMultiError) Error() string {
+func (m Redis_TracingMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -8009,12 +7052,11 @@ func (m RedisComponentConfig_RedisConfig_TracingMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m RedisComponentConfig_RedisConfig_TracingMultiError) AllErrors() []error { return m }
+func (m Redis_TracingMultiError) AllErrors() []error { return m }
 
-// RedisComponentConfig_RedisConfig_TracingValidationError is the validation
-// error returned by RedisComponentConfig_RedisConfig_Tracing.Validate if the
-// designated constraints aren't met.
-type RedisComponentConfig_RedisConfig_TracingValidationError struct {
+// Redis_TracingValidationError is the validation error returned by
+// Redis_Tracing.Validate if the designated constraints aren't met.
+type Redis_TracingValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -8022,24 +7064,22 @@ type RedisComponentConfig_RedisConfig_TracingValidationError struct {
 }
 
 // Field function returns field value.
-func (e RedisComponentConfig_RedisConfig_TracingValidationError) Field() string { return e.field }
+func (e Redis_TracingValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e RedisComponentConfig_RedisConfig_TracingValidationError) Reason() string { return e.reason }
+func (e Redis_TracingValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e RedisComponentConfig_RedisConfig_TracingValidationError) Cause() error { return e.cause }
+func (e Redis_TracingValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e RedisComponentConfig_RedisConfig_TracingValidationError) Key() bool { return e.key }
+func (e Redis_TracingValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e RedisComponentConfig_RedisConfig_TracingValidationError) ErrorName() string {
-	return "RedisComponentConfig_RedisConfig_TracingValidationError"
-}
+func (e Redis_TracingValidationError) ErrorName() string { return "Redis_TracingValidationError" }
 
 // Error satisfies the builtin error interface
-func (e RedisComponentConfig_RedisConfig_TracingValidationError) Error() string {
+func (e Redis_TracingValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -8051,14 +7091,14 @@ func (e RedisComponentConfig_RedisConfig_TracingValidationError) Error() string 
 	}
 
 	return fmt.Sprintf(
-		"invalid %sRedisComponentConfig_RedisConfig_Tracing.%s: %s%s",
+		"invalid %sRedis_Tracing.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = RedisComponentConfig_RedisConfig_TracingValidationError{}
+var _ error = Redis_TracingValidationError{}
 
 var _ interface {
 	Field() string
@@ -8066,26 +7106,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = RedisComponentConfig_RedisConfig_TracingValidationError{}
+} = Redis_TracingValidationError{}
 
-// Validate checks the field values on RedisComponentConfig_RedisConfig_Metrics
-// with the rules defined in the proto definition for this message. If any
-// rules are violated, the first error encountered is returned, or nil if
-// there are no violations.
-func (m *RedisComponentConfig_RedisConfig_Metrics) Validate() error {
+// Validate checks the field values on Redis_Metrics with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Redis_Metrics) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// RedisComponentConfig_RedisConfig_Metrics with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// RedisComponentConfig_RedisConfig_MetricsMultiError, or nil if none found.
-func (m *RedisComponentConfig_RedisConfig_Metrics) ValidateAll() error {
+// ValidateAll checks the field values on Redis_Metrics with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Redis_MetricsMultiError, or
+// nil if none found.
+func (m *Redis_Metrics) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RedisComponentConfig_RedisConfig_Metrics) validate(all bool) error {
+func (m *Redis_Metrics) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -8097,20 +7135,19 @@ func (m *RedisComponentConfig_RedisConfig_Metrics) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return RedisComponentConfig_RedisConfig_MetricsMultiError(errors)
+		return Redis_MetricsMultiError(errors)
 	}
 
 	return nil
 }
 
-// RedisComponentConfig_RedisConfig_MetricsMultiError is an error wrapping
-// multiple validation errors returned by
-// RedisComponentConfig_RedisConfig_Metrics.ValidateAll() if the designated
-// constraints aren't met.
-type RedisComponentConfig_RedisConfig_MetricsMultiError []error
+// Redis_MetricsMultiError is an error wrapping multiple validation errors
+// returned by Redis_Metrics.ValidateAll() if the designated constraints
+// aren't met.
+type Redis_MetricsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m RedisComponentConfig_RedisConfig_MetricsMultiError) Error() string {
+func (m Redis_MetricsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -8119,12 +7156,11 @@ func (m RedisComponentConfig_RedisConfig_MetricsMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m RedisComponentConfig_RedisConfig_MetricsMultiError) AllErrors() []error { return m }
+func (m Redis_MetricsMultiError) AllErrors() []error { return m }
 
-// RedisComponentConfig_RedisConfig_MetricsValidationError is the validation
-// error returned by RedisComponentConfig_RedisConfig_Metrics.Validate if the
-// designated constraints aren't met.
-type RedisComponentConfig_RedisConfig_MetricsValidationError struct {
+// Redis_MetricsValidationError is the validation error returned by
+// Redis_Metrics.Validate if the designated constraints aren't met.
+type Redis_MetricsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -8132,24 +7168,22 @@ type RedisComponentConfig_RedisConfig_MetricsValidationError struct {
 }
 
 // Field function returns field value.
-func (e RedisComponentConfig_RedisConfig_MetricsValidationError) Field() string { return e.field }
+func (e Redis_MetricsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e RedisComponentConfig_RedisConfig_MetricsValidationError) Reason() string { return e.reason }
+func (e Redis_MetricsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e RedisComponentConfig_RedisConfig_MetricsValidationError) Cause() error { return e.cause }
+func (e Redis_MetricsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e RedisComponentConfig_RedisConfig_MetricsValidationError) Key() bool { return e.key }
+func (e Redis_MetricsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e RedisComponentConfig_RedisConfig_MetricsValidationError) ErrorName() string {
-	return "RedisComponentConfig_RedisConfig_MetricsValidationError"
-}
+func (e Redis_MetricsValidationError) ErrorName() string { return "Redis_MetricsValidationError" }
 
 // Error satisfies the builtin error interface
-func (e RedisComponentConfig_RedisConfig_MetricsValidationError) Error() string {
+func (e Redis_MetricsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -8161,14 +7195,14 @@ func (e RedisComponentConfig_RedisConfig_MetricsValidationError) Error() string 
 	}
 
 	return fmt.Sprintf(
-		"invalid %sRedisComponentConfig_RedisConfig_Metrics.%s: %s%s",
+		"invalid %sRedis_Metrics.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = RedisComponentConfig_RedisConfig_MetricsValidationError{}
+var _ error = Redis_MetricsValidationError{}
 
 var _ interface {
 	Field() string
@@ -8176,26 +7210,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = RedisComponentConfig_RedisConfig_MetricsValidationError{}
+} = Redis_MetricsValidationError{}
 
-// Validate checks the field values on
-// RedisComponentConfig_RedisConfig_RedisOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *RedisComponentConfig_RedisConfig_RedisOption) Validate() error {
+// Validate checks the field values on Redis_RedisOption with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Redis_RedisOption) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// RedisComponentConfig_RedisConfig_RedisOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// RedisComponentConfig_RedisConfig_RedisOptionMultiError, or nil if none found.
-func (m *RedisComponentConfig_RedisConfig_RedisOption) ValidateAll() error {
+// ValidateAll checks the field values on Redis_RedisOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Redis_RedisOptionMultiError, or nil if none found.
+func (m *Redis_RedisOption) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error {
+func (m *Redis_RedisOption) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -8240,7 +7272,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetMinRetryBackoff()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "MinRetryBackoff",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8248,7 +7280,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "MinRetryBackoff",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8257,7 +7289,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetMinRetryBackoff()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "MinRetryBackoff",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8273,7 +7305,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetMaxRetryBackoff()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "MaxRetryBackoff",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8281,7 +7313,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "MaxRetryBackoff",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8290,7 +7322,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetMaxRetryBackoff()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "MaxRetryBackoff",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8306,7 +7338,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetDialTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "DialTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8314,7 +7346,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "DialTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8323,7 +7355,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetDialTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "DialTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8343,7 +7375,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetDialerRetryTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "DialerRetryTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8351,7 +7383,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "DialerRetryTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8360,7 +7392,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetDialerRetryTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "DialerRetryTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8376,7 +7408,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetReadTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "ReadTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8384,7 +7416,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "ReadTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8393,7 +7425,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetReadTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "ReadTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8409,7 +7441,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetWriteTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "WriteTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8417,7 +7449,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "WriteTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8426,7 +7458,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetWriteTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "WriteTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8466,7 +7498,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetPoolTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "PoolTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8474,7 +7506,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "PoolTimeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8483,7 +7515,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetPoolTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "PoolTimeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8511,7 +7543,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "ConnMaxIdleTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8519,7 +7551,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "ConnMaxIdleTime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8528,7 +7560,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "ConnMaxIdleTime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8544,7 +7576,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "ConnMaxLifetime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8552,7 +7584,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+					errors = append(errors, Redis_RedisOptionValidationError{
 						field:  "ConnMaxLifetime",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8561,7 +7593,7 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 			}
 		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return RedisComponentConfig_RedisConfig_RedisOptionValidationError{
+				return Redis_RedisOptionValidationError{
 					field:  "ConnMaxLifetime",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8596,217 +7628,32 @@ func (m *RedisComponentConfig_RedisConfig_RedisOption) validate(all bool) error 
 	}
 
 	if len(errors) > 0 {
-		return RedisComponentConfig_RedisConfig_RedisOptionMultiError(errors)
+		return Redis_RedisOptionMultiError(errors)
 	}
 
 	return nil
 }
 
-// RedisComponentConfig_RedisConfig_RedisOptionMultiError is an error wrapping
-// multiple validation errors returned by
-// RedisComponentConfig_RedisConfig_RedisOption.ValidateAll() if the
-// designated constraints aren't met.
-type RedisComponentConfig_RedisConfig_RedisOptionMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m RedisComponentConfig_RedisConfig_RedisOptionMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m RedisComponentConfig_RedisConfig_RedisOptionMultiError) AllErrors() []error { return m }
-
-// RedisComponentConfig_RedisConfig_RedisOptionValidationError is the
-// validation error returned by
-// RedisComponentConfig_RedisConfig_RedisOption.Validate if the designated
-// constraints aren't met.
-type RedisComponentConfig_RedisConfig_RedisOptionValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e RedisComponentConfig_RedisConfig_RedisOptionValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e RedisComponentConfig_RedisConfig_RedisOptionValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e RedisComponentConfig_RedisConfig_RedisOptionValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e RedisComponentConfig_RedisConfig_RedisOptionValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e RedisComponentConfig_RedisConfig_RedisOptionValidationError) ErrorName() string {
-	return "RedisComponentConfig_RedisConfig_RedisOptionValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e RedisComponentConfig_RedisConfig_RedisOptionValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sRedisComponentConfig_RedisConfig_RedisOption.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = RedisComponentConfig_RedisConfig_RedisOptionValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = RedisComponentConfig_RedisConfig_RedisOptionValidationError{}
-
-// Validate checks the field values on ClientComponentConfig_Client with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ClientComponentConfig_Client) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on ClientComponentConfig_Client with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ClientComponentConfig_ClientMultiError, or nil if none found.
-func (m *ClientComponentConfig_Client) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *ClientComponentConfig_Client) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	{
-		sorted_keys := make([]string, len(m.GetClients()))
-		i := 0
-		for key := range m.GetClients() {
-			sorted_keys[i] = key
-			i++
-		}
-		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
-		for _, key := range sorted_keys {
-			val := m.GetClients()[key]
-			_ = val
-
-			// no validation rules for Clients[key]
-
-			if all {
-				switch v := interface{}(val).(type) {
-				case interface{ ValidateAll() error }:
-					if err := v.ValidateAll(); err != nil {
-						errors = append(errors, ClientComponentConfig_ClientValidationError{
-							field:  fmt.Sprintf("Clients[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				case interface{ Validate() error }:
-					if err := v.Validate(); err != nil {
-						errors = append(errors, ClientComponentConfig_ClientValidationError{
-							field:  fmt.Sprintf("Clients[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				}
-			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
-				if err := v.Validate(); err != nil {
-					return ClientComponentConfig_ClientValidationError{
-						field:  fmt.Sprintf("Clients[%v]", key),
-						reason: "embedded message failed validation",
-						cause:  err,
-					}
-				}
-			}
-
-		}
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_ClientValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_ClientValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_ClientValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return ClientComponentConfig_ClientMultiError(errors)
-	}
-
-	return nil
-}
-
-// ClientComponentConfig_ClientMultiError is an error wrapping multiple
-// validation errors returned by ClientComponentConfig_Client.ValidateAll() if
-// the designated constraints aren't met.
-type ClientComponentConfig_ClientMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ClientComponentConfig_ClientMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ClientComponentConfig_ClientMultiError) AllErrors() []error { return m }
-
-// ClientComponentConfig_ClientValidationError is the validation error returned
-// by ClientComponentConfig_Client.Validate if the designated constraints
+// Redis_RedisOptionMultiError is an error wrapping multiple validation errors
+// returned by Redis_RedisOption.ValidateAll() if the designated constraints
 // aren't met.
-type ClientComponentConfig_ClientValidationError struct {
+type Redis_RedisOptionMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Redis_RedisOptionMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Redis_RedisOptionMultiError) AllErrors() []error { return m }
+
+// Redis_RedisOptionValidationError is the validation error returned by
+// Redis_RedisOption.Validate if the designated constraints aren't met.
+type Redis_RedisOptionValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -8814,24 +7661,24 @@ type ClientComponentConfig_ClientValidationError struct {
 }
 
 // Field function returns field value.
-func (e ClientComponentConfig_ClientValidationError) Field() string { return e.field }
+func (e Redis_RedisOptionValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ClientComponentConfig_ClientValidationError) Reason() string { return e.reason }
+func (e Redis_RedisOptionValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ClientComponentConfig_ClientValidationError) Cause() error { return e.cause }
+func (e Redis_RedisOptionValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ClientComponentConfig_ClientValidationError) Key() bool { return e.key }
+func (e Redis_RedisOptionValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ClientComponentConfig_ClientValidationError) ErrorName() string {
-	return "ClientComponentConfig_ClientValidationError"
+func (e Redis_RedisOptionValidationError) ErrorName() string {
+	return "Redis_RedisOptionValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ClientComponentConfig_ClientValidationError) Error() string {
+func (e Redis_RedisOptionValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -8843,14 +7690,14 @@ func (e ClientComponentConfig_ClientValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sClientComponentConfig_Client.%s: %s%s",
+		"invalid %sRedis_RedisOption.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ClientComponentConfig_ClientValidationError{}
+var _ error = Redis_RedisOptionValidationError{}
 
 var _ interface {
 	Field() string
@@ -8858,26 +7705,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ClientComponentConfig_ClientValidationError{}
+} = Redis_RedisOptionValidationError{}
 
-// Validate checks the field values on
-// ClientComponentConfig_Client_ClientOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *ClientComponentConfig_Client_ClientOption) Validate() error {
+// Validate checks the field values on Client_ClientOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Client_ClientOption) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// ClientComponentConfig_Client_ClientOption with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in
-// ClientComponentConfig_Client_ClientOptionMultiError, or nil if none found.
-func (m *ClientComponentConfig_Client_ClientOption) ValidateAll() error {
+// ValidateAll checks the field values on Client_ClientOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Client_ClientOptionMultiError, or nil if none found.
+func (m *Client_ClientOption) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ClientComponentConfig_Client_ClientOption) validate(all bool) error {
+func (m *Client_ClientOption) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -8896,7 +7741,7 @@ func (m *ClientComponentConfig_Client_ClientOption) validate(all bool) error {
 			switch v := interface{}(m.GetMiddleware()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOptionValidationError{
+					errors = append(errors, Client_ClientOptionValidationError{
 						field:  "Middleware",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8904,7 +7749,7 @@ func (m *ClientComponentConfig_Client_ClientOption) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOptionValidationError{
+					errors = append(errors, Client_ClientOptionValidationError{
 						field:  "Middleware",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -8913,7 +7758,7 @@ func (m *ClientComponentConfig_Client_ClientOption) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOptionValidationError{
+				return Client_ClientOptionValidationError{
 					field:  "Middleware",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -8924,20 +7769,19 @@ func (m *ClientComponentConfig_Client_ClientOption) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return ClientComponentConfig_Client_ClientOptionMultiError(errors)
+		return Client_ClientOptionMultiError(errors)
 	}
 
 	return nil
 }
 
-// ClientComponentConfig_Client_ClientOptionMultiError is an error wrapping
-// multiple validation errors returned by
-// ClientComponentConfig_Client_ClientOption.ValidateAll() if the designated
+// Client_ClientOptionMultiError is an error wrapping multiple validation
+// errors returned by Client_ClientOption.ValidateAll() if the designated
 // constraints aren't met.
-type ClientComponentConfig_Client_ClientOptionMultiError []error
+type Client_ClientOptionMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ClientComponentConfig_Client_ClientOptionMultiError) Error() string {
+func (m Client_ClientOptionMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -8946,12 +7790,11 @@ func (m ClientComponentConfig_Client_ClientOptionMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ClientComponentConfig_Client_ClientOptionMultiError) AllErrors() []error { return m }
+func (m Client_ClientOptionMultiError) AllErrors() []error { return m }
 
-// ClientComponentConfig_Client_ClientOptionValidationError is the validation
-// error returned by ClientComponentConfig_Client_ClientOption.Validate if the
-// designated constraints aren't met.
-type ClientComponentConfig_Client_ClientOptionValidationError struct {
+// Client_ClientOptionValidationError is the validation error returned by
+// Client_ClientOption.Validate if the designated constraints aren't met.
+type Client_ClientOptionValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -8959,24 +7802,24 @@ type ClientComponentConfig_Client_ClientOptionValidationError struct {
 }
 
 // Field function returns field value.
-func (e ClientComponentConfig_Client_ClientOptionValidationError) Field() string { return e.field }
+func (e Client_ClientOptionValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ClientComponentConfig_Client_ClientOptionValidationError) Reason() string { return e.reason }
+func (e Client_ClientOptionValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ClientComponentConfig_Client_ClientOptionValidationError) Cause() error { return e.cause }
+func (e Client_ClientOptionValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ClientComponentConfig_Client_ClientOptionValidationError) Key() bool { return e.key }
+func (e Client_ClientOptionValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ClientComponentConfig_Client_ClientOptionValidationError) ErrorName() string {
-	return "ClientComponentConfig_Client_ClientOptionValidationError"
+func (e Client_ClientOptionValidationError) ErrorName() string {
+	return "Client_ClientOptionValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ClientComponentConfig_Client_ClientOptionValidationError) Error() string {
+func (e Client_ClientOptionValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -8988,14 +7831,14 @@ func (e ClientComponentConfig_Client_ClientOptionValidationError) Error() string
 	}
 
 	return fmt.Sprintf(
-		"invalid %sClientComponentConfig_Client_ClientOption.%s: %s%s",
+		"invalid %sClient_ClientOption.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ClientComponentConfig_Client_ClientOptionValidationError{}
+var _ error = Client_ClientOptionValidationError{}
 
 var _ interface {
 	Field() string
@@ -9003,27 +7846,25 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ClientComponentConfig_Client_ClientOptionValidationError{}
+} = Client_ClientOptionValidationError{}
 
-// Validate checks the field values on
-// ClientComponentConfig_Client_ClientOption_ClientMiddleware with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) Validate() error {
+// Validate checks the field values on Client_ClientOption_ClientMiddleware
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the first error encountered is returned, or nil if
+// there are no violations.
+func (m *Client_ClientOption_ClientMiddleware) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on
-// ClientComponentConfig_Client_ClientOption_ClientMiddleware with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ClientComponentConfig_Client_ClientOption_ClientMiddlewareMultiError, or
-// nil if none found.
-func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) ValidateAll() error {
+// ValidateAll checks the field values on Client_ClientOption_ClientMiddleware
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// Client_ClientOption_ClientMiddlewareMultiError, or nil if none found.
+func (m *Client_ClientOption_ClientMiddleware) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(all bool) error {
+func (m *Client_ClientOption_ClientMiddleware) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -9036,7 +7877,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			switch v := interface{}(m.GetTimeout()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Timeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9044,7 +7885,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Timeout",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9053,7 +7894,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			}
 		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Timeout",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -9069,7 +7910,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			switch v := interface{}(m.GetMetadata()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Metadata",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9077,7 +7918,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Metadata",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9086,7 +7927,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			}
 		} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Metadata",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -9102,7 +7943,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			switch v := interface{}(m.GetTracing()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Tracing",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9110,7 +7951,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Tracing",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9119,7 +7960,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			}
 		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Tracing",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -9135,7 +7976,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			switch v := interface{}(m.GetMetrics()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9143,7 +7984,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Metrics",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9152,7 +7993,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			}
 		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Metrics",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -9168,7 +8009,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			switch v := interface{}(m.GetLogging()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Logging",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9176,7 +8017,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Logging",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9185,7 +8026,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			}
 		} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Logging",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -9201,7 +8042,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			switch v := interface{}(m.GetCircuitbreaker()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Circuitbreaker",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9209,7 +8050,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+					errors = append(errors, Client_ClientOption_ClientMiddlewareValidationError{
 						field:  "Circuitbreaker",
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -9218,7 +8059,7 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 			}
 		} else if v, ok := interface{}(m.GetCircuitbreaker()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{
+				return Client_ClientOption_ClientMiddlewareValidationError{
 					field:  "Circuitbreaker",
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -9229,287 +8070,20 @@ func (m *ClientComponentConfig_Client_ClientOption_ClientMiddleware) validate(al
 	}
 
 	if len(errors) > 0 {
-		return ClientComponentConfig_Client_ClientOption_ClientMiddlewareMultiError(errors)
+		return Client_ClientOption_ClientMiddlewareMultiError(errors)
 	}
 
 	return nil
 }
 
-// ClientComponentConfig_Client_ClientOption_ClientMiddlewareMultiError is an
-// error wrapping multiple validation errors returned by
-// ClientComponentConfig_Client_ClientOption_ClientMiddleware.ValidateAll() if
-// the designated constraints aren't met.
-type ClientComponentConfig_Client_ClientOption_ClientMiddlewareMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ClientComponentConfig_Client_ClientOption_ClientMiddlewareMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ClientComponentConfig_Client_ClientOption_ClientMiddlewareMultiError) AllErrors() []error {
-	return m
-}
-
-// ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError is
-// the validation error returned by
-// ClientComponentConfig_Client_ClientOption_ClientMiddleware.Validate if the
-// designated constraints aren't met.
-type ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError) Field() string {
-	return e.field
-}
-
-// Reason function returns reason value.
-func (e ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError) Reason() string {
-	return e.reason
-}
-
-// Cause function returns cause value.
-func (e ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError) Cause() error {
-	return e.cause
-}
-
-// Key function returns key value.
-func (e ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError) Key() bool {
-	return e.key
-}
-
-// ErrorName returns error name.
-func (e ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError) ErrorName() string {
-	return "ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sClientComponentConfig_Client_ClientOption_ClientMiddleware.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ClientComponentConfig_Client_ClientOption_ClientMiddlewareValidationError{}
-
-// Validate checks the field values on JobComponent_JobConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *JobComponent_JobConfig) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on JobComponent_JobConfig with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// JobComponent_JobConfigMultiError, or nil if none found.
-func (m *JobComponent_JobConfig) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *JobComponent_JobConfig) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	{
-		sorted_keys := make([]string, len(m.GetJobs()))
-		i := 0
-		for key := range m.GetJobs() {
-			sorted_keys[i] = key
-			i++
-		}
-		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
-		for _, key := range sorted_keys {
-			val := m.GetJobs()[key]
-			_ = val
-
-			// no validation rules for Jobs[key]
-
-			if all {
-				switch v := interface{}(val).(type) {
-				case interface{ ValidateAll() error }:
-					if err := v.ValidateAll(); err != nil {
-						errors = append(errors, JobComponent_JobConfigValidationError{
-							field:  fmt.Sprintf("Jobs[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				case interface{ Validate() error }:
-					if err := v.Validate(); err != nil {
-						errors = append(errors, JobComponent_JobConfigValidationError{
-							field:  fmt.Sprintf("Jobs[%v]", key),
-							reason: "embedded message failed validation",
-							cause:  err,
-						})
-					}
-				}
-			} else if v, ok := interface{}(val).(interface{ Validate() error }); ok {
-				if err := v.Validate(); err != nil {
-					return JobComponent_JobConfigValidationError{
-						field:  fmt.Sprintf("Jobs[%v]", key),
-						reason: "embedded message failed validation",
-						cause:  err,
-					}
-				}
-			}
-
-		}
-	}
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if m.Timezone != nil {
-		// no validation rules for Timezone
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, JobComponent_JobConfigValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, JobComponent_JobConfigValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return JobComponent_JobConfigValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Tracing != nil {
-
-		if all {
-			switch v := interface{}(m.GetTracing()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, JobComponent_JobConfigValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, JobComponent_JobConfigValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return JobComponent_JobConfigValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Metrics != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, JobComponent_JobConfigValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, JobComponent_JobConfigValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return JobComponent_JobConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return JobComponent_JobConfigMultiError(errors)
-	}
-
-	return nil
-}
-
-// JobComponent_JobConfigMultiError is an error wrapping multiple validation
-// errors returned by JobComponent_JobConfig.ValidateAll() if the designated
+// Client_ClientOption_ClientMiddlewareMultiError is an error wrapping multiple
+// validation errors returned by
+// Client_ClientOption_ClientMiddleware.ValidateAll() if the designated
 // constraints aren't met.
-type JobComponent_JobConfigMultiError []error
+type Client_ClientOption_ClientMiddlewareMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m JobComponent_JobConfigMultiError) Error() string {
+func (m Client_ClientOption_ClientMiddlewareMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -9518,11 +8092,12 @@ func (m JobComponent_JobConfigMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m JobComponent_JobConfigMultiError) AllErrors() []error { return m }
+func (m Client_ClientOption_ClientMiddlewareMultiError) AllErrors() []error { return m }
 
-// JobComponent_JobConfigValidationError is the validation error returned by
-// JobComponent_JobConfig.Validate if the designated constraints aren't met.
-type JobComponent_JobConfigValidationError struct {
+// Client_ClientOption_ClientMiddlewareValidationError is the validation error
+// returned by Client_ClientOption_ClientMiddleware.Validate if the designated
+// constraints aren't met.
+type Client_ClientOption_ClientMiddlewareValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -9530,24 +8105,24 @@ type JobComponent_JobConfigValidationError struct {
 }
 
 // Field function returns field value.
-func (e JobComponent_JobConfigValidationError) Field() string { return e.field }
+func (e Client_ClientOption_ClientMiddlewareValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e JobComponent_JobConfigValidationError) Reason() string { return e.reason }
+func (e Client_ClientOption_ClientMiddlewareValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e JobComponent_JobConfigValidationError) Cause() error { return e.cause }
+func (e Client_ClientOption_ClientMiddlewareValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e JobComponent_JobConfigValidationError) Key() bool { return e.key }
+func (e Client_ClientOption_ClientMiddlewareValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e JobComponent_JobConfigValidationError) ErrorName() string {
-	return "JobComponent_JobConfigValidationError"
+func (e Client_ClientOption_ClientMiddlewareValidationError) ErrorName() string {
+	return "Client_ClientOption_ClientMiddlewareValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e JobComponent_JobConfigValidationError) Error() string {
+func (e Client_ClientOption_ClientMiddlewareValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -9559,14 +8134,14 @@ func (e JobComponent_JobConfigValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sJobComponent_JobConfig.%s: %s%s",
+		"invalid %sClient_ClientOption_ClientMiddleware.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = JobComponent_JobConfigValidationError{}
+var _ error = Client_ClientOption_ClientMiddlewareValidationError{}
 
 var _ interface {
 	Field() string
@@ -9574,24 +8149,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = JobComponent_JobConfigValidationError{}
+} = Client_ClientOption_ClientMiddlewareValidationError{}
 
-// Validate checks the field values on JobComponent_JobConfig_Job with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *JobComponent_JobConfig_Job) Validate() error {
+// Validate checks the field values on Job_JobConfig with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Job_JobConfig) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on JobComponent_JobConfig_Job with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// JobComponent_JobConfig_JobMultiError, or nil if none found.
-func (m *JobComponent_JobConfig_Job) ValidateAll() error {
+// ValidateAll checks the field values on Job_JobConfig with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Job_JobConfigMultiError, or
+// nil if none found.
+func (m *Job_JobConfig) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *JobComponent_JobConfig_Job) validate(all bool) error {
+func (m *Job_JobConfig) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -9613,19 +8188,19 @@ func (m *JobComponent_JobConfig_Job) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return JobComponent_JobConfig_JobMultiError(errors)
+		return Job_JobConfigMultiError(errors)
 	}
 
 	return nil
 }
 
-// JobComponent_JobConfig_JobMultiError is an error wrapping multiple
-// validation errors returned by JobComponent_JobConfig_Job.ValidateAll() if
-// the designated constraints aren't met.
-type JobComponent_JobConfig_JobMultiError []error
+// Job_JobConfigMultiError is an error wrapping multiple validation errors
+// returned by Job_JobConfig.ValidateAll() if the designated constraints
+// aren't met.
+type Job_JobConfigMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m JobComponent_JobConfig_JobMultiError) Error() string {
+func (m Job_JobConfigMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -9634,11 +8209,11 @@ func (m JobComponent_JobConfig_JobMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m JobComponent_JobConfig_JobMultiError) AllErrors() []error { return m }
+func (m Job_JobConfigMultiError) AllErrors() []error { return m }
 
-// JobComponent_JobConfig_JobValidationError is the validation error returned
-// by JobComponent_JobConfig_Job.Validate if the designated constraints aren't met.
-type JobComponent_JobConfig_JobValidationError struct {
+// Job_JobConfigValidationError is the validation error returned by
+// Job_JobConfig.Validate if the designated constraints aren't met.
+type Job_JobConfigValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -9646,24 +8221,22 @@ type JobComponent_JobConfig_JobValidationError struct {
 }
 
 // Field function returns field value.
-func (e JobComponent_JobConfig_JobValidationError) Field() string { return e.field }
+func (e Job_JobConfigValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e JobComponent_JobConfig_JobValidationError) Reason() string { return e.reason }
+func (e Job_JobConfigValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e JobComponent_JobConfig_JobValidationError) Cause() error { return e.cause }
+func (e Job_JobConfigValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e JobComponent_JobConfig_JobValidationError) Key() bool { return e.key }
+func (e Job_JobConfigValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e JobComponent_JobConfig_JobValidationError) ErrorName() string {
-	return "JobComponent_JobConfig_JobValidationError"
-}
+func (e Job_JobConfigValidationError) ErrorName() string { return "Job_JobConfigValidationError" }
 
 // Error satisfies the builtin error interface
-func (e JobComponent_JobConfig_JobValidationError) Error() string {
+func (e Job_JobConfigValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -9675,14 +8248,14 @@ func (e JobComponent_JobConfig_JobValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sJobComponent_JobConfig_Job.%s: %s%s",
+		"invalid %sJob_JobConfig.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = JobComponent_JobConfig_JobValidationError{}
+var _ error = Job_JobConfigValidationError{}
 
 var _ interface {
 	Field() string
@@ -9690,24 +8263,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = JobComponent_JobConfig_JobValidationError{}
+} = Job_JobConfigValidationError{}
 
-// Validate checks the field values on JobComponent_JobConfig_Tracing with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *JobComponent_JobConfig_Tracing) Validate() error {
+// Validate checks the field values on Job_Tracing with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Job_Tracing) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on JobComponent_JobConfig_Tracing with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// JobComponent_JobConfig_TracingMultiError, or nil if none found.
-func (m *JobComponent_JobConfig_Tracing) ValidateAll() error {
+// ValidateAll checks the field values on Job_Tracing with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Job_TracingMultiError, or
+// nil if none found.
+func (m *Job_Tracing) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *JobComponent_JobConfig_Tracing) validate(all bool) error {
+func (m *Job_Tracing) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -9719,19 +8292,18 @@ func (m *JobComponent_JobConfig_Tracing) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return JobComponent_JobConfig_TracingMultiError(errors)
+		return Job_TracingMultiError(errors)
 	}
 
 	return nil
 }
 
-// JobComponent_JobConfig_TracingMultiError is an error wrapping multiple
-// validation errors returned by JobComponent_JobConfig_Tracing.ValidateAll()
-// if the designated constraints aren't met.
-type JobComponent_JobConfig_TracingMultiError []error
+// Job_TracingMultiError is an error wrapping multiple validation errors
+// returned by Job_Tracing.ValidateAll() if the designated constraints aren't met.
+type Job_TracingMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m JobComponent_JobConfig_TracingMultiError) Error() string {
+func (m Job_TracingMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -9740,12 +8312,11 @@ func (m JobComponent_JobConfig_TracingMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m JobComponent_JobConfig_TracingMultiError) AllErrors() []error { return m }
+func (m Job_TracingMultiError) AllErrors() []error { return m }
 
-// JobComponent_JobConfig_TracingValidationError is the validation error
-// returned by JobComponent_JobConfig_Tracing.Validate if the designated
-// constraints aren't met.
-type JobComponent_JobConfig_TracingValidationError struct {
+// Job_TracingValidationError is the validation error returned by
+// Job_Tracing.Validate if the designated constraints aren't met.
+type Job_TracingValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -9753,24 +8324,22 @@ type JobComponent_JobConfig_TracingValidationError struct {
 }
 
 // Field function returns field value.
-func (e JobComponent_JobConfig_TracingValidationError) Field() string { return e.field }
+func (e Job_TracingValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e JobComponent_JobConfig_TracingValidationError) Reason() string { return e.reason }
+func (e Job_TracingValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e JobComponent_JobConfig_TracingValidationError) Cause() error { return e.cause }
+func (e Job_TracingValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e JobComponent_JobConfig_TracingValidationError) Key() bool { return e.key }
+func (e Job_TracingValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e JobComponent_JobConfig_TracingValidationError) ErrorName() string {
-	return "JobComponent_JobConfig_TracingValidationError"
-}
+func (e Job_TracingValidationError) ErrorName() string { return "Job_TracingValidationError" }
 
 // Error satisfies the builtin error interface
-func (e JobComponent_JobConfig_TracingValidationError) Error() string {
+func (e Job_TracingValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -9782,14 +8351,14 @@ func (e JobComponent_JobConfig_TracingValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sJobComponent_JobConfig_Tracing.%s: %s%s",
+		"invalid %sJob_Tracing.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = JobComponent_JobConfig_TracingValidationError{}
+var _ error = Job_TracingValidationError{}
 
 var _ interface {
 	Field() string
@@ -9797,24 +8366,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = JobComponent_JobConfig_TracingValidationError{}
+} = Job_TracingValidationError{}
 
-// Validate checks the field values on JobComponent_JobConfig_Metrics with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *JobComponent_JobConfig_Metrics) Validate() error {
+// Validate checks the field values on Job_Metrics with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Job_Metrics) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on JobComponent_JobConfig_Metrics with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// JobComponent_JobConfig_MetricsMultiError, or nil if none found.
-func (m *JobComponent_JobConfig_Metrics) ValidateAll() error {
+// ValidateAll checks the field values on Job_Metrics with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in Job_MetricsMultiError, or
+// nil if none found.
+func (m *Job_Metrics) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *JobComponent_JobConfig_Metrics) validate(all bool) error {
+func (m *Job_Metrics) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -9826,19 +8395,18 @@ func (m *JobComponent_JobConfig_Metrics) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return JobComponent_JobConfig_MetricsMultiError(errors)
+		return Job_MetricsMultiError(errors)
 	}
 
 	return nil
 }
 
-// JobComponent_JobConfig_MetricsMultiError is an error wrapping multiple
-// validation errors returned by JobComponent_JobConfig_Metrics.ValidateAll()
-// if the designated constraints aren't met.
-type JobComponent_JobConfig_MetricsMultiError []error
+// Job_MetricsMultiError is an error wrapping multiple validation errors
+// returned by Job_Metrics.ValidateAll() if the designated constraints aren't met.
+type Job_MetricsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m JobComponent_JobConfig_MetricsMultiError) Error() string {
+func (m Job_MetricsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -9847,12 +8415,11 @@ func (m JobComponent_JobConfig_MetricsMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m JobComponent_JobConfig_MetricsMultiError) AllErrors() []error { return m }
+func (m Job_MetricsMultiError) AllErrors() []error { return m }
 
-// JobComponent_JobConfig_MetricsValidationError is the validation error
-// returned by JobComponent_JobConfig_Metrics.Validate if the designated
-// constraints aren't met.
-type JobComponent_JobConfig_MetricsValidationError struct {
+// Job_MetricsValidationError is the validation error returned by
+// Job_Metrics.Validate if the designated constraints aren't met.
+type Job_MetricsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -9860,24 +8427,22 @@ type JobComponent_JobConfig_MetricsValidationError struct {
 }
 
 // Field function returns field value.
-func (e JobComponent_JobConfig_MetricsValidationError) Field() string { return e.field }
+func (e Job_MetricsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e JobComponent_JobConfig_MetricsValidationError) Reason() string { return e.reason }
+func (e Job_MetricsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e JobComponent_JobConfig_MetricsValidationError) Cause() error { return e.cause }
+func (e Job_MetricsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e JobComponent_JobConfig_MetricsValidationError) Key() bool { return e.key }
+func (e Job_MetricsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e JobComponent_JobConfig_MetricsValidationError) ErrorName() string {
-	return "JobComponent_JobConfig_MetricsValidationError"
-}
+func (e Job_MetricsValidationError) ErrorName() string { return "Job_MetricsValidationError" }
 
 // Error satisfies the builtin error interface
-func (e JobComponent_JobConfig_MetricsValidationError) Error() string {
+func (e Job_MetricsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -9889,14 +8454,14 @@ func (e JobComponent_JobConfig_MetricsValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sJobComponent_JobConfig_Metrics.%s: %s%s",
+		"invalid %sJob_Metrics.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = JobComponent_JobConfig_MetricsValidationError{}
+var _ error = Job_MetricsValidationError{}
 
 var _ interface {
 	Field() string
@@ -9904,4 +8469,4 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = JobComponent_JobConfig_MetricsValidationError{}
+} = Job_MetricsValidationError{}
