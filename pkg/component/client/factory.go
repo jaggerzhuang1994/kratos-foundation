@@ -60,23 +60,23 @@ type clientKey struct {
 }
 
 func (key clientKey) isGrpc() bool {
-	return utils.Includes([]kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_Protocol{
-		kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_GRPC,
-		kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_GRPCS,
+	return utils.Includes([]kratos_foundation_pb.Client_ClientOption_Protocol{
+		kratos_foundation_pb.Client_ClientOption_GRPC,
+		kratos_foundation_pb.Client_ClientOption_GRPCS,
 	}, key.option.GetProtocol())
 }
 
 func (key clientKey) isHttp() bool {
-	return utils.Includes([]kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_Protocol{
-		kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_HTTP,
-		kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_HTTPS,
+	return utils.Includes([]kratos_foundation_pb.Client_ClientOption_Protocol{
+		kratos_foundation_pb.Client_ClientOption_HTTP,
+		kratos_foundation_pb.Client_ClientOption_HTTPS,
 	}, key.option.GetProtocol())
 }
 
 func (key clientKey) isSecurity() bool {
-	return utils.Includes([]kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_Protocol{
-		kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_GRPCS,
-		kratos_foundation_pb.ClientComponentConfig_Client_ClientOption_HTTPS,
+	return utils.Includes([]kratos_foundation_pb.Client_ClientOption_Protocol{
+		kratos_foundation_pb.Client_ClientOption_GRPCS,
+		kratos_foundation_pb.Client_ClientOption_HTTPS,
 	}, key.option.GetProtocol())
 }
 

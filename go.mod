@@ -12,6 +12,7 @@ require (
 	github.com/google/wire v0.7.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/consul/api v1.26.1
+	github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema v0.0.0-20251219093317-2ef88649c22f
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.0
 	github.com/redis/go-redis/extra/redisotel/v9 v9.17.0
@@ -80,6 +81,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
+	github.com/lyft/protoc-gen-star/v2 v2.0.4 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
@@ -98,6 +100,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.12 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/spf13/afero v1.3.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect

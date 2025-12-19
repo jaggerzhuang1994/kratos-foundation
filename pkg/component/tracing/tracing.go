@@ -119,7 +119,7 @@ func (t *Tracing) Trace(ctx context.Context, spanName string, logic func(context
 	err = logic(ctx, span)
 }
 
-func newExporter(ctx context.Context, cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Exporter) (*otlptrace.Exporter, error) {
+func newExporter(ctx context.Context, cfg *kratos_foundation_pb.Tracing_Exporter) (*otlptrace.Exporter, error) {
 	var opts []otlptracehttp.Option
 
 	if cfg.GetEndpointUrl() != "" {
@@ -150,15 +150,15 @@ func newExporter(ctx context.Context, cfg *kratos_foundation_pb.TracingComponent
 	return otlptracehttp.New(ctx, opts...)
 }
 
-func newSampler(log *log.Helper, cfg *kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler) tracesdk.Sampler {
+func newSampler(log *log.Helper, cfg *kratos_foundation_pb.Tracing_Sampler) tracesdk.Sampler {
 	switch cfg.GetSample() {
-	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_RATIO:
+	case kratos_foundation_pb.Tracing_Sampler_RATIO:
 		log.Info("tracing ratio sample ", cfg.GetRatio())
 		return tracesdk.ParentBased(tracesdk.TraceIDRatioBased(cfg.GetRatio()))
-	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_ALWAYS:
+	case kratos_foundation_pb.Tracing_Sampler_ALWAYS:
 		log.Info("tracing always sample")
 		return tracesdk.AlwaysSample()
-	case kratos_foundation_pb.TracingComponentConfig_Tracing_Sampler_NEVER:
+	case kratos_foundation_pb.Tracing_Sampler_NEVER:
 		log.Info("tracing never sample")
 		return tracesdk.NeverSample()
 	}

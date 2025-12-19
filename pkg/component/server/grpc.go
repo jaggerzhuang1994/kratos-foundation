@@ -4,7 +4,6 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
 // NewGrpcServer 默认 grpc 服务器
@@ -29,7 +28,7 @@ func NewGrpcServer(
 	return srv
 }
 
-func newGrpcServerOptions(cfg *kratos_foundation_pb.ServerComponentConfig_Server) []grpc.ServerOption {
+func newGrpcServerOptions(cfg *Config) []grpc.ServerOption {
 	grpcCfg := cfg.GetGrpc()
 	var opts []grpc.ServerOption
 	// 监听（"tcp", "tcp4", "tcp6", "unix" or "unixpacket"）

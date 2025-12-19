@@ -20,11 +20,11 @@ func NewGormLogger(log *log.Log, cfg *Config) logger.Interface {
 
 	var level = logger.Silent
 	switch gormLogger.GetLevel() {
-	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_INFO:
+	case kratos_foundation_pb.Database_Gorm_Logger_INFO:
 		level = logger.Info
-	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_WARN:
+	case kratos_foundation_pb.Database_Gorm_Logger_WARN:
 		level = logger.Warn
-	case kratos_foundation_pb.DatabaseComponentConfig_Database_Gorm_Logger_ERROR:
+	case kratos_foundation_pb.Database_Gorm_Logger_ERROR:
 		level = logger.Error
 	}
 

@@ -10,11 +10,11 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb"
 )
 
-func Middleware(log *log.Log, policy kratos_foundation_pb.JobComponent_JobConfig_Job_ConcurrentPolicy) middleware.Middleware {
+func Middleware(log *log.Log, policy kratos_foundation_pb.Job_JobConfig_ConcurrentPolicy) middleware.Middleware {
 	switch policy {
-	case kratos_foundation_pb.JobComponent_JobConfig_Job_DELAY:
+	case kratos_foundation_pb.Job_JobConfig_DELAY:
 		return delayIfStillRunning(log)
-	case kratos_foundation_pb.JobComponent_JobConfig_Job_SKIP:
+	case kratos_foundation_pb.Job_JobConfig_SKIP:
 		return skipIfStillRunning(log)
 	}
 	return nil

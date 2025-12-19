@@ -6,8 +6,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type JobConfig = kratos_foundation_pb.JobComponent_JobConfig_Job
-type ConcurrentPolicy = kratos_foundation_pb.JobComponent_JobConfig_Job_ConcurrentPolicy
+type JobConfig = kratos_foundation_pb.Job_JobConfig
+type ConcurrentPolicy = kratos_foundation_pb.Job_JobConfig_ConcurrentPolicy
 
 type ScheduleConfiguration interface {
 	Schedule() string

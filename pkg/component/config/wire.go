@@ -12,4 +12,5 @@ func WithoutConsulConfigSource() ConsulConfigSource {
 
 var ProviderSet = wire.NewSet(
 	NewConfig,
+	NewKratosConfig,
 )
