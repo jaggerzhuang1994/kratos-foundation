@@ -12,6 +12,6 @@ var defaultConfig = &Config{}
 
 func NewConfig(conf *kratos_foundation_pb.Config) *Config {
 	c := proto.CloneOf(defaultConfig)
-	proto.Merge(c, conf.GetApp())
+	proto.Merge(c, conf.GetClient())
 	return c
 }
