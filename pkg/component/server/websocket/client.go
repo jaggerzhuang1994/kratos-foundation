@@ -20,6 +20,8 @@ type Client struct {
 	conn    *websocket.Conn
 	Request *http.Request
 
+	writeLock sync.Mutex
+
 	closeOnce sync.Once
 
 	onConnectHandler OnConnectHandler
@@ -67,11 +69,15 @@ func (c *Client) resolve(_ context.Context) {
 
 func (c *Client) Close() {
 	c.closeOnce.Do(func() {
+		c.writeLock.Lock()
+		defer c.writeLock.Unlock()
 		_ = c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(writeWait))
 	})
 }
 
 func (c *Client) Send(messageType MessageType, data []byte) error {
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
 	// _ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	return c.conn.WriteMessage(int(messageType), data)
 }
