@@ -49,6 +49,10 @@ func (c *Cron) Schedule(ctx context.Context, name string, job job.Job, schedule 
 	})
 }
 
+func (c *Cron) Remove(id cron.EntryID) {
+	c.cron.Remove(id)
+}
+
 func (c *Cron) Start() {
 	c.log.Info("start cron")
 	c.cron.Start()
