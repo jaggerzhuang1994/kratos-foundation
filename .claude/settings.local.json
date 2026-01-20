@@ -6,7 +6,13 @@
       "Bash(git push)",
       "Bash(git restore:*)",
       "Bash(xargs ls:*)",
-      "Bash(git -C /Users/jagger/kratos-foundation log --oneline)"
+      "Bash(git -C /Users/jagger/kratos-foundation log --oneline)",
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)"
     ],
     "deny": [],
     "ask": []

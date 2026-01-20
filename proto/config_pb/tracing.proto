@@ -1,0 +1,63 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+
+message Tracing {
+  // 是否禁用链路追踪 local 环境默认为禁用
+  optional bool disable = 1;
+  // 默认 tracer name，默认值为 appinfo.name
+  optional string tracer_name = 2;
+  // 导出配置
+  optional Exporter exporter = 3;
+  // 采样率设置
+  optional Sampler sampler = 4;
+}
+
+message Exporter {
+  // 导出器的地址 http://host:port/path
+  optional string endpoint_url = 1;
+  // 是否压缩
+  optional Compression compression = 2;
+  // 额外请求头
+  map<string, string> headers = 3;
+  // 超时
+  optional google.protobuf.Duration timeout = 4;
+  // 重试策略
+  optional RetryConfig retry = 5;
+
+  enum Compression {
+    // 不压缩
+    NO = 0;
+    // gzip压缩
+    GZIP = 1;
+  }
+
+  message RetryConfig {
+    // 是否启用重试
+    optional bool enabled = 1;
+    // 初始间隔
+    optional google.protobuf.Duration initial_interval = 2;
+    // 最大间隔
+    optional google.protobuf.Duration max_interval = 3;
+    // 单次执行允许的最大耗时
+    optional google.protobuf.Duration max_elapsed_time = 4;
+  }
+}
+
+message Sampler {
+  enum Sample {
+    // 按照采样率采样
+    RATIO = 0;
+    // 总是采样
+    ALWAYS = 1;
+    // 总是不采样
+    NEVER = 2;
+  }
+  // 采样配置
+  optional Sample sample = 1;
+  // 采样率(默认采样率0.05)
+  optional double ratio = 2;
+}

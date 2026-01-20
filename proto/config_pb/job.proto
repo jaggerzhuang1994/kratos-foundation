@@ -1,0 +1,58 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "config_pb/common.proto";
+
+message Job {
+  // 是否禁用
+  optional bool disable = 1;
+  // cron定时器的时区(默认为当前时区)
+  optional string timezone = 2;
+  // log info则会输出详细日志
+  optional ModuleLog log = 3;
+  // tracing
+  optional Tracing tracing = 4;
+  // Metrics
+  optional Metrics metrics = 5;
+  // 任务配置
+  map<string, JobConfig> jobs = 6;
+
+  // 链路追踪配置
+  message Tracing {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 监控配置
+  message Metrics {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+}
+
+// 并行策略
+enum ConcurrentPolicy {
+  // 允许重复执行(默认)
+  OVERLAP = 0;
+  // 推迟下一个任务
+  DELAY = 1;
+  // 跳过下一个任务
+  SKIP = 2;
+}
+
+message JobConfig {
+  // 是否禁用任务
+  optional bool disable = 1;
+  // 【定时任务】定时表达式
+  // 支持在表达式之前指定时区，格式为 TZ=Asia/Tokyo {cron}
+  // 支持 cron 表达式（当有6组数字则表示支持秒，5组表示不支持秒）： [Sec(0-59,*), ]Min(0-59,*) Hour(0-23,*) DayOfMonth(1-31,*,?) Month(1-12,*) DayOfWeek(0-6,JUN-SAT,*,?)
+  // 支持 @yearly=每年第一天0点, @monthly=每月第一天0点, @weekly=每周第一天0点, @daily=每天0点, @hourly=每小时0分
+  // 支持 @every {duration}，例如 @every 1s, @every 1m2s
+  string schedule = 2;
+  // 【定时任务】任务并行策略
+  optional ConcurrentPolicy concurrent_policy = 3;
+  // 【定时任务】启动是否立刻调度一次
+  optional bool immediately = 4;
+}

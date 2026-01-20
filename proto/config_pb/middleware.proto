@@ -1,0 +1,107 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+
+message Middleware {
+  // metadata 中间件配置
+  message Metadata {
+    // 是否启用
+    optional bool disable = 1;
+    // server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
+    // client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-global-
+    repeated string prefix = 2;
+    // 固定携带md
+    map<string, string> constants = 3;
+  }
+
+  // 链路追踪配置
+  message Tracing {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 监控配置
+  message Metrics {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 日志配置
+  message Logging {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 表单校验配置
+  message Validator {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 限流器
+  message RateLimit {
+    // 是否禁用
+    optional bool enable = 1;
+    // 默认使用bbr limiter
+    optional BBRLimiter bbr_limiter = 2;
+
+    message BBRLimiter {
+      // 每个窗口的时间长度。默认值 10s
+      optional google.protobuf.Duration window = 1;
+      // 每个窗口包含的桶数量。默认值 100
+      optional int32 bucket = 2;
+      // 使用率阈值 默认值 800
+      optional int64 cpu_threshold = 3;
+      // 如果设置了 CPUQuota，则使用新的 cpuGetter
+      // 根据 CPU 核心数和配额计算实际 CPU 使用值
+      optional double cpu_quota = 4;
+    }
+  }
+
+  // 熔断器
+  message CircuitBreaker {
+    // 是否禁用
+    optional bool enable = 1;
+    // 默认使用 sre 熔断器
+    optional SREBreaker sre = 2;
+
+    message SREBreaker {
+      // 设置 SRE 熔断器中的 K 值（K = 1 / Success），默认 Success 为 0.6。
+      // 降低 K 值会让自适应限流变得更激进；
+      // 提高 K 值会让自适应限流变得更保守。
+      optional double success = 1;
+      // 设置允许的最小请求数量。默认值 100
+      optional int64 request = 2;
+      // 设置一个统计窗口内的桶（bucket）数量。默认值 10
+      optional int32 bucket = 3;
+      // 设置统计窗口的时间长度。默认值3s
+      optional google.protobuf.Duration window = 4;
+    }
+  }
+
+  // 超时控制中间件
+  // 优化：预编译所有规则，path会转化成hash，前缀匹配利用前缀树
+  // 优先级：path > 前缀
+  message Timeout {
+    // 默认超时时间
+    // 服务端默认超时 1s
+    // 客户端默认超时 2s
+    optional google.protobuf.Duration default = 1;
+    // 指定路由规则
+    repeated RouteRule routes = 2;
+
+    message RouteRule {
+      oneof rule {
+        // 路径匹配，例如 /pb_package.Service/Rpc
+        string path = 1;
+        // 前缀匹配，例如 /pb_package.Se
+        string prefix = 2;
+      }
+      // 超时
+      google.protobuf.Duration timeout = 3;
+    }
+  }
+}

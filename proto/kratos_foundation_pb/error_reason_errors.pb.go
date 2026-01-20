@@ -12,7 +12,7 @@ import (
 const _ = errors.SupportPackageIsVersion1
 
 // 成功
-func IsNone(err error) bool {
+func IsUndefined(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -20,11 +20,11 @@ func IsNone(err error) bool {
 	if e == nil {
 		return false
 	}
-	return e.Code == 200 && e.Reason == "NONE" && e.Metadata != nil && e.Metadata["reason_code"] == "0"
+	return e.Code == 200 && e.Reason == "UNDEFINED" && e.Metadata != nil && e.Metadata["reason_code"] == "0"
 }
 
 // 成功
-func ErrorNone(formatAndArgs ...any) *errors.Error {
+func ErrorUndefined(formatAndArgs ...any) *errors.Error {
 	var format string
 	var args []any
 	if len(formatAndArgs) > 0 {
@@ -33,7 +33,7 @@ func ErrorNone(formatAndArgs ...any) *errors.Error {
 	} else { // 如果没有传参数，则默认填充注释为错误原因
 		format = "成功"
 	}
-	return errors.New(200, "NONE", fmt.Sprintf(format, args...)).WithReasonCode(0).WithErrStack(4)
+	return errors.New(200, "UNDEFINED", fmt.Sprintf(format, args...)).WithReasonCode(0).WithErrStack(4)
 }
 
 // 异常请求
@@ -211,6 +211,31 @@ func ErrorTooManyRequests(formatAndArgs ...any) *errors.Error {
 	return errors.New(429, "TOO_MANY_REQUESTS", fmt.Sprintf(format, args...)).WithReasonCode(429).WithErrStack(4)
 }
 
+// client has closed connection
+func IsClientDisconnected(err error) bool {
+	if err == nil {
+		return false
+	}
+	e := errors.FromError(err)
+	if e == nil {
+		return false
+	}
+	return e.Code == 499 && e.Reason == "CLIENT_DISCONNECTED" && e.Metadata != nil && e.Metadata["reason_code"] == "499"
+}
+
+// client has closed connection
+func ErrorClientDisconnected(formatAndArgs ...any) *errors.Error {
+	var format string
+	var args []any
+	if len(formatAndArgs) > 0 {
+		format = formatAndArgs[0].(string)
+		args = formatAndArgs[1:]
+	} else { // 如果没有传参数，则默认填充注释为错误原因
+		format = "client has closed connection"
+	}
+	return errors.New(499, "CLIENT_DISCONNECTED", fmt.Sprintf(format, args...)).WithReasonCode(499).WithErrStack(4)
+}
+
 // 服务器错误
 func IsInternalServer(err error) bool {
 	if err == nil {
@@ -334,4 +359,54 @@ func ErrorGatewayTimeout(formatAndArgs ...any) *errors.Error {
 		format = "下游响应超时"
 	}
 	return errors.New(504, "GATEWAY_TIMEOUT", fmt.Sprintf(format, args...)).WithReasonCode(504).WithErrStack(4)
+}
+
+// 服务器不支持请求中使用的 HTTP 版本
+func IsHttpVersionNotSupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	e := errors.FromError(err)
+	if e == nil {
+		return false
+	}
+	return e.Code == 505 && e.Reason == "HTTP_VERSION_NOT_SUPPORTED" && e.Metadata != nil && e.Metadata["reason_code"] == "505"
+}
+
+// 服务器不支持请求中使用的 HTTP 版本
+func ErrorHttpVersionNotSupported(formatAndArgs ...any) *errors.Error {
+	var format string
+	var args []any
+	if len(formatAndArgs) > 0 {
+		format = formatAndArgs[0].(string)
+		args = formatAndArgs[1:]
+	} else { // 如果没有传参数，则默认填充注释为错误原因
+		format = "服务器不支持请求中使用的 HTTP 版本"
+	}
+	return errors.New(505, "HTTP_VERSION_NOT_SUPPORTED", fmt.Sprintf(format, args...)).WithReasonCode(505).WithErrStack(4)
+}
+
+// 网络连接超时
+func IsNetworkConnectTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	e := errors.FromError(err)
+	if e == nil {
+		return false
+	}
+	return e.Code == 599 && e.Reason == "NETWORK_CONNECT_TIMEOUT_ERROR" && e.Metadata != nil && e.Metadata["reason_code"] == "599"
+}
+
+// 网络连接超时
+func ErrorNetworkConnectTimeoutError(formatAndArgs ...any) *errors.Error {
+	var format string
+	var args []any
+	if len(formatAndArgs) > 0 {
+		format = formatAndArgs[0].(string)
+		args = formatAndArgs[1:]
+	} else { // 如果没有传参数，则默认填充注释为错误原因
+		format = "网络连接超时"
+	}
+	return errors.New(599, "NETWORK_CONNECT_TIMEOUT_ERROR", fmt.Sprintf(format, args...)).WithReasonCode(599).WithErrStack(4)
 }

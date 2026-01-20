@@ -43,7 +43,7 @@ type {{.ServiceName}}Api interface {
 // Deprecated: Do not use.
 {{- end}}
 type {{.ServiceName}}ApiWrapper struct {
-	factory *client.Factory
+	factory client.Factory
 }
 
 var _ {{.ServiceName}}Api = (*{{.ServiceName}}ApiWrapper)(nil)
@@ -52,7 +52,7 @@ var _ {{.ServiceName}}Api = (*{{.ServiceName}}ApiWrapper)(nil)
 {{- if .Deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-func New{{.ServiceName}}ApiWrapper(factory *client.Factory) *{{.ServiceName}}ApiWrapper {
+func New{{.ServiceName}}ApiWrapper(factory client.Factory) *{{.ServiceName}}ApiWrapper {
 	return &{{.ServiceName}}ApiWrapper{factory}
 }
 

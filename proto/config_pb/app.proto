@@ -1,0 +1,20 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+import "config_pb/common.proto";
+
+message App {
+  // 是否禁用服务注册
+  optional bool disable_registrar = 1;
+  // 注册中心超时时间（默认10s）
+  optional google.protobuf.Duration registrar_timeout = 2;
+  // stop timeout 必须大于 server.stop_delay （默认30s）
+  optional google.protobuf.Duration stop_timeout = 3;
+  // app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）
+  repeated Endpoint endpoints = 4;
+  // 注册到服务中心的md
+  map<string, string> metadata = 5;
+}

@@ -1,6 +1,10 @@
 package env
 
-import "github.com/go-kratos/kratos/v2/log"
+import (
+	"time"
+
+	"github.com/go-kratos/kratos/v2/log"
+)
 
 const (
 	Local = "local" // 本地环境
@@ -10,56 +14,95 @@ const (
 	Prod  = "prod"  // 正式环境
 )
 
-var appEnv string
+var env string
+var debug bool
 
 var appEnvKeys = []string{
 	"APP_ENV",
 	"KRATOS_ENV",
 }
 
-func init() {
-	appEnv = GetEnvKeys(appEnvKeys)
+var appDebugKeys = []string{
+	"APP_DEBUG",
+	"KRATOS_DEBUG",
+}
 
-	switch appEnv {
+func init() {
+	env = getEnv(appEnvKeys, Local)
+	switch env {
 	case Local, Dev, Test, Pre, Prod:
 	default:
-		log.Warnf("unknown environment=%s set to local", appEnv)
-		appEnv = Local // 无效env，设置为local
+		// 无效env，设置为local
+		log.Warnf("unknown env: %s, set to local", env)
+		env = Local
 	}
+	debug = getEnvAsBool(appDebugKeys)
 }
 
 func AppEnv() string {
-	return appEnv
+	return env
 }
 
-func IsLocal() bool { return appEnv == Local }
+func AppDebug() bool {
+	return debug
+}
 
-// IsDev 是否为开发环境
+func IsLocal() bool {
+	return env == Local
+}
+
 func IsDev() bool {
-	return appEnv == Dev
+	return env == Dev
 }
 
-// IsTest 是否为测试环境
 func IsTest() bool {
-	return appEnv == Test
+	return env == Test
 }
 
-// IsPre 是否为预发布
 func IsPre() bool {
-	return appEnv == Pre
+	return env == Pre
 }
 
-// IsProd 是否为正式环境
 func IsProd() bool {
-	return appEnv == Prod
+	return env == Prod
 }
 
-// IsOffline 是否为线下环境
 func IsOffline() bool {
 	return !IsOnline()
 }
 
-// IsOnline 是否为线上环境
 func IsOnline() bool {
-	return IsProd() || IsPre()
+	return IsPre() || IsProd()
+}
+
+func GetEnv(key string, optionalDefaultValue ...string) string {
+	return getEnv([]string{key}, optionalDefaultValue...)
+}
+
+func GetEnv2(keys []string, optionalDefaultValue ...string) string {
+	return getEnv(keys, optionalDefaultValue...)
+}
+
+func GetEnvAsBool(key string, optionalDefaultValue ...bool) (r bool) {
+	return getEnvAsBool([]string{key}, optionalDefaultValue...)
+}
+
+func GetEnvAsBool2(keys []string, optionalDefaultValue ...bool) (r bool) {
+	return getEnvAsBool(keys, optionalDefaultValue...)
+}
+
+func GetEnvAsDuration(key string, optionalDefaultValue ...time.Duration) (d time.Duration) {
+	return getEnvAsDuration([]string{key}, optionalDefaultValue...)
+}
+
+func GetEnvAsDuration2(keys []string, optionalDefaultValue ...time.Duration) (d time.Duration) {
+	return getEnvAsDuration(keys, optionalDefaultValue...)
+}
+
+func GetEnvAsInt(key string, optionalDefaultValue ...int) (d int) {
+	return getEnvAsInt([]string{key}, optionalDefaultValue...)
+}
+
+func GetEnvAsInt2(keys []string, optionalDefaultValue ...int) (d int) {
+	return getEnvAsInt(keys, optionalDefaultValue...)
 }

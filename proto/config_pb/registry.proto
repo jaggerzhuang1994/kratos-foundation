@@ -1,0 +1,20 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+
+// 服务注册
+message Registry {
+  // 是否禁用健康检查【默认false】
+  optional bool disable_health_check = 1;
+  // 是否禁用心跳【默认false】
+  optional bool disable_heartbeat = 2;
+  // 健康检查间隔【默认10s】
+  optional google.protobuf.Duration healthcheck_internal = 3;
+  // deregisterCriticalServiceAfter【默认600s】
+  optional google.protobuf.Duration deregister_critical_service_after = 4;
+  // tags
+  repeated string tags = 5;
+}

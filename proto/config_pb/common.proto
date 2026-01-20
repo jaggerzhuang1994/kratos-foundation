@@ -1,0 +1,22 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "pubg/jsonschema.proto";
+
+// 端点配置
+message Endpoint {
+  string scheme = 1;
+  string host = 2;
+}
+
+// 模块使用的 log 结构
+message ModuleLog {
+  // 是否禁用
+  optional bool disable = 1;
+  // 最小日志级别 (默认值为log.level)
+  optional string level = 2 [(pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR']}}];
+  // 打印日志过滤哪些keys（继承log.filter_keys）
+  repeated string filter_keys = 3;
+}

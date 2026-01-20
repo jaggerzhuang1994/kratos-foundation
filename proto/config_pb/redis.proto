@@ -1,0 +1,160 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+import "config_pb/common.proto";
+
+message Redis {
+  // 默认连接
+  optional string default = 1;
+  // 连接配置
+  map<string, RedisOption> connections = 2;
+  // logger 配置
+  optional ModuleLog log = 3;
+  // tracing
+  optional RedisTracing tracing = 4;
+  // Metrics
+  optional RedisMetrics metrics = 5;
+}
+
+message RedisTracing {
+  // 是否禁用
+  optional bool disable = 1;
+  // DBStatement tells the tracing hook to log raw redis commands.
+  optional bool db_statement = 2;
+  // CallerEnabled tells the tracing hook to log the calling function, file and line.
+  optional bool caller_enabled = 3;
+  // DialFilter enables or disables filtering of dial commands.
+  optional bool dial_filter = 4;
+}
+
+message RedisMetrics {
+  // 是否禁用
+  optional bool disable = 1;
+}
+
+message RedisOption {
+  // Network type, either tcp or unix.
+  //
+  // default: tcp
+  optional string network = 1;
+  // Addr is the address formatted as host:port
+  optional string addr = 2;
+  // ClientName will execute the `CLIENT SETNAME ClientName` command for each conn.
+  optional string client_name = 3;
+  // Protocol 2 or 3. Use the version to negotiate RESP version with redis-server.
+  //
+  // default: 3
+  optional int32 protocol = 4;
+  // Username is used to authenticate the current connection.
+  optional string username = 5;
+  // Password is an optional password.
+  optional string password = 6;
+  // DB is the database to be selected after connecting to the server.
+  optional int32 db = 7;
+  // MaxRetries is the maximum number of retries before giving up.
+  // -1 (not 0) disables retries.
+  //
+  // default: 3 retries
+  optional int32 max_retries = 8;
+  // MinRetryBackoff is the minimum backoff between each retry.
+  // -1 disables backoff.
+  //
+  // default: 8 milliseconds
+  optional google.protobuf.Duration min_retry_backoff = 9;
+  // MaxRetryBackoff is the maximum backoff between each retry.
+  // -1 disables backoff.
+  //
+  // default: 512 milliseconds;
+  optional google.protobuf.Duration max_retry_backoff = 10;
+  // DialTimeout for establishing new connections.
+  //
+  // default: 5 seconds
+  optional google.protobuf.Duration dial_timeout = 11;
+  // DialerRetries is the maximum number of retry attempts when dialing fails.
+  //
+  // default: 5
+  optional int32 dialer_retries = 12;
+  // DialerRetryTimeout is the backoff duration between retry attempts.
+  //
+  // default: 100 milliseconds
+  optional google.protobuf.Duration dialer_retry_timeout = 13;
+  // ReadTimeout for socket reads.
+  //
+  //  - -1  no timeout (block indefinitely)
+  //  - -2  disables SetReadDeadline calls completely
+  //
+  // default: 3 seconds
+  optional google.protobuf.Duration read_timeout = 14;
+  // WriteTimeout for socket writes.
+  //
+  //  - -1  no timeout (block indefinitely)
+  //  - -2  disables SetWriteDeadline calls completely
+  //
+  // default: 3 seconds
+  optional google.protobuf.Duration write_timeout = 15;
+  // ContextTimeoutEnabled controls whether the client respects context timeouts and deadlines.
+  optional bool context_timeout_enabled = 16;
+  // ReadBufferSize is the size of the bufio.Reader buffer for each connection.
+  //
+  // default: 32KiB (32768 bytes)
+  optional int32 read_buffer_size = 17;
+  // WriteBufferSize is the size of the bufio.Writer buffer for each connection.
+  //
+  // default: 32KiB (32768 bytes)
+  optional int32 write_buffer_size = 18;
+  // PoolFIFO type of connection pool.
+  //
+  //  - true  FIFO pool
+  //  - false LIFO pool
+  optional bool pool_fifo = 19;
+  // PoolSize is the base number of socket connections.
+  //
+  // default: 10 * runtime.GOMAXPROCS(0)
+  optional int32 pool_size = 20;
+  // MaxConcurrentDials is the maximum number of concurrent connection creation goroutines.
+  optional int32 max_concurrent_dials = 21;
+  // PoolTimeout is the amount of time client waits for connection if all connections
+  // are busy before returning an error.
+  //
+  // default: ReadTimeout + 1 second
+  optional google.protobuf.Duration pool_timeout = 22;
+  // MinIdleConns is the minimum number of idle connections.
+  //
+  // default: 0
+  optional int32 min_idle_conns = 23;
+  // MaxIdleConns is the maximum number of idle connections.
+  //
+  // default: 0
+  optional int32 max_idle_conns = 24;
+  // MaxActiveConns is the maximum number of connections allocated by the pool at a given time.
+  //
+  // 0 = no limit
+  optional int32 max_active_conns = 25;
+  // ConnMaxIdleTime is the maximum amount of time a connection may be idle.
+  //
+  // default: 30 minutes
+  optional google.protobuf.Duration conn_max_idle_time = 26;
+  // ConnMaxLifetime is the maximum amount of time a connection may be reused.
+  //
+  // default: 0
+  optional google.protobuf.Duration conn_max_lifetime = 27;
+  // readOnly enables read only queries on slave/follower nodes.
+  optional bool read_only = 28;
+  // DisableIndentity - Disable set-lib on connect.
+  //
+  // Deprecated: Use DisableIdentity instead.
+  optional bool disable_indentity = 29 [deprecated = true];
+  // DisableIdentity is used to disable CLIENT SETINFO command on connect.
+  optional bool disable_identity = 30;
+  // Add suffix to client name. Default is empty.
+  optional string identity_suffix = 31;
+  // UnstableResp3 enables Unstable mode for Redis Search module with RESP3.
+  optional bool unstable_resp3 = 32;
+  // FailingTimeoutSeconds is the timeout in seconds for marking a cluster node as failing.
+  //
+  // default: 15
+  optional int32 failing_timeout_seconds = 33;
+}

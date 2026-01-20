@@ -21,7 +21,7 @@ var importPackages = []string{
 	//"time",
 	"github.com/google/wire",
 	"github.com/pkg/errors",
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/client",
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/client",
 }
 
 // generateFile .

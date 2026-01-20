@@ -24,8 +24,8 @@ init:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
 	go install github.com/go-kratos/kratos/cmd/kratos/v2@latest
 	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
-	go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-errors@main
-	go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-client@main
+	(cd cmd/protoc-gen-kratos-foundation-errors && go install)
+	(cd cmd/protoc-gen-kratos-foundation-client && go install)
 	go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema@main
 	go install github.com/envoyproxy/protoc-gen-validate@latest
 	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
@@ -67,4 +67,4 @@ lint:
 	@golangci-lint run && echo 'lint ok'
 
 .PHONY: all
-all: generate proto lint
+all: proto generate lint

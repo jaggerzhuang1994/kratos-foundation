@@ -1,0 +1,22 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "config_pb/common.proto";
+
+message Metrics {
+  // 指标命名空间（默认为启动的应用名）
+  optional string meter_name = 1;
+  // 初始 counter map 容量（默认 64）
+  // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
+  optional int32 counter_map_size = 2;
+  // 初始 gauge map 容量（默认 64）
+  // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
+  optional int32 gauge_map_size = 3;
+  // 初始 histogram map 容量（默认 64）
+  // Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容
+  optional int32 histogram_map_size = 4;
+  // log
+  optional ModuleLog log = 5;
+}

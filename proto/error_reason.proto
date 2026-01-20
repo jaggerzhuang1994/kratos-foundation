@@ -11,12 +11,12 @@ enum ErrorReason {
   option (errors.default_code) = 500;
 
   // 示例
-  // ERROR_SYMBOL：错误标识
-  // REASON_CODE：错误码
-  // HTTP_CODE：http状态码
+  //  - {ERROR_SYMBOL}：错误标识
+  //  - {REASON_CODE}：错误码
+  //  - {HTTP_CODE}：http状态码
   // ERROR_SYMBOL = REASON_CODE [(errors.code) = HTTP_CODE];
 
-  NONE = 0 [(errors.code) = 200]; // 成功
+  UNDEFINED = 0 [(errors.code) = 200]; // 成功
 
   // 4xx -> 客户端错误
 
@@ -27,8 +27,7 @@ enum ErrorReason {
   CONFLICT = 409 [(errors.code) = 409]; // 资源状态冲突
   VALIDATOR = 422 [(errors.code) = 422]; // 请求字段校验不通过
   TOO_MANY_REQUESTS = 429 [(errors.code) = 429]; // 请求次数过多
-
-  // CLIENT_DISCONNECTED = 499 [(errors.code) = 499]; // client has closed connection
+  CLIENT_DISCONNECTED = 499 [(errors.code) = 499]; // client has closed connection
 
   // 5xx -> 服务端错误
 
@@ -37,4 +36,6 @@ enum ErrorReason {
   BAD_GATEWAY = 502 [(errors.code) = 502]; // 网关转发到下游失败
   SERVICE_UNAVAILABLE = 503 [(errors.code) = 503]; // 服务不可用
   GATEWAY_TIMEOUT = 504 [(errors.code) = 504]; // 下游响应超时
+  HTTP_VERSION_NOT_SUPPORTED = 505 [(errors.code) = 505]; // 服务器不支持请求中使用的 HTTP 版本
+  NETWORK_CONNECT_TIMEOUT_ERROR = 599 [(errors.code) = 599]; // 网络连接超时
 }

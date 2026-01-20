@@ -1,0 +1,45 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "config_pb/common.proto";
+import "config_pb/middleware.proto";
+
+message Client {
+  map<string, ClientOption> clients = 1;
+  // logger 配置
+  optional ModuleLog log = 2;
+}
+
+enum Protocol {
+  // grpc请求
+  GRPC = 0;
+  // http请求
+  HTTP = 1;
+  // grpcs请求
+  GRPCS = 2;
+  // https请求
+  HTTPS = 3;
+}
+
+message ClientOption {
+  // 协议 默认为 GRPC
+  optional Protocol protocol = 1;
+  // 目标端点 支持服务发现/直连:
+  // 默认为 discovery:///{client_key}
+  // 也可以指定直连 host:port
+  string target = 2;
+  // 中间件
+  optional ClientMiddleware middleware = 3;
+}
+
+// 客户端中间件配置
+message ClientMiddleware {
+  optional Middleware.Timeout timeout = 1;
+  optional Middleware.Metadata metadata = 2;
+  optional Middleware.Tracing tracing = 3;
+  optional Middleware.Metrics metrics = 4;
+  optional Middleware.Logging logging = 5;
+  optional Middleware.CircuitBreaker circuit_breaker = 6;
+}

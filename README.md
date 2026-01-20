@@ -1,45 +1,49 @@
 # Kratos Foundation
 
-[English](#english) | [中文](#中文)
+[![Go Version](https://img.shields.io/badge/Go-1.23.6-blue)](https://go.dev/)
+[![Kratos](https://img.shields.io/badge/Kratos-v2.9.1-orange)](https://go-kratos.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
----
+Kratos Foundation 是一个基于 [Go-Kratos](https://go-kratos.dev/) 框架的企业级微服务基础库，提供了一套完整的生产就绪功能模块，帮助开发者快速构建可扩展、可观测的微服务应用。
 
-<a name="中文"></a>
+## 特性
 
-基于 [Kratos](https://github.com/go-kratos/kratos) 微服务框架的生产级基础设施库，提供开箱即用的企业级微服务开发能力。
+- 🚀 **开箱即用** - 提供企业级微服务常用功能模块，按需配置
+- 📦 **统一配置** - 基于 Protobuf 的配置定义，强类型且自动验证
+- 🔍 **可观测性** - 内置日志、监控指标、链路追踪完整方案
+- 🛠️ **依赖注入** - 基于 Wire 的编译时依赖注入
+- 🌐 **服务治理** - 集成 Consul 服务注册、发现与配置中心
+- 💾 **数据访问** - GORM ORM 集成，支持主从数据库
+- ⏰ **定时任务** - 基于 Cron 的定时任务调度，支持并发策略
+- 🔄 **RPC 客户端** - HTTP/gRPC 客户端工厂，支持服务发现与负载均衡
 
-## ✨ 核心特性
+## 功能模块
 
-### 🏗️ 完整的微服务基础设施
-- **服务发现与注册** - 集成 Consul，支持服务自动注册、发现和健康检查
-- **分布式追踪** - 基于 OpenTelemetry，支持 OTLP HTTP 导出器
-- **指标采集** - Prometheus 指标，自动埋点 HTTP/gRPC/数据库/缓存
-- **结构化日志** - 支持日志过滤、轮转、多输出目标，自动注入 TraceID
-- **依赖注入** - 基于 Google Wire 的编译时 DI
+| 模块 | 说明 | 状态 |
+|------|------|------|
+| **应用管理** (`pkg/app`) | 应用生命周期管理、元信息 | ✅ 稳定 |
+| **日志** (`pkg/log`) | 结构化日志、文件轮转、多输出 | ✅ 稳定 |
+| **监控** (`pkg/metrics`) | Prometheus 指标采集与导出 | ✅ 稳定 |
+| **链路追踪** (`pkg/tracing`) | OpenTelemetry 分布式追踪 | ✅ 稳定 |
+| **HTTP 服务器** (`pkg/server/http`) | HTTP 服务器、WebSocket | ✅ 稳定 |
+| **gRPC 服务器** (`pkg/server/grpc`) | gRPC 服务器、反射服务 | ✅ 稳定 |
+| **数据库** (`pkg/database`) | GORM、主从分离、连接池 | ✅ 稳定 |
+| **Redis** (`pkg/redis`) | Redis 客户端、集群支持 | ✅ 稳定 |
+| **服务发现** (`pkg/discovery`) | Consul 服务发现 | ✅ 稳定 |
+| **服务注册** (`pkg/registry`) | Consul 服务注册 | ✅ 稳定 |
+| **配置中心** (`pkg/config`) | Consul KV 配置源 | ✅ 稳定 |
+| **RPC 客户端** (`pkg/client`) | HTTP/gRPC 客户端工厂 | ✅ 稳定 |
+| **定时任务** (`pkg/job`) | Cron 任务调度 | ✅ 稳定 |
+| **中间件** (`internal/middleware`) | 通用中间件集合 | ✅ 稳定 |
 
-### 💾 数据层
-- **数据库访问** - GORM 集成，支持多数据库（MySQL/PostgreSQL/SQLite）、读写分离、链路追踪
-- **Redis 缓存** - 多连接池管理，集成追踪与指标
+## 快速开始
 
-### 🌐 服务层
-- **双协议服务** - HTTP 与 gRPC 服务器，支持 WebSocket
-- **客户端工厂** - 服务发现与直连模式，支持熔断、重试、超时策略
-- **中间件系统** - 统一的服务端/客户端中间件（日志、追踪、限流、熔断等）
+### 环境要求
 
-### ⏰ 任务调度
-- **定时任务** - Cron 调度，支持并发策略控制（SKIP/OVERLAP/DELAY）
-
-### 🛠️ 开发工具
-- **protoc-gen-jsonschema** - Protocol Buffer 转 JSON Schema（支持 Draft-04/06/07/2019-09/2020-12）
-- **protoc-gen-kratos-foundation-errors** - 错误码生成器
-- **protoc-gen-kratos-foundation-client** - 客户端代码生成器
-
-## 📋 环境要求
-
-- Go >= 1.23
-- Protocol Buffers 编译器 (protoc)
-
-## 🚀 快速开始
+- Go >= 1.23.6
+- Protoc >= 3.x
+- Wire (编译时安装)
+- Consul (可选，用于服务治理)
 
 ### 安装
 
@@ -47,647 +51,441 @@
 go get github.com/jaggerzhuang1994/kratos-foundation
 ```
 
-### 安装开发工具
+### 初始化开发工具
 
 ```bash
+# 安装所有必需的工具
 make init
 ```
 
 这将安装以下工具：
-- `wire` - 依赖注入代码生成
-- `protoc-gen-go` / `protoc-gen-go-grpc` - Protocol Buffer 代码生成
-- `protoc-gen-go-http` - Kratos HTTP 代码生成
-- `protoc-gen-kratos-foundation-errors` - 错误码生成
-- `protoc-gen-kratos-foundation-client` - 客户端生成
-- `protoc-gen-jsonschema` - JSON Schema 生成
-- `protoc-gen-validate` - 参数校验生成
-- `protoc-gen-openapiv2` - OpenAPI 文档生成
+- `wire` - 依赖注入代码生成器
+- `protoc` 相关插件 - Protobuf 代码生成
+- `kratos` - Kratos CLI 工具
 - `golangci-lint` - 代码检查工具
 
-### 项目初始化
+### 基本使用
 
-#### 1. 使用 Wire 组装依赖
+#### 1. 定义配置
 
-创建 `wire.go`：
+在 `proto/config.proto` 中定义你的配置：
 
-```go
-//go:build wireinject
+```protobuf
+syntax = "proto3";
+package kratos_foundation_pb;
 
-package main
+import "config_pb/app.proto";
+import "config_pb/server.proto";
+import "config_pb/database.proto";
+// ... 其他模块
 
-import (
-	"github.com/go-kratos/kratos/v2"
-	"github.com/google/wire"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/app"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/client"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/consul"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/database"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/metrics"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/redis"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/registry"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/server"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/component/tracing"
-)
-
-// 组合所有基础 ProviderSet
-var infraProviderSet = wire.NewSet(
-	log.ProviderSet,      // 日志
-	consul.ProviderSet,   // Consul 客户端
-	registry.ProviderSet, // 服务注册
-	tracing.ProviderSet,  // 分布式追踪
-	metrics.ProviderSet,  // 指标采集
-	database.ProviderSet, // 数据库
-	redis.ProviderSet,    // Redis
-	client.ProviderSet,   // 客户端工厂
-	server.ProviderSet,   // 服务器
-	app.ProviderSet,      // 应用
-)
-
-func wireApp() (*kratos.App, func(), error) {
-	panic(wire.Build(
-		infraProviderSet,
-		// 添加你的业务 ProviderSet...
-		// service.ProviderSet,
-		// handler.ProviderSet,
-	))
+message Config {
+  App app = 1;
+  Server server = 2;
+  Database database = 3;
+  // ... 其他配置
 }
 ```
 
-#### 2. 配置文件
+#### 2. 生成配置代码
 
-创建 `config.yaml`：
-
-```yaml
-app:
-  stop_timeout: 30s
-
-log:
-  level: info
-  filter_keys:
-    - password
-    - token
-
-server:
-  http:
-    addr: :8080
-  grpc:
-    addr: :9090
-
-database:
-  default: main
-  connections:
-    main:
-      driver: mysql
-      dsn: "user:pass@tcp(localhost:3306)/db?charset=utf8mb4&parseTime=True"
-
-redis:
-  default: main
-  connections:
-    main:
-      addr: localhost:6379
-
-tracing:
-  exporter:
-    endpoint_url: http://localhost:4318/v1/traces
+```bash
+make proto
 ```
 
-完整配置示例参考 [config.example.yaml](./config.example.yaml)
+这将生成：
+- Protobuf Go 代码
+- 配置 JSON Schema (`config.schema.json`)
 
-#### 3. 主程序
-
-创建 `main.go`：
+#### 3. 创建应用主入口
 
 ```go
 package main
 
 import (
 	"flag"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
+
+	"github.com/jaggerzhuang1994/kratos-foundation-template/internal/conf"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
+	_ "github.com/jaggerzhuang1994/kratos-foundation/pkg/setup"
+	_ "go.uber.org/automaxprocs"
 )
 
-var configFile = flag.String("conf", "./config.yaml", "config path")
+// go build -ldflags "-X main.Version=x.y.z"
+var (
+	// Version is the version of the compiled software.
+	Version string
+	// flagconf is the config flag.
+	flagconf string
+)
+
+func init() {
+	flag.StringVar(&flagconf, "conf", "../../configs", "config path, eg: -conf config.yaml")
+}
 
 func main() {
 	flag.Parse()
-	bootstrap.Bootstrap(*configFile, wireApp)
+
+	// wireApp
+	app, cleanup, err := wireApp(app_info.Version(Version), conf.FileConfigSource(flagconf))
+	if err != nil {
+		panic(err)
+	}
+	defer cleanup()
+
+	// start and wait for stop signal
+	if err := app.Run(); err != nil {
+		panic(err)
+	}
 }
 ```
 
-#### 4. 生成代码并运行
+#### 4. 生成依赖注入代码
 
 ```bash
-# 生成 Wire 依赖注入代码
 make generate
-
-# 如果有 proto 文件，生成 proto 代码
-make proto
-
-# 运行应用
-go run .
 ```
 
-## 📁 项目结构
+#### 5. 配置文件示例
 
-```
-kratos-foundation/
-├── cmd/                                         # 命令行工具
-│   ├── protoc-gen-jsonschema/                   # JSON Schema 生成器
-│   ├── protoc-gen-kratos-foundation-errors/     # 错误码生成器
-│   └── protoc-gen-kratos-foundation-client/     # 客户端代码生成器
-├── pkg/
-│   ├── component/                               # 核心组件 (DI Provider)
-│   │   ├── app/                                 # 应用生命周期管理
-│   │   ├── client/                              # 服务客户端工厂
-│   │   ├── consul/                              # Consul 客户端
-│   │   ├── database/                            # 数据库连接池 (GORM)
-│   │   ├── internal/                            # 内部中间件
-│   │   │   ├── middleware/                      # 中间件实现
-│   │   │   │   ├── circuitbreaker/              # 熔断
-│   │   │   │   ├── logging/                     # 日志
-│   │   │   │   ├── metadata/                    # 元数据传递
-│   │   │   │   ├── ratelimit/                   # 限流
-│   │   │   │   ├── timeout/                     # 超时控制
-│   │   │   │   └── validator/                   # 参数校验
-│   │   │   └── filter/                          # 过滤器
-│   │   ├── job/                                 # 定时任务调度
-│   │   │   ├── cron/                            # Cron 任务
-│   │   │   ├── job/                             # Job 抽象
-│   │   │   └── middleware/                      # 任务中间件
-│   │   ├── log/                                 # 结构化日志
-│   │   ├── metrics/                             # OpenTelemetry 指标
-│   │   ├── redis/                               # Redis 连接池
-│   │   ├── registry/                            # 服务注册
-│   │   ├── server/                              # HTTP/gRPC/WebSocket 服务器
-│   │   └── tracing/                             # 分布式追踪
-│   ├── app_info/                                # 应用信息
-│   ├── bootstrap/                               # 启动引导
-│   ├── env/                                     # 环境检测
-│   ├── errors/                                  # 错误处理
-│   ├── transport/                               # 传输层工具
-│   └── utils/                                   # 工具函数
-├── proto/                                       # Protocol Buffers 定义
-│   ├── config.proto                             # 配置 proto 定义
-│   ├── conf.proto                               # 配置模板
-│   └── kratos_foundation_pb/                    # 生成的 Go 代码
-├── third_party/                                 # 第三方 proto 文件
-│   ├── google/                                  # Google Proto
-│   └── pubg/                                    # JSON Schema 选项
-├── config.example.yaml                          # 配置示例
-├── config.schema.json                           # 配置 JSON Schema
-├── Makefile                                     # 构建脚本
-└── README.md
+参考 `config.example.yaml` 创建你的配置文件：
+
+```yaml
+app:
+  name: my-service
+  version: v1.0.0
+
+server:
+  http:
+    addr: 0.0.0.0:8000
+  grpc:
+    addr: 0.0.0.0:9000
+
+database:
+  default: primary
+  connections:
+    primary:
+      dsn: root:password@tcp(127.0.0.1:3306)/mydb
+      driver: mysql
 ```
 
-## 📚 组件详解
+## 配置模块详解
 
-### 🪵 日志 (Log)
+### 应用配置 (App)
 
-结构化日志，支持多输出、自动字段注入和敏感信息过滤：
+```yaml
+app:
+  name: my-service          # 服务名称
+  version: v1.0.0          # 版本
+  metadata:                # 元数据（会注册到服务发现）
+    env: production
+    region: cn-north
+```
+
+### 日志配置 (Log)
 
 ```yaml
 log:
-  level: info                    # 全局日志级别
-  filter_empty: true             # 过滤空值
-  filter_keys:                   # 敏感信息脱敏
-    - password
-    - token
-  preset:                        # 预置字段
-    - ts                         # 时间戳
-    - service.id                 # 服务 ID
-    - trace.id                   # TraceID
-    - caller                     # 调用位置
-
-  std:                           # 标准输出
+  level: info              # 日志级别: debug/info/warn/error
+  std:                     # 标准输出
     disable: false
-
-  file:                          # 文件输出
-    disable: false
+  file:                    # 文件输出
     path: ./logs/app.log
     rotating:
-      max_size: 100              # MB
-      max_file_age: 7            # 天
-      max_files: 10
+      max_size: 100        # MB
+      max_age: 30          # days
+      compress: true
 ```
 
-### 💾 数据库 (Database)
-
-GORM 集成，支持多数据库、主从分离：
+### 监控配置 (Metrics)
 
 ```yaml
-database:
-  default: main
-  connections:
-    main:
-      driver: mysql              # mysql/sqlite/postgres
-      dsn: "..."
-      replicas:                  # 从库（读写分离）
-        - driver: mysql
-          dsn: "..."
-      max_idle_conns: 10
-      max_open_conns: 100
-      conn_max_lifetime: 1h
-  gorm:
-    logger:
-      level: WARN
-      slow_threshold: 200ms
-  tracing:
-    disable: false
-  metrics:
-    disable: false
+metrics:
+  meter_name: my-service   # 指标命名空间
 ```
 
-代码示例：
+访问 `http://localhost:8000/metrics` 查看 Prometheus 指标。
 
-```go
-type UserRepo struct {
-	db *gorm.DB
-}
-
-func NewUserRepo(dbs *database.Databases) *UserRepo {
-	return &UserRepo{
-		db: dbs.Default(), // 获取默认数据库
-	}
-}
-```
-
-### 📮 Redis
-
-多连接池管理，自动集成追踪与指标：
-
-```yaml
-redis:
-  default: main
-  connections:
-    main:
-      addr: localhost:6379
-      pool_size: 100
-      min_idle_conns: 10
-    cache:                       # 多 Redis 实例
-      addr: localhost:6380
-      db: 1
-  tracing:
-    disable: false
-  metrics:
-    disable: false
-```
-
-代码示例：
-
-```go
-type CacheRepo struct {
-	rdb redis.Cmdable
-}
-
-func NewCacheRepo(rdbs *redis.Redis) *CacheRepo {
-	return &CacheRepo{
-		rdb: rdbs.Default(), // 获取默认 Redis
-	}
-}
-```
-
-### 🌐 服务器 (Server)
-
-HTTP 与 gRPC 双协议支持，统一中间件：
-
-```yaml
-server:
-  stop_delay: 3s               # 停机延迟
-  middleware:
-    timeout:
-      default: 1s
-      routes:                  # 路由级超时配置
-        - path: /api.v1.Service/LongRunning
-          timeout: 30s
-    tracing:
-      disable: false
-    metrics:
-      disable: false
-    logging:
-      disable: false
-    ratelimit:
-      enable: false
-
-  http:
-    addr: :8080
-    timeout: 3s
-    metrics:
-      path: /metrics
-
-  grpc:
-    addr: :9090
-    timeout: 3s
-```
-
-### 🔌 客户端 (Client)
-
-服务发现与直连模式，支持熔断、重试：
-
-```yaml
-client:
-  clients:
-    user-service:                # 服务发现模式
-      protocol: GRPC
-      target: discovery:///user-service
-      middleware:
-        timeout:
-          default: 2s
-        circuitbreaker:
-          enable: true
-
-    external-api:                # 直连模式
-      protocol: HTTPS
-      target: api.example.com:443
-```
-
-代码示例：
-
-```go
-type UserServiceClient struct {
-	client userpb.UserServiceClient
-}
-
-func NewUserServiceClient(factory *client.Factory) (*UserServiceClient, error) {
-	conn, err := factory.GetClient("user-service")
-	if err != nil {
-		return nil, err
-	}
-	return &UserServiceClient{
-		client: userpb.NewUserServiceClient(conn),
-	}, nil
-}
-```
-
-### ⏰ 定时任务 (Job)
-
-Cron 调度，支持并发策略控制：
-
-```yaml
-job:
-  timezone: Asia/Shanghai
-  jobs:
-    sync-data:
-      schedule: "0 * * * * *"          # 秒 分 时 日 月 周
-      concurrent_policy: SKIP           # SKIP/OVERLAP/DELAY
-      immediately: false                # 启动时立即执行
-    cleanup:
-      schedule: "@hourly"               # 预定义表达式
-    health-check:
-      schedule: "@every 30s"
-```
-
-代码示例：
-
-```go
-type DataSyncJob struct{}
-
-func (j *DataSyncJob) Name() string {
-	return "sync-data"
-}
-
-func (j *DataSyncJob) Run(ctx context.Context) error {
-	// 任务逻辑
-	return nil
-}
-
-// 在 Wire 中注册
-func NewJobs() []job.Job {
-	return []job.Job{
-		&DataSyncJob{},
-	}
-}
-```
-
-### 📡 链路追踪 (Tracing)
-
-OpenTelemetry 集成，支持采样策略：
+### 链路追踪配置 (Tracing)
 
 ```yaml
 tracing:
   disable: false
   exporter:
-    endpoint_url: http://localhost:4318/v1/traces
+    endpoint_url: http://jaeger:14268/api/traces
     compression: GZIP
-    timeout: 10s
-    retry:
-      enabled: true
   sampler:
-    sample: RATIO
-    ratio: 0.05                # 5% 采样率
+    sample: RATIO          # 采样策略: ALWAYS/NEVER/RATIO
+    ratio: 0.1            # 采样率 10%
 ```
 
-### 📝 服务注册 (Registry)
-
-Consul 服务注册与发现：
+### 服务器配置 (Server)
 
 ```yaml
-consul:
-  addr: localhost:8500
-  scheme: http
+server:
+  http:
+    addr: 0.0.0.0:8000
+    timeout: 30s
+    middleware:
+      logging:
+        disable: false
+      metrics:
+        disable: false
+      tracing:
+        disable: false
+  grpc:
+    addr: 0.0.0.0:9000
+    timeout: 30s
+```
+
+### 数据库配置 (Database)
+
+```yaml
+database:
+  default: primary
+  connections:
+    primary:
+      dsn: root:password@tcp(127.0.0.1:3306)/mydb
+      driver: mysql
+      max_open_conns: 100
+      max_idle_conns: 10
+      conn_max_lifetime: 1h
+    replica:
+      - dsn: root:password@tcp(127.0.0.1:3307)/mydb
+        driver: mysql
+  gorm:
+    skip_default_transaction: true
+    logger:
+      level: Warn
+      slow_threshold: 200ms
+```
+
+### Redis 配置 (Redis)
+
+```yaml
+redis:
+  default: cache
+  connections:
+    cache:
+      addr: 127.0.0.1:6379
+      password: ""
+      db: 0
+      pool_size: 10
+      read_timeout: 3s
+      write_timeout: 3s
+```
+
+### 服务发现与注册 (Discovery & Registry)
+
+```yaml
+discovery:
+  timeout: 10s
 
 registry:
-  disable: false
+  disable_health_check: false
+  healthcheck_internal: 10s
+  tags:
+    - production
+    - v1
 ```
 
-## 🛠️ protoc-gen-jsonschema 工具
+### 客户端配置 (Client)
 
-将 Protocol Buffer 定义转换为 JSON Schema。
-
-### 安装
-
-```bash
-go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema@main
+```yaml
+client:
+  clients:
+    user-service:
+      target: discovery:///user-service  # 服务发现
+      protocol: GRPC
+      middleware:
+        timeout:
+          default: 5s
+        tracing:
+          disable: false
+        metrics:
+          disable: false
 ```
 
-### 快速使用
+### 定时任务配置 (Job)
 
-```bash
-# 基础生成
-protoc --jsonschema_out=. *.proto
-
-# 生成 YAML 格式
-protoc --jsonschema_out=. --jsonschema_opt=output_file_suffix=.yaml *.proto
-
-# 压缩输出（适合网络传输）
-protoc --jsonschema_out=. --jsonschema_opt=pretty_json_output=false *.proto
-
-# 符合 ProtoJSON 标准（int64 转 string）
-protoc --jsonschema_out=. \
-  --jsonschema_opt=respect_protojson_int64=true \
-  --jsonschema_opt=respect_protojson_presence=true \
-  *.proto
+```yaml
+job:
+  timezone: Asia/Shanghai
+  jobs:
+    cleanup:
+      schedule: "@daily"              # 每天 0 点
+      immediately: true               # 启动时立即执行一次
+      concurrent_policy: SKIP         # 并发策略: OVERLAP/DELAY/SKIP
+    backup:
+      schedule: "0 2 * * *"          # 每天凌晨 2 点
 ```
 
-### 核心特性
-
-- **多版本支持** - Draft-04/06/07/2019-09/2020-12
-- **Proto2/Proto3 兼容**
-- **Well-Known Types** - 内置 Google Protobuf 和 Kubernetes 类型支持
-- **自定义选项** - 字段级、消息级、文件级配置
-- **四阶段架构**：
-  1. Frontend Generator - Proto 解析与中间 Schema 生成
-  2. Backend Optimizer - 未使用定义移除（Tree Shaking）
-  3. Target Generator - 目标 Draft 版本生成
-  4. Serializer - JSON/YAML 序列化
-
-详细文档请参考 [cmd/protoc-gen-jsonschema/README.md](./cmd/protoc-gen-jsonschema/README.md)
-
-## 🏗️ 构建命令
+## 常用命令
 
 ```bash
-# 安装依赖工具
-make init
-
-# 生成代码 (Wire + go generate)
-make generate
-
-# 生成 Proto 文件
+# 生成 Proto 代码和配置 Schema
 make proto
 
-# 代码检查
+# 生成所有代码 (Wire 等)
+make generate
+
+# 运行代码检查
 make lint
 
-# 全部执行
+# 一次性执行所有命令
 make all
 ```
 
-## 📦 核心依赖
+## 项目结构
 
-| 组件                          | 版本      | 用途          |
-|-----------------------------|---------|-------------|
-| go-kratos/kratos            | v2.9.1  | 微服务框架       |
-| google/wire                 | v0.7.0  | 依赖注入        |
-| gorm.io/gorm                | v1.31.1 | ORM         |
-| redis/go-redis              | v9.17.0 | Redis 客户端  |
-| go.opentelemetry.io/otel    | v1.38.0 | 可观测性        |
-| hashicorp/consul/api        | v1.26.1 | 服务发现        |
-| robfig/cron                 | v3.0.1  | 定时任务        |
-| go.uber.org/zap             | v1.27.0 | 日志          |
-| google.golang.org/protobuf  | v1.36.8 | Protocol Buffer |
-| google.golang.org/grpc      | v1.75.0 | gRPC        |
-
-## 📖 最佳实践
-
-### 1. 配置管理
-
-- 使用 `config.schema.json` 验证配置文件
-- 敏感信息使用环境变量或配置中心
-- 区分环境配置（dev/test/prod）
-
-### 2. 日志规范
-
-- 使用结构化日志，避免字符串拼接
-- 敏感信息脱敏（通过 `filter_keys`）
-- 合理设置日志级别
-
-### 3. 错误处理
-
-- 使用 `pkg/errors` 包装错误，保留堆栈
-- 定义业务错误码（通过 proto 生成）
-- 区分可恢复错误与不可恢复错误
-
-### 4. 性能优化
-
-- 数据库使用连接池
-- Redis 使用 Pipeline 批量操作
-- gRPC 启用连接复用
-- 合理设置超时时间
-
-### 5. 可观测性
-
-- 启用分布式追踪
-- 监控关键指标（请求量、延迟、错误率）
-- 设置合理的采样率
-
-## 🤝 贡献指南
-
-欢迎贡献代码、报告 Bug 或提出新特性建议！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'feat: add some amazing feature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-提交信息请遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。
-
-## 📄 许可证
-
-[Apache License 2.0](LICENSE)
-
-## 🙏 致谢
-
-- [Kratos](https://github.com/go-kratos/kratos) - 优秀的 Go 微服务框架
-- [protoc-gen-jsonschema (PUBG)](https://github.com/pubg/protoc-gen-jsonschema) - JSON Schema 生成器原型
-
----
-
-<a name="english"></a>
-
-# Kratos Foundation
-
-A production-grade infrastructure library based on [Kratos](https://github.com/go-kratos/kratos) microservice framework, providing out-of-the-box enterprise-level microservice development capabilities.
-
-## ✨ Core Features
-
-### 🏗️ Complete Microservice Infrastructure
-- **Service Discovery & Registration** - Consul integration with automatic registration and health checks
-- **Distributed Tracing** - OpenTelemetry-based with OTLP HTTP exporter
-- **Metrics Collection** - Prometheus metrics with auto-instrumentation for HTTP/gRPC/Database/Cache
-- **Structured Logging** - Log filtering, rotation, multiple outputs, auto TraceID injection
-- **Dependency Injection** - Compile-time DI based on Google Wire
-
-### 💾 Data Layer
-- **Database Access** - GORM integration supporting multiple databases (MySQL/PostgreSQL/SQLite), read-write separation, tracing
-- **Redis Cache** - Multiple connection pool management with tracing and metrics
-
-### 🌐 Service Layer
-- **Dual Protocol Server** - HTTP and gRPC servers with WebSocket support
-- **Client Factory** - Service discovery and direct connection modes with circuit breaker, retry, timeout policies
-- **Middleware System** - Unified server/client middleware (logging, tracing, rate limiting, circuit breaking, etc.)
-
-### ⏰ Task Scheduling
-- **Scheduled Jobs** - Cron scheduling with concurrent policy control (SKIP/OVERLAP/DELAY)
-
-### 🛠️ Development Tools
-- **protoc-gen-jsonschema** - Protocol Buffer to JSON Schema converter (supports Draft-04/06/07/2019-09/2020-12)
-- **protoc-gen-kratos-foundation-errors** - Error code generator
-- **protoc-gen-kratos-foundation-client** - Client code generator
-
-## 📋 Requirements
-
-- Go >= 1.23
-- Protocol Buffers compiler (protoc)
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-go get github.com/jaggerzhuang1994/kratos-foundation
+```
+kratos-foundation/
+├── cmd/                    # 命令行工具和代码生成器
+│   ├── protoc-gen-kratos-foundation-client/
+│   └── protoc-gen-jsonschema/
+├── internal/               # 内部实现
+│   ├── middleware/         # 中间件实现
+│   └── logger/            # 日志实现
+├── pkg/                    # 公共 API (可被外部依赖)
+│   ├── app/               # 应用管理
+│   ├── app_info/          # 应用元信息
+│   ├── client/            # RPC 客户端
+│   ├── config/            # 配置加载
+│   ├── consul/            # Consul 客户端
+│   ├── database/          # 数据库
+│   ├── discovery/         # 服务发现
+│   ├── env/               # 环境变量
+│   ├── errors/            # 错误处理
+│   ├── job/               # 定时任务
+│   ├── log/               # 日志
+│   ├── metrics/           # 监控指标
+│   ├── redis/             # Redis
+│   ├── registry/          # 服务注册
+│   ├── server/            # HTTP/gRPC 服务器
+│   ├── tracing/           # 链路追踪
+│   ├── transport/         # 传输层
+│   └── utils/             # 工具函数
+├── proto/                  # Protobuf 定义
+│   ├── config.proto       # 主配置
+│   ├── config_pb/         # 配置子模块
+│   └── error_reason.proto # 错误定义
+├── third_party/           # 第三方 proto 定义
+├── config.example.yaml    # 配置示例
+├── config.schema.json     # 配置 JSON Schema
+├── Makefile               # 构建脚本
+└── go.mod                 # Go 模块定义
 ```
 
-### Install Development Tools
+## 中间件
 
-```bash
-make init
+框架提供以下中间件：
+
+### 服务端中间件
+
+- **Timeout** - 超时控制，支持按路由配置
+- **Metrics** - Prometheus 指标采集
+- **Tracing** - OpenTelemetry 链路追踪
+- **Logging** - 结构化日志记录
+- **Metadata** - 元数据传递
+- **Validator** - 请求参数验证
+- **RateLimit** - BBR 自适应限流
+- **CircuitBreaker** - SRE 熔断器
+
+### 客户端中间件
+
+- **Timeout** - 超时控制
+- **Metrics** - 客户端指标
+- **Tracing** - 链路追踪上下文传递
+- **Logging** - 请求/响应日志
+- **CircuitBreaker** - 客户端熔断
+
+## 依赖注入
+
+Kratos Foundation 使用 [Wire](https://github.com/google/wire) 进行编译时依赖注入。
+
+```go
+//go:build wireinject
+// +build wireinject
+
+// The build tag makes sure the stub is not built in the final build.
+
+package main
+
+import (
+	"github.com/go-kratos/kratos/v2"
+	"github.com/google/wire"
+	"github.com/jaggerzhuang1994/kratos-foundation-template/internal"
+	"github.com/jaggerzhuang1994/kratos-foundation-template/internal/conf"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
+)
+
+// wireApp init kratos application.
+func wireApp(app_info.Version, conf.FileConfigSource) (*kratos.App, func(), error) {
+	panic(wire.Build(
+		kratos_foundation.ProviderSet,
+		internal.ProviderSet,
+		NewBootstrap,
+	))
+}
+
 ```
 
-For detailed usage, please refer to the Chinese documentation above.
+## 可观测性
 
-## 📦 Core Dependencies
+### 日志
 
-| Component                    | Version | Purpose  |
-|------------------------------|---------|----------|
-| go-kratos/kratos             | v2.9.1  | Microservice Framework |
-| google/wire                  | v0.7.0  | Dependency Injection |
-| gorm.io/gorm                 | v1.31.1 | ORM |
-| redis/go-redis               | v9.17.0 | Redis Client |
-| go.opentelemetry.io/otel     | v1.38.0 | Observability |
-| hashicorp/consul/api         | v1.26.1 | Service Discovery |
-| robfig/cron                  | v3.0.1  | Cron Scheduler |
-| go.uber.org/zap              | v1.27.0 | Logger |
+结构化日志，支持 JSON 格式输出，自动注入：
+- 时间戳
+- Trace ID / Span ID
+- 服务名称 / 版本
+- 调用位置
 
-## 📄 License
+### 监控指标
 
-[Apache License 2.0](LICENSE)
+Prometheus 指标包括：
+- HTTP/gRPC 请求计数、延迟
+- 数据库连接池、查询统计
+- Redis 操作统计
+- 定时任务执行统计
+
+### 链路追踪
+
+OpenTelemetry 集成，支持导出到：
+- Jaeger
+- Zipkin
+- OTLP-compatible 系统
+
+## 最佳实践
+
+1. **配置管理** - 使用环境变量覆盖配置，敏感信息通过环境变量注入
+2. **错误处理** - 使用定义的 Error Reason 统一错误码
+3. **日志规范** - 保持日志结构化，避免打印敏感信息
+4. **资源管理** - 合理配置连接池大小，设置合理的超时时间
+5. **监控告警** - 关键指标配置告警规则
+6. **优雅停机** - 实现 `Stop` 方法处理优雅关闭
+
+## 贡献指南
+
+欢迎贡献代码！请确保：
+
+1. 通过 `make lint` 代码检查
+2. 添加必要的单元测试
+3. 更新相关文档
+4. 遵循现有代码风格
+
+## 许可证
+
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+
+## 相关链接
+
+- [Go-Kratos 官方文档](https://go-kratos.dev/)
+- [Wire 文档](https://github.com/google/wire)
+- [GORM 文档](https://gorm.io/)
+- [OpenTelemetry Go](https://opentelemetry.io/docs/instrumentation/go/)
+- [Consul 文档](https://www.consul.io/docs)
+
+## 支持
+
+如有问题或建议，欢迎提交 Issue 或 Pull Request。

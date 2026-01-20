@@ -1,0 +1,21 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+
+enum DC {
+  // 单数据中心
+  SINGLE = 0;
+  // 多数据中心
+  MULTI = 1;
+}
+
+// 服务发现
+message Discovery {
+  // 获取服务的超时时间【默认10s】
+  optional google.protobuf.Duration timeout = 1;
+  // 数据中心【默认 SINGLE】
+  optional DC dc = 2;
+}
