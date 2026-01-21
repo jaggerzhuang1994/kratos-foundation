@@ -18,14 +18,14 @@ func NewFileSource(
 	fileSourcePathList FileSourcePathList,
 ) (FileSource, error) {
 	if len(fileSourcePathList) == 0 {
-		log.Info("not load file source: file config path is empty")
+		log.Warn("file source not loaded: config path is empty")
 		return nil, nil
 	}
 	matches, err := glob(fileSourcePathList...)
 	if err != nil {
 		return nil, errors.WithMessage(err, "load file source failed")
 	}
-	log.Info("file config list ", matches)
+	log.Info("file config list:", matches)
 	// 通配符返回的文件列表构成一个优先级组，优先级按照glob返回的顺序
 	return NewPriorityConfigSource(utils.Map(matches, func(filename string) config.Source {
 		return file.NewSource(filename)

@@ -59,14 +59,14 @@ func (c *cron_) Remove(id cron.EntryID) {
 }
 
 func (c *cron_) start() {
-	c.log.Info("start cron")
+	c.log.Info("starting cron server")
 	c.cron.Start()
 }
 
 func (c *cron_) stop() {
-	c.log.Info("stop cron")
+	c.log.Info("stopping cron server")
 	<-c.cron.Stop().Done()
-	c.log.Info("stop cron done")
+	c.log.Info("cron server stopped")
 }
 
 type cronJob struct {

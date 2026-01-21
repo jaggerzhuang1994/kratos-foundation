@@ -17,7 +17,7 @@ func NewDiscovery(
 	log = log.WithModule("discovery")
 
 	if client == nil {
-		log.Warn("not load discovery: consul not initialized")
+		log.Warn("discovery not loaded: consul client not initialized")
 		return nil
 	}
 

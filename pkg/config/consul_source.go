@@ -16,14 +16,14 @@ func NewConsulSource(
 	consulSourcePathList ConsulSourcePathList, // 配置列表
 ) ConsulSource {
 	if len(consulSourcePathList) == 0 {
-		log.Info("not load consul source: consul path is empty")
+		log.Warn("consul source not loaded: path is empty")
 		return nil
 	}
 	if client == nil {
-		log.Warn("not load consul source: consul not initialized")
+		log.Warn("consul source not loaded: consul client not initialized")
 		return nil
 	}
-	log.Info("consul source path list ", consulSourcePathList)
+	log.Info("consul source path list:", consulSourcePathList)
 	// 所有配置路径构成一个优先级组，优先级按照路径顺序指定
 	return NewPriorityConfigSource(utils.Map(consulSourcePathList, func(configPath string) Source {
 		sc, _ := consul.New(client, consul.WithPath(configPath))

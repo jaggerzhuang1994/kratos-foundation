@@ -106,7 +106,7 @@ func (s *websocketServer) Handle(path string, handler any, optionalUpgrader ...U
 			// 建立连接
 			err := client.upgrade(upgrader, w)
 			if err != nil {
-				clog.Warn(err)
+				clog.With("error", err).Warn("websocket upgrade failed")
 				return nil, err
 			}
 			// 处理请求

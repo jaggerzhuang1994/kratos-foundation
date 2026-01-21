@@ -67,11 +67,11 @@ func (s *schedule) Next(now time.Time) time.Time {
 	// 如果是立刻调度，并且是首次调度
 	if s.immediately && !s.immediatelyScheduled {
 		s.immediatelyScheduled = true
-		s.log.Debug("job schedule immediately")
+		s.log.Debug("scheduling job immediately")
 		return now
 	}
 
 	next := s.schedule.Next(now)
-	s.log.With("next", next.Format(time.RFC3339), "left", time.Until(next)).Debug("job schedule")
+	s.log.With("next", next.Format(time.RFC3339), "left", time.Until(next)).Debug("job scheduled")
 	return next
 }

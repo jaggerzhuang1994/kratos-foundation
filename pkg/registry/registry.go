@@ -17,7 +17,7 @@ func NewRegistry(
 	log = log.WithModule("registry")
 
 	if client == nil {
-		log.Warn("not load registry: consul not initialized")
+		log.Warn("registry not loaded: consul client not initialized")
 		return nil
 	}
 

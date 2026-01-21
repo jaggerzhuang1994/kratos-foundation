@@ -13,12 +13,12 @@ func Middleware(log log.Log) middleware.Middleware {
 		return func(ctx context.Context) (err error) {
 			st := time.Now()
 			log = log.WithContext(ctx)
-			log.Info("run")
+			log.Info("job execution started")
 			defer func() {
 				if err == nil {
-					log.With("duration", time.Since(st)).Info("done")
+					log.With("duration", time.Since(st)).Info("job execution done")
 				} else {
-					log.With("duration", time.Since(st)).Error("err done: ", err)
+					log.With("duration", time.Since(st)).Error("job execution err done: ", err)
 				}
 			}()
 			err = next(ctx)
