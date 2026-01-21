@@ -20,6 +20,16 @@ const traceIDKey = "trace.id"
 const spanIDKey = "span.id"
 const callerKey = "caller"
 
+var defaultPreset = []string{
+	tsKey,
+	serviceIDKey,
+	serviceNameKey,
+	serviceVersionKey,
+	traceIDKey,
+	spanIDKey,
+	// callerKey,
+}
+
 func NewPresetKv(appInfo app_info.AppInfo) PresetKv {
 	return PresetKv{
 		tsKey: log.DefaultTimestamp,

@@ -12,16 +12,6 @@ type Config = *config_pb.Log
 
 type DefaultConfig Config
 
-var defaultPreset = []string{
-	tsKey,
-	serviceIDKey,
-	serviceNameKey,
-	serviceVersionKey,
-	traceIDKey,
-	spanIDKey,
-	callerKey,
-}
-
 func NewDefaultConfig() DefaultConfig {
 	var defaultLevel = "info"
 	if env.AppDebug() || env.IsLocal() {
