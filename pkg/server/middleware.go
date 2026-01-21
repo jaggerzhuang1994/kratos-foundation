@@ -40,7 +40,7 @@ func NewMiddlewares(
 	// 往ctx中注入server metadata
 	if mm := metadata.Server(conf.GetMetadata()); mm != nil {
 		m = append(m, mm)
-		log.Info("add timeout middleware")
+		log.Info("add metadata middleware")
 	}
 
 	// 链路追踪中间件
