@@ -64,7 +64,7 @@ func NewWebsocketServer(
 	}
 	router := httpServer.Route("/")
 	srv := &websocketServer{
-		log: log.WithModule("websocket").With(
+		log: log.WithModule("server/websocket").With(
 			"client", log2.Valuer(func(ctx context.Context) any {
 				request, ok := http.RequestFromServerContext(ctx)
 				if ok {

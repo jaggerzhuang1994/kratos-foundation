@@ -22,39 +22,61 @@ func NewMiddlewares(
 	metrics_ metrics.Metrics,
 	tracing_ tracing.Tracing,
 ) Middlewares {
+	log = log.WithModule("server/middleware", config.GetLog())
+
 	var m Middlewares
 	conf := config.GetMiddleware()
 
 	// 异常恢复
 	m = append(m, recovery.Recovery())
+	log.Info("add recovery middleware")
 
 	// 超时中间件
 	m = append(m, timeout.Server(
 		conf.GetTimeout(),
 	))
+	log.Info("add timeout middleware")
 
 	// 往ctx中注入server metadata
-	m = append(m, metadata.Server(conf.GetMetadata()))
+	if mm := metadata.Server(conf.GetMetadata()); mm != nil {
+		m = append(m, mm)
+		log.Info("add timeout middleware")
+	}
 
 	// 链路追踪中间件
-	m = append(m, tracing.Server(tracing_, conf.GetTracing()))
+	if mm := tracing.Server(tracing_, conf.GetTracing()); mm != nil {
+		m = append(m, mm)
+		log.Info("add tracing middleware")
+	}
 
 	// 监控中间件
-	mm, err := metrics.Server(metrics_, conf.GetMetrics())
-	if err != nil {
-		log.Warn("Failed to create metrics middleware ", err)
-	} else {
-		m = append(m, mm)
+	{
+		mm, err := metrics.Server(metrics_, conf.GetMetrics())
+		if err != nil {
+			log.Warn("failed to add metrics middleware ", err)
+		} else {
+			m = append(m, mm)
+			log.Info("add metrics middleware")
+		}
 	}
 
 	// 日志中间件
-	m = append(m, logging.Server(log, conf.GetLogging()))
+	if mm := logging.Server(log, conf.GetLogging()); mm != nil {
+		m = append(m, mm)
+		log.Info("add logging middleware")
+	}
 
 	// 表单验证中间件
-	m = append(m, validator.Validator(conf.GetValidator()))
+	if mm := validator.Validator(conf.GetValidator()); mm != nil {
+		m = append(m, mm)
+		log.Info("add validator middleware")
+	}
 
 	// 限流
-	m = append(m, ratelimit.Server(conf.GetRateLimit()))
+	if mm := ratelimit.Server(conf.GetRateLimit()); mm != nil {
+		m = append(m, mm)
+		log.Info("add ratelimit middleware")
+	}
 
 	return m
 }

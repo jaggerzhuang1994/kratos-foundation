@@ -21,5 +21,5 @@ func NewLog(log log.Log, config Config) Log {
 type CronLog log.Log
 
 func NewCronLog(log log.Log, config Config) CronLog {
-	return log.WithModule("cron", config.GetLog()).With("job", jobNameValuer)
+	return log.WithModule("job/cron", config.GetLog()).With("job", jobNameValuer)
 }

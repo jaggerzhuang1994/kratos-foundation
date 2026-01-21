@@ -2165,6 +2165,9 @@
         },
         "sampler": {
           "$ref": "#/definitions/.kratos_foundation_pb.Tracing.sampler"
+        },
+        "log": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Tracing.log"
         }
       },
       "type": "object"
@@ -2176,6 +2179,10 @@
     ".kratos_foundation_pb.Tracing.exporter": {
       "$ref": "#/definitions/.kratos_foundation_pb.Exporter",
       "description": "导出配置"
+    },
+    ".kratos_foundation_pb.Tracing.log": {
+      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
+      "description": "logger 配置"
     },
     ".kratos_foundation_pb.Tracing.sampler": {
       "$ref": "#/definitions/.kratos_foundation_pb.Sampler",

@@ -16,6 +16,8 @@ var DefaultIPResolver = net.LookupIP
 const DisableConsul = "DISABLE_CONSUL"
 
 func NewConsul(log log.Log) (Client, error) {
+	log = log.WithModule("consul")
+
 	// 如果指定 DISABLE_CONSUL
 	// 如果没有指定 api.HTTPAddrEnvName 并且是 local 环境，则不返回 consul 实例
 	if env.GetEnvAsBool(DisableConsul) || (env.GetEnv(api.HTTPAddrEnvName) == "" && env.IsLocal()) {

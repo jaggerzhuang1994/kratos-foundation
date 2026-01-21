@@ -4,6 +4,7 @@ option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_
 package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
+import "config_pb/common.proto";
 
 message Tracing {
   // 是否禁用链路追踪 local 环境默认为禁用
@@ -14,6 +15,8 @@ message Tracing {
   optional Exporter exporter = 3;
   // 采样率设置
   optional Sampler sampler = 4;
+  // logger 配置
+  optional ModuleLog log = 5;
 }
 
 message Exporter {

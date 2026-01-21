@@ -14,6 +14,8 @@ func NewDiscovery(
 	config Config,
 	client consul2.Client,
 ) Discovery {
+	log = log.WithModule("discovery")
+
 	if client == nil {
 		log.Warn("not load discovery: consul not initialized")
 		return nil

@@ -28,7 +28,7 @@ func NewGormLogger(log log.Log, conf Config) GormLogger {
 	}
 
 	return logger.New(&gormLoggerWriter{
-		log.WithModule("gorm", conf.GetLog()).AddCallerDepth(),
+		log.WithModule("database/gorm", conf.GetLog()).AddCallerDepth(),
 	}, logger.Config{
 		SlowThreshold:             gormLogger.GetSlowThreshold().AsDuration(),
 		Colorful:                  gormLogger.GetColorful(),

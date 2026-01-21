@@ -15,6 +15,7 @@ func NewSampler(
 	if config.GetDisable() {
 		return nil
 	}
+	log = log.WithModule("tracing/sampler", config.GetLog())
 
 	samplerConfig := config.GetSampler()
 	switch samplerConfig.GetSample() {
