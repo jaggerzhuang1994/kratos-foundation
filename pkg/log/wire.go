@@ -9,6 +9,7 @@ var ProviderSet = wire.NewSet(
 	NewDefaultConfig,
 	NewPresetKv,
 	NewLogger,
+	NewHook,
 	NewLog,
 
 	wire.Bind(new(UpdateLogger), new(Logger)),

@@ -46,6 +46,7 @@ type logger struct {
 	release       *atomic.Value
 	presetKv      PresetKv
 	defaultConfig DefaultConfig
+	hook          Hook
 
 	cache atomic.Value
 
@@ -60,12 +61,14 @@ type logger struct {
 func NewLogger(
 	presetKv PresetKv,
 	defaultConfig DefaultConfig,
+	hook Hook,
 ) (Logger, func(), error) {
 	l := &logger{
 		global:        new(atomic.Value),
 		release:       new(atomic.Value),
 		presetKv:      presetKv,
 		defaultConfig: defaultConfig,
+		hook:          hook,
 	}
 	// 使用默认 logger
 	l.global.Store(&globalLogger{
@@ -302,6 +305,9 @@ func (l *logger) Update(c Config) error {
 		} else {
 			kv = append(kv, key, val)
 		}
+	}
+	if h, ok := l.hook.(hookInternal); ok {
+		kv = append(kv, h.customKv()...)
 	}
 	logger = log.With(logger, kv...)
 

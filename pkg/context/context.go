@@ -13,6 +13,7 @@ import (
 )
 
 func NewContext(
+	hook Hook,
 	appInfo app_info.AppInfo,
 	log_ log.Log, // log 组件
 	registry_ registry.Registrar, // registry 组件
@@ -27,6 +28,13 @@ func NewContext(
 	ctx = discovery.NewContext(ctx, discovery_)
 	ctx = metrics.NewContext(ctx, metrics_)
 	ctx = tracing.NewContext(ctx, tracing_)
+
+	if h, ok := hook.(hookInternal); ok {
+		for _, withCtx := range h.getWithContext() {
+			ctx = withCtx(ctx)
+		}
+	}
+
 	ctx, cancel := utils.GracefulShutdownCtx(ctx)
 	return ctx, cancel
 }

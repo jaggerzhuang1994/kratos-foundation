@@ -77,17 +77,19 @@ func NewApp(
 	options = append(options, kratos.StopTimeout(config.GetStopTimeout().AsDuration()))
 
 	// app hook
-	for _, beforeStart := range hook_.(*hook).BeforeStartHooks {
-		options = append(options, kratos.BeforeStart(beforeStart))
-	}
-	for _, afterStart := range hook_.(*hook).AfterStartHooks {
-		options = append(options, kratos.AfterStart(afterStart))
-	}
-	for _, beforeStop := range hook_.(*hook).BeforeStopHooks {
-		options = append(options, kratos.BeforeStop(beforeStop))
-	}
-	for _, afterStop := range hook_.(*hook).AfterStopHooks {
-		options = append(options, kratos.AfterStop(afterStop))
+	if h, ok := hook_.(hookInternal); ok {
+		for _, beforeStart := range h.beforeStartHooks() {
+			options = append(options, kratos.BeforeStart(beforeStart))
+		}
+		for _, afterStart := range h.afterStartHooks() {
+			options = append(options, kratos.AfterStart(afterStart))
+		}
+		for _, beforeStop := range h.beforeStopHooks() {
+			options = append(options, kratos.BeforeStop(beforeStop))
+		}
+		for _, afterStop := range h.afterStopHooks() {
+			options = append(options, kratos.AfterStop(afterStop))
+		}
 	}
 
 	return kratos.New(options...)
