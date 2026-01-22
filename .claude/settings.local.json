@@ -13,7 +13,9 @@
       "Bash(go build:*)",
       "Bash(go test:*)",
       "Bash(go vet:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "mcp__zread__get_repo_structure",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
