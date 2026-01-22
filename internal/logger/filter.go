@@ -64,7 +64,7 @@ func (f *filterLogger) Log(level log.Level, keyvals ...any) error {
 		if i+1 <= length-1 {
 			// 如果启用空值过滤且值为空，则跳过
 			if f.filterEmpty {
-				if fmt.Sprintf("%v", keyvals[i+1]) == "" {
+				if fmt.Sprintf("%v", keyvals[i+1]) == "" || keyvals[i+1] == nil {
 					continue
 				}
 			}
