@@ -246,15 +246,17 @@ func (m *hook) AfterStop(hook HookFunc) {
 // 返回按照注册顺序排列的所有启动前钩子函数。
 //
 // 返回：
-//   []HookFunc: 启动前钩子函数列表的引用
+//
+//	[]HookFunc: 启动前钩子函数列表的引用
 //
 // 使用示例：
-//   hooks := hook.BeforeStartHooks()
-//   for _, h := range hooks {
-//       if err := h(ctx); err != nil {
-//           log.Errorf("BeforeStart hook failed: %v", err)
-//       }
-//   }
+//
+//	hooks := hook.BeforeStartHooks()
+//	for _, h := range hooks {
+//	    if err := h(ctx); err != nil {
+//	        log.Errorf("BeforeStart hook failed: %v", err)
+//	    }
+//	}
 func (m *hook) BeforeStartHooks() []HookFunc {
 	return m.beforeStartHooks
 }
@@ -265,15 +267,17 @@ func (m *hook) BeforeStartHooks() []HookFunc {
 // 返回按照注册顺序排列的所有启动后钩子函数。
 //
 // 返回：
-//   []HookFunc: 启动后钩子函数列表的引用
+//
+//	[]HookFunc: 启动后钩子函数列表的引用
 //
 // 使用示例：
-//   hooks := hook.AfterStartHooks()
-//   for _, h := range hooks {
-//       if err := h(ctx); err != nil {
-//           log.Errorf("AfterStart hook failed: %v", err)
-//       }
-//   }
+//
+//	hooks := hook.AfterStartHooks()
+//	for _, h := range hooks {
+//	    if err := h(ctx); err != nil {
+//	        log.Errorf("AfterStart hook failed: %v", err)
+//	    }
+//	}
 func (m *hook) AfterStartHooks() []HookFunc {
 	return m.afterStartHooks
 }
@@ -284,15 +288,17 @@ func (m *hook) AfterStartHooks() []HookFunc {
 // 返回按照注册顺序排列的所有停止前钩子函数。
 //
 // 返回：
-//   []HookFunc: 停止前钩子函数列表的引用
+//
+//	[]HookFunc: 停止前钩子函数列表的引用
 //
 // 使用示例：
-//   hooks := hook.BeforeStopHooks()
-//   for _, h := range hooks {
-//       if err := h(ctx); err != nil {
-//           log.Errorf("BeforeStop hook failed: %v", err)
-//       }
-//   }
+//
+//	hooks := hook.BeforeStopHooks()
+//	for _, h := range hooks {
+//	    if err := h(ctx); err != nil {
+//	        log.Errorf("BeforeStop hook failed: %v", err)
+//	    }
+//	}
 func (m *hook) BeforeStopHooks() []HookFunc {
 	return m.beforeStopHooks
 }
@@ -303,15 +309,17 @@ func (m *hook) BeforeStopHooks() []HookFunc {
 // 返回按照注册顺序排列的所有停止后钩子函数。
 //
 // 返回：
-//   []HookFunc: 停止后钩子函数列表的引用
+//
+//	[]HookFunc: 停止后钩子函数列表的引用
 //
 // 使用示例：
-//   hooks := hook.AfterStopHooks()
-//   for _, h := range hooks {
-//       if err := h(ctx); err != nil {
-//           log.Errorf("AfterStop hook failed: %v", err)
-//       }
-//   }
+//
+//	hooks := hook.AfterStopHooks()
+//	for _, h := range hooks {
+//	    if err := h(ctx); err != nil {
+//	        log.Errorf("AfterStop hook failed: %v", err)
+//	    }
+//	}
 func (m *hook) AfterStopHooks() []HookFunc {
 	return m.afterStopHooks
 }

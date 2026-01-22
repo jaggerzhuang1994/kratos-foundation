@@ -33,8 +33,9 @@ import (
 //   - 注入集群、区域等部署拓扑信息
 //
 // 数据格式：
-//   键值对应该以交替的 key, value 形式提供，例如：
-//   With("service", "user-service", "version", "1.0.0")
+//
+//	键值对应该以交替的 key, value 形式提供，例如：
+//	With("service", "user-service", "version", "1.0.0")
 //
 // 注意：
 //   - 全局字段会添加到每条日志中，避免添加过多字段
@@ -107,18 +108,19 @@ func NewHook() Hook {
 // 这些键值对将作为预设字段出现在所有日志输出中。
 //
 // 执行流程：
-//   1. 将新的键值对追加到现有列表
-//   2. 更新时间戳为当前时间
-//   3. 后续的日志输出会自动包含这些字段
+//  1. 将新的键值对追加到现有列表
+//  2. 更新时间戳为当前时间
+//  3. 后续的日志输出会自动包含这些字段
 //
 // 示例：
-//   hook := NewHook()
-//   hook.With("service", "user-service")
-//   hook.With("version", "v1.0.0")
-//   hook.With("env", "production")
 //
-//   // 在日志中使用
-//   log.Info("启动应用") // 输出: {"service":"user-service","version":"v1.0.0","env":"production","msg":"启动应用"}
+//	hook := NewHook()
+//	hook.With("service", "user-service")
+//	hook.With("version", "v1.0.0")
+//	hook.With("env", "production")
+//
+//	// 在日志中使用
+//	log.Info("启动应用") // 输出: {"service":"user-service","version":"v1.0.0","env":"production","msg":"启动应用"}
 //
 // 注意：
 //   - 每次调用都会追加，不会替换现有的键值对

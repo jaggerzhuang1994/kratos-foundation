@@ -12,8 +12,9 @@
 //   - 配置优雅停机和平滑重启
 //
 // 使用方式：
-//   应用通常通过依赖注入（Wire）创建，NewApp 函数接收所有必要的依赖，
-//   并返回一个完全配置好的 Kratos 应用实例。
+//
+//	应用通常通过依赖注入（Wire）创建，NewApp 函数接收所有必要的依赖，
+//	并返回一个完全配置好的 Kratos 应用实例。
 package app
 
 import (
@@ -29,7 +30,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
-	"github.com/pkg/errors"
 )
 
 // ServerProvider 服务提供者接口，用于获取应用的所有传输层服务器
@@ -38,14 +38,15 @@ import (
 // 通常由 Wire 依赖注入自动实现，返回所有已配置的服务器实例。
 //
 // 典型实现：
-//   type ServerProvider struct {
-//       httpServer *http.Server
-//       grpcServer *grpc.Server
-//   }
 //
-//   func (p *ServerProvider) GetServers() []transport.Server {
-//       return []transport.Server{p.httpServer, p.grpcServer}
-//   }
+//	type ServerProvider struct {
+//	    httpServer *http.Server
+//	    grpcServer *grpc.Server
+//	}
+//
+//	func (p *ServerProvider) GetServers() []transport.Server {
+//	    return []transport.Server{p.httpServer, p.grpcServer}
+//	}
 type ServerProvider interface {
 	// GetServers 返回应用的所有传输层服务器
 	//
@@ -68,7 +69,7 @@ type ServerProvider interface {
 //
 // 参数说明：
 //   - bootstrap: 业务引导接口，用于初始化业务逻辑
-//                ⚠️ 禁止在 bootstrap 中注入 app（防止循环依赖）
+//     ⚠️ 禁止在 bootstrap 中注入 app（防止循环依赖）
 //   - config:     应用配置（从配置文件加载）
 //   - hook_:      应用生命周期 Hook（启动前/后、停止前/后）
 //   - appInfo:    应用元信息（ID、名称、版本等）
@@ -78,37 +79,38 @@ type ServerProvider interface {
 //   - registrar:  服务注册中心（Consul 等），用于服务发现
 //
 // 配置流程：
-//   1. 合并应用元信息（配置文件 + appInfo）
-//   2. 配置服务发现端点
-//   3. 设置上下文和日志
-//   4. 注册传输层服务器
-//   5. 配置平滑重启信号（SIGINT、SIGTERM 等）
-//   6. 配置服务注册中心
-//   7. 配置优雅停机超时
-//   8. 注册应用生命周期 Hook
+//  1. 合并应用元信息（配置文件 + appInfo）
+//  2. 配置服务发现端点
+//  3. 设置上下文和日志
+//  4. 注册传输层服务器
+//  5. 配置平滑重启信号（SIGINT、SIGTERM 等）
+//  6. 配置服务注册中心
+//  7. 配置优雅停机超时
+//  8. 注册应用生命周期 Hook
 //
 // 返回：
 //   - *kratos.App: 完全配置好的 Kratos 应用实例
 //   - error:       配置过程中的错误
 //
 // 使用示例：
-//   app, err := NewApp(
-//       bootstrap,
-//       config,
-//       hook,
-//       appInfo,
-//       context.Background(),
-//       logger,
-//       serverProvider,
-//       registrar,
-//   )
-//   if err != nil {
-//       log.Fatal(err)
-//   }
 //
-//   if err := app.Run(); err != nil {
-//       log.Fatal(err)
-//   }
+//	app, err := NewApp(
+//	    bootstrap,
+//	    config,
+//	    hook,
+//	    appInfo,
+//	    context.Background(),
+//	    logger,
+//	    serverProvider,
+//	    registrar,
+//	)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	if err := app.Run(); err != nil {
+//	    log.Fatal(err)
+//	}
 //
 // 注意事项：
 //   - 此函数通常由 Wire 依赖注入自动调用
@@ -124,7 +126,7 @@ func NewApp(
 	logger log.Logger,
 	serverProvider ServerProvider,
 	registrar registry.Registrar,
-) (*kratos.App, error) {
+) *kratos.App {
 	var options []kratos.Option
 
 	// ============================================================
@@ -140,10 +142,10 @@ func NewApp(
 		md[k] = v
 	}
 	options = append(options,
-		kratos.ID(appInfo.GetId()),                  // 应用唯一标识
-		kratos.Name(appInfo.GetName()),              // 应用名称
-		kratos.Version(appInfo.GetVersion()),        // 应用版本
-		kratos.Metadata(md),                         // 应用元数据
+		kratos.ID(appInfo.GetId()),           // 应用唯一标识
+		kratos.Name(appInfo.GetName()),       // 应用名称
+		kratos.Version(appInfo.GetVersion()), // 应用版本
+		kratos.Metadata(md),                  // 应用元数据
 	)
 
 	// ============================================================
@@ -188,7 +190,7 @@ func NewApp(
 	// 则将服务注册到 Consul 等注册中心
 	if !config.GetDisableRegistrar() && registrar != nil {
 		options = append(options,
-			kratos.Registrar(registrar),                                    // 注册中心实例
+			kratos.Registrar(registrar),                                        // 注册中心实例
 			kratos.RegistrarTimeout(config.GetRegistrarTimeout().AsDuration()), // 注册超时时间
 		)
 	}
@@ -205,36 +207,33 @@ func NewApp(
 	// ============================================================
 	// 将 Hook 机制中注册的钩子函数应用到 Kratos 应用生命周期中
 	// 钩子函数会按照注册顺序依次执行
-	if h, ok := hook_.(*hook); ok {
-		// 启动前钩子：在服务器启动之前执行
-		// 适用场景：检查依赖、预热缓存、验证配置等
-		for _, beforeStart := range h.beforeStartHooks {
-			options = append(options, kratos.BeforeStart(beforeStart))
-		}
 
-		// 启动后钩子：在服务器启动完成并开始接受请求后执行
-		// 适用场景：发送启动通知、注册到服务发现、启动后台任务等
-		for _, afterStart := range h.afterStartHooks {
-			options = append(options, kratos.AfterStart(afterStart))
-		}
+	// 启动前钩子：在服务器启动之前执行
+	// 适用场景：检查依赖、预热缓存、验证配置等
+	for _, beforeStart := range hook_.BeforeStartHooks() {
+		options = append(options, kratos.BeforeStart(beforeStart))
+	}
 
-		// 停止前钩子：在服务器停止之前执行
-		// 适用场景：优雅关闭连接、释放资源、持久化数据等
-		for _, beforeStop := range h.beforeStopHooks {
-			options = append(options, kratos.BeforeStop(beforeStop))
-		}
+	// 启动后钩子：在服务器启动完成并开始接受请求后执行
+	// 适用场景：发送启动通知、注册到服务发现、启动后台任务等
+	for _, afterStart := range hook_.AfterStartHooks() {
+		options = append(options, kratos.AfterStart(afterStart))
+	}
 
-		// 停止后钩子：在服务器完全停止后执行
-		// 适用场景：清理临时文件、发送停止通知、关闭日志文件等
-		for _, afterStop := range h.afterStopHooks {
-			options = append(options, kratos.AfterStop(afterStop))
-		}
-	} else {
-		return nil, errors.New("app.Hook does not implement hook")
+	// 停止前钩子：在服务器停止之前执行
+	// 适用场景：优雅关闭连接、释放资源、持久化数据等
+	for _, beforeStop := range hook_.BeforeStopHooks() {
+		options = append(options, kratos.BeforeStop(beforeStop))
+	}
+
+	// 停止后钩子：在服务器完全停止后执行
+	// 适用场景：清理临时文件、发送停止通知、关闭日志文件等
+	for _, afterStop := range hook_.AfterStopHooks() {
+		options = append(options, kratos.AfterStop(afterStop))
 	}
 
 	// ============================================================
 	// 创建并返回 Kratos 应用实例
 	// ============================================================
-	return kratos.New(options...), nil
+	return kratos.New(options...)
 }

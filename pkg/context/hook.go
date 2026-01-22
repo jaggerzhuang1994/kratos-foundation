@@ -167,20 +167,23 @@ func (h *hook) WithContext(withContext func(context.Context) context.Context) {
 // 按照注册顺序依次执行所有 context 修改函数，形成处理链。
 //
 // 参数：
-//   ctx: 原始 context，通常是请求的根 context
+//
+//	ctx: 原始 context，通常是请求的根 context
 //
 // 返回：
-//   context.Context: 经过所有修改函数处理后的 context
+//
+//	context.Context: 经过所有修改函数处理后的 context
 //
 // 执行示例：
-//   // 假设注册了以下函数：
-//   // 1. addRequestID: 添加 request_id
-//   // 2. addUserID: 添加 user_id
-//   // 3. addTenantID: 添加 tenant_id
 //
-//   ctx := hook.Chain(context.Background())
-//   // 执行流程：
-//   // context.Background() -> addRequestID() -> addUserID() -> addTenantID() -> final ctx
+//	// 假设注册了以下函数：
+//	// 1. addRequestID: 添加 request_id
+//	// 2. addUserID: 添加 user_id
+//	// 3. addTenantID: 添加 tenant_id
+//
+//	ctx := hook.Chain(context.Background())
+//	// 执行流程：
+//	// context.Background() -> addRequestID() -> addUserID() -> addTenantID() -> final ctx
 //
 // 注意事项：
 //   - 此方法会在每个请求中被调用，性能敏感

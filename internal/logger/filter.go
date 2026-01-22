@@ -18,9 +18,9 @@ func NewFilterLevelLogger(logger log.Logger, level log.Level) log.Logger {
 
 // filterLogger 支持按键和空值过滤的日志器
 type filterLogger struct {
-	logger log.Logger
-	filterKeys map[string]struct{} // 需要过滤的键集合（这些键不会被记录）
-	filterEmpty bool               // 是否过滤空值
+	logger      log.Logger
+	filterKeys  map[string]struct{} // 需要过滤的键集合（这些键不会被记录）
+	filterEmpty bool                // 是否过滤空值
 }
 
 // NewFilterLogger 创建一个支持按键和空值过滤的日志器
