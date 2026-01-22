@@ -1,46 +1,126 @@
 # Kratos Foundation
 
-[![Go Version](https://img.shields.io/badge/Go-1.23.6-blue)](https://go.dev/)
-[![Kratos](https://img.shields.io/badge/Kratos-v2.9.1-orange)](https://go-kratos.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.24.12-blue)](https://go.dev/)
+[![Kratos](https://img.shields.io/badge/Kratos-v2.9.2-orange)](https://go-kratos.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 Kratos Foundation 是一个基于 [Go-Kratos](https://go-kratos.dev/) 框架的企业级微服务基础库，提供了一套完整的生产就绪功能模块，帮助开发者快速构建可扩展、可观测的微服务应用。
 
-## 特性
+## 核心特性
 
 - 🚀 **开箱即用** - 提供企业级微服务常用功能模块，按需配置
+- 🔌 **Hook 机制** - 灵活的应用生命周期、日志和上下文扩展机制
 - 📦 **统一配置** - 基于 Protobuf 的配置定义，强类型且自动验证
 - 🔍 **可观测性** - 内置日志、监控指标、链路追踪完整方案
 - 🛠️ **依赖注入** - 基于 Wire 的编译时依赖注入
 - 🌐 **服务治理** - 集成 Consul 服务注册、发现与配置中心
-- 💾 **数据访问** - GORM ORM 集成，支持主从数据库
+- 💾 **数据访问** - GORM ORM 集成，支持主从数据库、ClickHouse
 - ⏰ **定时任务** - 基于 Cron 的定时任务调度，支持并发策略
 - 🔄 **RPC 客户端** - HTTP/gRPC 客户端工厂，支持服务发现与负载均衡
+- 🔌 **WebSocket** - 原生 WebSocket 支持
 
 ## 功能模块
 
-| 模块 | 说明 | 状态 |
-|------|------|------|
-| **应用管理** (`pkg/app`) | 应用生命周期管理、元信息 | ✅ 稳定 |
-| **日志** (`pkg/log`) | 结构化日志、文件轮转、多输出 | ✅ 稳定 |
-| **监控** (`pkg/metrics`) | Prometheus 指标采集与导出 | ✅ 稳定 |
-| **链路追踪** (`pkg/tracing`) | OpenTelemetry 分布式追踪 | ✅ 稳定 |
-| **HTTP 服务器** (`pkg/server/http`) | HTTP 服务器、WebSocket | ✅ 稳定 |
-| **gRPC 服务器** (`pkg/server/grpc`) | gRPC 服务器、反射服务 | ✅ 稳定 |
-| **数据库** (`pkg/database`) | GORM、主从分离、连接池 | ✅ 稳定 |
-| **Redis** (`pkg/redis`) | Redis 客户端、集群支持 | ✅ 稳定 |
-| **服务发现** (`pkg/discovery`) | Consul 服务发现 | ✅ 稳定 |
-| **服务注册** (`pkg/registry`) | Consul 服务注册 | ✅ 稳定 |
-| **配置中心** (`pkg/config`) | Consul KV 配置源 | ✅ 稳定 |
-| **RPC 客户端** (`pkg/client`) | HTTP/gRPC 客户端工厂 | ✅ 稳定 |
-| **定时任务** (`pkg/job`) | Cron 任务调度 | ✅ 稳定 |
-| **中间件** (`internal/middleware`) | 通用中间件集合 | ✅ 稳定 |
+| 模块                               | 说明                   | 状态   |
+|----------------------------------|----------------------|------|
+| **Hook 机制** (`pkg/app/hook.go`)  | 应用生命周期、日志、上下文扩展      | ✨ 新增 |
+| **应用管理** (`pkg/app`)             | 应用生命周期管理、Hook 集成     | ✅ 稳定 |
+| **日志** (`pkg/log`)               | 结构化日志、Hook、文件轮转      | ✅ 稳定 |
+| **上下文** (`pkg/context`)          | 上下文管理、Hook 扩展        | ✅ 稳定 |
+| **监控** (`pkg/metrics`)           | Prometheus 指标采集与导出   | ✅ 稳定 |
+| **链路追踪** (`pkg/tracing`)         | OpenTelemetry 分布式追踪  | ✅ 稳定 |
+| **HTTP 服务器** (`pkg/server/http`) | HTTP 服务器、WebSocket   | ✅ 稳定 |
+| **gRPC 服务器** (`pkg/server/grpc`) | gRPC 服务器、反射服务        | ✅ 稳定 |
+| **数据库** (`pkg/database`)         | GORM、主从分离、ClickHouse | ✅ 稳定 |
+| **Redis** (`pkg/redis`)          | Redis 客户端、集群支持       | ✅ 稳定 |
+| **服务发现** (`pkg/discovery`)       | Consul 服务发现          | ✅ 稳定 |
+| **服务注册** (`pkg/registry`)        | Consul 服务注册          | ✅ 稳定 |
+| **配置中心** (`pkg/config`)          | Consul KV 配置源        | ✅ 稳定 |
+| **RPC 客户端** (`pkg/client`)       | HTTP/gRPC 客户端工厂      | ✅ 稳定 |
+| **定时任务** (`pkg/job`)             | Cron 任务调度            | ✅ 稳定 |
+| **中间件** (`internal/middleware`)  | 通用中间件集合              | ✅ 稳定 |
+
+## Hook 机制
+
+Kratos Foundation 提供了强大的 Hook 机制，允许开发者在应用的关键生命周期点插入自定义逻辑。
+
+### 1. 应用生命周期 Hook
+
+在应用启动和停止的四个阶段注入自定义逻辑：
+
+```go
+import "github.com/jaggerzhuang1994/kratos-foundation/pkg/app/hook"
+
+// 方式一：函数式注册
+hook.BeforeStart(func (ctx context.Context) error {
+// 启动前：检查依赖、预热缓存等
+return nil
+})
+
+hook.AfterStart(func (ctx context.Context) error {
+// 启动后：发送启动通知、注册服务发现等
+return nil
+})
+
+hook.BeforeStop(func (ctx context.Context) error {
+// 停止前：优雅关闭连接、释放资源等
+return nil
+})
+
+hook.AfterStop(func (ctx context.Context) error {
+// 停止后：清理临时文件、发送停止通知等
+return nil
+})
+
+// 方式二：接口实现
+type MyHook struct{}
+
+func (h *MyHook) OnBeforeStart(ctx context.Context) error {
+// 自定义逻辑
+return nil
+}
+
+// ... 实现其他接口方法
+
+hook.Register(&MyHook{})
+```
+
+### 2. 日志 Hook
+
+为所有日志自动注入全局字段：
+
+```go
+import "github.com/jaggerzhuang1994/kratos-foundation/pkg/log/hook"
+
+logHook.With("service", "user-service")
+logHook.With("version", "v1.0.0")
+logHook.With("environment", "production")
+
+// 之后所有日志都会自动包含这些字段
+log.Info("处理请求") // 输出: {"service":"user-service","version":"v1.0.0","environment":"production","msg":"处理请求"}
+```
+
+### 3. 上下文 Hook
+
+为所有请求上下文注入自定义数据：
+
+```go
+import "github.com/jaggerzhuang1994/kratos-foundation/pkg/context/hook"
+
+contextHook.WithContext(func (ctx context.Context) context.Context {
+// 自动生成请求 ID
+requestID := uuid.New().String()
+return context.WithValue(ctx, "request_id", requestID)
+})
+
+// 之后所有处理器的 context 都会包含 request_id
+```
 
 ## 快速开始
 
 ### 环境要求
 
-- Go >= 1.23.6
+- Go >= 1.24.12
 - Protoc >= 3.x
 - Wire (编译时安装)
 - Consul (可选，用于服务治理)
@@ -59,6 +139,7 @@ make init
 ```
 
 这将安装以下工具：
+
 - `wire` - 依赖注入代码生成器
 - `protoc` 相关插件 - Protobuf 代码生成
 - `kratos` - Kratos CLI 工具
@@ -94,6 +175,7 @@ make proto
 ```
 
 这将生成：
+
 - Protobuf Go 代码
 - 配置 JSON Schema (`config.schema.json`)
 
@@ -140,13 +222,49 @@ func main() {
 }
 ```
 
-#### 4. 生成依赖注入代码
+#### 4. 使用 Hook 机制
+
+```go
+package main
+
+import (
+	"context"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app/hook"
+	logHook "github.com/jaggerzhuang1994/kratos-foundation/pkg/log/hook"
+	contextHook "github.com/jaggerzhuang1994/kratos-foundation/pkg/context/hook"
+)
+
+func init() {
+	// 注册应用生命周期 Hook
+	hook.BeforeStart(func(ctx context.Context) error {
+		// 预热缓存
+		return warmupCache(ctx)
+	})
+
+	hook.AfterStop(func(ctx context.Context) error {
+		// 清理资源
+		return cleanupResources(ctx)
+	})
+
+	// 注册日志 Hook
+	logHook.With("service", "my-service")
+	logHook.With("version", app_info.Version().String())
+
+	// 注册上下文 Hook
+	contextHook.WithContext(func(ctx context.Context) context.Context {
+		requestID := generateRequestID()
+		return context.WithValue(ctx, "request_id", requestID)
+	})
+}
+```
+
+#### 5. 生成依赖注入代码
 
 ```bash
 make generate
 ```
 
-#### 5. 配置文件示例
+#### 6. 配置文件示例
 
 参考 `config.example.yaml` 创建你的配置文件：
 
@@ -177,7 +295,7 @@ database:
 app:
   name: my-service          # 服务名称
   version: v1.0.0          # 版本
-  metadata:                # 元数据（会注册到服务发现）
+  metadata: # 元数据（会注册到服务发现）
     env: production
     region: cn-north
 ```
@@ -187,14 +305,16 @@ app:
 ```yaml
 log:
   level: info              # 日志级别: debug/info/warn/error
-  std:                     # 标准输出
+  std: # 标准输出
     disable: false
-  file:                    # 文件输出
+  file: # 文件输出
     path: ./logs/app.log
     rotating:
       max_size: 100        # MB
       max_age: 30          # days
       compress: true
+  caller: # 调用位置信息
+    skip: 0                # 跳过的栈帧数
 ```
 
 ### 监控配置 (Metrics)
@@ -253,6 +373,9 @@ database:
     replica:
       - dsn: root:password@tcp(127.0.0.1:3307)/mydb
         driver: mysql
+    clickhouse:
+      dsn: tcp://127.0.0.1:9000/mydb
+      driver: clickhouse
   gorm:
     skip_default_transaction: true
     logger:
@@ -340,40 +463,50 @@ make all
 
 ```
 kratos-foundation/
-├── cmd/                    # 命令行工具和代码生成器
-│   ├── protoc-gen-kratos-foundation-client/
-│   └── protoc-gen-jsonschema/
-├── internal/               # 内部实现
-│   ├── middleware/         # 中间件实现
-│   └── logger/            # 日志实现
-├── pkg/                    # 公共 API (可被外部依赖)
-│   ├── app/               # 应用管理
-│   ├── app_info/          # 应用元信息
-│   ├── client/            # RPC 客户端
-│   ├── config/            # 配置加载
-│   ├── consul/            # Consul 客户端
-│   ├── database/          # 数据库
-│   ├── discovery/         # 服务发现
-│   ├── env/               # 环境变量
-│   ├── errors/            # 错误处理
-│   ├── job/               # 定时任务
-│   ├── log/               # 日志
-│   ├── metrics/           # 监控指标
-│   ├── redis/             # Redis
-│   ├── registry/          # 服务注册
-│   ├── server/            # HTTP/gRPC 服务器
-│   ├── tracing/           # 链路追踪
-│   ├── transport/         # 传输层
-│   └── utils/             # 工具函数
-├── proto/                  # Protobuf 定义
-│   ├── config.proto       # 主配置
-│   ├── config_pb/         # 配置子模块
-│   └── error_reason.proto # 错误定义
-├── third_party/           # 第三方 proto 定义
-├── config.example.yaml    # 配置示例
-├── config.schema.json     # 配置 JSON Schema
-├── Makefile               # 构建脚本
-└── go.mod                 # Go 模块定义
+├── cmd/                               # 命令行工具和代码生成器
+│   ├── protoc-gen-kratos-foundation-client/    # gRPC 客户端代码生成器
+│   ├── protoc-gen-kratos-foundation-errors/     # 错误代码生成器
+│   └── protoc-gen-jsonschema/                  # JSON Schema 生成器
+├── internal/                          # 内部实现（不对外暴露）
+│   ├── middleware/                    # 中间件实现
+│   ├── logger/                       # 日志具体实现（基于 Zap）
+│   └── filter/                       # 过滤器实现
+├── pkg/                               # 公共 API（可被外部依赖）
+│   ├── app/                          # 应用管理模块
+│   │   └── hook.go                   # 应用生命周期 Hook
+│   ├── app_info/                     # 应用元信息
+│   ├── bootstrap/                    # 引导程序
+│   ├── client/                       # RPC 客户端工厂
+│   ├── config/                       # 配置加载与管理
+│   ├── consul/                       # Consul 客户端
+│   ├── context/                      # 上下文管理（支持 Hook）
+│   │   └── hook.go                   # 上下文 Hook
+│   ├── database/                     # 数据库（GORM 集成）
+│   ├── discovery/                    # 服务发现
+│   ├── errors/                       # 错误处理
+│   ├── job/                          # 定时任务（Cron）
+│   ├── log/                          # 日志系统（支持 Hook）
+│   │   └── hook.go                   # 日志 Hook
+│   ├── metrics/                      # 监控指标（Prometheus）
+│   ├── redis/                        # Redis 客户端
+│   ├── registry/                     # 服务注册
+│   ├── server/                       # HTTP/gRPC 服务器
+│   ├── setup/                        # 设置模块
+│   ├── tracing/                      # 链路追踪（OpenTelemetry）
+│   ├── transport/                    # 传输层
+│   ├── utils/                        # 工具函数
+│   └── websocket/                    # WebSocket 支持
+├── proto/                             # Protobuf 定义
+│   ├── config.proto                  # 主配置定义
+│   ├── config_pb/                    # 配置子模块
+│   ├── app_info.proto                # 应用信息定义
+│   ├── error_reason.proto            # 错误定义
+│   └── kratos_foundation_pb/         # 生成的 protobuf 代码
+├── third_party/                       # 第三方 proto 定义
+├── config.example.yaml                # 配置文件示例
+├── config.schema.json                 # 配置 JSON Schema
+├── Makefile                           # 构建脚本
+└── go.mod                             # Go 模块定义
 ```
 
 ## 中间件
@@ -407,8 +540,6 @@ Kratos Foundation 使用 [Wire](https://github.com/google/wire) 进行编译时�
 //go:build wireinject
 // +build wireinject
 
-// The build tag makes sure the stub is not built in the final build.
-
 package main
 
 import (
@@ -428,7 +559,6 @@ func wireApp(app_info.Version, conf.FileConfigSource) (*kratos.App, func(), erro
 		NewBootstrap,
 	))
 }
-
 ```
 
 ## 可观测性
@@ -436,14 +566,17 @@ func wireApp(app_info.Version, conf.FileConfigSource) (*kratos.App, func(), erro
 ### 日志
 
 结构化日志，支持 JSON 格式输出，自动注入：
+
 - 时间戳
 - Trace ID / Span ID
 - 服务名称 / 版本
 - 调用位置
+- 自定义全局字段（通过 Hook）
 
 ### 监控指标
 
 Prometheus 指标包括：
+
 - HTTP/gRPC 请求计数、延迟
 - 数据库连接池、查询统计
 - Redis 操作统计
@@ -452,6 +585,7 @@ Prometheus 指标包括：
 ### 链路追踪
 
 OpenTelemetry 集成，支持导出到：
+
 - Jaeger
 - Zipkin
 - OTLP-compatible 系统
@@ -460,10 +594,45 @@ OpenTelemetry 集成，支持导出到：
 
 1. **配置管理** - 使用环境变量覆盖配置，敏感信息通过环境变量注入
 2. **错误处理** - 使用定义的 Error Reason 统一错误码
-3. **日志规范** - 保持日志结构化，避免打印敏感信息
+3. **日志规范** - 保持日志结构化，避免打印敏感信息，使用 Hook 注入公共字段
 4. **资源管理** - 合理配置连接池大小，设置合理的超时时间
 5. **监控告警** - 关键指标配置告警规则
-6. **优雅停机** - 实现 `Stop` 方法处理优雅关闭
+6. **优雅停机** - 使用 Hook 机制处理应用启动和停止逻辑
+7. **上下文传递** - 使用 Context Hook 在请求链路中传递公共数据
+
+## 技术栈
+
+- **Go**: 1.24.12
+- **框架**: Go-Kratos v2.9.2
+- **依赖注入**: Google Wire
+- **日志**: Zap Logger
+- **ORM**: GORM v1.31.1
+    - MySQL Driver
+    - PostgreSQL Driver
+    - SQLite Driver
+    - ClickHouse Driver
+- **缓存**: Redis v9.17.2
+- **监控**: Prometheus + OpenTelemetry
+- **服务治理**: Consul
+- **定时任务**: Cron v3.0.1
+- **配置**: Consul KV + Protobuf 强类型配置
+- **WebSocket**: Gorilla WebSocket v1.5.3
+
+## 代码生成工具
+
+Kratos Foundation 提供了以下代码生成工具：
+
+### protoc-gen-kratos-foundation-client
+
+生成类型安全的 gRPC 客户端代码，自动处理服务发现和负载均衡。
+
+### protoc-gen-kratos-foundation-errors
+
+生成错误处理相关代码，统一的错误码和错误消息。
+
+### protoc-gen-jsonschema
+
+从 Protobuf 定义生成 JSON Schema，用于配置验证。
 
 ## 贡献指南
 
@@ -473,6 +642,7 @@ OpenTelemetry 集成，支持导出到：
 2. 添加必要的单元测试
 3. 更新相关文档
 4. 遵循现有代码风格
+5. 为新增功能添加示例
 
 ## 许可证
 
@@ -485,6 +655,7 @@ OpenTelemetry 集成，支持导出到：
 - [GORM 文档](https://gorm.io/)
 - [OpenTelemetry Go](https://opentelemetry.io/docs/instrumentation/go/)
 - [Consul 文档](https://www.consul.io/docs)
+- [Prometheus 文档](https://prometheus.io/docs/)
 
 ## 支持
 
