@@ -105,6 +105,62 @@ type Hook interface {
 	//   - 关闭日志文件
 	//   - 上传监控数据
 	AfterStop(hook HookFunc)
+
+	// BeforeStartHooks 获取应用启动前执行的钩子函数列表
+	//
+	// 返回按照注册顺序（FIFO）排列的所有启动前钩子函数。
+	// 这些函数会在应用 HTTP/gRPC 服务器启动之前执行。
+	//
+	// 返回：
+	//   []HookFunc: 启动前钩子函数列表，如果没有注册任何钩子则返回空切片
+	//
+	// 注意：
+	//   - 返回的是切片引用，建议只读使用，不要修改
+	//   - 钩子函数会按照返回的顺序依次执行
+	//   - 如果任一函数返回错误，后续函数将不会执行
+	BeforeStartHooks() []HookFunc
+
+	// AfterStartHooks 获取应用启动后执行的钩子函数列表
+	//
+	// 返回按照注册顺序（FIFO）排列的所有启动后钩子函数。
+	// 这些函数会在应用服务器启动完成并开始接受请求后执行。
+	//
+	// 返回：
+	//   []HookFunc: 启动后钩子函数列表，如果没有注册任何钩子则返回空切片
+	//
+	// 注意：
+	//   - 返回的是切片引用，建议只读使用，不要修改
+	//   - 钩子函数会按照返回的顺序依次执行
+	//   - 即使某个函数返回错误，后续函数仍会继续执行
+	AfterStartHooks() []HookFunc
+
+	// BeforeStopHooks 获取应用停止前执行的钩子函数列表
+	//
+	// 返回按照注册顺序（FIFO）排列的所有停止前钩子函数。
+	// 这些函数会在应用停止服务器之前执行。
+	//
+	// 返回：
+	//   []HookFunc: 停止前钩子函数列表，如果没有注册任何钩子则返回空切片
+	//
+	// 注意：
+	//   - 返回的是切片引用，建议只读使用，不要修改
+	//   - 钩子函数会按照返回的顺序依次执行
+	//   - 建议在此阶段执行关键的清理和释放资源操作
+	BeforeStopHooks() []HookFunc
+
+	// AfterStopHooks 获取应用停止后执行的钩子函数列表
+	//
+	// 返回按照注册顺序（FIFO）排列的所有停止后钩子函数。
+	// 这些函数会在应用完全停止后执行。
+	//
+	// 返回：
+	//   []HookFunc: 停止后钩子函数列表，如果没有注册任何钩子则返回空切片
+	//
+	// 注意：
+	//   - 返回的是切片引用，建议只读使用，不要修改
+	//   - 钩子函数会按照返回的顺序依次执行
+	//   - 此时服务器已经关闭，无法处理请求
+	AfterStopHooks() []HookFunc
 }
 
 // hook Hook 接口的实现，持有各生命周期阶段的钩子函数列表
@@ -184,6 +240,82 @@ func (m *hook) AfterStop(hook HookFunc) {
 	m.afterStopHooks = append(m.afterStopHooks, hook)
 }
 
+// BeforeStartHooks 返回应用启动前执行的钩子函数列表
+//
+// 实现 Hook 接口的 BeforeStartHooks 方法。
+// 返回按照注册顺序排列的所有启动前钩子函数。
+//
+// 返回：
+//   []HookFunc: 启动前钩子函数列表的引用
+//
+// 使用示例：
+//   hooks := hook.BeforeStartHooks()
+//   for _, h := range hooks {
+//       if err := h(ctx); err != nil {
+//           log.Errorf("BeforeStart hook failed: %v", err)
+//       }
+//   }
+func (m *hook) BeforeStartHooks() []HookFunc {
+	return m.beforeStartHooks
+}
+
+// AfterStartHooks 返回应用启动后执行的钩子函数列表
+//
+// 实现 Hook 接口的 AfterStartHooks 方法。
+// 返回按照注册顺序排列的所有启动后钩子函数。
+//
+// 返回：
+//   []HookFunc: 启动后钩子函数列表的引用
+//
+// 使用示例：
+//   hooks := hook.AfterStartHooks()
+//   for _, h := range hooks {
+//       if err := h(ctx); err != nil {
+//           log.Errorf("AfterStart hook failed: %v", err)
+//       }
+//   }
+func (m *hook) AfterStartHooks() []HookFunc {
+	return m.afterStartHooks
+}
+
+// BeforeStopHooks 返回应用停止前执行的钩子函数列表
+//
+// 实现 Hook 接口的 BeforeStopHooks 方法。
+// 返回按照注册顺序排列的所有停止前钩子函数。
+//
+// 返回：
+//   []HookFunc: 停止前钩子函数列表的引用
+//
+// 使用示例：
+//   hooks := hook.BeforeStopHooks()
+//   for _, h := range hooks {
+//       if err := h(ctx); err != nil {
+//           log.Errorf("BeforeStop hook failed: %v", err)
+//       }
+//   }
+func (m *hook) BeforeStopHooks() []HookFunc {
+	return m.beforeStopHooks
+}
+
+// AfterStopHooks 返回应用停止后执行的钩子函数列表
+//
+// 实现 Hook 接口的 AfterStopHooks 方法。
+// 返回按照注册顺序排列的所有停止后钩子函数。
+//
+// 返回：
+//   []HookFunc: 停止后钩子函数列表的引用
+//
+// 使用示例：
+//   hooks := hook.AfterStopHooks()
+//   for _, h := range hooks {
+//       if err := h(ctx); err != nil {
+//           log.Errorf("AfterStop hook failed: %v", err)
+//       }
+//   }
+func (m *hook) AfterStopHooks() []HookFunc {
+	return m.afterStopHooks
+}
+
 // OnBeforeStartHook 应用启动前钩子接口
 //
 // 实现此接口的类型可以在应用启动前执行自定义逻辑。
@@ -194,8 +326,9 @@ func (m *hook) AfterStop(hook HookFunc) {
 //   - 预加载静态数据
 //
 // 错误处理：
-//   如果方法返回错误，应用将不会启动。
-//   建议返回明确的错误信息，说明启动失败的原因。
+//
+//	如果方法返回错误，应用将不会启动。
+//	建议返回明确的错误信息，说明启动失败的原因。
 type OnBeforeStartHook interface {
 	OnBeforeStart(context.Context) error
 }
@@ -210,8 +343,9 @@ type OnBeforeStartHook interface {
 //   - 初始化监控指标
 //
 // 注意：
-//   此时应用已经开始接受请求。
-//   即使此方法返回错误，应用也不会停止。
+//
+//	此时应用已经开始接受请求。
+//	即使此方法返回错误，应用也不会停止。
 type OnAfterStartHook interface {
 	OnAfterStart(context.Context) error
 }
@@ -227,8 +361,9 @@ type OnAfterStartHook interface {
 //   - 持久化未完成的任务
 //
 // 错误处理：
-//   如果方法返回错误，应用仍会停止，但会记录错误日志。
-//   建议在此方法中实现幂等的清理逻辑。
+//
+//	如果方法返回错误，应用仍会停止，但会记录错误日志。
+//	建议在此方法中实现幂等的清理逻辑。
 type OnBeforeStopHook interface {
 	OnBeforeStop(context.Context) error
 }
@@ -244,8 +379,9 @@ type OnBeforeStopHook interface {
 //   - 释放最后的资源
 //
 // 注意：
-//   此时应用已经完全停止，服务器已关闭。
-//   即使此方法返回错误，也不会影响应用状态。
+//
+//	此时应用已经完全停止，服务器已关闭。
+//	即使此方法返回错误，也不会影响应用状态。
 type OnAfterStopHook interface {
 	OnAfterStop(context.Context) error
 }

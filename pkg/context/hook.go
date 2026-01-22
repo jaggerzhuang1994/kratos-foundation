@@ -32,8 +32,9 @@ import (
 //   - 设置默认的超时时间
 //
 // 执行顺序：
-//   所有注册的 context 修改函数按照注册顺序（FIFO）依次执行，
-//   每个函数接收前一个函数的返回值作为输入。
+//
+//	所有注册的 context 修改函数按照注册顺序（FIFO）依次执行，
+//	每个函数接收前一个函数的返回值作为输入。
 //
 // 注意：
 //   - context 修改函数应该是幂等的，多次调用应该产生相同的结果
@@ -73,6 +74,46 @@ type Hook interface {
 	//   - 不要在函数中阻塞或执行耗时操作
 	//   - 确保传递的 context 不会被意外取消
 	WithContext(fn func(ctx context.Context) context.Context)
+
+	// Chain 执行所有注册的 context 修改函数，形成处理链
+	//
+	// 此方法按照注册顺序依次执行所有 context 修改函数，
+	// 每个函数接收前一个函数的返回值作为输入，最终返回修改后的 context。
+	//
+	// 参数：
+	//   ctx: 原始 context，通常是请求的根 context
+	//
+	// 返回：
+	//   context.Context: 经过所有修改函数处理后的 context
+	//
+	// 执行流程：
+	//   1. 从输入的 ctx 开始
+	//   2. 按照注册顺序依次调用每个修改函数
+	//   3. 每个函数接收上一个函数的返回值
+	//   4. 返回最终的 context
+	//
+	// 示例：
+	//   // 假设注册了三个修改函数
+	//   hook.WithContext(addRequestID)
+	//   hook.WithContext(addUserID)
+	//   hook.WithContext(addTenantID)
+	//
+	//   // 使用 Chain 执行所有修改
+	//   ctx := hook.Chain(context.Background())
+	//   // ctx 现在包含 request_id、user_id 和 tenant_id
+	//
+	// 注意：
+	//   - 函数按照注册顺序执行，后注册的可以覆盖前面的修改
+	//   - 如果某个函数返回 nil，会导致后续函数执行时 panic
+	//   - 建议每个函数专注于单一职责，保持逻辑简单
+	//   - 避免在函数中执行耗时操作，会影响每个请求的性能
+	//
+	// 性能考虑：
+	//   此方法会在每个请求中被调用，因此：
+	//   - 建议控制注册的函数数量（建议不超过 10 个）
+	//   - 避免在函数中进行复杂的计算或 I/O 操作
+	//   - 函数应该是幂等的，多次调用产生相同结果
+	Chain(context.Context) context.Context
 }
 
 // hook Hook 接口的实现，持有所有 context 修改函数
@@ -98,18 +139,19 @@ func NewHook() Hook {
 // 这些函数将在 NewContext 中按注册顺序依次执行。
 //
 // 执行流程：
-//   1. 从原始 context 开始
-//   2. 依次调用每个注册的修改函数
-//   3. 每个函数接收上一个函数的返回值
-//   4. 返回最终的 context
+//  1. 从原始 context 开始
+//  2. 依次调用每个注册的修改函数
+//  3. 每个函数接收上一个函数的返回值
+//  4. 返回最终的 context
 //
 // 示例：
-//   // 注册三个修改函数
-//   hook.WithContext(addRequestID)
-//   hook.WithContext(addUserID)
-//   hook.WithContext(addTenantID)
 //
-//   // 执行顺序：original -> addRequestID -> addUserID -> addTenantID -> final
+//	// 注册三个修改函数
+//	hook.WithContext(addRequestID)
+//	hook.WithContext(addUserID)
+//	hook.WithContext(addTenantID)
+//
+//	// 执行顺序：original -> addRequestID -> addUserID -> addTenantID -> final
 //
 // 注意：
 //   - 函数按照注册顺序执行，后注册的函数可以覆盖前面的修改
@@ -117,4 +159,42 @@ func NewHook() Hook {
 //   - 建议每个函数专注于单一职责
 func (h *hook) WithContext(withContext func(context.Context) context.Context) {
 	h.withContext = append(h.withContext, withContext)
+}
+
+// Chain 执行所有注册的 context 修改函数
+//
+// 实现 Hook 接口的 Chain 方法。
+// 按照注册顺序依次执行所有 context 修改函数，形成处理链。
+//
+// 参数：
+//   ctx: 原始 context，通常是请求的根 context
+//
+// 返回：
+//   context.Context: 经过所有修改函数处理后的 context
+//
+// 执行示例：
+//   // 假设注册了以下函数：
+//   // 1. addRequestID: 添加 request_id
+//   // 2. addUserID: 添加 user_id
+//   // 3. addTenantID: 添加 tenant_id
+//
+//   ctx := hook.Chain(context.Background())
+//   // 执行流程：
+//   // context.Background() -> addRequestID() -> addUserID() -> addTenantID() -> final ctx
+//
+// 注意事项：
+//   - 此方法会在每个请求中被调用，性能敏感
+//   - 如果某个函数返回 nil，会导致后续函数 panic
+//   - 建议在注册时确保所有函数都不会返回 nil
+//   - 函数应该快速执行，避免阻塞请求处理
+//
+// 性能优化建议：
+//   - 控制注册的函数数量，建议不超过 10 个
+//   - 避免在函数中进行复杂计算或 I/O 操作
+//   - 可以考虑缓存不变的计算结果
+func (h *hook) Chain(ctx context.Context) context.Context {
+	for _, withCtx := range h.withContext {
+		ctx = withCtx(ctx)
+	}
+	return ctx
 }
