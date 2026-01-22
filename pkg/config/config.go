@@ -6,9 +6,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 )
 
-type Config = config.Config
-type Source = config.Source
-
 func NewConfig(
 	fileSource FileSource,
 	consulSource ConsulSource,
