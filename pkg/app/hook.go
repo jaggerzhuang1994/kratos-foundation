@@ -4,42 +4,40 @@ import (
 	"context"
 )
 
-// HookFunc 钩子函数
+// HookFunc 钩子函数类型，接收上下文并返回可能的错误
 type HookFunc func(context.Context) error
 
 // Hook 应用生命周期钩子接口
+// 提供应用在启动和停止各个阶段的自定义处理能力
 type Hook interface {
-	// Register 注册一个hook的实例（可以选择实现 OnBeforeStartHook、 OnAfterStartHook、 OnBeforeStopHook、 OnAfterStopHook）
+	// Register 注册一个钩子实例
+	// 参数可以是实现了 OnBeforeStartHook、OnAfterStartHook、OnBeforeStopHook、OnAfterStopHook 中任意接口的对象
 	Register(adapter any)
-	// BeforeStart 应用启动前
+	// BeforeStart 注册应用启动前的钩子函数
 	BeforeStart(hook HookFunc)
-	// AfterStart 应用启动后
+	// AfterStart 注册应用启动后的钩子函数
 	AfterStart(hook HookFunc)
-	// BeforeStop 应用停止前
+	// BeforeStop 注册应用停止前的钩子函数
 	BeforeStop(hook HookFunc)
-	// AfterStop 应用停止后
+	// AfterStop 注册应用停止后的钩子函数
 	AfterStop(hook HookFunc)
 }
 
-// hookInternal 内部接口，仅在 app 包内使用，用于读取已注册的 hooks
-type hookInternal interface {
-	beforeStartHooks() []HookFunc
-	afterStartHooks() []HookFunc
-	beforeStopHooks() []HookFunc
-	afterStopHooks() []HookFunc
-}
-
+// hook Hook 接口的实现，持有各生命周期阶段的钩子函数列表
 type hook struct {
-	BeforeStartHooks []HookFunc
-	AfterStartHooks  []HookFunc
-	BeforeStopHooks  []HookFunc
-	AfterStopHooks   []HookFunc
+	beforeStartHooks []HookFunc // 应用启动前执行的钩子列表
+	afterStartHooks  []HookFunc // 应用启动后执行的钩子列表
+	beforeStopHooks  []HookFunc // 应用停止前执行的钩子列表
+	afterStopHooks   []HookFunc // 应用停止后执行的钩子列表
 }
 
+// NewHook 创建一个新的应用生命周期钩子实例
 func NewHook() Hook {
 	return &hook{}
 }
 
+// Register 注册钩子实例，通过类型断言识别实现了各阶段钩子接口的方法
+// 支持一个对象实现多个钩子接口
 func (m *hook) Register(hook any) {
 	if hook, ok := hook.(OnBeforeStartHook); ok {
 		m.BeforeStart(hook.OnBeforeStart)
@@ -55,54 +53,46 @@ func (m *hook) Register(hook any) {
 	}
 }
 
+// BeforeStart 添加应用启动前执行的钩子函数
 func (m *hook) BeforeStart(hook HookFunc) {
-	m.BeforeStartHooks = append(m.BeforeStartHooks, hook)
+	m.beforeStartHooks = append(m.beforeStartHooks, hook)
 }
 
+// AfterStart 添加应用启动后执行的钩子函数
 func (m *hook) AfterStart(hook HookFunc) {
-	m.AfterStartHooks = append(m.AfterStartHooks, hook)
+	m.afterStartHooks = append(m.afterStartHooks, hook)
 }
 
+// BeforeStop 添加应用停止前执行的钩子函数
 func (m *hook) BeforeStop(hook HookFunc) {
-	m.BeforeStopHooks = append(m.BeforeStopHooks, hook)
+	m.beforeStopHooks = append(m.beforeStopHooks, hook)
 }
 
+// AfterStop 添加应用停止后执行的钩子函数
 func (m *hook) AfterStop(hook HookFunc) {
-	m.AfterStopHooks = append(m.AfterStopHooks, hook)
+	m.afterStopHooks = append(m.afterStopHooks, hook)
 }
 
-func (m *hook) beforeStartHooks() []HookFunc {
-	return m.BeforeStartHooks
-}
-
-func (m *hook) afterStartHooks() []HookFunc {
-	return m.AfterStartHooks
-}
-
-func (m *hook) beforeStopHooks() []HookFunc {
-	return m.BeforeStopHooks
-}
-
-func (m *hook) afterStopHooks() []HookFunc {
-	return m.AfterStopHooks
-}
-
-// OnBeforeStartHook 应用启动前钩子
+// OnBeforeStartHook 应用启动前钩子接口
+// 实现此接口的类型可以在应用启动前执行自定义逻辑
 type OnBeforeStartHook interface {
 	OnBeforeStart(context.Context) error
 }
 
-// OnAfterStartHook 应用启动后钩子
+// OnAfterStartHook 应用启动后钩子接口
+// 实现此接口的类型可以在应用启动后执行自定义逻辑
 type OnAfterStartHook interface {
 	OnAfterStart(context.Context) error
 }
 
-// OnBeforeStopHook 应用停止前钩子
+// OnBeforeStopHook 应用停止前钩子接口
+// 实现此接口的类型可以在应用停止前执行自定义逻辑（如清理资源）
 type OnBeforeStopHook interface {
 	OnBeforeStop(context.Context) error
 }
 
-// OnAfterStopHook 应用停止后钩子
+// OnAfterStopHook 应用停止后钩子接口
+// 实现此接口的类型可以在应用停止后执行自定义逻辑
 type OnAfterStopHook interface {
 	OnAfterStop(context.Context) error
 }

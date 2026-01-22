@@ -13,13 +13,26 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
+	"github.com/pkg/errors"
 )
 
-// ServerProvider 服务提供者
+// ServerProvider 服务提供者接口，用于获取应用的所有传输层服务器
 type ServerProvider interface {
 	GetServers() []transport.Server
 }
 
+// NewApp 创建并配置 Kratos 应用实例
+// 参数：
+//   - bootstrap: 禁止在 bootstrap 中注入 app（防止循环依赖）
+//   - config: 应用配置
+//   - hook_: 应用生命周期钩子
+//   - appInfo: 应用元信息（ID、名称、版本等）
+//   - ctx: 应用上下文
+//   - logger: 日志记录器
+//   - serverProvider: 服务器提供者
+//   - registrar: 服务注册中心
+//
+// 返回：配置好的 Kratos 应用实例或错误
 func NewApp(
 	_ bootstrap.Bootstrap, // 禁止在 bootstrap 注入 app
 	config Config,
@@ -29,10 +42,10 @@ func NewApp(
 	logger log.Logger,
 	serverProvider ServerProvider,
 	registrar registry.Registrar,
-) *kratos.App {
+) (*kratos.App, error) {
 	var options []kratos.Option
 
-	// app info
+	// 合并配置和 appInfo 的元数据
 	var md = map[string]string{}
 	for k, v := range config.GetMetadata() {
 		md[k] = v
@@ -47,25 +60,24 @@ func NewApp(
 		kratos.Metadata(md),
 	)
 
-	// endpoints
+	// 配置服务发现端点
 	if config.GetEndpoints() != nil {
 		options = append(options, kratos.Endpoint(utils.Map(config.GetEndpoints(), func(e *config_pb.Endpoint) *url.URL {
 			return &url.URL{Scheme: e.GetScheme(), Host: e.GetHost()}
 		})...))
 	}
 
-	// ctx
+	// 设置上下文和日志
 	options = append(options, kratos.Context(ctx))
-	// logger
 	options = append(options, kratos.Logger(logger))
 
-	// server
+	// 添加传输层服务器（HTTP、gRPC 等）
 	options = append(options, kratos.Server(serverProvider.GetServers()...))
 
-	// signal 平滑重启的信号量
+	// 配置平滑重启信号
 	options = append(options, kratos.Signal(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGTERM))
 
-	// register
+	// 配置服务注册中心
 	if !config.GetDisableRegistrar() && registrar != nil {
 		options = append(options,
 			kratos.Registrar(registrar),
@@ -73,24 +85,30 @@ func NewApp(
 		)
 	}
 
-	// stop timeout
+	// 配置优雅停机超时时间
 	options = append(options, kratos.StopTimeout(config.GetStopTimeout().AsDuration()))
 
-	// app hook
-	if h, ok := hook_.(hookInternal); ok {
-		for _, beforeStart := range h.beforeStartHooks() {
+	// 注册应用生命周期钩子
+	if h, ok := hook_.(*hook); ok {
+		// 启动前钩子
+		for _, beforeStart := range h.beforeStartHooks {
 			options = append(options, kratos.BeforeStart(beforeStart))
 		}
-		for _, afterStart := range h.afterStartHooks() {
+		// 启动后钩子
+		for _, afterStart := range h.afterStartHooks {
 			options = append(options, kratos.AfterStart(afterStart))
 		}
-		for _, beforeStop := range h.beforeStopHooks() {
+		// 停止前钩子
+		for _, beforeStop := range h.beforeStopHooks {
 			options = append(options, kratos.BeforeStop(beforeStop))
 		}
-		for _, afterStop := range h.afterStopHooks() {
+		// 停止后钩子
+		for _, afterStop := range h.afterStopHooks {
 			options = append(options, kratos.AfterStop(afterStop))
 		}
+	} else {
+		return nil, errors.New("app.Hook does not implement hook")
 	}
 
-	return kratos.New(options...)
+	return kratos.New(options...), nil
 }
