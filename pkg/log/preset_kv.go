@@ -8,6 +8,8 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
 )
 
+type Valuer = log.Valuer
+
 // defaultCallerDepth 默认调用栈深度，用于定位日志调用位置
 const defaultCallerDepth = 6
 
@@ -16,13 +18,13 @@ type PresetKv map[string]any
 
 // 预设字段的键名常量
 const (
-	tsKey            = "ts"            // 时间戳
-	serviceIDKey     = "service.id"    // 服务 ID
-	serviceNameKey   = "service.name"  // 服务名称
+	tsKey             = "ts"              // 时间戳
+	serviceIDKey      = "service.id"      // 服务 ID
+	serviceNameKey    = "service.name"    // 服务名称
 	serviceVersionKey = "service.version" // 服务版本
-	traceIDKey       = "trace.id"      // 追踪 ID
-	spanIDKey        = "span.id"       // 跨度 ID
-	callerKey        = "caller"        // 调用者信息
+	traceIDKey        = "trace.id"        // 追踪 ID
+	spanIDKey         = "span.id"         // 跨度 ID
+	callerKey         = "caller"          // 调用者信息
 )
 
 // defaultPreset 默认的预设字段列表

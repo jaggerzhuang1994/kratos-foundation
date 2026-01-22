@@ -2,7 +2,6 @@ package log
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -62,7 +61,9 @@ type globalLogger struct {
 
 // cacheLogger 缓存多层日志器，避免每次 Log 都重新构建
 // 采用分层缓存策略：
-//   layer1(key过滤) -> layer2(预设KV) -> layer3(动态KV) -> layer4(context)
+//
+//	layer1(key过滤) -> layer2(预设KV) -> layer3(动态KV) -> layer4(context)
+//
 // 这种分层设计允许高效地复用中间层
 type cacheLogger struct {
 	log.Logger
@@ -172,7 +173,7 @@ func (l *logger) Log(level log.Level, keyvals ...any) error {
 
 	// 检查缓存是否过期，global.timestamp 变更表示配置已更新
 	cache := l.cache.Load().(*cacheLogger)
-	if !cache.timestamp.Equal(global.timestamp) {
+	if cache.timestamp.Before(global.timestamp) || cache.timestamp.Before(l.hook.GetLastUpdatedAt()) {
 		l.buildCache()
 		cache = l.cache.Load().(*cacheLogger)
 	}
@@ -282,16 +283,20 @@ func (l *logger) buildLayer2(global *globalLogger, layer1 log.Logger) log.Logger
 	if l.callerDepth == 0 {
 		// 使用默认 caller 深度，直接复用全局 kvLogger
 		if layer1 == global.coreLogger {
-			return global.kvLogger
+			if len(l.hook.GetKv()) == 0 {
+				return global.kvLogger
+			}
+			return log.With(global.kvLogger, l.hook.GetKv()...)
 		}
-		return log.With(layer1, global.kv...)
+		return log.With(layer1, append(global.kv, l.hook.GetKv()...)...)
 	}
 
 	// 需要自定义 callerDepth，重新构建 KV
-	length := len(global.kv)
+	keyvals := append(global.kv, l.hook.GetKv()...)
+	length := len(keyvals)
 	kv := make([]any, 0, length)
 	for i := 0; i < length; i += 2 {
-		key, ok := global.kv[i].(string)
+		key, ok := keyvals[i].(string)
 		if !ok {
 			continue
 		}
@@ -300,7 +305,7 @@ func (l *logger) buildLayer2(global *globalLogger, layer1 log.Logger) log.Logger
 		if i+1 > length-1 {
 			break
 		}
-		val := global.kv[i+1]
+		val := keyvals[i+1]
 		// 替换 callerKey 的值为指定深度的调用者
 		if key == callerKey {
 			val = log.Caller(l.callerDepth)
@@ -373,7 +378,7 @@ func (l *logger) buildCache() {
 	if len(l.kv) == 0 && len(l.filterKeys) == 0 && l.callerDepth == 0 && l.ctx == nil {
 		l.cache.Store(&cacheLogger{
 			Logger:      global.logger,
-			timestamp:   global.timestamp,
+			timestamp:   time.Now(),
 			layer1:      global.coreLogger,
 			layer2:      global.kvLogger,
 			layer3:      global.kvLogger,
@@ -388,7 +393,7 @@ func (l *logger) buildCache() {
 	cache := l.cache.Load().(*cacheLogger)
 
 	// 增量更新路径：global 配置未变且 filterKeys 未变
-	if global.timestamp == cache.timestamp && reflect.DeepEqual(l.filterKeys, cache.filterKeys) {
+	if cache.timestamp.After(global.timestamp) && cache.timestamp.After(l.hook.GetLastUpdatedAt()) && reflect.DeepEqual(l.filterKeys, cache.filterKeys) {
 		var layer1, layer2, layer3, layer4 log.Logger
 
 		// 根据变化的层，选择不同的重建策略
@@ -425,7 +430,7 @@ func (l *logger) buildCache() {
 		}
 		l.cache.Store(&cacheLogger{
 			Logger:      layer4,
-			timestamp:   global.timestamp,
+			timestamp:   time.Now(),
 			layer1:      layer1,
 			layer2:      layer2,
 			layer3:      layer3,
@@ -444,7 +449,7 @@ func (l *logger) buildCache() {
 	layer4 := l.buildLayer4(layer3)
 	l.cache.Store(&cacheLogger{
 		Logger:      layer4,
-		timestamp:   global.timestamp,
+		timestamp:   time.Now(),
 		layer1:      layer1,
 		layer2:      layer2,
 		layer3:      layer3,
@@ -554,11 +559,7 @@ func (l *logger) Update(c Config) error {
 	}
 
 	// 添加 hook 的全局 KV
-	if h, ok := l.hook.(*hook); ok {
-		kv = append(kv, h.kv...)
-	} else {
-		return errors.New("log.Hook does not implement hook")
-	}
+	kv = append(kv, l.hook.GetKv()...)
 	logger = log.With(logger, kv...)
 	kvLogger := logger
 

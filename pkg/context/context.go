@@ -13,6 +13,25 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 )
 
+type Context = context.Context
+type CancelFunc = context.CancelFunc
+type CancelCauseFunc = context.CancelCauseFunc
+
+var Background = context.Background
+var WithTimeout = context.WithTimeout
+var WithValue = context.WithValue
+var WithCancel = context.WithCancel
+var WithoutCancel = context.WithoutCancel
+var Canceled = context.Canceled
+var AfterFunc = context.AfterFunc
+var Cause = context.Cause
+var DeadlineExceeded = context.DeadlineExceeded
+var TODO = context.TODO
+var WithCancelCause = context.WithCancelCause
+var WithDeadline = context.WithDeadline
+var WithDeadlineCause = context.WithDeadlineCause
+var WithTimeoutCause = context.WithTimeoutCause
+
 // NewContext 创建并初始化应用上下文
 // 将各种基础设施组件（日志、注册中心、发现、指标、追踪）注入到 context 中
 // 同时应用 context hook 允许自定义扩展
