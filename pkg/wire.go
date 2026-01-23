@@ -34,11 +34,14 @@ var ProviderSet = wire.NewSet(
 	registry.ProviderSet, discovery.ProviderSet, tracing.ProviderSet, metrics.ProviderSet,
 	// 数据库			  // redis
 	database.ProviderSet, redis.ProviderSet,
-	// job client server context
-	job.ProviderSet,
+	// client
 	client.ProviderSet,
+	// server.setup
+	// server.bootstrap
 	server.ProviderSet,
+	// job bootstrap
+	job.ProviderSet,
 	context.ProviderSet,
-	// bootstrap
+	// app.bootstrap
 	app.ProviderSet,
 )

@@ -25,42 +25,12 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
-	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/job"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
 )
-
-// ServerProvider 服务提供者接口，用于获取应用的所有传输层服务器
-//
-// 此接口允许应用提供多个传输层服务器（HTTP、gRPC、WebSocket 等）。
-// 通常由 Wire 依赖注入自动实现，返回所有已配置的服务器实例。
-//
-// 典型实现：
-//
-//	type ServerProvider struct {
-//	    httpServer *http.Server
-//	    grpcServer *grpc.Server
-//	}
-//
-//	func (p *ServerProvider) GetServers() []transport.Server {
-//	    return []transport.Server{p.httpServer, p.grpcServer}
-//	}
-type ServerProvider interface {
-	// GetServers 返回应用的所有传输层服务器
-	//
-	// 返回的服务器列表可以包含：
-	//   - HTTP Server (REST API)
-	//   - gRPC Server (RPC 服务)
-	//   - WebSocket Server (实时通信)
-	//   - 其他自定义服务器
-	//
-	// 注意：
-	//   - 服务器会按照列表顺序启动和停止
-	//   - 建议将 HTTP 服务器放在前面，便于健康检查
-	GetServers() []transport.Server
-}
 
 // NewApp 创建并配置 Kratos 应用实例
 //
@@ -118,13 +88,15 @@ type ServerProvider interface {
 //   - 元数据合并规则：appInfo 覆盖配置文件中的值
 //   - 服务注册需要配置 Registrar 和启用注册功能
 func NewApp(
-	_ bootstrap.Bootstrap, // 禁止在 bootstrap 注入 app（防止循环依赖）
+	_ Bootstrap, // 禁止在 bootstrap 注入 app（防止循环依赖）
+	_ job.Bootstrap, // 注入 job 服务
+	_ server.Bootstrap, // 注入 server 服务
 	config Config,
 	hook_ Hook,
 	appInfo app_info.AppInfo,
 	ctx context.Context,
 	logger log.Logger,
-	serverProvider ServerProvider,
+	serverProvider server.Register,
 	registrar registry.Registrar,
 ) *kratos.App {
 	var options []kratos.Option
