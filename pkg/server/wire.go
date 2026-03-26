@@ -59,4 +59,10 @@ var ProviderSet = wire.NewSet(
 
 	// 服务器注册
 	NewRegister, // 服务器注册器（收集所有服务器）
+
+	// 允许在 wire 注入中禁用 http/grpc
+	// 使用方法：在 app.bootstrap 中注入 server.DisableHttp, server.DisableGrpc 即可禁用对应的服务
+	NewDisableHttp,
+	NewDisableGrpc,
+	NewDisableState,
 )

@@ -50,7 +50,7 @@ message JobConfig {
   // 支持 cron 表达式（当有6组数字则表示支持秒，5组表示不支持秒）： [Sec(0-59,*), ]Min(0-59,*) Hour(0-23,*) DayOfMonth(1-31,*,?) Month(1-12,*) DayOfWeek(0-6,JUN-SAT,*,?)
   // 支持 @yearly=每年第一天0点, @monthly=每月第一天0点, @weekly=每周第一天0点, @daily=每天0点, @hourly=每小时0分
   // 支持 @every {duration}，例如 @every 1s, @every 1m2s
-  string schedule = 2;
+  optional string schedule = 2;
   // 【定时任务】任务并行策略
   optional ConcurrentPolicy concurrent_policy = 3;
   // 【定时任务】启动是否立刻调度一次

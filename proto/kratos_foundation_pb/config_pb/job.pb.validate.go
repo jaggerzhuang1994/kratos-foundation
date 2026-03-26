@@ -308,10 +308,12 @@ func (m *JobConfig) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Schedule
-
 	if m.Disable != nil {
 		// no validation rules for Disable
+	}
+
+	if m.Schedule != nil {
+		// no validation rules for Schedule
 	}
 
 	if m.ConcurrentPolicy != nil {

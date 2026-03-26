@@ -1159,10 +1159,7 @@
           "$ref": "#/definitions/.kratos_foundation_pb.JobConfig.immediately"
         }
       },
-      "type": "object",
-      "required": [
-        "schedule"
-      ]
+      "type": "object"
     },
     ".kratos_foundation_pb.JobConfig.concurrent_policy": {
       "$ref": "#/definitions/.kratos_foundation_pb.ConcurrentPolicy",

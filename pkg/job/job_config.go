@@ -35,7 +35,7 @@ func getJobConfig(config Config, name string, job Job) (jc *jobConfig) {
 
 	// 默认值为 job 实例上的配置
 	if t, ok := job.(ScheduleConfiguration); ok {
-		jc.Schedule = t.Schedule()
+		jc.Schedule = proto.String(t.Schedule())
 	}
 	if t, ok := job.(ImmediatelyConfiguration); ok {
 		jc.Immediately = proto.Bool(t.Immediately())

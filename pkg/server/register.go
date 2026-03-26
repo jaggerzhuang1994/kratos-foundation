@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2/transport"
+	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 )
 
 // Register 服务器注册器接口
@@ -37,6 +38,7 @@ type Register interface {
 // 是否为服务器添加延迟停止包装器。
 type register struct {
 	config  Config             // 服务器配置
+	state   *DisableState      // 禁用的服务
 	servers []transport.Server // 已注册的服务器列表
 }
 
@@ -55,9 +57,11 @@ type register struct {
 //   - 实际的启动由 Kratos 应用实例控制
 func NewRegister(
 	config Config,
+	state *DisableState,
 ) Register {
 	r := &register{
 		config: config,
+		state:  state,
 	}
 	return r
 }
@@ -111,7 +115,28 @@ func (s *register) RegisterServer(server transport.Server) {
 //   - 返回的列表可能包含被 serverStopDelayWrapper 包装的服务器
 //   - 服务器顺序即为注册顺序
 func (s *register) GetServers() []transport.Server {
-	return s.servers
+	servers := s.servers[:]
+	if s.state.disableHttp {
+		servers = utils.Filter(servers, func(server transport.Server) bool {
+			if wrapper, ok := server.(*serverStopDelayWrapper); ok {
+				if _, ok := wrapper.Server.(HttpServer); ok {
+					return false
+				}
+			}
+			return true
+		})
+	}
+	if s.state.disableGrpc {
+		servers = utils.Filter(servers, func(server transport.Server) bool {
+			if wrapper, ok := server.(*serverStopDelayWrapper); ok {
+				if _, ok := wrapper.Server.(GrpcServer); ok {
+					return false
+				}
+			}
+			return true
+		})
+	}
+	return servers
 }
 
 // serverStopDelayWrapper 服务器延迟停止包装器
