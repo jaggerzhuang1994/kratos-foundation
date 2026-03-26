@@ -122,6 +122,8 @@ func (s *register) GetServers() []transport.Server {
 				if _, ok := wrapper.Server.(HttpServer); ok {
 					return false
 				}
+			} else if _, ok := server.(HttpServer); ok {
+				return false
 			}
 			return true
 		})
@@ -132,6 +134,8 @@ func (s *register) GetServers() []transport.Server {
 				if _, ok := wrapper.Server.(GrpcServer); ok {
 					return false
 				}
+			} else if _, ok := server.(GrpcServer); ok {
+				return false
 			}
 			return true
 		})
