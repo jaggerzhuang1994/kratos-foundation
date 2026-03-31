@@ -30,7 +30,7 @@ func NewConsul(log log.Log) (Client, error) {
 
 	// 如果 address 是域名，则解析为具体 ip
 	// 防止应用启动后，连接 consul 实例不稳定（会导致服务发现和注册等组件出错）
-	err := resolveAddress(&config.Address, DefaultIPResolver)
+	err := resolveAddress(config, DefaultIPResolver)
 	if err != nil {
 		return nil, err
 	}

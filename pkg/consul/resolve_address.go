@@ -6,19 +6,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/consul/api"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/rand"
 )
 
 // 如果 address 是域名，则解析替换为具体的ip
-func resolveAddress(address *string, resolver func(string) ([]net.IP, error)) (err error) {
-	// 获取 host
-	var host = *address
-	if strings.Contains(*address, "://") {
-		host, err = parseHost(*address)
-		if err != nil {
-			return errors.WithMessage(err, "无法解析consul address host")
+func resolveAddress(conf *api.Config, resolver func(string) ([]net.IP, error)) (err error) {
+	// 补充 address 为完整 url
+	if !strings.Contains(conf.Address, "://") {
+		if conf.Scheme == "" {
+			conf.Address = "http://" + conf.Address
+		} else {
+			conf.Address = conf.Scheme + "://" + conf.Address
 		}
+	}
+
+	// 使用 url 解析 host
+	host, err := parseHost(conf.Address)
+	if err != nil {
+		return errors.WithMessage(err, "无法解析consul address host")
 	}
 
 	// 如果是 ip 则不处理
@@ -37,7 +44,7 @@ func resolveAddress(address *string, resolver func(string) ([]net.IP, error)) (e
 	// 这里选取策略后面在改 是否要使用一个稳定性的标识作为选取策略还是要随机
 	// 解析host成功，随机取一个作为consul节点
 	ip := ips[rand.New(rand.NewSource(uint64(time.Now().UnixNano()))).Intn(len(ips))]
-	*address, _ = replaceHostname(*address, ip.String())
+	conf.Address, _ = replaceHostname(conf.Address, ip.String())
 	return nil
 }
 
