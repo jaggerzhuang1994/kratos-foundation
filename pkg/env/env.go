@@ -36,7 +36,10 @@ func init() {
 		log.Warnf("unknown env: %s, set to local", env)
 		env = Local
 	}
+	log.Infof("app env load: %s", env)
+
 	debug = getEnvAsBool(appDebugKeys)
+	log.Infof("app debug: %v", debug)
 }
 
 func AppEnv() string {
