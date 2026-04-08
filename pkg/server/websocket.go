@@ -165,13 +165,6 @@ func (s *websocketServer) Handle(path string, handler any, optionalUpgrader ...U
 	}
 	upgrader.Error = nil // 使用默认的错误处理
 
-	// 提取处理器接口
-	onHandshakeHandler, _ := handler.(OnHandshakeHandler)
-	onConnectHandler, _ := handler.(OnConnectHandler)
-	onMessageHandler, _ := handler.(OnMessageHandler)
-	onCloseHandler, _ := handler.(OnCloseHandler)
-	onErrorHandler, _ := handler.(OnErrorHandler)
-
 	rlog := s.log.With("path", path)
 	s.router.Handle("GET", path, func(ctx http.Context) error {
 		w := ctx.Response()
@@ -181,10 +174,8 @@ func (s *websocketServer) Handle(path string, handler any, optionalUpgrader ...U
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			clog := rlog.WithContext(ctx)
 			request := req.(*http.Request)
-			// 新建客户端
-			client := newWebsocketClient(clog, request, onHandshakeHandler, onConnectHandler, onMessageHandler, onCloseHandler, onErrorHandler)
 			// 建立连接
-			err := client.upgrade(upgrader, w)
+			client, err := upgrade(upgrader, clog, request, w, handler)
 			if err != nil {
 				clog.With("error", err).Warn("websocket upgrade failed")
 				return nil, err

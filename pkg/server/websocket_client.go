@@ -13,6 +13,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+type websocketClientSyncMap interface {
+	Load(key any) (value any, ok bool)
+	Store(key, value any)
+	LoadOrStore(key, value any) (actual any, loaded bool)
+	Delete(key any)
+	Range(func(key, value any) (shouldContinue bool))
+}
+
 type WebsocketClient interface {
 	Request() *http.Request
 	Close()
@@ -20,69 +28,68 @@ type WebsocketClient interface {
 	SendJSON(any) error
 	SendText(string) error
 	SendBinary([]byte) error
+	Conn() *websocket.Conn // 返回内部原始websocket连接对象
+	websocketClientSyncMap // client可以当作sync map读写
 }
 
 const writeWait = time.Second
 
 type websocketClient struct {
 	log.Log
-
-	onHandshakeHandler OnHandshakeHandler
-	onConnectHandler   OnConnectHandler
-	onMessageHandler   OnMessageHandler
-	onCloseHandler     OnCloseHandler
-	onErrorHandler     OnErrorHandler
-
-	writeLock sync.Mutex
-	closeOnce sync.Once
+	sync.Map
 
 	request *http.Request
 	conn    *websocket.Conn
+
+	onConnectHandler OnConnectHandler
+	onMessageHandler OnMessageHandler
+	onCloseHandler   OnCloseHandler
+	onErrorHandler   OnErrorHandler
+
+	writeLock sync.Mutex
+	closeOnce sync.Once
 }
 
-func newWebsocketClient(
+// 建立websocket连接
+func upgrade(
+	upgrader Upgrader,
 	log log.Log,
 	request *http.Request,
-	onHandshakeHandler OnHandshakeHandler,
-	onConnectHandler OnConnectHandler,
-	onMessageHandler OnMessageHandler,
-	onCloseHandler OnCloseHandler,
-	onErrorHandler OnErrorHandler,
-) *websocketClient {
-	return &websocketClient{
-		Log:                log,
-		onHandshakeHandler: onHandshakeHandler,
-		onConnectHandler:   onConnectHandler,
-		onMessageHandler:   onMessageHandler,
-		onCloseHandler:     onCloseHandler,
-		onErrorHandler:     onErrorHandler,
-		request:            request,
-	}
-}
-
-// 建立 ws 连接
-func (c *websocketClient) upgrade(
-	upgrader Upgrader,
 	w http.ResponseWriter,
-) error {
-	var err error
+	handler any,
+) (client *websocketClient, err error) {
+	// 提取处理器接口
+	onHandshakeHandler, _ := handler.(OnHandshakeHandler)
+	onConnectHandler, _ := handler.(OnConnectHandler)
+	onMessageHandler, _ := handler.(OnMessageHandler)
+	onCloseHandler, _ := handler.(OnCloseHandler)
+	onErrorHandler, _ := handler.(OnErrorHandler)
 
 	// 自定义握手处理
-	if c.onHandshakeHandler != nil {
-		err = c.onHandshakeHandler.OnHandshake(c.request)
+	if onHandshakeHandler != nil {
+		err = onHandshakeHandler.OnHandshake(request)
 		if err != nil {
-			return errors.WithMessage(err, "OnHandshake failure")
+			return nil, errors.WithMessage(err, "OnHandshake failure")
 		}
 	}
 
 	// 建立 ws 链接
-	conn, err := upgrader.Upgrade(w, c.request, w.Header())
+	conn, err := upgrader.Upgrade(w, request, w.Header())
 	if err != nil {
-		return errors.WithMessage(err, "Upgrade failure")
+		return nil, errors.WithMessage(err, "Upgrade failure")
 	}
 
-	c.conn = conn
-	return nil
+	client = &websocketClient{
+		Log:              log,
+		request:          request,
+		conn:             conn,
+		onConnectHandler: onConnectHandler,
+		onMessageHandler: onMessageHandler,
+		onCloseHandler:   onCloseHandler,
+		onErrorHandler:   onErrorHandler,
+	}
+
+	return client, nil
 }
 
 func (c *websocketClient) resolve() {
@@ -157,4 +164,8 @@ func (c *websocketClient) SendJSON(data any) error {
 		return err
 	}
 	return c.SendText(string(bytes))
+}
+
+func (c *websocketClient) Conn() *websocket.Conn {
+	return c.conn
 }
