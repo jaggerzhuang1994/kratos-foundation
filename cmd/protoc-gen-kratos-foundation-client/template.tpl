@@ -14,46 +14,43 @@ package {{.GoPackageName}}
 {{$fileServiceName := .File.ServiceName}}
 {{$deprecated := .Deprecated}}
 
-// {{.ServiceName}}ApiProvider .
+// {{.ServiceName}}Provider .
 {{- if .Deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-var {{.ServiceName}}ApiProvider = wire.NewSet(
-	New{{.ServiceName}}ApiWrapper,
-	wire.Bind(new({{.ServiceName}}Api), new(*{{.ServiceName}}ApiWrapper)),
+var {{.ServiceName}}Provider = wire.NewSet(
+	New{{.ServiceName}},
 )
+var {{.ServiceName}}HTTPImplProvider = {{.ServiceName}}Provider
+var {{.ServiceName}}GRPCClientImplProvider = {{.ServiceName}}Provider
 
-// service interface
-
-// {{.ServiceName}}Api .
+// {{.ServiceName}} .
 {{- if .Deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-type {{.ServiceName}}Api interface {
+type {{.ServiceName}} interface {
 {{- range .MethodSets}}
     {{.Comment}}
 	{{.Name}}(context.Context, *{{.Request}}) (*{{.Reply}}, error)
 {{- end}}
 }
 
-// impl
-
-// {{.ServiceName}}ApiWrapper .
+// {{.ServiceName}}Impl .
 {{- if .Deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-type {{.ServiceName}}ApiWrapper struct {
+type {{.ServiceName}}Impl struct {
 	factory client.Factory
 }
 
-var _ {{.ServiceName}}Api = (*{{.ServiceName}}ApiWrapper)(nil)
+var _ {{.ServiceName}} = (*{{.ServiceName}}Impl)(nil)
 
-// New{{.ServiceName}}ApiWrapper .
+// New{{.ServiceName}}Impl .
 {{- if .Deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-func New{{.ServiceName}}ApiWrapper(factory client.Factory) *{{.ServiceName}}ApiWrapper {
-	return &{{.ServiceName}}ApiWrapper{factory}
+func New{{.ServiceName}}(factory client.Factory) {{.ServiceName}} {
+	return &{{.ServiceName}}Impl{factory}
 }
 
 {{range .MethodSets}}
@@ -61,7 +58,7 @@ func New{{.ServiceName}}ApiWrapper(factory client.Factory) *{{.ServiceName}}ApiW
 {{- if $deprecated}}
 // Deprecated: Do not use.
 {{- end}}
-func (c *{{.ServiceName}}ApiWrapper) {{.Name}}(ctx context.Context, in *{{.Request}}) (rsp *{{.Reply}}, err error) {
+func (c *{{.ServiceName}}Impl) {{.Name}}(ctx context.Context, in *{{.Request}}) (rsp *{{.Reply}}, err error) {
 	ctx = client.WithDefaultConnName(ctx, "{{$fileServiceName}}")
 
 	// 获取连接
