@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
@@ -42,14 +41,13 @@ func client(opts ...Option) middleware.Middleware {
 			// x-md-
 			if md, ok := metadata.FromServerContext(ctx); ok {
 				for k, vList := range md {
-					//if opt.hasPrefix(k) {
-					for _, v := range vList {
-						header.Add(k, url.QueryEscape(v))
+					if opt.hasPrefix(k) {
+						for _, v := range vList {
+							header.Add(k, url.QueryEscape(v))
+						}
 					}
-					//}
 				}
 			}
-			log.Debug("client-out-metadata", header)
 			return handler(ctx, req)
 		}
 	}

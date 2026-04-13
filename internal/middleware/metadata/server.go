@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
@@ -64,7 +63,6 @@ func server(opts ...Option) middleware.Middleware {
 				}
 			}
 
-			log.Debug("server-in-metadata", md)
 			ctx = metadata.NewServerContext(ctx, md)
 			return handler(ctx, req)
 		}
