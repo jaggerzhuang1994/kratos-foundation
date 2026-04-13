@@ -9,6 +9,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/grpc"
 )
 
@@ -17,6 +18,8 @@ type GRPCClient = *grpc.ClientConn
 
 type Factory interface {
 	ResolveClient(ctx context.Context) (httpClient HTTPClient, grpcClient GRPCClient, err error)
+	MakeGrpcConn(ctx context.Context) (grpcClient GRPCClient, err error)
+	MakeHttpClient(ctx context.Context) (httpClient HTTPClient, err error)
 }
 
 type factory struct {
@@ -30,7 +33,8 @@ type factory struct {
 	// 初始化连接的锁
 	initLocker sync.Mutex
 	// 客户端缓存 map[ clientKey ] -> HTTPClient | GRPCClient
-	clients sync.Map
+	httpClients sync.Map
+	grpcClients sync.Map
 }
 
 func NewFactory(
@@ -50,31 +54,44 @@ func NewFactory(
 	}
 }
 
+func (f *factory) MakeGrpcConn(ctx context.Context) (grpcClient GRPCClient, err error) {
+	_, grpcClient, err = f.resolveClient(ctx, config_pb.Protocol_GRPC)
+	return
+}
+
+func (f *factory) MakeHttpClient(ctx context.Context) (httpClient HTTPClient, err error) {
+	httpClient, _, err = f.resolveClient(ctx, config_pb.Protocol_HTTP)
+	return
+}
+
 func (f *factory) ResolveClient(ctx context.Context) (httpClient HTTPClient, grpcClient GRPCClient, err error) {
-	clientKey := ClientConfig{Name: ConnNameFromContext(ctx)}
-	if clientKey.Name == "" {
+	return f.resolveClient(ctx)
+}
+
+func (f *factory) resolveClient(ctx context.Context, optionalProtocol ...config_pb.Protocol) (httpClient HTTPClient, grpcClient GRPCClient, err error) {
+	clientName := ConnNameFromContext(ctx)
+	if clientName == "" {
 		err = ErrInvalidClientName
 		return
 	}
-	clientKey.Option = f.clientOptions[clientKey.Name]
+	clientKey := newClientConfig(clientName, f.clientOptions[clientName], optionalProtocol...)
 
+	// 从缓存读
 	getCache := func() bool {
-		conn, ok := f.clients.Load(clientKey)
-		if !ok {
-			return false
-		}
-
-		if clientKey.IsGRPC() {
-			grpcClient, ok = conn.(GRPCClient)
+		if clientKey.protocol == config_pb.Protocol_GRPC || clientKey.protocol == config_pb.Protocol_GRPCS {
+			conn, ok := f.grpcClients.Load(clientKey)
 			if !ok {
-				err = ErrInvalidGRPCClient
+				return false
 			}
+			grpcClient = conn.(GRPCClient)
 			return true
-		} else if clientKey.IsHTTP() {
-			httpClient, ok = conn.(HTTPClient)
+		}
+		if clientKey.protocol == config_pb.Protocol_HTTP || clientKey.protocol == config_pb.Protocol_HTTPS {
+			conn, ok := f.httpClients.Load(clientKey)
 			if !ok {
-				err = ErrInvalidHTTPClient
+				return false
 			}
+			httpClient = conn.(HTTPClient)
 			return true
 		}
 		// 未知协议，则报错
@@ -87,6 +104,9 @@ func (f *factory) ResolveClient(ctx context.Context) (httpClient HTTPClient, grp
 	if ok {
 		return
 	}
+	if err != nil {
+		return
+	}
 
 	f.initLocker.Lock()
 	defer f.initLocker.Unlock()
@@ -96,30 +116,35 @@ func (f *factory) ResolveClient(ctx context.Context) (httpClient HTTPClient, grp
 	if ok {
 		return
 	}
+	if err != nil {
+		return
+	}
 
 	// 初始化客户端
-	f.Infof("client initializing, name=%s protocol=%s target=%s", clientKey.Name, clientKey.Option.GetProtocol().String(), clientKey.Option.GetTarget())
+	f.Infof("client initializing, name=%s protocol=%s target=%s", clientKey.name, clientKey.protocol.String(), clientKey.option.GetTarget())
 	defer func() {
 		if err == nil {
-			f.Infof("client initialized, name=%s", clientKey.Name)
+			f.Infof("client initialized, name=%s", clientKey.name)
 		} else {
-			f.Errorf("client init failed, name=%s err=%v", clientKey.Name, err)
+			f.Errorf("client init failed, name=%s err=%v", clientKey.name, err)
 		}
 	}()
 	// 初始化 grpc 连接
-	if clientKey.IsGRPC() {
+	if clientKey.protocol == config_pb.Protocol_GRPC || clientKey.protocol == config_pb.Protocol_GRPCS {
 		grpcClient, err = f.newGRPCClient(ctx, clientKey)
 		if err != nil {
 			return
 		}
-		f.clients.Store(clientKey, grpcClient)
+		f.grpcClients.Store(clientKey, grpcClient)
 		return
 	}
-	// 初始化 http 连接
-	httpClient, err = f.newHTTPClient(ctx, clientKey)
-	if err != nil {
-		return
+	if clientKey.protocol == config_pb.Protocol_HTTP || clientKey.protocol == config_pb.Protocol_HTTPS {
+		// 初始化 http 连接
+		httpClient, err = f.newHTTPClient(ctx, clientKey)
+		if err != nil {
+			return
+		}
+		f.httpClients.Store(clientKey, httpClient)
 	}
-	f.clients.Store(clientKey, httpClient)
 	return
 }

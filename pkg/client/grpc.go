@@ -8,7 +8,7 @@ import (
 
 func (f *factory) newGRPCClient(
 	ctx context.Context,
-	clientConfig ClientConfig,
+	clientConfig clientConfig,
 ) (GRPCClient, error) {
 	var opts []grpc.ClientOption
 
@@ -36,10 +36,10 @@ func (f *factory) newGRPCClient(
 	return conn, nil
 }
 
-func (f *factory) getGRPCEndpointOption(clientConfig ClientConfig) ([]grpc.ClientOption, error) {
-	target := clientConfig.GetTarget()
+func (f *factory) getGRPCEndpointOption(clientConfig clientConfig) ([]grpc.ClientOption, error) {
+	target := clientConfig.getTarget()
 
-	if !clientConfig.UseDiscovery() {
+	if !clientConfig.useDiscovery() {
 		// 使用直连
 		return []grpc.ClientOption{
 			grpc.WithEndpoint(target),
@@ -52,7 +52,7 @@ func (f *factory) getGRPCEndpointOption(clientConfig ClientConfig) ([]grpc.Clien
 	}
 
 	// node 过滤器
-	nodeFilters, err := clientConfig.GetNodeFilters()
+	nodeFilters, err := clientConfig.getNodeFilters()
 	if err != nil {
 		return nil, err
 	}

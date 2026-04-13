@@ -11,10 +11,10 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
 )
 
-func (f *factory) newMiddleware(clientConfig ClientConfig) []middleware.Middleware {
+func (f *factory) newMiddleware(clientConfig clientConfig) []middleware.Middleware {
 	var m []middleware.Middleware
 
-	config := clientConfig.Option.GetMiddleware()
+	config := clientConfig.option.GetMiddleware()
 
 	// 超时中间件
 	m = append(m, timeout.Client(

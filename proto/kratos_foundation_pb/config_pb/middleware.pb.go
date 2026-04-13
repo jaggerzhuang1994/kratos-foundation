@@ -68,7 +68,7 @@ type Middleware_Metadata struct {
 	// 是否启用
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
-	// client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-global-
+	// client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-
 	Prefix []string `protobuf:"bytes,2,rep,name=prefix,proto3" json:"prefix,omitempty"`
 	// 固定携带md
 	Constants map[string]string `protobuf:"bytes,3,rep,name=constants,proto3" json:"constants,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`

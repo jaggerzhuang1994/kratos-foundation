@@ -137,7 +137,8 @@ type ClientOption struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// 协议 默认为 GRPC
+	// 不指定协议时，ResolveClient的时候默认会返回GRPC链接
+	// 如果指定协议MakeClient的话，则忽略 protocol 创建对应协议的客户端
 	Protocol *Protocol `protobuf:"varint,1,opt,name=protocol,proto3,enum=kratos_foundation_pb.Protocol,oneof" json:"protocol,omitempty"`
 	// 目标端点 支持服务发现/直连:
 	// 默认为 discovery:///{client_key}

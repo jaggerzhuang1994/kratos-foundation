@@ -11,7 +11,7 @@ message Middleware {
     // 是否启用
     optional bool disable = 1;
     // server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
-    // client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-global-
+    // client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-
     repeated string prefix = 2;
     // 固定携带md
     map<string, string> constants = 3;

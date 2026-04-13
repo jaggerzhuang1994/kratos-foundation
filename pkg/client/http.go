@@ -9,7 +9,7 @@ import (
 
 func (f *factory) newHTTPClient(
 	ctx context.Context,
-	clientConfig ClientConfig,
+	clientConfig clientConfig,
 ) (HTTPClient, error) {
 	var opts []http.ClientOption
 
@@ -39,10 +39,10 @@ func (f *factory) newHTTPClient(
 	return conn, nil
 }
 
-func (f *factory) getHTTPEndpointOption(key ClientConfig) ([]http.ClientOption, error) {
-	target := key.GetTarget()
+func (f *factory) getHTTPEndpointOption(key clientConfig) ([]http.ClientOption, error) {
+	target := key.getTarget()
 
-	if !key.UseDiscovery() {
+	if !key.useDiscovery() {
 		// 使用直连
 		return []http.ClientOption{
 			http.WithEndpoint(target),
@@ -54,7 +54,7 @@ func (f *factory) getHTTPEndpointOption(key ClientConfig) ([]http.ClientOption, 
 	}
 
 	// node 过滤器
-	nodeFilters, err := key.GetNodeFilters()
+	nodeFilters, err := key.getNodeFilters()
 	if err != nil {
 		return nil, err
 	}

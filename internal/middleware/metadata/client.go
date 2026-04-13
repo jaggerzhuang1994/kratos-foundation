@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
@@ -11,7 +12,7 @@ import (
 // client is middleware client-side metadata.
 func client(opts ...Option) middleware.Middleware {
 	opt := &options{
-		prefix: []string{"x-md-global-"},
+		prefix: []string{"x-md-"},
 	}
 	for _, o := range opts {
 		o(opt)
@@ -27,24 +28,24 @@ func client(opts ...Option) middleware.Middleware {
 			// x-md-local-
 			for k, vList := range opt.md {
 				for _, v := range vList {
-					header.Add(k, v)
+					header.Add(k, url.QueryEscape(v))
 				}
 			}
 			if md, ok := metadata.FromClientContext(ctx); ok {
 				for k, vList := range md {
 					for _, v := range vList {
-						header.Add(k, v)
+						header.Add(k, url.QueryEscape(v))
 					}
 				}
 			}
-			// x-md-global-
+			// x-md-
 			if md, ok := metadata.FromServerContext(ctx); ok {
 				for k, vList := range md {
-					if opt.hasPrefix(k) {
-						for _, v := range vList {
-							header.Add(k, v)
-						}
+					//if opt.hasPrefix(k) {
+					for _, v := range vList {
+						header.Add(k, v)
 					}
+					//}
 				}
 			}
 			return handler(ctx, req)
