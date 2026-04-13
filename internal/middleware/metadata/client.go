@@ -44,7 +44,7 @@ func client(opts ...Option) middleware.Middleware {
 				for k, vList := range md {
 					//if opt.hasPrefix(k) {
 					for _, v := range vList {
-						header.Add(k, v)
+						header.Add(k, url.QueryEscape(v))
 					}
 					//}
 				}

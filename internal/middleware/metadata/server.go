@@ -31,7 +31,8 @@ func server(opts ...Option) middleware.Middleware {
 			for _, k := range header.Keys() {
 				if opt.hasPrefix(k) {
 					for _, v := range header.Values(k) {
-						md.Add(k, v)
+						vv, _ := url.QueryUnescape(v)
+						md.Add(k, vv)
 					}
 				}
 			}
@@ -47,7 +48,8 @@ func server(opts ...Option) middleware.Middleware {
 				for k := range queryValues {
 					if opt.hasPrefix(k) {
 						for _, v := range queryValues[k] {
-							md.Add(k, v)
+							vv, _ := url.QueryUnescape(v)
+							md.Add(k, vv)
 						}
 					}
 				}
@@ -55,7 +57,8 @@ func server(opts ...Option) middleware.Middleware {
 				sp := websocket.Subprotocols(request)
 				for i := 0; i < len(sp); i++ {
 					if opt.hasPrefix(sp[i]) && i+1 < len(sp) {
-						md.Add(sp[i], sp[i+1])
+						vv, _ := url.QueryUnescape(sp[i+1])
+						md.Add(sp[i], vv)
 						i++
 					}
 				}
