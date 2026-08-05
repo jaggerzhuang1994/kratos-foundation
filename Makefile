@@ -13,9 +13,6 @@ endif
 PROTO_OUT=./proto/kratos_foundation_pb
 CONFIG_PROTO=proto/config.proto
 
-GO_MODULE=$(shell go list -m)
-VERSION=$(shell git describe --tags --always)
-
 .PHONY: init
 # 初始化框架环境
 init:
@@ -24,12 +21,12 @@ init:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
 	go install github.com/go-kratos/kratos/cmd/kratos/v2@latest
 	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
-	(cd cmd/protoc-gen-kratos-foundation-errors && go install)
-	(cd cmd/protoc-gen-kratos-foundation-client && go install)
-	go install github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema@main
 	go install github.com/envoyproxy/protoc-gen-validate@latest
 	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	(cd cmd/protoc-gen-kratos-foundation-errors && go install)
+	(cd cmd/protoc-gen-kratos-foundation-client && go install)
+	(cd cmd/protoc-gen-jsonschema && go install)
 
 .PHONY: generate
 generate:

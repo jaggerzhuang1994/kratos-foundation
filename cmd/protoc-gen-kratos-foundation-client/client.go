@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,10 +33,17 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) *fileDesc {
 
 	g := gen.NewGeneratedFile(file.GeneratedFilenamePrefix+"_client.pb.go", file.GoImportPath)
 
-	// 如果是根目录的文件，则用文件名作为 service_name
-	serviceName := filepath.Dir(file.Desc.Path())
+	// 默认用 proto 目录名作为 serviceName
+	serviceName := path.Base(path.Dir(file.Desc.Path()))
+
+	// 查无目录，则用文件名作为 serviceName
 	if serviceName == "." {
-		// 使用 package name
+		serviceName = path.Base(file.Desc.Path())
+		serviceName = strings.TrimSuffix(serviceName, filepath.Ext(serviceName))
+	}
+
+	// 最后用包名做兜底
+	if serviceName == "" || serviceName == "." || serviceName == "/" {
 		serviceName = string(file.GoPackageName)
 	}
 

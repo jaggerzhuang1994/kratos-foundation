@@ -41,7 +41,6 @@ func makeMiddleware(
 	for _, rule := range rules {
 		timeout := rule.GetTimeout().AsDuration()
 		if timeout <= 0 {
-			// log.Warnf("route_timeout middleware has invalid timeout=%s, ignore it", rule.GetTimeout().String())
 			continue
 		}
 		if rule.GetPath() != "" {
