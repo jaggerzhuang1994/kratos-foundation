@@ -11,7 +11,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func server(opts ...Option) middleware.Middleware {
+// server 创建服务端实现并把传入值写入 Kratos 服务端元数据上下文。
+func server(opts ...option) middleware.Middleware {
 	opt := &options{
 		prefix: []string{"x-md-"}, // x-md-global-, x-md-local
 	}
@@ -30,33 +31,45 @@ func server(opts ...Option) middleware.Middleware {
 			for _, k := range header.Keys() {
 				if opt.hasPrefix(k) {
 					for _, v := range header.Values(k) {
-						vv, _ := url.QueryUnescape(v)
+						vv, decodeErr := url.QueryUnescape(v)
+						if decodeErr != nil {
+							// 客户端编码器只会产生合法转义；畸形值来自非约定调用方，跳过比传播部分值安全。
+							continue
+						}
 						md.Add(k, vv)
 					}
 				}
 			}
 
-			// 如果是ws请求，从query/子协议中读取header
+			// WebSocket 握手无法可靠携带自定义头，因此兼容查询参数和子协议两种载体。
 			request, ok := http.RequestFromServerContext(ctx)
-			if ok && websocket.IsWebSocketUpgrade(request) {
-				// 从query解析md
-				var queryValues = make(url.Values)
+			if ok && request != nil && websocket.IsWebSocketUpgrade(request) {
+				// ParseQuery 已完成一次解码，再次 QueryUnescape 会把值中的字面量“+”误改为空格。
+				var queryValues url.Values
 				if request.URL != nil {
-					queryValues, _ = url.ParseQuery(request.URL.RawQuery)
+					var parseErr error
+					queryValues, parseErr = url.ParseQuery(request.URL.RawQuery)
+					if parseErr != nil {
+						// ParseQuery 会在报错时返回部分结果；整组丢弃才能避免只透传一半身份信息。
+						queryValues = nil
+					}
 				}
 				for k := range queryValues {
 					if opt.hasPrefix(k) {
 						for _, v := range queryValues[k] {
-							vv, _ := url.QueryUnescape(v)
-							md.Add(k, vv)
+							md.Add(k, v)
 						}
 					}
 				}
-				// 从子协议解析md
+				// 子协议使用相邻的“键、值”对，保持与现有客户端编码约定兼容。
 				sp := websocket.Subprotocols(request)
 				for i := 0; i < len(sp); i++ {
 					if opt.hasPrefix(sp[i]) && i+1 < len(sp) {
-						vv, _ := url.QueryUnescape(sp[i+1])
+						vv, decodeErr := url.QueryUnescape(sp[i+1])
+						if decodeErr != nil {
+							i++
+							continue
+						}
 						md.Add(sp[i], vv)
 						i++
 					}

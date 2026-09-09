@@ -89,72 +89,6 @@ func (m *Config) validate(all bool) error {
 
 	}
 
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ConfigValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ConfigValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ConfigValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Metrics != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ConfigValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ConfigValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ConfigValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
 	if m.Tracing != nil {
 
 		if all {
@@ -386,14 +320,14 @@ func (m *Config) validate(all bool) error {
 
 	}
 
-	if m.Job != nil {
+	if m.Kafka != nil {
 
 		if all {
-			switch v := interface{}(m.GetJob()).(type) {
+			switch v := interface{}(m.GetKafka()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
 					errors = append(errors, ConfigValidationError{
-						field:  "Job",
+						field:  "Kafka",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
@@ -401,16 +335,49 @@ func (m *Config) validate(all bool) error {
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
 					errors = append(errors, ConfigValidationError{
-						field:  "Job",
+						field:  "Kafka",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetJob()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetKafka()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
 				return ConfigValidationError{
-					field:  "Job",
+					field:  "Kafka",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Oss != nil {
+
+		if all {
+			switch v := interface{}(m.GetOss()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ConfigValidationError{
+						field:  "Oss",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ConfigValidationError{
+						field:  "Oss",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetOss()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ConfigValidationError{
+					field:  "Oss",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}

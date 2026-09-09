@@ -1,0 +1,27 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+// OSS 按逻辑名管理多个对象存储 bucket。
+//
+// [需重启] bucket 客户端持有凭证与连接，在构造时一次性建立；新增或修改 bucket 都需要
+// 重启进程。
+message OSS {
+  reserved 1;
+  reserved "default";
+  // buckets 的 key 是应用内使用的逻辑名，bucket 字段是云厂商上的真实名称。
+  map<string, OSSBucket> buckets = 2;
+}
+
+// OSSBucket 保留跨厂商通用字段，驱动专属参数放在 options 中。
+message OSSBucket {
+  // driver 是编译进应用并已注册的驱动名，必须显式配置。
+  string driver = 1;
+  // bucket 是云厂商上的真实 bucket 名。
+  string bucket = 2;
+  // domain 是可选的公开访问域名，可带固定路径前缀。
+  optional string domain = 3;
+  // options 是驱动专属配置，具体 key 由 contrib 驱动定义。
+  map<string, string> options = 4;
+}

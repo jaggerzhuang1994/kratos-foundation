@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package kratos_foundation_client;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_client;kratos_foundation_client";
+
+extend google.protobuf.ServiceOptions {
+  // client_name is the default logical connection name used by generated
+  // clients for this service. It must not be blank.
+  string client_name = 51000;
+}

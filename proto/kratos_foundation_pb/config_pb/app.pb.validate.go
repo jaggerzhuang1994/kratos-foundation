@@ -92,10 +92,6 @@ func (m *App) validate(all bool) error {
 
 	// no validation rules for Metadata
 
-	if m.DisableRegistrar != nil {
-		// no validation rules for DisableRegistrar
-	}
-
 	if m.RegistrarTimeout != nil {
 
 		if all {

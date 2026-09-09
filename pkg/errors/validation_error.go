@@ -2,12 +2,13 @@ package errors
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-
-	"github.com/pkg/errors"
 )
 
-type ProtoValidationError interface {
+// protoValidationError 只描述生成器错误的稳定方法集合，避免把具体生成实现暴露给业务。
+type protoValidationError interface {
+	error
 	Field() string
 	Reason() string
 	Key() bool
@@ -15,6 +16,7 @@ type ProtoValidationError interface {
 	ErrorName() string
 }
 
+// ValidationError 是单条 protobuf 校验失败的稳定传输表示。
 type ValidationError struct {
 	Field     string
 	Reason    string
@@ -23,7 +25,11 @@ type ValidationError struct {
 	ErrorName string
 }
 
-func NewValidationError(err ProtoValidationError) *ValidationError {
+// newValidationError 从生成器错误复制稳定字段，避免泄漏具体实现类型。
+func newValidationError(err protoValidationError) *ValidationError {
+	if err == nil {
+		return nil
+	}
 	return &ValidationError{
 		Field:     err.Field(),
 		Reason:    err.Reason(),
@@ -33,6 +39,7 @@ func NewValidationError(err ProtoValidationError) *ValidationError {
 	}
 }
 
+// MarshalJSON 把底层原因序列化为文本，避免传输任意错误实现。
 func (e *ValidationError) MarshalJSON() ([]byte, error) {
 	var cause = ""
 	if e.Cause != nil {
@@ -47,6 +54,7 @@ func (e *ValidationError) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON 恢复校验失败，并把原因文本重建为普通错误。
 func (e *ValidationError) UnmarshalJSON(data []byte) error {
 	v := struct {
 		Field     string `json:"field"`
@@ -61,6 +69,7 @@ func (e *ValidationError) UnmarshalJSON(data []byte) error {
 	}
 	e.Field = v.Field
 	e.Reason = v.Reason
+	e.Cause = nil
 	if v.Cause != "" {
 		e.Cause = errors.New(v.Cause)
 	}
@@ -69,7 +78,7 @@ func (e *ValidationError) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Error satisfies the builtin error interface
+// Error 返回稳定、可读的参数校验消息。
 func (e *ValidationError) Error() string {
 	cause := ""
 	if e.Cause != nil {
@@ -81,32 +90,40 @@ func (e *ValidationError) Error() string {
 		key = "key for "
 	}
 
-	return fmt.Sprintf(
-		"invalid %sTest.%s: %s%s",
-		key,
-		e.Field,
-		e.Reason,
-		cause)
-}
-
-func ParseValidationError(validationErr error) (validationErrors []*ValidationError) {
-	var pbErrs []error
-
-	if _, ok := validationErr.(ProtoValidationError); ok {
-		pbErrs = []error{validationErr}
-	} else if multiError, ok := validationErr.(interface {
-		AllErrors() []error
-	}); ok {
-		pbErrs = multiError.AllErrors()
+	target := e.Field
+	if e.ErrorName != "" {
+		target = e.ErrorName + "." + e.Field
 	}
 
-	for _, err := range pbErrs {
-		if validationErr, ok := err.(ProtoValidationError); ok {
-			validationErrors = append(validationErrors, NewValidationError(validationErr))
+	return fmt.Sprintf("invalid %s%s: %s%s", key, target, e.Reason, cause)
+}
+
+// ParseValidationError 转换生成器的单个或聚合错误；其他错误保留为 unknown 记录。
+func ParseValidationError(validationErr error) (validationErrors []*ValidationError) {
+	if validationErr == nil {
+		return nil
+	}
+	var pbErrs []error
+
+	var protoErr protoValidationError
+	if errors.As(validationErr, &protoErr) {
+		pbErrs = []error{protoErr}
+	} else {
+		var multiError interface {
+			AllErrors() []error
+		}
+		if errors.As(validationErr, &multiError) {
+			pbErrs = multiError.AllErrors()
 		}
 	}
 
-	// 如果都不是校验错误，则包装一个未知错误
+	for _, err := range pbErrs {
+		var protoErr protoValidationError
+		if errors.As(err, &protoErr) {
+			validationErrors = append(validationErrors, newValidationError(protoErr))
+		}
+	}
+
 	if len(validationErrors) == 0 {
 		validationErrors = []*ValidationError{
 			{

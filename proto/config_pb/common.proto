@@ -1,9 +1,11 @@
 syntax = "proto3";
-option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
 
 package kratos_foundation_pb;
 
+import "google/protobuf/duration.proto";
 import "pubg/jsonschema.proto";
+import "validate/validate.proto";
 
 // 端点配置
 message Endpoint {
@@ -16,7 +18,120 @@ message ModuleLog {
   // 是否禁用
   optional bool disable = 1;
   // 最小日志级别 (默认值为log.level)
-  optional string level = 2 [(pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR']}}];
-  // 打印日志过滤哪些keys（继承log.filter_keys）
+  optional string level = 2 [
+    (pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}},
+    (validate.rules).string = {in: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}
+  ];
+  // 打印日志过滤哪些 keys；尾部 * 表示前缀匹配，例如 secret.*
   repeated string filter_keys = 3;
+}
+
+// Middleware 是服务端与客户端共用的中间件配置。
+//
+// 热更新语义取决于引用它的位置：在 server.middleware 下全部支持热更新并逐项原子替换，不保证整条调用链同时切换；
+// 在 client.clients 的 middleware 下则随所属客户端一起生效，代价是旧连接会退役重建。
+message Middleware {
+  // metadata 中间件配置
+  message Metadata {
+    // 是否启用
+    optional bool disable = 1;
+    // server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-
+    // client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-
+    repeated string prefix = 2;
+    // 固定携带md
+    map<string, string> constants = 3;
+  }
+
+  // 链路追踪配置
+  message Tracing {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 监控配置
+  message Metrics {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 日志配置
+  message Logging {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 表单校验配置
+  message Validator {
+    // 是否禁用
+    optional bool disable = 1;
+  }
+
+  // 限流器
+  message RateLimit {
+    // 是否禁用
+    optional bool enable = 1;
+    // 默认使用bbr limiter
+    optional BBRLimiter bbr_limiter = 2;
+
+    message BBRLimiter {
+      // 每个窗口的时间长度。默认值 10s
+      optional google.protobuf.Duration window = 1;
+      // 每个窗口包含的桶数量。默认值 100
+      optional int32 bucket = 2;
+      // 使用率阈值 默认值 800
+      optional int64 cpu_threshold = 3;
+      // 如果设置了 CPUQuota，则使用新的 cpuGetter
+      // 根据 CPU 核心数和配额计算实际 CPU 使用值
+      optional double cpu_quota = 4;
+    }
+  }
+
+  // 熔断器
+  message CircuitBreaker {
+    // 是否禁用
+    optional bool enable = 1;
+    // 默认使用 sre 熔断器
+    optional SREBreaker sre = 2;
+
+    message SREBreaker {
+      // 设置 SRE 熔断器中的 K 值（K = 1 / Success），默认 Success 为 0.6。
+      // 降低 K 值会让自适应限流变得更激进；
+      // 提高 K 值会让自适应限流变得更保守。
+      optional double success = 1;
+      // 设置允许的最小请求数量。默认值 100
+      optional int64 request = 2;
+      // 设置一个统计窗口内的桶（bucket）数量。默认值 10
+      optional int32 bucket = 3;
+      // 设置统计窗口的时间长度。默认值3s
+      optional google.protobuf.Duration window = 4;
+    }
+  }
+
+  // 请求截止时间控制。未配置 deadline 或 fallback_timeout 时，回退超时默认为 10s。
+  // fallback_timeout 仅用于没有上游截止时间的请求；显式 0s 关闭回退超时。
+  // max_timeout 是本地最大耗时，不受上游截止时间是否存在的影响；
+  // 没有上游预算且 fallback_timeout 为零时也可单独作为超时；
+  // min_budget 表示开始处理或派发调用所需的最小剩余预算。max_timeout 与 min_budget 默认 0s，不启用限制。
+  message Deadline {
+    // 无上游截止时间时的回退超时，缺失时默认 10s；显式 0s 关闭回退超时。
+    optional google.protobuf.Duration fallback_timeout = 1;
+    optional google.protobuf.Duration max_timeout = 2;
+    reserved 3, 5;
+    reserved "response_reserve", "accept_incoming_timeout";
+    optional google.protobuf.Duration min_budget = 4;
+    repeated RouteRule routes = 6;
+
+    message RouteRule {
+      oneof rule {
+        string path = 1;
+        string prefix = 2;
+      }
+      // 缺失时继承全局回退超时；显式 0s 关闭该路由的回退超时。
+      optional google.protobuf.Duration fallback_timeout = 3;
+      optional google.protobuf.Duration max_timeout = 4;
+      reserved 5;
+      reserved "response_reserve";
+      optional google.protobuf.Duration min_budget = 6;
+    }
+  }
 }

@@ -1,46 +1,107 @@
 package server
 
 import (
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/config"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
+	"fmt"
+	"time"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
+	metadatamiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metadata"
+	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server/internal/middleware/ratelimit"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-type Config = *config_pb.Server
+type componentConfig = *config_pb.Server
 
-type DefaultConfig Config
-
-func NewDefaultConfig() DefaultConfig {
-	return &config_pb.Server{
-		StopDelay:  durationpb.New(0),
-		Middleware: nil,
-		Http: &config_pb.HttpServerOption{
-			Disable:            proto.Bool(false),
-			Network:            proto.String("tcp"),
-			Addr:               proto.String("0.0.0.0:8000"),
-			Endpoint:           nil,
-			DisableStrictSlash: proto.Bool(false),
-			PathPrefix:         proto.String(""),
-			Metrics: &config_pb.HttpServerOption_Metrics{
-				Disable: proto.Bool(false),
-				Path:    proto.String("/metrics"),
-			},
+// defaultConfig 只作为合并模板使用，Manager.Load 会先复制它。
+var defaultConfig = &config_pb.Server{
+	StopDelay:  durationpb.New(0),
+	Middleware: nil,
+	Http: &config_pb.HttpServerOption{
+		Disable:            proto.Bool(false),
+		Network:            proto.String("tcp"),
+		Addr:               proto.String("0.0.0.0:8000"),
+		Endpoint:           nil,
+		DisableStrictSlash: proto.Bool(false),
+		PathPrefix:         proto.String(""),
+		Health: &config_pb.HttpServerOption_Health{
+			Disable:       proto.Bool(false),
+			LivenessPath:  proto.String("/healthz"),
+			ReadinessPath: proto.String("/readyz"),
+			Timeout:       durationpb.New(time.Second),
 		},
-		Grpc: &config_pb.GrpcServerOption{
-			Disable:           proto.Bool(false),
-			Network:           proto.String("tcp"),
-			Addr:              proto.String("0.0.0.0:9000"),
-			Endpoint:          nil,
-			CustomHealth:      proto.Bool(false),
-			DisableReflection: proto.Bool(false),
+		Metrics: &config_pb.HttpServerOption_Metrics{
+			Disable: proto.Bool(false),
+			Path:    proto.String("/metrics"),
 		},
-		Log: nil,
-	}
+	},
+	Grpc: &config_pb.GrpcServerOption{
+		Disable:           proto.Bool(false),
+		Network:           proto.String("tcp"),
+		Addr:              proto.String("0.0.0.0:9000"),
+		Endpoint:          nil,
+		CustomHealth:      proto.Bool(false),
+		DisableReflection: proto.Bool(false),
+	},
 }
 
-func NewConfig(config config.KratosFoundationConfig, defaultConfig DefaultConfig) Config {
-	c := proto.CloneOf((Config)(defaultConfig))
-	proto.Merge(c, config.GetServer())
-	return c
+// loadConfig 合并默认值并校验服务端配置，确保构造阶段得到完整快照。
+func loadConfig(manager foundationconfig.Manager) (componentConfig, error) {
+	next := new(config_pb.Server)
+	if err := manager.Load("server", next, defaultConfig); err != nil {
+		return nil, err
+	}
+	if err := validateConfig(next); err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
+// defaultMiddlewareConfig 是 server.middleware 订阅使用的默认值。它必须是非 nil 的空
+// 消息：未配置 middleware 的应用同样需要拿到默认策略，而各中间件对空配置的处理与对
+// nil 的处理一致。
+var defaultMiddlewareConfig = &config_pb.ServerMiddleware{}
+
+// validateConfig 统一检查生成约束、停机时间和中间件策略。
+func validateConfig(config componentConfig) error {
+	if err := config.ValidateAll(); err != nil {
+		return fmt.Errorf("validate server config: %w", err)
+	}
+	if stopDelay := config.GetStopDelay().AsDuration(); stopDelay < 0 {
+		return fmt.Errorf("server stop_delay cannot be negative: %s", stopDelay)
+	}
+	return validateMiddlewareConfig(config.GetMiddleware())
+}
+
+// validateMiddlewareConfig 校验可热更新的中间件策略。
+//
+// 热更新只订阅 server.middleware 这一子树，因此这部分校验必须能脱离整份 Server 配置
+// 独立执行；启动期的 validateConfig 也复用它，避免两条路径出现不同的接受标准。
+func validateMiddlewareConfig(config *config_pb.ServerMiddleware) error {
+	if err := config.ValidateAll(); err != nil {
+		return fmt.Errorf("validate server middleware config: %w", err)
+	}
+	if _, err := deadline.NewStore(config.GetDeadline()); err != nil {
+		return fmt.Errorf("server deadline: %w", err)
+	}
+	if err := metadatamiddleware.Validate(config.GetMetadata()); err != nil {
+		return fmt.Errorf("server metadata: %w", err)
+	}
+	if err := ratelimit.Validate(config.GetRateLimit()); err != nil {
+		return fmt.Errorf("server rate limit: %w", err)
+	}
+	return nil
+}
+
+// configuredHealth 读取配置文件；显式 Spec.Health 整体覆盖端点设置，检查函数仅由代码注入。
+func configuredHealth(config componentConfig, spec *Spec) *healthState {
+	source := config.GetHttp().GetHealth()
+	next := HealthConfig{Disable: source.GetDisable(), Addr: source.GetAddr(), LivenessPath: source.GetLivenessPath(), ReadinessPath: source.GetReadinessPath(), Timeout: source.GetTimeout().AsDuration()}
+	if spec.http.health != nil {
+		next = *spec.http.health
+	}
+	next.Checks = append(append([]ReadinessCheck(nil), next.Checks...), spec.http.healthChecks...)
+	return newHealthState(next)
 }

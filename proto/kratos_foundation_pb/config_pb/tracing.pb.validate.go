@@ -60,10 +60,6 @@ func (m *Tracing) validate(all bool) error {
 		// no validation rules for Disable
 	}
 
-	if m.TracerName != nil {
-		// no validation rules for TracerName
-	}
-
 	if m.Exporter != nil {
 
 		if all {
@@ -122,39 +118,6 @@ func (m *Tracing) validate(all bool) error {
 			if err := v.Validate(); err != nil {
 				return TracingValidationError{
 					field:  "Sampler",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, TracingValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, TracingValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return TracingValidationError{
-					field:  "Log",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}

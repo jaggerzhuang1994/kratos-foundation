@@ -30,6 +30,12 @@ go.work.sum
 # Editor/IDE
 .idea/
 .vscode/
+.claude/settings.local.json
 
 # macos file system
 .DS_Store
+
+# agent
+AGENTS.custom.md
+AGENTS.override.md
+.superpowers/

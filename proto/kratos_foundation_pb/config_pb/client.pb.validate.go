@@ -135,6 +135,40 @@ func (m *Client) validate(all bool) error {
 
 	}
 
+	if m.CleanupTimeout != nil {
+
+		if d := m.GetCleanupTimeout(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = ClientValidationError{
+					field:  "CleanupTimeout",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := ClientValidationError{
+						field:  "CleanupTimeout",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return ClientMultiError(errors)
 	}
@@ -372,14 +406,14 @@ func (m *ClientMiddleware) validate(all bool) error {
 
 	var errors []error
 
-	if m.Timeout != nil {
+	if m.Deadline != nil {
 
 		if all {
-			switch v := interface{}(m.GetTimeout()).(type) {
+			switch v := interface{}(m.GetDeadline()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
 					errors = append(errors, ClientMiddlewareValidationError{
-						field:  "Timeout",
+						field:  "Deadline",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
@@ -387,16 +421,16 @@ func (m *ClientMiddleware) validate(all bool) error {
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
 					errors = append(errors, ClientMiddlewareValidationError{
-						field:  "Timeout",
+						field:  "Deadline",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
 				return ClientMiddlewareValidationError{
-					field:  "Timeout",
+					field:  "Deadline",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}

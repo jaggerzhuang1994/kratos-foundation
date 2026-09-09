@@ -1,112 +1,46 @@
-# $schema: ./config.schema.json
+# yaml-language-server: $schema=./config.schema.json
 #
 # Kratos Foundation 配置参考
-# 此文件展示所有可配置项及其默认值
-# 标注 [默认] 的值为框架或第三方库的默认值，可省略不写
+# 覆盖当前 Foundation Config 中未弃用的字段；可选项以注释形式展示。
+# 连接级 gorm 与全局 gorm 使用相同字段，下方只展示局部覆盖；详见 README.md。
+# 示例值不等于默认值；[默认: ...] 表示省略字段时的行为，显式零值不一定等同省略。
+# Duration 使用 protobuf 秒字符串（如 10s、0.2s、0s），不能写 10m 或裸数字。
+# 地址、连接名及凭据均为示例，按实际环境替换；仅在应用组装对应组件后生效。
+# 本文件不自动加载；由应用通过 contrib/config/file 或其他配置源显式加载。
+# 热更新范围：app.stop_timeout、server.middleware、client.clients、tracing.sampler、数据库连接池。
+# 其余字段需重启；LOG_*、Consul 连接参数以及 Job/Queue Spec 见 README.md。
 #
 
 # =============================================================================
 # 应用生命周期配置
 # =============================================================================
 app:
-  # 是否禁用服务注册 [默认: false]
-  disable_registrar: false
   # 注册中心超时时间 [默认: 10s]
   registrar_timeout: 10s
-  # 停机超时时间，必须大于 server.stop_delay [默认: 30s]
+  # 停机超时时间，必须大于 server.stop_delay，支持热更新 [默认: 30s]
   stop_timeout: 30s
-
-# =============================================================================
-# 日志配置
-# =============================================================================
-log:
-  # 最小日志级别 [默认: 本地/debug 环境为 debug，其他环境为 info]
-  level: info
-  # 是否过滤空值 KV [默认: true]
-  filter_empty: true
-  # 过滤指定的 keys（敏感信息脱敏）[默认: []]
-  filter_keys:
-    - password
-    - token
-    - secret
-  # 时间格式 [默认: RFC3339 = "2006-01-02T15:04:05Z07:00"]
-  time_format: "2006-01-02T15:04:05Z07:00"
-  # 预置字段，为空则使用全部默认值 [默认: ts, service.id, service.name, service.version, trace.id, span.id, caller]
-  preset:
-    - ts
-    - service.id
-    - service.name
-    - service.version
-    - trace.id
-    - span.id
-    - caller
-
-  # 标准输出日志配置
-  std:
-    # 最小日志级别，可覆盖全局 level [默认: 继承 log.level]
-    level: info
-    # 是否过滤空值 KV [默认: 继承 log.filter_empty]
-    filter_empty: false
-    # 是否禁用 [默认: false]
-    disable: false
-    # 过滤指定的 keys，会合并 log.filter_keys [默认: []]
-    filter_keys: [ ]
-
-  # 文件日志配置
-  file:
-    # 是否禁用 [默认: false]
-    disable: true
-    # 最小日志级别 [默认: 继承 log.level]
-    level: info
-    # 是否过滤空值 KV [默认: 继承 log.filter_empty]
-    filter_empty: true
-    # 过滤指定的 keys，会合并 log.filter_keys [默认: []]
-    filter_keys: [ ]
-    # 日志文件路径 [默认: ./app.log]
-    path: ./logs/app.log
-    # 文件轮转配置
-    rotating:
-      # 是否禁用轮转 [默认: false]
-      disable: false
-      # 单个日志文件最大大小 (MB) [默认: 100]
-      max_size: 100
-      # 日志文件保留天数，0 表示不限制 [默认: 0]
-      max_file_age: 7
-      # 保留的日志文件数量，0 表示不限制 [默认: 0]
-      max_files: 10
-      # 文件名时间戳是否使用本地时间 [默认: false (UTC)]
-      local_time: true
-      # 是否压缩轮转后的日志文件 [默认: false]
-      compress: true
-
-# =============================================================================
-# 指标配置
-# =============================================================================
-metrics:
-  # 指标命名空间 [默认: 应用名]
-  meter_name: my-service
-  # Map 初始容量（优化预分配）[默认: 64]
-  counter_map_size: 64
-  gauge_map_size: 64
-  histogram_map_size: 64
-  # 模块日志配置
-  log:
-    level: debug
+  # 服务注册端点；省略时使用 Server 导出的业务端点 [需重启]
+  # endpoints:
+  #   - scheme: http
+  #     host: my-service.example.com:8000
+  #   - scheme: grpc
+  #     host: my-service.example.com:9000
+  # 注册到 Kratos ServiceInstance.Metadata；与 registry.tags 分开配置 [需重启]
+  # metadata:
+  #   version: v1.0.0
 
 # =============================================================================
 # 链路追踪配置
 # =============================================================================
 tracing:
-  # 是否禁用 [默认: false]
+  # 是否禁用 [默认: local 环境为 true，其他环境为 false；此处显式启用]
   disable: false
-  # Tracer 名称 [默认: 应用名]
-  # tracer_name: my-service
   # 导出器配置
   exporter:
     # OTLP HTTP 端点 [默认: http://localhost:4318/v1/traces]
     endpoint_url: http://localhost:4318/v1/traces
     # 压缩方式: NO, GZIP [默认: NO]
-    compression: NO
+    compression: "NO"
     # 导出超时时间 [默认: 10s]
     timeout: 10s
     # 自定义 Headers
@@ -122,11 +56,12 @@ tracing:
       max_interval: 30s
       # 最大重试总时长 [默认: 60s]
       max_elapsed_time: 60s
-  # 采样器配置
+  # 采样器配置 [热更新]；构造时禁用 Provider 后，不能仅靠修改采样器启用追踪
   sampler:
-    # 采样策略: RATIO, ALWAYS, NEVER [默认: RATIO]
+    # 所有策略都会继承父 Span 的采样决定；此处只控制本服务创建的根 trace
+    # 根 trace 采样策略: RATIO, ALWAYS, NEVER [默认: RATIO]
     sample: RATIO
-    # 采样率 (0.0-1.0) [默认: 0.05 = 5%]
+    # RATIO 策略的采样率 (0.0-1.0) [默认: 0.05 = 5%]
     ratio: 0.05
 
 # =============================================================================
@@ -137,25 +72,30 @@ server:
   # 建议设置 3-5s，让服务发现有时间同步
   stop_delay: 3s
 
-  # 通用中间件配置
+  # 通用中间件配置 [热更新]；非法组合保留旧策略，逐项发布不保证整条调用链同时切换
   middleware:
-    # 超时控制中间件
-    timeout:
-      # 默认超时时间 [默认: Server 1s, Client 2s]
-      default: 1s
-      # 路由级超时配置（优先级: path > prefix）
+    # 截止时间控制：未配置 deadline 时，fallback_timeout 也默认 10s
+    deadline:
+      # 没有上游截止时间时的兜底值 [默认: 10s；显式 0s 关闭回退超时]
+      fallback_timeout: 1s
+      # 本地最大耗时；无上游预算且 fallback 为 0 时也会作为超时 [默认: 0s，不限制]
+      max_timeout: 0s
+      # 进入 Handler 所需的最小剩余预算 [默认: 0s，不检查]
+      min_budget: 0s
+      # 路由级策略（优先级: 精确 path > 最长 prefix > 默认配置）；缺失字段继承全局，显式 0s 关闭对应限制
       routes:
-        # 精确路径匹配
         - path: /api.v1.LongRunning/Process
-          timeout: 30s
-        # 前缀匹配
+          fallback_timeout: 30s
+          max_timeout: 30s
+          min_budget: 0.100s
         - prefix: /api.v1.Upload
-          timeout: 60s
+          fallback_timeout: 60s
+          max_timeout: 60s
     # Metadata 中间件
     metadata:
       # 是否禁用 [默认: false]
       disable: false
-      # 传播的 metadata 前缀 [默认: Server 使用 x-md-, Client 使用 x-md-global-]
+      # 接收并向下游传播的 metadata 前缀 [默认: x-md-]
       prefix:
         - x-md-
       # 固定携带的 metadata
@@ -178,7 +118,7 @@ server:
       # 是否禁用 [默认: false]
       disable: false
     # 限流中间件
-    ratelimit:
+    rate_limit:
       # 是否启用 [默认: false]
       enable: false
       # BBR 限流器配置
@@ -215,6 +155,23 @@ server:
       disable: false
       # Metrics 路由路径 [默认: /metrics]
       path: /metrics
+      # 空值复用业务 HTTP；指定其他 host:port 时独立监听 [默认: 空；需重启]
+      # addr: 127.0.0.1:9001
+    # HTTP 健康检查 [需重启]；独立于业务 path_prefix、Filter 和鉴权
+    health:
+      # 是否禁用 [默认: false]
+      disable: false
+      # 与 metrics.addr 相同则共享管理监听；省略则复用业务 HTTP
+      # addr: 127.0.0.1:9001
+      # 存活探针路径 [默认: /healthz]；GET/HEAD 返回 200，仅表示 HTTP 可响应，不检查依赖或应用就绪状态
+      liveness_path: /healthz
+      # 就绪探针路径 [默认: /readyz]；GET/HEAD 在应用完成启动、依赖检查通过且未停机时返回 200，否则返回 503
+      # 未绑定应用就绪状态时始终返回 503；NewServerBootstrap 自动绑定
+      readiness_path: /readyz
+      # 全部就绪检查共用总期限 [默认: 1s]；检查函数由 Spec.HTTP().HealthChecks 注入
+      timeout: 1s
+    # 业务 HTTP 禁用时，只有显式指定 addr 的管理端点才会启动。
+    # 独立管理监听使用普通 HTTP，不继承业务 TLS，且不发布到服务发现。
 
   # gRPC 服务器配置
   grpc:
@@ -233,9 +190,32 @@ server:
     # 是否禁用服务反射 [默认: false]
     disable_reflection: false
 
-  # 模块日志配置
-  # log:
-  #   level: info
+# =============================================================================
+# 服务发现配置（由 contrib/discovery/consul 使用；需重启）
+# =============================================================================
+# Consul 地址/认证在配置 Manager 之前通过环境变量或 pkg/consul.Options 提供。
+discovery:
+  # 获取服务的超时，必须为正数 [默认: 10s]
+  timeout: 10s
+  # 数据中心模式: SINGLE, MULTI [默认: SINGLE]
+  dc: SINGLE
+
+# =============================================================================
+# 服务注册配置（由 contrib/registry/consul 使用；需重启）
+# =============================================================================
+registry:
+  # 禁用 TCP 健康检查 [默认: false]
+  disable_health_check: false
+  # 禁用 TTL 心跳 [默认: false]
+  disable_heartbeat: false
+  # 健康检查间隔；internal 是保留的历史字段拼写，值需为至少一秒的整秒 [默认: 10s]
+  healthcheck_internal: 10s
+  # 持续不健康后的注销等待时间，值需为至少一秒的整秒 [默认: 600s]
+  deregister_critical_service_after: 600s
+  # Consul 服务实例标签，用于 Consul 侧分类、查询和 tag 过滤。
+  # 不会自动成为 Kratos ServiceInstance.Metadata。
+  tags:
+    - region=local
 
 # =============================================================================
 # 数据库配置
@@ -244,25 +224,39 @@ database:
   # 默认连接名 [默认: default]
   default: main
 
-  # 数据库连接配置
+  # 每个具名连接使用独立的连接池、GORM 配置和方言；通过 UseConnection 显式选择
   connections:
     main:
-      # 数据库驱动: mysql, sqlite, postgres [默认: mysql]
+      # 数据库驱动: mysql, sqlite3 [默认: mysql]
       driver: mysql
       # DSN 连接字符串
       dsn: "user:password@tcp(localhost:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
-      # 从库配置（可选，用于读写分离）
-      # replicas:
-      #   - driver: mysql
-      #     dsn: "user:password@tcp(replica1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
-      #   - driver: mysql
-      #     dsn: "user:password@tcp(replica2:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
-      # 自动切换数据源关联的表名
-      # datas:
-      #   - users
-      #   - orders
-      # 是否在日志中打印 sources/replicas 模式 [默认: false]
-      # trace_resolver_mode: false
+      # 连接池参数 [热更新]；同次更新若包含需重启字段，整个 database 更新会跳过
+      # 最大空闲连接数，0 表示不保留空闲连接 [默认: 2]
+      max_idle_conns: 2
+      # 最大打开连接数，0 表示不限制 [默认: 0]
+      max_open_conns: 0
+      # 连接最大生命周期，0s 表示不限制 [默认: 0s]
+      conn_max_lifetime: 0s
+      # 连接最大空闲时间，0s 表示不限制 [默认: 0s]
+      conn_max_idle_time: 0s
+      # 删除以上字段会恢复默认值；空闲上限超过正数 max_open_conns 时会自动降低。
+      # 自定义加密字段配置（可选；未配置时仅 AESDecryptString/AESDecryptBytes 读写报错）
+      # aes:
+      #   # Base64 编码的 16/24/32 字节 AES key
+      #   key: "MDEyMzQ1Njc4OWFiY2RlZg=="
+      #   # CBC（默认）
+      #   algorithm: CBC
+      # 覆盖下方 database.gorm；支持全局 gorm 展示的全部字段，未填写字段继续继承
+      # gorm:
+      #   skip_default_transaction: true
+      #   default_context_timeout: 5s
+      #   create_batch_size: 200
+
+    # 其他数据库声明为独立连接，例如 database.UseConnection(ctx, "local")
+    # local:
+    #   driver: sqlite3
+    #   dsn: app.db
 
   # GORM 配置
   gorm:
@@ -294,8 +288,8 @@ database:
     # propagate_unscoped: false
     # 日志配置
     logger:
-      # 日志级别: UNKNOWN, SILENT, ERROR, WARN, INFO [默认: WARN]
-      level: WARN
+      # 日志级别: UNKNOWN, SILENT, ERROR, WARN, INFO [默认: SILENT；UNKNOWN 也按 SILENT 处理]
+      level: SILENT
       # 慢查询阈值 [默认: 200ms]
       slow_threshold: 0.2s
       # 是否彩色输出 [默认: false]
@@ -311,8 +305,7 @@ database:
     disable: false
     # 是否排除 SQL 变量部分 [默认: false]
     exclude_query_vars: false
-    # 是否排除 DBStats 指标上报 [默认: false]
-    exclude_metrics: false
+    # exclude_metrics 已弃用；数据库指标统一由下方 metrics 配置控制。
     # 是否在异常事件中包含堆栈追踪 [默认: false]
     # record_stack_trace_in_span: false
     # 是否排除 db.server_address 属性 [默认: false]
@@ -327,7 +320,7 @@ database:
     # 常量 Labels
     # labels:
     #   env: production
-    # MySQL 插件配置
+    # MySQL 状态指标配置
     mysql:
       # 指标前缀 [默认: gorm_status_]
       prefix: gorm_status_
@@ -340,7 +333,13 @@ database:
 
   # 模块日志配置
   # log:
+  #   # 禁用该模块日志 [默认: false]
+  #   disable: false
+  #   # 不填写时继承注入 Logger 的级别
   #   level: info
+  #   # 过滤键支持尾部 * 前缀匹配
+  #   filter_keys:
+  #     - secret.*
 
 # =============================================================================
 # Redis 配置
@@ -360,6 +359,8 @@ redis:
       # client_name: my-service
       # RESP 协议版本: 2, 3 [默认: 3]
       protocol: 3
+      # 启用 Redis Search 的实验性 RESP3 响应；启用后使用 RawResult [默认: false]
+      # unstable_resp3: false
       # 用户名（Redis 6.0+ ACL）
       # username: ""
       # 密码
@@ -368,19 +369,19 @@ redis:
       db: 0
       # 最大重试次数，-1 禁用重试 [默认: 3]
       max_retries: 3
-      # 最小重试退避时间，-1 禁用退避 [默认: 8ms]
+      # 最小重试退避时间，-0.000000001s（-1ns）禁用退避 [默认: 8ms]
       min_retry_backoff: 0.008s
-      # 最大重试退避时间，-1 禁用退避 [默认: 512ms]
+      # 最大重试退避时间，-0.000000001s（-1ns）禁用退避 [默认: 512ms]
       max_retry_backoff: 0.512s
       # 连接超时 [默认: 5s]
       dial_timeout: 5s
       # 连接重试次数 [默认: 5]
       dialer_retries: 5
       # 连接重试间隔 [默认: 100ms]
-      dialer_retry_timeout: 100.0001s
-      # 读取超时，-1 无限，-2 禁用 [默认: 3s]
+      dialer_retry_timeout: 0.1s
+      # 读取超时，-0.000000001s 无限，-0.000000002s 不设置 socket deadline [默认: 3s]
       read_timeout: 3s
-      # 写入超时，-1 无限，-2 禁用 [默认: 3s]
+      # 写入超时，负值哨兵同 read_timeout [默认: 跟随 read_timeout，通常 3s]
       write_timeout: 3s
       # 是否启用 Context 超时控制 [默认: false]
       # context_timeout_enabled: false
@@ -392,9 +393,9 @@ redis:
       # pool_fifo: false
       # 连接池大小 [默认: 10 * runtime.GOMAXPROCS(0)]
       pool_size: 100
-      # 最大并发连接创建数
+      # 最大并发连接创建数，0 跟随 pool_size，大于 pool_size 时截断 [默认: pool_size]
       # max_concurrent_dials: 0
-      # 连接池超时 [默认: read_timeout + 1s]
+      # 连接池超时 [默认: 正数 read_timeout + 1s，否则 30s]
       # pool_timeout: 4s
       # 最小空闲连接数 [默认: 0]
       min_idle_conns: 10
@@ -402,12 +403,10 @@ redis:
       max_idle_conns: 50
       # 最大活跃连接数，0 表示无限制 [默认: 0]
       # max_active_conns: 0
-      # 连接最大空闲时间 [默认: 30m]
+      # 连接最大空闲时间，0s 恢复默认，-0.000000001s 禁用过期 [默认: 1800s]
       conn_max_idle_time: 1800s
-      # 连接最大生命周期，0 表示无限制 [默认: 0]
-      # conn_max_lifetime: 0
-      # 是否只读模式 [默认: false]
-      # read_only: false
+      # 连接最大生命周期，0s 表示无限制 [默认: 0s]
+      # conn_max_lifetime: 0s
       # 是否禁用 CLIENT SETINFO [默认: false]
       # disable_identity: false
       # 客户端名称后缀
@@ -428,8 +427,8 @@ redis:
     db_statement: true
     # 是否记录调用者信息 [默认: true]
     caller_enabled: true
-    # 是否启用 dial 过滤 [默认: false]
-    # dial_filter: false
+    # 是否过滤连接建立的 Span [默认: true]
+    # dial_filter: true
 
   # 监控配置
   metrics:
@@ -438,16 +437,95 @@ redis:
 
   # 模块日志配置
   # log:
+  #   # 禁用该模块日志 [默认: false]
+  #   disable: false
+  #   # 不填写时继承注入 Logger 的级别
   #   level: info
+  #   # 过滤键支持尾部 * 前缀匹配
+  #   filter_keys:
+  #     - secret.*
+
+# =============================================================================
+# Kafka 连接配置
+# =============================================================================
+kafka:
+  connections:
+    events:
+      brokers:
+        - localhost:9092
+      client_id: my-service
+      dial_timeout: 10s
+      allow_auto_topic_creation: false
+
+      # 配置此块即启用 TLS
+      # tls:
+      #   server_name: kafka.example.com
+      #   insecure_skip_verify: false
+      #   ca_file: ./certs/ca.pem
+      #   cert_file: ./certs/client.pem
+      #   key_file: ./certs/client-key.pem
+
+      # 支持 PLAIN、SCRAM-SHA-256 和 SCRAM-SHA-512
+      # sasl:
+      #   mechanism: KAFKA_SASL_MECHANISM_SCRAM_SHA_256
+      #   username: app
+      #   password: secret
+
+      # 以下生产/消费参数是示例值；省略字段沿用当前依赖版本的 franz-go 默认值
+      producer:
+        required_acks: KAFKA_REQUIRED_ACKS_ALL
+        compression: KAFKA_COMPRESSION_SNAPPY
+        linger: 0.005s
+        batch_max_bytes: 1048576
+
+      consumer:
+        session_timeout: 45s
+        heartbeat_interval: 3s
+        rebalance_timeout: 60s
+        fetch_min_bytes: 1
+        fetch_max_bytes: 52428800
+        fetch_max_wait: 5s
+
+  # log:
+  #   # 禁用该模块日志 [默认: false]
+  #   disable: false
+  #   # 不填写时继承注入 Logger 的级别
+  #   level: info
+  #   # 过滤键支持尾部 * 前缀匹配
+  #   filter_keys:
+  #     - secret.*
+
+# =============================================================================
+# OSS 对象存储配置
+# =============================================================================
+# 使用阿里云驱动时，应用组装层需要导入 contrib/oss/aliyun。
+# oss:
+#   buckets:
+#     # assets 是业务代码使用的逻辑名，可与云端 bucket 名不同。
+#     assets:
+#       driver: aliyun
+#       bucket: my-production-assets
+#       # 可选：用于生成公开对象 URL 的域名或 CDN 域名。
+#       domain: https://assets.example.com
+#       # options 的 key 由具体驱动定义。
+#       options:
+#         region: cn-hongkong
+#         # endpoint: https://oss-cn-hongkong.aliyuncs.com
+#         access_key_id: replace-me
+#         access_key_secret: replace-me
+#         # security_token: replace-me
 
 # =============================================================================
 # 服务客户端配置
 # =============================================================================
 client:
+  # Wire cleanup 的排空等待上限；到期后强制关闭仍被租用的连接。[需重启]
+  cleanup_timeout: 30s
+  # clients 支持热更新；新增、修改和删除会影响后续 Factory 解析。
   clients:
     # 服务发现模式示例
     user-service:
-      # 协议: GRPC, HTTP, GRPCS, HTTPS [默认: GRPC]
+      # 协议: GRPC, HTTP, HTTPS [默认: GRPC]
       protocol: GRPC
       # 目标端点 [默认: discovery:///{client_key}]
       # 支持服务发现: discovery:///service-name
@@ -455,17 +533,32 @@ client:
       target: discovery:///user-service
       # 中间件配置
       middleware:
-        # 超时配置
-        timeout:
-          # 默认超时 [默认: Client 2s]
-          default: 2s
-          # 路由级超时
+        # 调用预算配置
+        deadline:
+          # 父 Context 无截止时间时的兜底值 [默认: 10s；显式 0s 关闭回退超时]
+          fallback_timeout: 2s
+          # 单次调用最大耗时；无父预算且 fallback 为 0 时也会作为超时 [默认: 0s，不限制]
+          max_timeout: 2s
+          # 预算低于该值时不再发起请求 [默认: 0s，不检查]
+          min_budget: 0.020s
           routes:
             - path: /api.user.v1.UserService/GetProfile
-              timeout: 5s
+              fallback_timeout: 5s
+              max_timeout: 5s
+              min_budget: 0.020s
+            # 同一规则只能设置 path 或 prefix；缺失预算继承客户端全局配置
+            - prefix: /api.user.v1.UserService/
+              fallback_timeout: 2s
+              max_timeout: 2s
+              min_budget: 0.020s
         # Metadata 配置
         metadata:
-          # 传播的 metadata 前缀 [默认: x-md-global-]
+          # 是否禁用 [默认: false]
+          disable: false
+          # 固定携带的 metadata
+          # constants:
+          #   x-md-client-version: v1.0.0
+          # 本 Client 仅向下游传播 x-md-global- 前缀
           prefix:
             - x-md-global-
         # 链路追踪
@@ -478,13 +571,13 @@ client:
         logging:
           disable: false
         # 熔断器配置
-        circuitbreaker:
+        circuit_breaker:
           # 是否启用 [默认: false]
           enable: true
           # SRE 熔断器配置
           sre:
             # 成功率阈值 (K = 1/success) [默认: 0.6]
-            # 降低该值会使熔断更激进，提高则更保守
+            # K = 1/success；提高 success 会降低 K，使熔断更激进
             success: 0.6
             # 最小请求数 [默认: 100]
             request: 100
@@ -498,68 +591,18 @@ client:
     #   protocol: HTTPS
     #   target: api.example.com:443
     #   middleware:
-    #     timeout:
-    #       default: 10s
-    #     circuitbreaker:
+    #     deadline:
+    #       fallback_timeout: 10s
+    #       max_timeout: 10s
+    #     circuit_breaker:
     #       enable: true
 
-  # 模块日志配置
+  # 模块日志配置（仅构造时读取；变更记录需重启告警，不阻止 clients 更新）
   # log:
+  #   # 禁用该模块日志 [默认: false]
+  #   disable: false
+  #   # 不填写时继承注入 Logger 的级别
   #   level: info
-
-# =============================================================================
-# 定时任务配置
-# =============================================================================
-job:
-  # 是否禁用 [默认: false]
-  disable: false
-  # 时区 [默认: 系统时区]
-  timezone: Asia/Shanghai
-
-  # 链路追踪配置
-  tracing:
-    # 是否禁用 [默认: false]
-    disable: false
-
-  # 监控配置
-  metrics:
-    # 是否禁用 [默认: false]
-    disable: false
-
-  # 任务定义
-  jobs:
-    # 每分钟执行
-    # schedule 支持:
-    # - cron 表达式（6 位含秒，5 位不含秒）: [秒] 分 时 日 月 周
-    # - 预定义: @yearly, @monthly, @weekly, @daily, @hourly
-    # - 间隔: @every 30s, @every 1m, @every 1h30m
-    # - 指定时区: TZ=America/New_York 0 9 * * 1-5
-    sync-data:
-      # 是否禁用 [默认: false]
-      disable: false
-      # Cron 表达式: 每分钟第 0 秒执行
-      schedule: "0 * * * * *"
-      # 并发策略: OVERLAP(允许重叠), DELAY(推迟), SKIP(跳过) [默认: OVERLAP]
-      concurrent_policy: SKIP
-      # 启动时是否立即执行一次 [默认: false]
-      immediately: false
-
-    # 每小时执行
-    cleanup:
-      schedule: "@hourly"
-      concurrent_policy: OVERLAP
-
-    # 每 30 秒执行
-    health-check:
-      schedule: "@every 30s"
-      concurrent_policy: SKIP
-      immediately: true
-
-    # 指定时区示例：工作日上午 9 点（纽约时间）
-    # report:
-    #   schedule: "TZ=America/New_York 0 9 * * 1-5"
-    #   concurrent_policy: DELAY
-
-  # 模块日志配置
-  # log:
-  #   level: info
+  #   # 过滤键支持尾部 * 前缀匹配
+  #   filter_keys:
+  #     - secret.*

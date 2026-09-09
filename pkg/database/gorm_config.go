@@ -1,83 +1,124 @@
 package database
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-type GormConfig gorm.Option
-
-func NewGormConfig(config Config, logger GormLogger) GormConfig {
-	gormConfig := &gorm.Config{}
-	conf := config.GetGorm()
-
-	// SkipDefaultTransaction
+func newGORMConfig(conf *config_pb.Gorm, gormLogger logger.Interface) *gorm.Config {
+	result := &gorm.Config{}
 	if conf.GetSkipDefaultTransaction() {
-		gormConfig.SkipDefaultTransaction = conf.GetSkipDefaultTransaction()
+		result.SkipDefaultTransaction = conf.GetSkipDefaultTransaction()
 	}
-
-	// DefaultTransactionTimeout
 	if conf.GetDefaultTransactionTimeout() != nil {
-		gormConfig.DefaultTransactionTimeout = conf.GetDefaultTransactionTimeout().AsDuration()
+		result.DefaultTransactionTimeout = conf.GetDefaultTransactionTimeout().AsDuration()
 	}
-
-	// DefaultContextTimeout
 	if conf.GetDefaultContextTimeout() != nil {
-		gormConfig.DefaultContextTimeout = conf.GetDefaultContextTimeout().AsDuration()
+		result.DefaultContextTimeout = conf.GetDefaultContextTimeout().AsDuration()
 	}
-
-	// FullSaveAssociations
 	if conf.GetFullSaveAssociations() {
-		gormConfig.FullSaveAssociations = conf.GetFullSaveAssociations()
+		result.FullSaveAssociations = conf.GetFullSaveAssociations()
 	}
-
-	// DisableAutomaticPing
 	if conf.GetDisableAutomaticPing() {
-		gormConfig.DisableAutomaticPing = conf.GetDisableAutomaticPing()
+		result.DisableAutomaticPing = conf.GetDisableAutomaticPing()
 	}
-
-	// DisableForeignKeyConstraintWhenMigrating
 	if conf.GetDisableForeignKeyConstraintWhenMigrating() {
-		gormConfig.DisableForeignKeyConstraintWhenMigrating = conf.GetDisableForeignKeyConstraintWhenMigrating()
+		result.DisableForeignKeyConstraintWhenMigrating = conf.GetDisableForeignKeyConstraintWhenMigrating()
 	}
-
-	// IgnoreRelationshipsWhenMigrating
 	if conf.GetIgnoreRelationshipsWhenMigrating() {
-		gormConfig.IgnoreRelationshipsWhenMigrating = conf.GetIgnoreRelationshipsWhenMigrating()
+		result.IgnoreRelationshipsWhenMigrating = conf.GetIgnoreRelationshipsWhenMigrating()
 	}
-
-	// DisableNestedTransaction
 	if conf.GetDisableNestedTransaction() {
-		gormConfig.DisableNestedTransaction = conf.GetDisableNestedTransaction()
+		result.DisableNestedTransaction = conf.GetDisableNestedTransaction()
 	}
-
-	// AllowGlobalUpdate
 	if conf.GetAllowGlobalUpdate() {
-		gormConfig.AllowGlobalUpdate = conf.GetAllowGlobalUpdate()
+		result.AllowGlobalUpdate = conf.GetAllowGlobalUpdate()
 	}
-
-	// QueryFields
 	if conf.GetQueryFields() {
-		gormConfig.QueryFields = conf.GetQueryFields()
+		result.QueryFields = conf.GetQueryFields()
 	}
-
-	// CreateBatchSize
 	if conf.GetCreateBatchSize() != 0 {
-		gormConfig.CreateBatchSize = int(conf.GetCreateBatchSize())
+		result.CreateBatchSize = int(conf.GetCreateBatchSize())
 	}
-
-	// TranslateError
 	if conf.GetTranslateError() {
-		gormConfig.TranslateError = conf.GetTranslateError()
+		result.TranslateError = conf.GetTranslateError()
 	}
-
-	// PropagateUnscoped
 	if conf.GetPropagateUnscoped() {
-		gormConfig.PropagateUnscoped = conf.GetPropagateUnscoped()
+		result.PropagateUnscoped = conf.GetPropagateUnscoped()
+	}
+	result.Logger = gormLogger
+	return result
+}
+
+// MergeGORMConfig applies explicitly configured connection fields over global fields.
+func mergeGORMConfig(base, override *config_pb.Gorm) *config_pb.Gorm {
+	result := new(config_pb.Gorm)
+	if base != nil {
+		result = proto.Clone(base).(*config_pb.Gorm)
+	}
+	if override != nil {
+		proto.Merge(result, override)
+	}
+	return result
+}
+
+type gormLoggerWriter struct {
+	logger log.Logger
+}
+
+func newGORMLogger(log log.Logger, config *config_pb.GormLogger) logger.Interface {
+	level := logger.Silent
+	switch config.GetLevel() {
+	case config_pb.GormLogger_INFO:
+		level = logger.Info
+	case config_pb.GormLogger_WARN:
+		level = logger.Warn
+	case config_pb.GormLogger_ERROR:
+		level = logger.Error
 	}
 
-	if logger != nil {
-		gormConfig.Logger = logger
-	}
+	return logger.New(&gormLoggerWriter{
+		logger: log.AddCallerDepth(),
+	}, logger.Config{
+		SlowThreshold:             config.GetSlowThreshold().AsDuration(),
+		Colorful:                  config.GetColorful(),
+		IgnoreRecordNotFoundError: config.GetIgnoreRecordNotFoundError(),
+		ParameterizedQueries:      config.GetParameterizedQueries(),
+		LogLevel:                  level,
+	})
+}
 
-	return gormConfig
+func (writer *gormLoggerWriter) Printf(format string, arguments ...any) {
+	format = strings.ReplaceAll(format, "\n", " ")
+	message := fmt.Sprintf(format, arguments...)
+	switch {
+	case strings.Contains(format, "[error]") || secondGORMLogArgumentIsError(arguments):
+		writer.logger.Error(message)
+	case strings.Contains(format, "[warn]") || secondGORMLogArgumentIsSlowSQL(arguments):
+		writer.logger.Warn(message)
+	default:
+		writer.logger.Info(message)
+	}
+}
+
+func secondGORMLogArgumentIsError(arguments []any) bool {
+	if len(arguments) < 2 {
+		return false
+	}
+	_, ok := arguments[1].(error)
+	return ok
+}
+
+func secondGORMLogArgumentIsSlowSQL(arguments []any) bool {
+	if len(arguments) < 2 {
+		return false
+	}
+	message, ok := arguments[1].(string)
+	return ok && strings.HasPrefix(message, "SLOW SQL >=")
 }

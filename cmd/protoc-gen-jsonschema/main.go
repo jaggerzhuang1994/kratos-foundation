@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/pkg/modules"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/modules"
 	pgs "github.com/lyft/protoc-gen-star/v2"
 	"google.golang.org/protobuf/types/pluginpb"
 )
@@ -44,9 +44,10 @@ FLAGS:
 
 func main() {
 	if len(os.Args) == 2 {
-		if os.Args[1] == "--version" {
+		switch os.Args[1] {
+		case "--version":
 			fmt.Println(Version)
-		} else if os.Args[1] == "--help" {
+		case "--help":
 			fmt.Print(helpMessage)
 		}
 		return

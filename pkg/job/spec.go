@@ -1,0 +1,264 @@
+package job
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// kind 区分任务由调度器执行一次、周期执行还是常驻执行。
+type kind uint8
+
+const (
+	// kindCron 表示周期调度任务。
+	kindCron kind = iota + 1
+	// kindOnce 表示应用启动后执行一次的任务。
+	kindOnce
+	// kindDaemon 表示持续运行直到 Context 被取消的任务。
+	kindDaemon
+)
+
+// managerOptions 保存整个 Spec 解析后的运行策略。
+type managerOptions struct {
+	Location       *time.Location
+	TracingEnabled bool
+	MetricsEnabled bool
+	LoggingEnabled bool
+	ErrorHandler   func(context.Context, string, error)
+}
+
+// ManagerOption 调整 Spec 中所有任务共享的运行策略。
+type ManagerOption func(*managerOptions)
+
+// WithLocation 设置 cron 表达式使用的时区。
+func WithLocation(location *time.Location) ManagerOption {
+	return func(options *managerOptions) {
+		if location != nil {
+			options.Location = location
+		}
+	}
+}
+
+// WithTracing 控制是否为任务记录 tracing。
+func WithTracing(enabled bool) ManagerOption {
+	return func(options *managerOptions) {
+		options.TracingEnabled = enabled
+	}
+}
+
+// WithMetrics 控制是否为任务记录 metrics。
+func WithMetrics(enabled bool) ManagerOption {
+	return func(options *managerOptions) {
+		options.MetricsEnabled = enabled
+	}
+}
+
+// WithLogging 控制是否记录任务生命周期日志。
+func WithLogging(enabled bool) ManagerOption {
+	return func(options *managerOptions) {
+		options.LoggingEnabled = enabled
+	}
+}
+
+// WithErrorHandler 设置任务最终失败时的回调。不同任务可能并发调用该回调，因此实现
+// 必须保证并发安全。
+func WithErrorHandler(handler func(context.Context, string, error)) ManagerOption {
+	return func(options *managerOptions) {
+		options.ErrorHandler = handler
+	}
+}
+
+// CronOption 调整单个周期任务。
+type CronOption func(*cronOptions)
+
+type cronOptions struct {
+	runImmediately   bool
+	concurrentPolicy ConcurrentPolicy
+}
+
+// RunImmediately 要求调度器启动后立即执行一次。
+func RunImmediately() CronOption {
+	return func(options *cronOptions) {
+		options.runImmediately = true
+	}
+}
+
+// WithConcurrentPolicy 设置单个周期任务的重叠策略。
+func WithConcurrentPolicy(policy ConcurrentPolicy) CronOption {
+	return func(options *cronOptions) {
+		options.concurrentPolicy = policy
+	}
+}
+
+// Builder 在 Bootstrap 阶段收集任务定义和运行策略。它会修改同一个 Spec，不支持
+// 并发调用。
+type Builder interface {
+	// Middleware 追加所有任务共享的中间件。
+	Middleware(...Middleware) Builder
+	// Option 追加 Manager 运行策略。
+	Option(...ManagerOption) Builder
+	// Coordinator 提供分布式并发策略所需的跨进程协调能力。
+	Coordinator(ConcurrencyCoordinator) Builder
+	// Cron 注册周期任务。
+	Cron(name, schedule string, job Task, options ...CronOption) Builder
+	// Once 注册启动后执行一次的任务。
+	Once(name string, job Task) Builder
+	// Daemon 注册随 Context 取消而退出的常驻任务。
+	Daemon(name string, job Task) Builder
+	// ExitWhenDone 要求所有 Once 任务结束后停止应用。
+	ExitWhenDone() Builder
+}
+
+// Spec 保存 Manager 构造前收集的任务定义和运行策略。
+type Spec struct {
+	middlewares  []Middleware
+	options      []ManagerOption
+	definitions  []definition
+	coordinator  ConcurrencyCoordinator
+	exitWhenDone bool
+}
+
+type definition struct {
+	name     string
+	kind     kind
+	schedule string
+	job      Task
+	cron     cronOptions
+}
+
+// NewSpec 返回空的任务定义。
+func NewSpec() *Spec { return &Spec{} }
+
+// Middleware 追加所有任务共享的中间件。
+func (s *Spec) Middleware(middlewares ...Middleware) Builder {
+	for _, middleware := range middlewares {
+		if middleware != nil {
+			s.middlewares = append(s.middlewares, middleware)
+		}
+	}
+	return s
+}
+
+// Option 追加 Manager 运行策略。
+func (s *Spec) Option(options ...ManagerOption) Builder {
+	for _, option := range options {
+		if option != nil {
+			s.options = append(s.options, option)
+		}
+	}
+	return s
+}
+
+// Coordinator 设置分布式并发策略使用的协调器。
+func (s *Spec) Coordinator(coordinator ConcurrencyCoordinator) Builder {
+	s.coordinator = coordinator
+	return s
+}
+
+// Cron 向 Spec 注册周期任务。
+func (s *Spec) Cron(name, schedule string, job Task, options ...CronOption) Builder {
+	cron := cronOptions{concurrentPolicy: AllowOverlap}
+	for _, option := range options {
+		if option != nil {
+			option(&cron)
+		}
+	}
+	s.definitions = append(s.definitions, definition{
+		name:     name,
+		kind:     kindCron,
+		schedule: schedule,
+		job:      job,
+		cron:     cron,
+	})
+	return s
+}
+
+// Once 向 Spec 注册启动后执行一次的任务。
+func (s *Spec) Once(name string, job Task) Builder {
+	s.definitions = append(s.definitions, definition{
+		name: name,
+		kind: kindOnce,
+		job:  job,
+	})
+	return s
+}
+
+// Daemon 向 Spec 注册常驻任务。
+func (s *Spec) Daemon(name string, job Task) Builder {
+	s.definitions = append(s.definitions, definition{
+		name: name,
+		kind: kindDaemon,
+		job:  job,
+	})
+	return s
+}
+
+// ExitWhenDone 要求所有 Once 任务结束后停止应用。
+func (s *Spec) ExitWhenDone() Builder {
+	s.exitWhenDone = true
+	return s
+}
+
+// Validate 拒绝不完整、重复或策略不兼容的任务定义。
+func (s *Spec) Validate() error {
+	names := make(map[string]struct{}, len(s.definitions))
+	var once int
+	for _, definition := range s.definitions {
+		if definition.name == "" {
+			return fmt.Errorf("job name is required")
+		}
+		if definition.job == nil {
+			return fmt.Errorf("job %q is nil", definition.name)
+		}
+		if definition.kind == kindCron && definition.schedule == "" {
+			return fmt.Errorf("cron job %q requires a schedule", definition.name)
+		}
+		if definition.kind == kindCron && !definition.cron.concurrentPolicy.valid() {
+			return fmt.Errorf(
+				"cron job %q has invalid concurrent policy %d",
+				definition.name,
+				definition.cron.concurrentPolicy,
+			)
+		}
+		if definition.kind == kindCron &&
+			definition.cron.concurrentPolicy.distributed() &&
+			s.coordinator == nil {
+			return fmt.Errorf(
+				"cron job %q requires a concurrency coordinator",
+				definition.name,
+			)
+		}
+		if _, ok := names[definition.name]; ok {
+			return fmt.Errorf("job %q is already registered", definition.name)
+		}
+		names[definition.name] = struct{}{}
+		if definition.kind == kindOnce {
+			once++
+		}
+	}
+	if s.exitWhenDone {
+		if once == 0 {
+			return fmt.Errorf("ExitWhenDone requires at least one once job")
+		}
+		for _, definition := range s.definitions {
+			if definition.kind != kindOnce {
+				return fmt.Errorf("ExitWhenDone only supports once jobs")
+			}
+		}
+	}
+	return nil
+}
+
+// newManagerOptions 在运行时默认值上应用 Spec 策略，避免构造阶段和执行阶段重复合并。
+func newManagerOptions(spec *Spec) managerOptions {
+	options := managerOptions{
+		Location:       time.Local,
+		TracingEnabled: true,
+		MetricsEnabled: true,
+		LoggingEnabled: true,
+	}
+	for _, option := range spec.options {
+		option(&options)
+	}
+	return options
+}

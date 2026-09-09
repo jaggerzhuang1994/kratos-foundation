@@ -1,31 +1,25 @@
 syntax = "proto3";
-option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
 
 package kratos_foundation_pb;
 
 import "config_pb/common.proto";
-import "config_pb/middleware.proto";
+import "google/protobuf/duration.proto";
+import "validate/validate.proto";
 
+// Client 的 clients 支持热更新。修改 target 或 protocol 会从缓存摘除旧连接，
+// 并在最后一个调用级引用释放后关闭。
 message Client {
+  // [热更新] 后续调用使用新配置，旧连接等待活跃调用释放。
   map<string, ClientOption> clients = 1;
-  // logger 配置
+  // logger 配置。[需重启] 只在 Factory 构造时读取。
   optional ModuleLog log = 2;
-}
-
-enum Protocol {
-  // grpc请求
-  GRPC = 0;
-  // http请求
-  HTTP = 1;
-  // grpcs请求
-  GRPCS = 2;
-  // https请求
-  HTTPS = 3;
+  // cleanup 等待租约与在途活动的上限，默认 30s；超时强制关闭连接并记录日志。[需重启]
+  optional google.protobuf.Duration cleanup_timeout = 3 [(validate.rules).duration = {gt: {}}];
 }
 
 message ClientOption {
-  // 不指定协议时，ResolveClient的时候默认会返回GRPC链接
-  // 如果指定协议MakeClient的话，则忽略 protocol 创建对应协议的客户端
+  // 不指定协议时，AcquireClient 默认返回 gRPC 连接。
   optional Protocol protocol = 1;
   // 目标端点 支持服务发现/直连:
   // 默认为 discovery:///{client_key}
@@ -35,9 +29,22 @@ message ClientOption {
   optional ClientMiddleware middleware = 3;
 }
 
+enum Protocol {
+  // grpc请求
+  GRPC = 0;
+  // http请求
+  HTTP = 1;
+  reserved 2;
+  reserved "GRPCS";
+  // https请求
+  HTTPS = 3;
+}
+
 // 客户端中间件配置
 message ClientMiddleware {
-  optional Middleware.Timeout timeout = 1;
+  reserved 1;
+  reserved "timeout";
+  optional Middleware.Deadline deadline = 7;
   optional Middleware.Metadata metadata = 2;
   optional Middleware.Tracing tracing = 3;
   optional Middleware.Metrics metrics = 4;

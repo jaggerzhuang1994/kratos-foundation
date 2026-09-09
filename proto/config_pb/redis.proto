@@ -1,13 +1,15 @@
 syntax = "proto3";
-option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
 
 package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
 import "config_pb/common.proto";
 
+// Redis [需重启]：Manager 拥有它创建的全部 client，连接参数、日志与遥测配置都在构造时
+// 固定，修改后需要重启进程。
 message Redis {
-  // 默认连接
+  // 默认连接。[需重启]
   optional string default = 1;
   // 连接配置
   map<string, RedisOption> connections = 2;
@@ -19,23 +21,10 @@ message Redis {
   optional RedisMetrics metrics = 5;
 }
 
-message RedisTracing {
-  // 是否禁用
-  optional bool disable = 1;
-  // DBStatement tells the tracing hook to log raw redis commands.
-  optional bool db_statement = 2;
-  // CallerEnabled tells the tracing hook to log the calling function, file and line.
-  optional bool caller_enabled = 3;
-  // DialFilter enables or disables filtering of dial commands.
-  optional bool dial_filter = 4;
-}
-
-message RedisMetrics {
-  // 是否禁用
-  optional bool disable = 1;
-}
-
 message RedisOption {
+  reserved 28, 29;
+  reserved "read_only", "disable_indentity";
+
   // Network type, either tcp or unix.
   //
   // default: tcp
@@ -141,12 +130,6 @@ message RedisOption {
   //
   // default: 0
   optional google.protobuf.Duration conn_max_lifetime = 27;
-  // readOnly enables read only queries on slave/follower nodes.
-  optional bool read_only = 28;
-  // DisableIndentity - Disable set-lib on connect.
-  //
-  // Deprecated: Use DisableIdentity instead.
-  optional bool disable_indentity = 29 [deprecated = true];
   // DisableIdentity is used to disable CLIENT SETINFO command on connect.
   optional bool disable_identity = 30;
   // Add suffix to client name. Default is empty.
@@ -157,4 +140,20 @@ message RedisOption {
   //
   // default: 15
   optional int32 failing_timeout_seconds = 33;
+}
+
+message RedisTracing {
+  // 是否禁用
+  optional bool disable = 1;
+  // DBStatement tells the tracing hook to log raw redis commands.
+  optional bool db_statement = 2;
+  // CallerEnabled tells the tracing hook to log the calling function, file and line.
+  optional bool caller_enabled = 3;
+  // DialFilter enables or disables filtering of dial commands.
+  optional bool dial_filter = 4;
+}
+
+message RedisMetrics {
+  // 是否禁用
+  optional bool disable = 1;
 }

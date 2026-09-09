@@ -56,72 +56,6 @@ func (m *Server) validate(all bool) error {
 
 	var errors []error
 
-	if m.StopDelay != nil {
-
-		if all {
-			switch v := interface{}(m.GetStopDelay()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerValidationError{
-						field:  "StopDelay",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerValidationError{
-						field:  "StopDelay",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetStopDelay()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerValidationError{
-					field:  "StopDelay",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Middleware != nil {
-
-		if all {
-			switch v := interface{}(m.GetMiddleware()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerValidationError{
-						field:  "Middleware",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerValidationError{
-						field:  "Middleware",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerValidationError{
-					field:  "Middleware",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
 	if m.Http != nil {
 
 		if all {
@@ -188,14 +122,14 @@ func (m *Server) validate(all bool) error {
 
 	}
 
-	if m.Log != nil {
+	if m.Middleware != nil {
 
 		if all {
-			switch v := interface{}(m.GetLog()).(type) {
+			switch v := interface{}(m.GetMiddleware()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
 					errors = append(errors, ServerValidationError{
-						field:  "Log",
+						field:  "Middleware",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
@@ -203,16 +137,49 @@ func (m *Server) validate(all bool) error {
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
 					errors = append(errors, ServerValidationError{
-						field:  "Log",
+						field:  "Middleware",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
 				return ServerValidationError{
-					field:  "Log",
+					field:  "Middleware",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.StopDelay != nil {
+
+		if all {
+			switch v := interface{}(m.GetStopDelay()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "StopDelay",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "StopDelay",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetStopDelay()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "StopDelay",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -298,6 +265,416 @@ var _ interface {
 	ErrorName() string
 } = ServerValidationError{}
 
+// Validate checks the field values on HttpServerOption with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *HttpServerOption) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HttpServerOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// HttpServerOptionMultiError, or nil if none found.
+func (m *HttpServerOption) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HttpServerOption) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.Network != nil {
+
+		if _, ok := _HttpServerOption_Network_InLookup[m.GetNetwork()]; !ok {
+			err := HttpServerOptionValidationError{
+				field:  "Network",
+				reason: "value must be in list [tcp tcp4 tcp6 unix unixpacket]",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
+
+	if m.Endpoint != nil {
+
+		if all {
+			switch v := interface{}(m.GetEndpoint()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOptionValidationError{
+					field:  "Endpoint",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.DisableStrictSlash != nil {
+		// no validation rules for DisableStrictSlash
+	}
+
+	if m.PathPrefix != nil {
+		// no validation rules for PathPrefix
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOptionValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Health != nil {
+
+		if all {
+			switch v := interface{}(m.GetHealth()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Health",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Health",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetHealth()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOptionValidationError{
+					field:  "Health",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return HttpServerOptionMultiError(errors)
+	}
+
+	return nil
+}
+
+// HttpServerOptionMultiError is an error wrapping multiple validation errors
+// returned by HttpServerOption.ValidateAll() if the designated constraints
+// aren't met.
+type HttpServerOptionMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HttpServerOptionMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HttpServerOptionMultiError) AllErrors() []error { return m }
+
+// HttpServerOptionValidationError is the validation error returned by
+// HttpServerOption.Validate if the designated constraints aren't met.
+type HttpServerOptionValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HttpServerOptionValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HttpServerOptionValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HttpServerOptionValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HttpServerOptionValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HttpServerOptionValidationError) ErrorName() string { return "HttpServerOptionValidationError" }
+
+// Error satisfies the builtin error interface
+func (e HttpServerOptionValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttpServerOption.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HttpServerOptionValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HttpServerOptionValidationError{}
+
+var _HttpServerOption_Network_InLookup = map[string]struct{}{
+	"tcp":        {},
+	"tcp4":       {},
+	"tcp6":       {},
+	"unix":       {},
+	"unixpacket": {},
+}
+
+// Validate checks the field values on GrpcServerOption with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *GrpcServerOption) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GrpcServerOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GrpcServerOptionMultiError, or nil if none found.
+func (m *GrpcServerOption) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GrpcServerOption) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.Network != nil {
+
+		if _, ok := _GrpcServerOption_Network_InLookup[m.GetNetwork()]; !ok {
+			err := GrpcServerOptionValidationError{
+				field:  "Network",
+				reason: "value must be in list [tcp tcp4 tcp6 unix unixpacket]",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
+
+	if m.Endpoint != nil {
+
+		if all {
+			switch v := interface{}(m.GetEndpoint()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, GrpcServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, GrpcServerOptionValidationError{
+						field:  "Endpoint",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return GrpcServerOptionValidationError{
+					field:  "Endpoint",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.CustomHealth != nil {
+		// no validation rules for CustomHealth
+	}
+
+	if m.DisableReflection != nil {
+		// no validation rules for DisableReflection
+	}
+
+	if len(errors) > 0 {
+		return GrpcServerOptionMultiError(errors)
+	}
+
+	return nil
+}
+
+// GrpcServerOptionMultiError is an error wrapping multiple validation errors
+// returned by GrpcServerOption.ValidateAll() if the designated constraints
+// aren't met.
+type GrpcServerOptionMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GrpcServerOptionMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GrpcServerOptionMultiError) AllErrors() []error { return m }
+
+// GrpcServerOptionValidationError is the validation error returned by
+// GrpcServerOption.Validate if the designated constraints aren't met.
+type GrpcServerOptionValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GrpcServerOptionValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GrpcServerOptionValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GrpcServerOptionValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GrpcServerOptionValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GrpcServerOptionValidationError) ErrorName() string { return "GrpcServerOptionValidationError" }
+
+// Error satisfies the builtin error interface
+func (e GrpcServerOptionValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGrpcServerOption.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GrpcServerOptionValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GrpcServerOptionValidationError{}
+
+var _GrpcServerOption_Network_InLookup = map[string]struct{}{
+	"tcp":        {},
+	"tcp4":       {},
+	"tcp6":       {},
+	"unix":       {},
+	"unixpacket": {},
+}
+
 // Validate checks the field values on ServerMiddleware with the rules defined
 // in the proto definition for this message. If any rules are violated, the
 // first error encountered is returned, or nil if there are no violations.
@@ -320,14 +697,14 @@ func (m *ServerMiddleware) validate(all bool) error {
 
 	var errors []error
 
-	if m.Timeout != nil {
+	if m.Deadline != nil {
 
 		if all {
-			switch v := interface{}(m.GetTimeout()).(type) {
+			switch v := interface{}(m.GetDeadline()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
 					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Timeout",
+						field:  "Deadline",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
@@ -335,16 +712,16 @@ func (m *ServerMiddleware) validate(all bool) error {
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
 					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Timeout",
+						field:  "Deadline",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
 				return ServerMiddlewareValidationError{
-					field:  "Timeout",
+					field:  "Deadline",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -629,345 +1006,6 @@ var _ interface {
 	ErrorName() string
 } = ServerMiddlewareValidationError{}
 
-// Validate checks the field values on HttpServerOption with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *HttpServerOption) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on HttpServerOption with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// HttpServerOptionMultiError, or nil if none found.
-func (m *HttpServerOption) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *HttpServerOption) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if m.Network != nil {
-		// no validation rules for Network
-	}
-
-	if m.Addr != nil {
-		// no validation rules for Addr
-	}
-
-	if m.Endpoint != nil {
-
-		if all {
-			switch v := interface{}(m.GetEndpoint()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, HttpServerOptionValidationError{
-						field:  "Endpoint",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, HttpServerOptionValidationError{
-						field:  "Endpoint",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return HttpServerOptionValidationError{
-					field:  "Endpoint",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.DisableStrictSlash != nil {
-		// no validation rules for DisableStrictSlash
-	}
-
-	if m.PathPrefix != nil {
-		// no validation rules for PathPrefix
-	}
-
-	if m.Metrics != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, HttpServerOptionValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, HttpServerOptionValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return HttpServerOptionValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return HttpServerOptionMultiError(errors)
-	}
-
-	return nil
-}
-
-// HttpServerOptionMultiError is an error wrapping multiple validation errors
-// returned by HttpServerOption.ValidateAll() if the designated constraints
-// aren't met.
-type HttpServerOptionMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m HttpServerOptionMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m HttpServerOptionMultiError) AllErrors() []error { return m }
-
-// HttpServerOptionValidationError is the validation error returned by
-// HttpServerOption.Validate if the designated constraints aren't met.
-type HttpServerOptionValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e HttpServerOptionValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e HttpServerOptionValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e HttpServerOptionValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e HttpServerOptionValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e HttpServerOptionValidationError) ErrorName() string { return "HttpServerOptionValidationError" }
-
-// Error satisfies the builtin error interface
-func (e HttpServerOptionValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sHttpServerOption.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = HttpServerOptionValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = HttpServerOptionValidationError{}
-
-// Validate checks the field values on GrpcServerOption with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *GrpcServerOption) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on GrpcServerOption with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// GrpcServerOptionMultiError, or nil if none found.
-func (m *GrpcServerOption) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *GrpcServerOption) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if m.Network != nil {
-		// no validation rules for Network
-	}
-
-	if m.Addr != nil {
-		// no validation rules for Addr
-	}
-
-	if m.Endpoint != nil {
-
-		if all {
-			switch v := interface{}(m.GetEndpoint()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, GrpcServerOptionValidationError{
-						field:  "Endpoint",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, GrpcServerOptionValidationError{
-						field:  "Endpoint",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetEndpoint()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return GrpcServerOptionValidationError{
-					field:  "Endpoint",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.CustomHealth != nil {
-		// no validation rules for CustomHealth
-	}
-
-	if m.DisableReflection != nil {
-		// no validation rules for DisableReflection
-	}
-
-	if len(errors) > 0 {
-		return GrpcServerOptionMultiError(errors)
-	}
-
-	return nil
-}
-
-// GrpcServerOptionMultiError is an error wrapping multiple validation errors
-// returned by GrpcServerOption.ValidateAll() if the designated constraints
-// aren't met.
-type GrpcServerOptionMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m GrpcServerOptionMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m GrpcServerOptionMultiError) AllErrors() []error { return m }
-
-// GrpcServerOptionValidationError is the validation error returned by
-// GrpcServerOption.Validate if the designated constraints aren't met.
-type GrpcServerOptionValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e GrpcServerOptionValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e GrpcServerOptionValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e GrpcServerOptionValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e GrpcServerOptionValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e GrpcServerOptionValidationError) ErrorName() string { return "GrpcServerOptionValidationError" }
-
-// Error satisfies the builtin error interface
-func (e GrpcServerOptionValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sGrpcServerOption.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = GrpcServerOptionValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = GrpcServerOptionValidationError{}
-
 // Validate checks the field values on HttpServerOption_Metrics with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -996,6 +1034,10 @@ func (m *HttpServerOption_Metrics) validate(all bool) error {
 
 	if m.Path != nil {
 		// no validation rules for Path
+	}
+
+	if m.Addr != nil {
+		// no validation rules for Addr
 	}
 
 	if len(errors) > 0 {
@@ -1077,3 +1119,154 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = HttpServerOption_MetricsValidationError{}
+
+// Validate checks the field values on HttpServerOption_Health with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *HttpServerOption_Health) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HttpServerOption_Health with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// HttpServerOption_HealthMultiError, or nil if none found.
+func (m *HttpServerOption_Health) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HttpServerOption_Health) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
+
+	if m.LivenessPath != nil {
+		// no validation rules for LivenessPath
+	}
+
+	if m.ReadinessPath != nil {
+		// no validation rules for ReadinessPath
+	}
+
+	if m.Timeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOption_HealthValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOption_HealthValidationError{
+						field:  "Timeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOption_HealthValidationError{
+					field:  "Timeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return HttpServerOption_HealthMultiError(errors)
+	}
+
+	return nil
+}
+
+// HttpServerOption_HealthMultiError is an error wrapping multiple validation
+// errors returned by HttpServerOption_Health.ValidateAll() if the designated
+// constraints aren't met.
+type HttpServerOption_HealthMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HttpServerOption_HealthMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HttpServerOption_HealthMultiError) AllErrors() []error { return m }
+
+// HttpServerOption_HealthValidationError is the validation error returned by
+// HttpServerOption_Health.Validate if the designated constraints aren't met.
+type HttpServerOption_HealthValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HttpServerOption_HealthValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HttpServerOption_HealthValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HttpServerOption_HealthValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HttpServerOption_HealthValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HttpServerOption_HealthValidationError) ErrorName() string {
+	return "HttpServerOption_HealthValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e HttpServerOption_HealthValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttpServerOption_Health.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HttpServerOption_HealthValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HttpServerOption_HealthValidationError{}

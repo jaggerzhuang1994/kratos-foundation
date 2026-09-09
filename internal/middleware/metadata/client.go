@@ -9,8 +9,8 @@ import (
 	"github.com/go-kratos/kratos/v2/transport"
 )
 
-// client is middleware client-side metadata.
-func client(opts ...Option) middleware.Middleware {
+// client 创建客户端实现并把上下文元数据写入下游请求。
+func client(opts ...option) middleware.Middleware {
 	opt := &options{
 		prefix: []string{"x-md-"},
 	}
@@ -25,29 +25,49 @@ func client(opts ...Option) middleware.Middleware {
 			}
 
 			header := tr.RequestHeader()
-			// x-md-local-
+			//var grpcPairs []string
+			add := func(key, value string) {
+				// 保留的 metadata 不透传
+				if isReservedMetadataKey(key) {
+					return
+				}
+				value = url.QueryEscape(value)
+				//if tr.Kind() == transport.KindGRPC {
+				//	grpcPairs = append(grpcPairs, key, value)
+				//	return
+				//}
+				header.Add(key, value)
+			}
+			// 常量先写入，调用方显式上下文随后追加，便于网关保留完整来源链。
 			for k, vList := range opt.md {
 				for _, v := range vList {
-					header.Add(k, url.QueryEscape(v))
+					add(k, v)
 				}
 			}
+			// 运行时调用 metadata.NewClientContext 显示传入的md 明确要透传给client的md
 			if md, ok := metadata.FromClientContext(ctx); ok {
 				for k, vList := range md {
 					for _, v := range vList {
-						header.Add(k, url.QueryEscape(v))
+						add(k, v)
 					}
 				}
 			}
-			// x-md-
+			// 服务端上下文只透传白名单前缀，避免把上游私有头无意扩散到下游。
 			if md, ok := metadata.FromServerContext(ctx); ok {
 				for k, vList := range md {
 					if opt.hasPrefix(k) {
 						for _, v := range vList {
-							header.Add(k, url.QueryEscape(v))
+							add(k, v)
 						}
 					}
 				}
 			}
+
+			// todo 透传md的裁剪也纳入 opt 配置
+
+			//if len(grpcPairs) > 0 {
+			//	ctx = grpcmetadata.AppendToOutgoingContext(ctx, grpcPairs...)
+			//}
 			return handler(ctx, req)
 		}
 	}

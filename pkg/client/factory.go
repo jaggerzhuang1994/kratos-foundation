@@ -2,149 +2,190 @@ package client
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
+	"time"
 
-	"github.com/go-kratos/kratos/v2/transport/http"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/discovery"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/metrics"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/tracing"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
-	"google.golang.org/grpc"
+	"github.com/go-kratos/kratos/v2/registry"
+	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	stdgrpc "google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
-type HTTPClient = *http.Client
-type GRPCClient = *grpc.ClientConn
-
+// Factory 按连接名称共享并租用 HTTP 与 gRPC 客户端。
+//
+// 每次成功 AcquireClient 都必须在本次调用结束时执行其幂等 release；遗漏 release
+// 会在 cleanup 预算耗尽后被强制关闭。
 type Factory interface {
-	ResolveClient(ctx context.Context) (httpClient HTTPClient, grpcClient GRPCClient, err error)
-	MakeGrpcConn(ctx context.Context) (grpcClient GRPCClient, err error)
-	MakeHttpClient(ctx context.Context) (httpClient HTTPClient, err error)
+	// AcquireClient 返回连接名称对应的客户端和幂等 release。成功返回后，调用方必须
+	// 在本次调用结束时执行 release；遗漏 release 会在 cleanup 预算耗尽后被强制关闭。
+	AcquireClient(ctx context.Context, name string) (*kratoshttp.Client, *stdgrpc.ClientConn, func(), error)
 }
+
+type clientBuilder interface {
+	validateConfig(*config_pb.Client) error
+	build(context.Context, clientSpec) (clientResult, error)
+}
+
+type clientSlot struct {
+	name    string
+	current *clientVersion
+	build   *buildCall
+}
+
+type clientVersion struct {
+	revision     uint64
+	spec         clientSpec
+	client       clientResult
+	references   int
+	retired      bool
+	retireReason retireReason
+}
+
+type buildCall struct {
+	version *clientVersion
+	done    chan struct{}
+	cancel  context.CancelFunc
+	err     error
+}
+
+type retireReason string
+
+const (
+	retireConfigUpdated retireReason = "config_updated"
+	retireConfigRemoved retireReason = "config_removed"
+	retireStaleBuild    retireReason = "stale_build"
+	retireFactoryClosed retireReason = "factory_closed"
+)
 
 type factory struct {
-	log.Log
-	log       log.Log
-	tracing   tracing.Tracing
-	metrics   metrics.Metrics
-	discovery discovery.Discovery
-
-	clientOptions map[string]Option
-	// 初始化连接的锁
-	initLocker sync.Mutex
-	// 客户端缓存 map[ clientKey ] -> HTTPClient | GRPCClient
-	httpClients sync.Map
-	grpcClients sync.Map
+	logger         foundationlog.Logger
+	builder        clientBuilder
+	mu             sync.Mutex
+	config         *config_pb.Client
+	slots          map[string]*clientSlot
+	closed         bool
+	activities     int
+	drained        chan struct{}
+	leases         map[*clientVersion]string
+	cleanupTimeout time.Duration
 }
 
+var _ Factory = (*factory)(nil)
+
+// NewFactory 创建订阅 client 配置并管理客户端生命周期的 Factory。
 func NewFactory(
-	config Config,
-	log log.Log,
-	tracing tracing.Tracing,
-	metrics metrics.Metrics,
-	discovery discovery.Discovery,
-) Factory {
-	return &factory{
-		Log:           log.WithModule("client", config.GetLog()),
-		log:           log,
-		tracing:       tracing,
-		metrics:       metrics,
-		discovery:     discovery,
-		clientOptions: config.GetClients(),
-	}
-}
-
-func (f *factory) MakeGrpcConn(ctx context.Context) (grpcClient GRPCClient, err error) {
-	_, grpcClient, err = f.resolveClient(ctx, config_pb.Protocol_GRPC)
-	return
-}
-
-func (f *factory) MakeHttpClient(ctx context.Context) (httpClient HTTPClient, err error) {
-	httpClient, _, err = f.resolveClient(ctx, config_pb.Protocol_HTTP)
-	return
-}
-
-func (f *factory) ResolveClient(ctx context.Context) (httpClient HTTPClient, grpcClient GRPCClient, err error) {
-	return f.resolveClient(ctx)
-}
-
-func (f *factory) resolveClient(ctx context.Context, optionalProtocol ...config_pb.Protocol) (httpClient HTTPClient, grpcClient GRPCClient, err error) {
-	clientName := ConnNameFromContext(ctx)
-	if clientName == "" {
-		err = ErrInvalidClientName
-		return
-	}
-	clientKey := newClientConfig(clientName, f.clientOptions[clientName], optionalProtocol...)
-
-	// 从缓存读
-	getCache := func() bool {
-		if clientKey.protocol == config_pb.Protocol_GRPC || clientKey.protocol == config_pb.Protocol_GRPCS {
-			conn, ok := f.grpcClients.Load(clientKey)
-			if !ok {
-				return false
-			}
-			grpcClient = conn.(GRPCClient)
-			return true
-		}
-		if clientKey.protocol == config_pb.Protocol_HTTP || clientKey.protocol == config_pb.Protocol_HTTPS {
-			conn, ok := f.httpClients.Load(clientKey)
-			if !ok {
-				return false
-			}
-			httpClient = conn.(HTTPClient)
-			return true
-		}
-		// 未知协议，则报错
-		err = ErrInvalidProtocol
-		return true
-	}
-
-	// 从缓存读取链接，返回ok表示缓存存在
-	ok := getCache()
-	if ok {
-		return
-	}
+	manager config.Manager,
+	logger foundationlog.Logger,
+	appInfo appinfo.AppInfo,
+	tracingProvider tracing.Provider,
+	metricsProvider metrics.Provider,
+	discovery registry.Discovery,
+) (Factory, func(), error) {
+	initial, moduleLogger, err := loadFactoryConfig(manager, logger)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
+	// 在构造传输前固定模块日志，访问日志与资源生命周期日志使用同一策略。
+	builder := newBuilder(moduleLogger, appInfo, tracingProvider, metricsProvider, discovery)
+	return newConfiguredFactory(manager, builder, moduleLogger, initial)
+}
 
-	f.initLocker.Lock()
-	defer f.initLocker.Unlock()
-	// 如果2个同时阻塞锁，一个初始化完链接后，另一个可以再读一次缓存
-	// 从缓存读取链接，返回ok表示缓存存在
-	ok = getCache()
-	if ok {
-		return
+func loadFactoryConfig(manager config.Manager, logger foundationlog.Logger) (*config_pb.Client, foundationlog.Logger, error) {
+	initial := new(config_pb.Client)
+	if err := manager.Load("client", initial, new(config_pb.Client)); err != nil {
+		return nil, nil, fmt.Errorf("load client config: %w", err)
 	}
+	logger, err := logger.WithModuleConfig("client", initial.GetLog())
 	if err != nil {
-		return
+		return nil, nil, fmt.Errorf("configure client logger: %w", err)
+	}
+	return initial, logger, nil
+}
+
+func newConfiguredFactory(
+	manager config.Manager,
+	builder clientBuilder,
+	logger foundationlog.Logger,
+	initial *config_pb.Client,
+) (Factory, func(), error) {
+	if err := builder.validateConfig(initial); err != nil {
+		return nil, nil, err
+	}
+	timeout, err := clientCleanupTimeout(initial)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// 初始化客户端
-	f.Infof("client initializing, name=%s protocol=%s target=%s", clientKey.name, clientKey.protocol.String(), clientKey.option.GetTarget())
-	defer func() {
-		if err == nil {
-			f.Infof("client initialized, name=%s", clientKey.name)
+	f := &factory{
+		logger:         logger,
+		builder:        builder,
+		config:         proto.CloneOf(initial),
+		slots:          make(map[string]*clientSlot, len(initial.GetClients())),
+		leases:         make(map[*clientVersion]string),
+		cleanupTimeout: timeout,
+	}
+	for name, option := range initial.GetClients() {
+		f.slots[name] = &clientSlot{
+			name: name,
+			current: &clientVersion{
+				revision: 1,
+				spec:     newClientSpec(name, option),
+			},
+		}
+	}
+
+	observer := func(_ string, value any, deliveryErr error) {
+		if err := f.beginActivity(); err != nil {
+			return
+		}
+		defer f.endActivity()
+
+		if deliveryErr != nil {
+			if !errors.Is(deliveryErr, ErrFactoryClosed) {
+				f.logger.With("error", deliveryErr).Error("client config update rejected")
+			}
+			return
+		}
+		next, ok := value.(*config_pb.Client)
+		if !ok || next == nil {
+			deliveryErr = fmt.Errorf("client config update has type %T", value)
 		} else {
-			f.Errorf("client init failed, name=%s err=%v", clientKey.name, err)
+			deliveryErr = f.updateConfigActive(next)
 		}
-	}()
-	// 初始化 grpc 连接
-	if clientKey.protocol == config_pb.Protocol_GRPC || clientKey.protocol == config_pb.Protocol_GRPCS {
-		grpcClient, err = f.newGRPCClient(ctx, clientKey)
-		if err != nil {
-			return
+		if deliveryErr != nil && !errors.Is(deliveryErr, ErrFactoryClosed) {
+			f.logger.With("error", deliveryErr).Error("client config update rejected")
 		}
-		f.grpcClients.Store(clientKey, grpcClient)
-		return
 	}
-	if clientKey.protocol == config_pb.Protocol_HTTP || clientKey.protocol == config_pb.Protocol_HTTPS {
-		// 初始化 http 连接
-		httpClient, err = f.newHTTPClient(ctx, clientKey)
-		if err != nil {
-			return
-		}
-		f.httpClients.Store(clientKey, httpClient)
+	cancelSubscription, err := manager.Subscribe(
+		"client",
+		new(config_pb.Client),
+		observer,
+		new(config_pb.Client),
+	)
+	if err != nil {
+		f.cleanup(cancelSubscription)()
+		return nil, nil, fmt.Errorf("subscribe client config: %w", err)
 	}
-	return
+	return f, f.cleanup(cancelSubscription), nil
 }
+
+var (
+	// ErrInvalidClientName 表示调用上下文未包含连接名称。
+	ErrInvalidClientName = errors.New("client connection name is missing")
+	// ErrFactoryClosed 表示客户端工厂已开始关闭。
+	ErrFactoryClosed = errors.New("client factory is closed")
+	// ErrDiscoveryNotInitialized 表示服务发现目标缺少发现实现。
+	ErrDiscoveryNotInitialized = errors.New("discovery not initialized")
+	// ErrInvalidProtocol 表示客户端配置使用了不支持的协议。
+	ErrInvalidProtocol = errors.New("invalid client protocol")
+	// ErrInvalidBuildResult 表示构建结果没有恰好包含一个协议客户端。
+	ErrInvalidBuildResult = errors.New("invalid client build result")
+)

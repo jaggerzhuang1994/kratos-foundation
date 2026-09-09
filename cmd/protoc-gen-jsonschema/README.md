@@ -203,14 +203,53 @@ Check out the [Options](./options.md) file to see auto-generated options.
 | google.protobuf.Any                             |
 | google.protobuf.NullValue                       |
 
-If you'd like to contribute well-known types, Please check [the generator](./pkg/modules/1_middleend_generator.go) file.
+`google.protobuf.Duration` 默认生成 `type: string`，不设置 `format: duration`，
+并使用 pattern `^-?[0-9]+(\.[0-9]{1,9})?s$`：只接受以 `s` 结尾的秒数字符串，
+支持负数和最多 9 位小数，例如 `1s`、`-0.5s`、`0.000000001s`。
+`1ms`、`1m`、`PT1S` 和超过 9 位的小数不符合该规则。
 
-# Output Examples
-You can find basic example cases in the `./examples` directory and more complex cases in `./testdata/cases.`
+特殊类型映射位于 [well_known.go](./internal/modules/well_known.go)。
 
-# Development Environment
-You should install `protoc` and `protoc-gen-go` to your development environment. Below are required tool versions.
-- protoc: 32.0
-- protoc-gen-go: 1.36.7
-- go: 1.24.3
-- protoc-gen-doc: latest
+# 开发与文档生成
+
+生成行为的测试位于 `internal/modules/*_test.go`。Go 版本以本模块 `go.mod` 为准，协议生成使用仓库根目录的 Makefile 和 `third_party`。
+
+在仓库根目录执行 `make -C cmd/protoc-gen-jsonschema deps options`，可从 `third_party/pubg/jsonschema.proto` 重新生成 `options.md`；`deps` 安装固定版本的 `protoc-gen-doc`，`options` 仅生成文档。
+
+```mermaid
+flowchart LR
+    A([开始]) --> B[deps: 安装 protoc-gen-doc]
+    B --> C{安装成功?}
+    C -- 否 --> F([命令失败并停止])
+    C -- 是 --> D[options: protoc 读取根目录 third_party]
+    D --> E{生成成功?}
+    E -- 否 --> F
+    E -- 是 --> G[更新 options.md]
+    G --> H([完成])
+```
+
+## 输出和远程合并边界
+
+`pretty_json_output` 默认保留缩进输出；设为 `false` 时生成紧凑 JSON，非法布尔值会导致生成失败。YAML 不受此选项影响。
+
+普通字段、数组元素和 map 值共用已有的特殊类型映射：`Timestamp` 为 `date-time` 字符串，`Duration` 为秒数字符串，`Any` 为对象，`NullValue` 为 `null`。
+
+远程 `merge` URL 的完整请求最多等待 30 秒，只接受 2xx 响应，并限制响应体为 8 MiB。读取失败、超时、状态码异常或超限时，生成器报告错误并停止；本地文件读取保持原有行为。
+
+```mermaid
+flowchart TD
+    A([读取 merge 配置]) --> B{HTTP 或 HTTPS URL?}
+    B -- 否 --> C[读取本地文件]
+    B -- 是 --> D[HTTP 请求: 30 秒超时]
+    D --> E{请求成功且为 2xx?}
+    E -- 否 --> X[CheckErr: 生成失败]
+    E -- 是 --> F[限量读取并关闭响应体]
+    F --> G{读取成功且不超过 8 MiB?}
+    G -- 否 --> X
+    G -- 是 --> H[解析 schema]
+    C --> H
+    H --> I{格式与 draft 有效?}
+    I -- 否 --> X
+    I -- 是 --> J([交给现有合并流程])
+    X --> K([停止生成])
+```

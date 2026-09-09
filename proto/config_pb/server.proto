@@ -1,43 +1,39 @@
 syntax = "proto3";
-option go_package = "github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
 
 package kratos_foundation_pb;
 
 import "pubg/jsonschema.proto";
 import "google/protobuf/duration.proto";
 import "config_pb/common.proto";
-import "config_pb/middleware.proto";
+import "validate/validate.proto";
 
+// Server 只有 middleware 支持热更新：中间件是纯请求策略，可以原子替换；监听地址、
+// 端点和停机延迟决定 Server 实例本身，运行期无法安全切换。
 message Server {
+  reserved 5;
+  reserved "log";
+
+  // http 服务器配置。[需重启]
+  optional HttpServerOption http = 3;
+  // grpc 服务器配置。[需重启]
+  optional GrpcServerOption grpc = 4;
+  // 通用中间件配置。[热更新] 逐项发布策略；并发请求可能短暂读取新旧策略组合。
+  optional ServerMiddleware middleware = 2;
   // consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
   // 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。
   // 因此给servers套上一个wrapper用于延迟停止服务。
+  // [需重启] 该值在构造 Server 时冻结，同时参与 app.stop_timeout 的校验。
   optional google.protobuf.Duration stop_delay = 1;
-  // 通用中间件配置
-  optional ServerMiddleware middleware = 2;
-  // http 服务器配置
-  optional HttpServerOption http = 3;
-  // grpc 服务器配置
-  optional GrpcServerOption grpc = 4;
-  // logger 配置
-  optional ModuleLog log = 5;
-}
-
-// 服务器中间件配置
-message ServerMiddleware {
-  optional Middleware.Timeout timeout = 1;
-  optional Middleware.Metadata metadata = 2;
-  optional Middleware.Tracing tracing = 3;
-  optional Middleware.Metrics metrics = 4;
-  optional Middleware.Logging logging = 5;
-  optional Middleware.Validator validator = 6;
-  optional Middleware.RateLimit rate_limit = 7;
 }
 
 message HttpServerOption {
   optional bool disable = 1;
   // 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
-  optional string network = 2 [(pubg.jsonschema.field) = {string: {enum: ['tcp', 'tcp4', 'tcp6', 'unix', 'unixpacket']}}];;
+  optional string network = 2 [
+    (pubg.jsonschema.field) = {string: {enum: ['tcp', 'tcp4', 'tcp6', 'unix', 'unixpacket']}},
+    (validate.rules).string = {in: ['tcp', 'tcp4', 'tcp6', 'unix', 'unixpacket']}
+  ];
   // 服务监听地址，host:port 或者 unix文件地址
   optional string addr = 3;
   // 对外暴露端点
@@ -48,19 +44,40 @@ message HttpServerOption {
   optional string path_prefix = 6;
   // metrics 路由
   optional Metrics metrics = 7;
+  // HTTP 健康检查端点。[需重启]
+  optional Health health = 8;
 
   message Metrics {
     // 禁用
     optional bool disable = 1;
     // metrics 路由，默认 /metrics
     optional string path = 2;
+    // 监听地址 host:port；空值或与 http.addr 相同复用业务 HTTP，否则独立监听。[需重启]
+    optional string addr = 3;
+  }
+  message Health {
+    optional bool disable = 1;
+    // 空值或与 http.addr 相同复用业务 HTTP；与 metrics.addr 相同共享独立监听。[需重启]
+    optional string addr = 2;
+    // 存活探针路径，默认 /healthz。[需重启]
+    // GET/HEAD 返回 200，仅表示 HTTP 可响应，不检查依赖或应用就绪状态。
+    optional string liveness_path = 3;
+    // 就绪探针路径，默认 /readyz。[需重启]
+    // GET/HEAD 在应用完成启动、依赖检查通过且未停机时返回 200，否则返回 503。
+    // 未绑定应用就绪状态时始终返回 503；NewServerBootstrap 自动绑定。
+    optional string readiness_path = 4;
+    // 全部关键依赖检查的总期限，默认一秒；检查函数必须响应 Context。
+    optional google.protobuf.Duration timeout = 5;
   }
 }
 
 message GrpcServerOption {
   optional bool disable = 1;
   // 一般不需要指定，默认(tcp)
-  optional string network = 2 [(pubg.jsonschema.field) = {string: {enum: ['tcp', 'tcp4', 'tcp6', 'unix', 'unixpacket']}}];;
+  optional string network = 2 [
+    (pubg.jsonschema.field) = {string: {enum: ['tcp', 'tcp4', 'tcp6', 'unix', 'unixpacket']}},
+    (validate.rules).string = {in: ['tcp', 'tcp4', 'tcp6', 'unix', 'unixpacket']}
+  ];
   // 服务监听地址，host:port
   optional string addr = 3;
   // 对外暴露端点
@@ -69,4 +86,32 @@ message GrpcServerOption {
   optional bool custom_health = 5;
   // disableReflection 是否禁用服务反射
   optional bool disable_reflection = 6;
+}
+
+// 服务器中间件配置。
+//
+// [热更新] 全部字段都支持运行期修改，一次更新会先完整校验和构造，再逐项原子替换；并发请求可能短暂读取新旧组合。任何一项非法
+// 都会整体拒绝并保留上一次生效的组合。这些中间件常驻调用链，因此把某项从禁用改为
+// 启用也不需要重建 Server。
+//
+// 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成
+// 启用也不会产生链路追踪数据。
+message ServerMiddleware {
+  // 旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。
+  reserved 1;
+  reserved "timeout";
+  // 请求截止时间。[热更新] 只影响新请求。
+  optional Middleware.Deadline deadline = 8;
+  // 元数据透传。[热更新]
+  optional Middleware.Metadata metadata = 2;
+  // 链路追踪开关。[热更新]
+  optional Middleware.Tracing tracing = 3;
+  // 请求指标开关。[热更新]
+  optional Middleware.Metrics metrics = 4;
+  // 访问日志开关。[热更新] 适合排障时临时打开。
+  optional Middleware.Logging logging = 5;
+  // 请求校验开关。[热更新]
+  optional Middleware.Validator validator = 6;
+  // 自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。
+  optional Middleware.RateLimit rate_limit = 7;
 }

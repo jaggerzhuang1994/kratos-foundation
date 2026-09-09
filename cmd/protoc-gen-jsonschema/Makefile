@@ -1,13 +1,13 @@
+PROTOC_GEN_DOC_VERSION ?= v1.5.1
+
+.PHONY: deps options
 deps:
-	go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
+	go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@$(PROTOC_GEN_DOC_VERSION)
 
 options:
 	@echo "> protoc options..."
 	@protoc \
-	--proto_path=./ \
-	--proto_path=./third_party \
-	--go_out=./pkg/proto \
-	--go_opt=paths=source_relative \
+	--proto_path=../../third_party \
 	--doc_out=. \
 	--doc_opt=markdown,options.md \
-	./*.proto && echo "done."
+	../../third_party/pubg/jsonschema.proto && echo "done."

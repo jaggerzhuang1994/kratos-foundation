@@ -4,9 +4,6 @@
   "definitions": {
     ".kratos_foundation_pb.App": {
       "properties": {
-        "disable_registrar": {
-          "$ref": "#/definitions/.kratos_foundation_pb.App.disable_registrar"
-        },
         "registrar_timeout": {
           "$ref": "#/definitions/.kratos_foundation_pb.App.registrar_timeout"
         },
@@ -20,38 +17,33 @@
           "$ref": "#/definitions/.kratos_foundation_pb.App.metadata"
         }
       },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.App.disable_registrar": {
-      "type": "boolean",
-      "description": "是否禁用服务注册"
+      "type": "object",
+      "description": "App 只有 stop_timeout 支持热更新，其余字段在构造 Kratos App 时固定。"
     },
     ".kratos_foundation_pb.App.endpoints": {
-      "additionalItems": {
+      "items": {
         "$ref": "#/definitions/.kratos_foundation_pb.Endpoint",
-        "description": "app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）"
+        "description": "app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）。[需重启]"
       },
       "type": "array",
-      "description": "app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）"
+      "description": "app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）。[需重启]"
     },
     ".kratos_foundation_pb.App.metadata": {
       "additionalProperties": {
         "type": "string"
       },
       "type": "object",
-      "description": "注册到服务中心的md"
+      "description": "注册到服务中心的md。[需重启]"
     },
     ".kratos_foundation_pb.App.registrar_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "注册中心超时时间（默认10s）"
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "注册中心超时时间（默认10s）。[需重启]"
     },
     ".kratos_foundation_pb.App.stop_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "stop timeout 必须大于 server.stop_delay （默认30s）"
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "stop timeout 必须大于 server.stop_delay （默认30s）。\n [热更新] 下次开始停机时读取；停机一旦开始，取值即冻结。"
     },
     ".kratos_foundation_pb.Client": {
       "properties": {
@@ -60,24 +52,34 @@
         },
         "log": {
           "$ref": "#/definitions/.kratos_foundation_pb.Client.log"
+        },
+        "cleanup_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Client.cleanup_timeout"
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Client 的 clients 支持热更新。修改 target 或 protocol 会从缓存摘除旧连接，\n 并在最后一个调用级引用释放后关闭。"
+    },
+    ".kratos_foundation_pb.Client.cleanup_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "cleanup 等待租约与在途活动的上限，默认 30s；超时强制关闭连接并记录日志。[需重启]"
     },
     ".kratos_foundation_pb.Client.clients": {
       "additionalProperties": {
         "$ref": "#/definitions/.kratos_foundation_pb.ClientOption"
       },
-      "type": "object"
+      "type": "object",
+      "description": "[热更新] 后续调用使用新配置，旧连接等待活跃调用释放。"
     },
     ".kratos_foundation_pb.Client.log": {
       "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置"
+      "description": "logger 配置。[需重启] 只在 Factory 构造时读取。"
     },
     ".kratos_foundation_pb.ClientMiddleware": {
       "properties": {
-        "timeout": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.timeout"
+        "deadline": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.deadline"
         },
         "metadata": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.metadata"
@@ -101,6 +103,9 @@
     ".kratos_foundation_pb.ClientMiddleware.circuit_breaker": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.CircuitBreaker"
     },
+    ".kratos_foundation_pb.ClientMiddleware.deadline": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline"
+    },
     ".kratos_foundation_pb.ClientMiddleware.logging": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging"
     },
@@ -109,9 +114,6 @@
     },
     ".kratos_foundation_pb.ClientMiddleware.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.timeout": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout"
     },
     ".kratos_foundation_pb.ClientMiddleware.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing"
@@ -139,31 +141,16 @@
     },
     ".kratos_foundation_pb.ClientOption.protocol": {
       "$ref": "#/definitions/.kratos_foundation_pb.Protocol",
-      "description": "不指定协议时，ResolveClient的时候默认会返回GRPC链接\n 如果指定协议MakeClient的话，则忽略 protocol 创建对应协议的客户端"
+      "description": "不指定协议时，AcquireClient 默认返回 gRPC 连接。"
     },
     ".kratos_foundation_pb.ClientOption.target": {
       "type": "string",
       "description": "目标端点 支持服务发现/直连:\n 默认为 discovery:///{client_key}\n 也可以指定直连 host:port"
     },
-    ".kratos_foundation_pb.ConcurrentPolicy": {
-      "type": "string",
-      "enum": [
-        "OVERLAP",
-        "DELAY",
-        "SKIP"
-      ],
-      "description": "并行策略"
-    },
     ".kratos_foundation_pb.Config": {
       "properties": {
         "app": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.app"
-        },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Config.log"
-        },
-        "metrics": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Config.metrics"
         },
         "tracing": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.tracing"
@@ -186,55 +173,55 @@
         "client": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.client"
         },
-        "job": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Config.job"
+        "kafka": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Config.kafka"
+        },
+        "oss": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Config.oss"
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n app.stop_timeout、server.middleware、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数。"
     },
     ".kratos_foundation_pb.Config.app": {
       "$ref": "#/definitions/.kratos_foundation_pb.App",
-      "description": "应用配置"
+      "description": "应用配置。仅 stop_timeout 支持热更新。"
     },
     ".kratos_foundation_pb.Config.client": {
       "$ref": "#/definitions/.kratos_foundation_pb.Client",
-      "description": "客户端组件配置"
+      "description": "客户端组件配置。仅 clients 支持热更新。"
     },
     ".kratos_foundation_pb.Config.database": {
       "$ref": "#/definitions/.kratos_foundation_pb.Database",
-      "description": "数据库配置"
+      "description": "数据库配置。仅各连接的连接池参数支持热更新。"
     },
     ".kratos_foundation_pb.Config.discovery": {
       "$ref": "#/definitions/.kratos_foundation_pb.Discovery",
-      "description": "服务发现"
+      "description": "服务发现。[需重启]"
     },
-    ".kratos_foundation_pb.Config.job": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Job",
-      "description": "任务组件配置"
+    ".kratos_foundation_pb.Config.kafka": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Kafka",
+      "description": "Kafka 连接配置。[需重启]"
     },
-    ".kratos_foundation_pb.Config.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Log",
-      "description": "日志组件配置"
-    },
-    ".kratos_foundation_pb.Config.metrics": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Metrics",
-      "description": "监控组件配置"
+    ".kratos_foundation_pb.Config.oss": {
+      "$ref": "#/definitions/.kratos_foundation_pb.OSS",
+      "description": "对象存储配置。[需重启]"
     },
     ".kratos_foundation_pb.Config.redis": {
       "$ref": "#/definitions/.kratos_foundation_pb.Redis",
-      "description": "redis配置"
+      "description": "redis配置。[需重启]"
     },
     ".kratos_foundation_pb.Config.registry": {
       "$ref": "#/definitions/.kratos_foundation_pb.Registry",
-      "description": "服务注册"
+      "description": "服务注册。[需重启]"
     },
     ".kratos_foundation_pb.Config.server": {
       "$ref": "#/definitions/.kratos_foundation_pb.Server",
-      "description": "服务组件配置"
+      "description": "服务组件配置。仅 middleware 支持热更新。"
     },
     ".kratos_foundation_pb.Config.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Tracing",
-      "description": "链路追踪组件配置"
+      "description": "链路追踪组件配置。仅 sampler 支持热更新。"
     },
     ".kratos_foundation_pb.DBConnection": {
       "properties": {
@@ -243,15 +230,6 @@
         },
         "dsn": {
           "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.dsn"
-        },
-        "replicas": {
-          "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.replicas"
-        },
-        "datas": {
-          "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.datas"
-        },
-        "trace_resolver_mode": {
-          "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.trace_resolver_mode"
         },
         "max_idle_conns": {
           "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.max_idle_conns"
@@ -264,6 +242,12 @@
         },
         "conn_max_idle_time": {
           "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.conn_max_idle_time"
+        },
+        "aes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.aes"
+        },
+        "gorm": {
+          "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.gorm"
         }
       },
       "type": "object",
@@ -271,53 +255,39 @@
         "dsn"
       ]
     },
+    ".kratos_foundation_pb.DBConnection.aes": {
+      "$ref": "#/definitions/.kratos_foundation_pb.DatabaseAes",
+      "description": "GORM 自定义加密字段使用的 AES 配置。未配置时数据库连接仍可正常使用，\n 但读写 AESDecryptString/AESDecryptBytes 字段会返回错误。"
+    },
     ".kratos_foundation_pb.DBConnection.conn_max_idle_time": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "用于设置连接在空闲状态下允许存在的最长时间。\n 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。\n 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。\n 默认值是 0，也就是无限制。"
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "用于设置连接在空闲状态下允许存在的最长时间。\n 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。\n 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。\n 默认值是 0，也就是无限制。\n [热更新]"
     },
     ".kratos_foundation_pb.DBConnection.conn_max_lifetime": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "用于设置单个连接可被重复使用的最长时间。\n 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。\n 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。\n 默认值是 0，也就是无限制。"
-    },
-    ".kratos_foundation_pb.DBConnection.datas": {
-      "additionalItems": {
-        "type": "string",
-        "description": "自动切换数据源关联表"
-      },
-      "type": "array",
-      "description": "自动切换数据源关联表"
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "用于设置单个连接可被重复使用的最长时间。\n 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。\n 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。\n 默认值是 0，也就是无限制。\n [热更新]"
     },
     ".kratos_foundation_pb.DBConnection.driver": {
       "type": "string",
-      "description": "数据库驱动，默认mysql"
+      "description": "编译进应用并已注册的数据库驱动名；默认 mysql。"
     },
     ".kratos_foundation_pb.DBConnection.dsn": {
       "type": "string",
       "description": "dsn"
     },
+    ".kratos_foundation_pb.DBConnection.gorm": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Gorm",
+      "description": "覆盖 database.gorm 中显式配置的字段；未配置字段继续继承全局值。\n 每个连接拥有独立的 GORM 实例、方言与回调。"
+    },
     ".kratos_foundation_pb.DBConnection.max_idle_conns": {
       "type": "integer",
-      "description": "用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 默认的最大空闲连接数目前是 2，这个默认值在未来的 Go 版本中可能会发生变化(sql.defaultMaxIdleConns)。"
+      "description": "用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 未配置时默认 2；热更新删除字段也恢复为 2。\n [热更新]"
     },
     ".kratos_foundation_pb.DBConnection.max_open_conns": {
       "type": "integer",
-      "description": "用于设置数据库最大打开连接数。\n 如果 MaxIdleConns \u003e 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。\n 如果 n ≤ 0，表示不限制打开连接的数量。\n 默认值是 0，也就是无限制。"
-    },
-    ".kratos_foundation_pb.DBConnection.replicas": {
-      "additionalItems": {
-        "$ref": "#/definitions/.kratos_foundation_pb.GormDialector",
-        "description": "从库"
-      },
-      "type": "array",
-      "description": "从库"
-    },
-    ".kratos_foundation_pb.DBConnection.trace_resolver_mode": {
-      "type": "boolean",
-      "description": "print sources/replicas mode in logger"
+      "description": "用于设置数据库最大打开连接数。\n 如果 MaxIdleConns \u003e 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。\n 如果 n ≤ 0，表示不限制打开连接的数量。\n 默认值是 0，也就是无限制。\n [热更新] 连接池打满时可以在线扩容，无需重启。"
     },
     ".kratos_foundation_pb.DC": {
       "type": "string",
@@ -328,17 +298,17 @@
     },
     ".kratos_foundation_pb.Database": {
       "properties": {
-        "gorm": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Database.gorm"
-        },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Database.log"
-        },
         "default": {
           "$ref": "#/definitions/.kratos_foundation_pb.Database.default"
         },
         "connections": {
           "$ref": "#/definitions/.kratos_foundation_pb.Database.connections"
+        },
+        "gorm": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Database.gorm"
+        },
+        "log": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Database.log"
         },
         "tracing": {
           "$ref": "#/definitions/.kratos_foundation_pb.Database.tracing"
@@ -347,7 +317,8 @@
           "$ref": "#/definitions/.kratos_foundation_pb.Database.metrics"
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Database 中只有各连接的连接池参数（max_idle_conns、max_open_conns、\n conn_max_lifetime、conn_max_idle_time）支持热更新，它们直接写回 *sql.DB，不需要\n 重连数据库。dsn、driver、连接集合以及 gorm、aes、log 等配置决定连接与会话本身，\n 必须重启。配置中新增的连接也只能由重启创建。\n\n 注意两点：其一，如果一次更新同时改动了需要重启的字段，本次更新会整体跳过、只记录\n 告警，其中的连接池参数也不会生效。其二，每次完整\n 应用池参数；删除字段时恢复默认：最大空闲连接数为 2，总连接数和过期时间为 0（不限）。\n 显式设置 max_idle_conns 为 0 表示不保留空闲连接。先应用总连接上限，再应用空闲上限，\n 避免扩容时被旧总上限截断。"
     },
     ".kratos_foundation_pb.Database.connections": {
       "additionalProperties": {
@@ -358,7 +329,7 @@
     },
     ".kratos_foundation_pb.Database.default": {
       "type": "string",
-      "description": "默认连接"
+      "description": "默认连接。[需重启]"
     },
     ".kratos_foundation_pb.Database.gorm": {
       "$ref": "#/definitions/.kratos_foundation_pb.Gorm",
@@ -376,6 +347,33 @@
       "$ref": "#/definitions/.kratos_foundation_pb.GormTracing",
       "description": "链路追踪配置"
     },
+    ".kratos_foundation_pb.DatabaseAes": {
+      "properties": {
+        "key": {
+          "$ref": "#/definitions/.kratos_foundation_pb.DatabaseAes.key"
+        },
+        "algorithm": {
+          "$ref": "#/definitions/.kratos_foundation_pb.DatabaseAes.algorithm"
+        }
+      },
+      "type": "object",
+      "description": "数据库字段 AES 加密配置。"
+    },
+    ".kratos_foundation_pb.DatabaseAes.Algorithm": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "CBC"
+      ]
+    },
+    ".kratos_foundation_pb.DatabaseAes.algorithm": {
+      "$ref": "#/definitions/.kratos_foundation_pb.DatabaseAes.Algorithm",
+      "description": "加密算法，默认 CBC。[需重启]\n\n CBC 只提供机密性，不做完整性校验：字段密文被篡改不会被发现。\n 该取舍只适用于「数据库泄漏」这一威胁模型，详见 pkg/crypto/aes 的包注释。"
+    },
+    ".kratos_foundation_pb.DatabaseAes.key": {
+      "type": "string",
+      "description": "Base64 编码的 AES key；解码后长度必须为 16、24 或 32 字节。"
+    },
     ".kratos_foundation_pb.Discovery": {
       "properties": {
         "timeout": {
@@ -386,7 +384,7 @@
         }
       },
       "type": "object",
-      "description": "服务发现"
+      "description": "服务发现。[需重启] 配置在创建 Consul Discovery 时读取一次。"
     },
     ".kratos_foundation_pb.Discovery.dc": {
       "$ref": "#/definitions/.kratos_foundation_pb.DC",
@@ -394,8 +392,7 @@
     },
     ".kratos_foundation_pb.Discovery.timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "获取服务的超时时间【默认10s】"
     },
     ".kratos_foundation_pb.Endpoint": {
@@ -470,20 +467,17 @@
     },
     ".kratos_foundation_pb.Exporter.RetryConfig.initial_interval": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "初始间隔"
     },
     ".kratos_foundation_pb.Exporter.RetryConfig.max_elapsed_time": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "单次执行允许的最大耗时"
     },
     ".kratos_foundation_pb.Exporter.RetryConfig.max_interval": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "最大间隔"
     },
     ".kratos_foundation_pb.Exporter.compression": {
@@ -507,110 +501,8 @@
     },
     ".kratos_foundation_pb.Exporter.timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "超时"
-    },
-    ".kratos_foundation_pb.FileLogger": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileLogger.disable"
-        },
-        "level": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileLogger.level"
-        },
-        "filter_keys": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileLogger.filter_keys"
-        },
-        "path": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileLogger.path"
-        },
-        "rotating": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileLogger.rotating"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.FileLogger.disable": {
-      "type": "boolean",
-      "description": "是否禁用file logger"
-    },
-    ".kratos_foundation_pb.FileLogger.filter_keys": {
-      "additionalItems": {
-        "type": "string",
-        "description": "打印日志过滤哪些keys"
-      },
-      "type": "array",
-      "description": "打印日志过滤哪些keys"
-    },
-    ".kratos_foundation_pb.FileLogger.level": {
-      "type": "string",
-      "enum": [
-        "debug",
-        "DEBUG",
-        "info",
-        "INFO",
-        "warn",
-        "WARN",
-        "error",
-        "ERROR"
-      ],
-      "description": "最小日志级别（默认值为父级level）"
-    },
-    ".kratos_foundation_pb.FileLogger.path": {
-      "type": "string",
-      "description": "日志路径 (默认 ./app.log)"
-    },
-    ".kratos_foundation_pb.FileLogger.rotating": {
-      "$ref": "#/definitions/.kratos_foundation_pb.FileRotating",
-      "description": "文件拆分"
-    },
-    ".kratos_foundation_pb.FileRotating": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileRotating.disable"
-        },
-        "max_size": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileRotating.max_size"
-        },
-        "max_file_age": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileRotating.max_file_age"
-        },
-        "max_files": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileRotating.max_files"
-        },
-        "local_time": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileRotating.local_time"
-        },
-        "compress": {
-          "$ref": "#/definitions/.kratos_foundation_pb.FileRotating.compress"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.FileRotating.compress": {
-      "type": "boolean",
-      "description": "决定轮转后的日志文件是否使用 gzip 压缩。默认不压缩。"
-    },
-    ".kratos_foundation_pb.FileRotating.disable": {
-      "type": "boolean",
-      "description": "禁用文件拆分(默认不禁用)"
-    },
-    ".kratos_foundation_pb.FileRotating.local_time": {
-      "type": "boolean",
-      "description": "决定备份文件名中的时间戳是否使用本地时间。默认使用 UTC 时间。"
-    },
-    ".kratos_foundation_pb.FileRotating.max_file_age": {
-      "type": "integer",
-      "description": "是根据备份文件名中编码的时间戳来保留旧日志文件的最大天数。\n 注意：一天被定义为 24 小时，可能与日历中的自然日不完全对应，\n 比如受到夏令时、闰秒等影响。默认不会因为时间而删除旧日志文件。\n 默认会保留所有文件。"
-    },
-    ".kratos_foundation_pb.FileRotating.max_files": {
-      "type": "integer",
-      "description": "要保留的旧日志文件的最大数量。\n 默认会保留所有旧日志文件（但 MaxAge 仍可能导致旧文件被删除）。"
-    },
-    ".kratos_foundation_pb.FileRotating.max_size": {
-      "type": "integer",
-      "description": "日志文件在轮转前允许的最大大小。默认为 100 MB。"
     },
     ".kratos_foundation_pb.Gorm": {
       "properties": {
@@ -669,14 +561,12 @@
     },
     ".kratos_foundation_pb.Gorm.default_context_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "普通 DB 操作（非事务）默认 context 超时"
     },
     ".kratos_foundation_pb.Gorm.default_transaction_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "“显式/默认事务”统一的超时上限"
     },
     ".kratos_foundation_pb.Gorm.disable_automatic_ping": {
@@ -718,61 +608,6 @@
     ".kratos_foundation_pb.Gorm.translate_error": {
       "type": "boolean",
       "description": "将驱动/数据库错误翻译成 GORM 统一错误（比如重复键、外键错误等），便于业务判断。"
-    },
-    ".kratos_foundation_pb.GormDialector": {
-      "properties": {
-        "driver": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormDialector.driver"
-        },
-        "dsn": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormDialector.dsn"
-        },
-        "max_idle_conns": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormDialector.max_idle_conns"
-        },
-        "max_open_conns": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormDialector.max_open_conns"
-        },
-        "conn_max_lifetime": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormDialector.conn_max_lifetime"
-        },
-        "conn_max_idle_time": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormDialector.conn_max_idle_time"
-        }
-      },
-      "type": "object",
-      "required": [
-        "dsn"
-      ],
-      "description": "数据库方言"
-    },
-    ".kratos_foundation_pb.GormDialector.conn_max_idle_time": {
-      "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "用于设置连接在空闲状态下允许存在的最长时间。\n 超过这个空闲时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。\n 如果 d ≤ 0，则不会因为连接空闲时间过长而关闭连接（也就是不限制空闲时长）。\n 默认值是 0，也就是无限制。"
-    },
-    ".kratos_foundation_pb.GormDialector.conn_max_lifetime": {
-      "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "用于设置单个连接可被重复使用的最长时间。\n 超过这个时间的连接，在再次被复用之前，可能会被延迟（惰性）关闭，而不是立刻关闭。\n 如果 d ≤ 0，则不会因为连接使用时间过长而关闭连接（也就是不限制连接的生命周期）。\n 默认值是 0，也就是无限制。"
-    },
-    ".kratos_foundation_pb.GormDialector.driver": {
-      "type": "string",
-      "description": "数据库驱动，默认mysql"
-    },
-    ".kratos_foundation_pb.GormDialector.dsn": {
-      "type": "string",
-      "description": "dsn"
-    },
-    ".kratos_foundation_pb.GormDialector.max_idle_conns": {
-      "type": "integer",
-      "description": "用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 默认的最大空闲连接数目前是 2，这个默认值在未来的 Go 版本中可能会发生变化(sql.defaultMaxIdleConns)。"
-    },
-    ".kratos_foundation_pb.GormDialector.max_open_conns": {
-      "type": "integer",
-      "description": "用于设置数据库最大打开连接数。\n 如果 MaxIdleConns \u003e 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。\n 如果 n ≤ 0，表示不限制打开连接的数量。\n 默认值是 0，也就是无限制。"
     },
     ".kratos_foundation_pb.GormLogger": {
       "properties": {
@@ -822,8 +657,7 @@
     },
     ".kratos_foundation_pb.GormLogger.slow_threshold": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "gorm 慢日志门限"
     },
     ".kratos_foundation_pb.GormMetrics": {
@@ -859,8 +693,7 @@
     },
     ".kratos_foundation_pb.GormMetrics.Mysql.interval": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "间隔 默认 refresh_interval"
     },
     ".kratos_foundation_pb.GormMetrics.Mysql.prefix": {
@@ -868,7 +701,7 @@
       "description": "指标前缀，默认 gorm_status_"
     },
     ".kratos_foundation_pb.GormMetrics.Mysql.variable_names": {
-      "additionalItems": {
+      "items": {
         "type": "string",
         "description": "采集哪些指标，默认所有"
       },
@@ -877,7 +710,7 @@
     },
     ".kratos_foundation_pb.GormMetrics.disable": {
       "type": "boolean",
-      "description": "禁用 gorm.metrics 插件"
+      "description": "禁用数据库指标采集"
     },
     ".kratos_foundation_pb.GormMetrics.labels": {
       "additionalProperties": {
@@ -888,12 +721,11 @@
     },
     ".kratos_foundation_pb.GormMetrics.mysql": {
       "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.Mysql",
-      "description": "mysql 插件的配置"
+      "description": "MySQL 状态指标配置"
     },
     ".kratos_foundation_pb.GormMetrics.refresh_interval": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "刷新间隔 默认15s"
     },
     ".kratos_foundation_pb.GormTracing": {
@@ -922,7 +754,7 @@
     },
     ".kratos_foundation_pb.GormTracing.exclude_metrics": {
       "type": "boolean",
-      "description": "排除 DBStats 指标被上报"
+      "description": "已弃用：tracing 始终不采集指标；统一使用 database.metrics 配置。"
     },
     ".kratos_foundation_pb.GormTracing.exclude_query_vars": {
       "type": "boolean",
@@ -1011,9 +843,52 @@
         },
         "metrics": {
           "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.metrics"
+        },
+        "health": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.health"
         }
       },
       "type": "object"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Health": {
+      "properties": {
+        "disable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health.disable"
+        },
+        "addr": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health.addr"
+        },
+        "liveness_path": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health.liveness_path"
+        },
+        "readiness_path": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health.readiness_path"
+        },
+        "timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health.timeout"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Health.addr": {
+      "type": "string",
+      "description": "空值或与 http.addr 相同复用业务 HTTP；与 metrics.addr 相同共享独立监听。[需重启]"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Health.disable": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Health.liveness_path": {
+      "type": "string",
+      "description": "存活探针路径，默认 /healthz。[需重启]\n GET/HEAD 返回 200，仅表示 HTTP 可响应，不检查依赖或应用就绪状态。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Health.readiness_path": {
+      "type": "string",
+      "description": "就绪探针路径，默认 /readyz。[需重启]\n GET/HEAD 在应用完成启动、依赖检查通过且未停机时返回 200，否则返回 503。\n 未绑定应用就绪状态时始终返回 503；NewServerBootstrap 自动绑定。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Health.timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "全部关键依赖检查的总期限，默认一秒；检查函数必须响应 Context。"
     },
     ".kratos_foundation_pb.HttpServerOption.Metrics": {
       "properties": {
@@ -1022,9 +897,16 @@
         },
         "path": {
           "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Metrics.path"
+        },
+        "addr": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Metrics.addr"
         }
       },
       "type": "object"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Metrics.addr": {
+      "type": "string",
+      "description": "监听地址 host:port；空值或与 http.addr 相同复用业务 HTTP，否则独立监听。[需重启]"
     },
     ".kratos_foundation_pb.HttpServerOption.Metrics.disable": {
       "type": "boolean",
@@ -1049,6 +931,10 @@
       "$ref": "#/definitions/.kratos_foundation_pb.Endpoint",
       "description": "对外暴露端点"
     },
+    ".kratos_foundation_pb.HttpServerOption.health": {
+      "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health",
+      "description": "HTTP 健康检查端点。[需重启]"
+    },
     ".kratos_foundation_pb.HttpServerOption.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Metrics",
       "description": "metrics 路由"
@@ -1068,235 +954,247 @@
       "type": "string",
       "description": "http 路由前缀"
     },
-    ".kratos_foundation_pb.Job": {
+    ".kratos_foundation_pb.Kafka": {
       "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.disable"
-        },
-        "timezone": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.timezone"
+        "connections": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Kafka.connections"
         },
         "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.log"
-        },
-        "tracing": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.tracing"
-        },
-        "metrics": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.metrics"
-        },
-        "jobs": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.jobs"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.Job.Metrics": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.Metrics.disable"
+          "$ref": "#/definitions/.kratos_foundation_pb.Kafka.log"
         }
       },
       "type": "object",
-      "description": "监控配置"
+      "description": "Kafka [需重启]：连接配置在启动期完成校验与索引，client 按该快照创建，修改后需要\n 重启进程。"
     },
-    ".kratos_foundation_pb.Job.Metrics.disable": {
-      "type": "boolean",
-      "description": "是否禁用"
-    },
-    ".kratos_foundation_pb.Job.Tracing": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Job.Tracing.disable"
-        }
-      },
-      "type": "object",
-      "description": "链路追踪配置"
-    },
-    ".kratos_foundation_pb.Job.Tracing.disable": {
-      "type": "boolean",
-      "description": "是否禁用"
-    },
-    ".kratos_foundation_pb.Job.disable": {
-      "type": "boolean",
-      "description": "是否禁用"
-    },
-    ".kratos_foundation_pb.Job.jobs": {
+    ".kratos_foundation_pb.Kafka.connections": {
       "additionalProperties": {
-        "$ref": "#/definitions/.kratos_foundation_pb.JobConfig"
+        "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection"
       },
       "type": "object",
-      "description": "任务配置"
+      "description": "按逻辑名索引的连接配置。[需重启]"
     },
-    ".kratos_foundation_pb.Job.log": {
+    ".kratos_foundation_pb.Kafka.log": {
       "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "log info则会输出详细日志"
+      "description": "logger 配置。[需重启]"
     },
-    ".kratos_foundation_pb.Job.metrics": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Job.Metrics",
-      "description": "Metrics"
-    },
-    ".kratos_foundation_pb.Job.timezone": {
-      "type": "string",
-      "description": "cron定时器的时区(默认为当前时区)"
-    },
-    ".kratos_foundation_pb.Job.tracing": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Job.Tracing",
-      "description": "tracing"
-    },
-    ".kratos_foundation_pb.JobConfig": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.JobConfig.disable"
-        },
-        "schedule": {
-          "$ref": "#/definitions/.kratos_foundation_pb.JobConfig.schedule"
-        },
-        "concurrent_policy": {
-          "$ref": "#/definitions/.kratos_foundation_pb.JobConfig.concurrent_policy"
-        },
-        "immediately": {
-          "$ref": "#/definitions/.kratos_foundation_pb.JobConfig.immediately"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.JobConfig.concurrent_policy": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ConcurrentPolicy",
-      "description": "【定时任务】任务并行策略"
-    },
-    ".kratos_foundation_pb.JobConfig.disable": {
-      "type": "boolean",
-      "description": "是否禁用任务"
-    },
-    ".kratos_foundation_pb.JobConfig.immediately": {
-      "type": "boolean",
-      "description": "【定时任务】启动是否立刻调度一次"
-    },
-    ".kratos_foundation_pb.JobConfig.schedule": {
-      "type": "string",
-      "description": "【定时任务】定时表达式\n 支持在表达式之前指定时区，格式为 TZ=Asia/Tokyo {cron}\n 支持 cron 表达式（当有6组数字则表示支持秒，5组表示不支持秒）： [Sec(0-59,*), ]Min(0-59,*) Hour(0-23,*) DayOfMonth(1-31,*,?) Month(1-12,*) DayOfWeek(0-6,JUN-SAT,*,?)\n 支持 @yearly=每年第一天0点, @monthly=每月第一天0点, @weekly=每周第一天0点, @daily=每天0点, @hourly=每小时0分\n 支持 @every {duration}，例如 @every 1s, @every 1m2s"
-    },
-    ".kratos_foundation_pb.Log": {
-      "properties": {
-        "level": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.level"
-        },
-        "filter_empty": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.filter_empty"
-        },
-        "filter_keys": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.filter_keys"
-        },
-        "time_format": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.time_format"
-        },
-        "std": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.std"
-        },
-        "file": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.file"
-        },
-        "preset": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Log.preset"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.Log.file": {
-      "$ref": "#/definitions/.kratos_foundation_pb.FileLogger",
-      "description": "文件日志"
-    },
-    ".kratos_foundation_pb.Log.filter_empty": {
-      "type": "boolean",
-      "description": "是否过滤掉空值的kv(默认true)"
-    },
-    ".kratos_foundation_pb.Log.filter_keys": {
-      "additionalItems": {
-        "type": "string",
-        "description": "打印日志过滤哪些keys"
-      },
-      "type": "array",
-      "description": "打印日志过滤哪些keys"
-    },
-    ".kratos_foundation_pb.Log.level": {
+    ".kratos_foundation_pb.KafkaCompression": {
       "type": "string",
       "enum": [
-        "debug",
-        "DEBUG",
-        "info",
-        "INFO",
-        "warn",
-        "WARN",
-        "error",
-        "ERROR"
-      ],
-      "description": "最小日志级别 (本地环境或者debug环境默认 debug，其他环境默认 info)"
+        "KAFKA_COMPRESSION_UNSPECIFIED",
+        "KAFKA_COMPRESSION_NONE",
+        "KAFKA_COMPRESSION_GZIP",
+        "KAFKA_COMPRESSION_SNAPPY",
+        "KAFKA_COMPRESSION_LZ4",
+        "KAFKA_COMPRESSION_ZSTD"
+      ]
     },
-    ".kratos_foundation_pb.Log.preset": {
-      "additionalItems": {
-        "type": "string",
-        "enum": [
-          "ts",
-          "service.id",
-          "service.name",
-          "service.version",
-          "trace.id",
-          "span.id",
-          "caller"
-        ],
-        "description": "预置哪些 kv，默认 ts, service.id, service.name, service.version, trace.id, span.id, caller"
-      },
-      "type": "array",
-      "description": "预置哪些 kv，默认 ts, service.id, service.name, service.version, trace.id, span.id, caller"
-    },
-    ".kratos_foundation_pb.Log.std": {
-      "$ref": "#/definitions/.kratos_foundation_pb.StdLogger",
-      "description": "标准输出流日志"
-    },
-    ".kratos_foundation_pb.Log.time_format": {
-      "type": "string",
-      "description": "时间格式化 默认为 time.RFC3339"
-    },
-    ".kratos_foundation_pb.Metrics": {
+    ".kratos_foundation_pb.KafkaConnection": {
       "properties": {
-        "meter_name": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Metrics.meter_name"
+        "brokers": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.brokers"
         },
-        "counter_map_size": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Metrics.counter_map_size"
+        "client_id": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.client_id"
         },
-        "gauge_map_size": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Metrics.gauge_map_size"
+        "dial_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.dial_timeout"
         },
-        "histogram_map_size": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Metrics.histogram_map_size"
+        "allow_auto_topic_creation": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.allow_auto_topic_creation"
         },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Metrics.log"
+        "tls": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.tls"
+        },
+        "sasl": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.sasl"
+        },
+        "producer": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.producer"
+        },
+        "consumer": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConnection.consumer"
         }
       },
       "type": "object"
     },
-    ".kratos_foundation_pb.Metrics.counter_map_size": {
-      "type": "integer",
-      "description": "初始 counter map 容量（默认 64）\n Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容"
+    ".kratos_foundation_pb.KafkaConnection.allow_auto_topic_creation": {
+      "type": "boolean"
     },
-    ".kratos_foundation_pb.Metrics.gauge_map_size": {
-      "type": "integer",
-      "description": "初始 gauge map 容量（默认 64）\n Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容"
+    ".kratos_foundation_pb.KafkaConnection.brokers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
-    ".kratos_foundation_pb.Metrics.histogram_map_size": {
-      "type": "integer",
-      "description": "初始 histogram map 容量（默认 64）\n Go 原生 map 默认初始化为 8 buckets，此参数用于自定义预分配大小以减少扩容"
+    ".kratos_foundation_pb.KafkaConnection.client_id": {
+      "type": "string"
     },
-    ".kratos_foundation_pb.Metrics.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "log"
+    ".kratos_foundation_pb.KafkaConnection.consumer": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer"
     },
-    ".kratos_foundation_pb.Metrics.meter_name": {
+    ".kratos_foundation_pb.KafkaConnection.dial_timeout": {
       "type": "string",
-      "description": "指标命名空间（默认为启动的应用名）"
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.KafkaConnection.producer": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaProducer"
+    },
+    ".kratos_foundation_pb.KafkaConnection.sasl": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaSASL"
+    },
+    ".kratos_foundation_pb.KafkaConnection.tls": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaTLS"
+    },
+    ".kratos_foundation_pb.KafkaConsumer": {
+      "properties": {
+        "session_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer.session_timeout"
+        },
+        "heartbeat_interval": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer.heartbeat_interval"
+        },
+        "rebalance_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer.rebalance_timeout"
+        },
+        "fetch_min_bytes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer.fetch_min_bytes"
+        },
+        "fetch_max_bytes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer.fetch_max_bytes"
+        },
+        "fetch_max_wait": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaConsumer.fetch_max_wait"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.KafkaConsumer.fetch_max_bytes": {
+      "type": "integer"
+    },
+    ".kratos_foundation_pb.KafkaConsumer.fetch_max_wait": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.KafkaConsumer.fetch_min_bytes": {
+      "type": "integer"
+    },
+    ".kratos_foundation_pb.KafkaConsumer.heartbeat_interval": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.KafkaConsumer.rebalance_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.KafkaConsumer.session_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.KafkaProducer": {
+      "properties": {
+        "required_acks": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaProducer.required_acks"
+        },
+        "compression": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaProducer.compression"
+        },
+        "linger": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaProducer.linger"
+        },
+        "batch_max_bytes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaProducer.batch_max_bytes"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.KafkaProducer.batch_max_bytes": {
+      "type": "integer"
+    },
+    ".kratos_foundation_pb.KafkaProducer.compression": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaCompression"
+    },
+    ".kratos_foundation_pb.KafkaProducer.linger": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.KafkaProducer.required_acks": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaRequiredAcks"
+    },
+    ".kratos_foundation_pb.KafkaRequiredAcks": {
+      "type": "string",
+      "enum": [
+        "KAFKA_REQUIRED_ACKS_UNSPECIFIED",
+        "KAFKA_REQUIRED_ACKS_NONE",
+        "KAFKA_REQUIRED_ACKS_LEADER",
+        "KAFKA_REQUIRED_ACKS_ALL"
+      ]
+    },
+    ".kratos_foundation_pb.KafkaSASL": {
+      "properties": {
+        "mechanism": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaSASL.mechanism"
+        },
+        "username": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaSASL.username"
+        },
+        "password": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaSASL.password"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.KafkaSASL.mechanism": {
+      "$ref": "#/definitions/.kratos_foundation_pb.KafkaSASLMechanism"
+    },
+    ".kratos_foundation_pb.KafkaSASL.password": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.KafkaSASL.username": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.KafkaSASLMechanism": {
+      "type": "string",
+      "enum": [
+        "KAFKA_SASL_MECHANISM_UNSPECIFIED",
+        "KAFKA_SASL_MECHANISM_PLAIN",
+        "KAFKA_SASL_MECHANISM_SCRAM_SHA_256",
+        "KAFKA_SASL_MECHANISM_SCRAM_SHA_512"
+      ]
+    },
+    ".kratos_foundation_pb.KafkaTLS": {
+      "properties": {
+        "server_name": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaTLS.server_name"
+        },
+        "insecure_skip_verify": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaTLS.insecure_skip_verify"
+        },
+        "ca_file": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaTLS.ca_file"
+        },
+        "cert_file": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaTLS.cert_file"
+        },
+        "key_file": {
+          "$ref": "#/definitions/.kratos_foundation_pb.KafkaTLS.key_file"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.KafkaTLS.ca_file": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.KafkaTLS.cert_file": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.KafkaTLS.insecure_skip_verify": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.KafkaTLS.key_file": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.KafkaTLS.server_name": {
+      "type": "string"
     },
     ".kratos_foundation_pb.Middleware.CircuitBreaker": {
       "properties": {
@@ -1341,8 +1239,7 @@
     },
     ".kratos_foundation_pb.Middleware.CircuitBreaker.SREBreaker.window": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "设置统计窗口的时间长度。默认值3s"
     },
     ".kratos_foundation_pb.Middleware.CircuitBreaker.enable": {
@@ -1352,6 +1249,82 @@
     ".kratos_foundation_pb.Middleware.CircuitBreaker.sre": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.CircuitBreaker.SREBreaker",
       "description": "默认使用 sre 熔断器"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline": {
+      "properties": {
+        "fallback_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.fallback_timeout"
+        },
+        "max_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.max_timeout"
+        },
+        "min_budget": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.min_budget"
+        },
+        "routes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.routes"
+        }
+      },
+      "type": "object",
+      "description": "请求截止时间控制。未配置 deadline 或 fallback_timeout 时，回退超时默认为 10s。\n fallback_timeout 仅用于没有上游截止时间的请求；显式 0s 关闭回退超时。\n max_timeout 是本地最大耗时，不受上游截止时间是否存在的影响；\n 没有上游预算且 fallback_timeout 为零时也可单独作为超时；\n min_budget 表示开始处理或派发调用所需的最小剩余预算。max_timeout 与 min_budget 默认 0s，不启用限制。"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.RouteRule": {
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.RouteRule.path"
+        },
+        "prefix": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.RouteRule.prefix"
+        },
+        "fallback_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.RouteRule.fallback_timeout"
+        },
+        "max_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.RouteRule.max_timeout"
+        },
+        "min_budget": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.RouteRule.min_budget"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.RouteRule.fallback_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "缺失时继承全局回退超时；显式 0s 关闭该路由的回退超时。"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.RouteRule.max_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.RouteRule.min_budget": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.RouteRule.path": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.RouteRule.prefix": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.fallback_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "无上游截止时间时的回退超时，缺失时默认 10s；显式 0s 关闭回退超时。"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.max_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.min_budget": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$"
+    },
+    ".kratos_foundation_pb.Middleware.Deadline.routes": {
+      "items": {
+        "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline.RouteRule"
+      },
+      "type": "array"
     },
     ".kratos_foundation_pb.Middleware.Logging": {
       "properties": {
@@ -1393,7 +1366,7 @@
       "description": "是否启用"
     },
     ".kratos_foundation_pb.Middleware.Metadata.prefix": {
-      "additionalItems": {
+      "items": {
         "type": "string",
         "description": "server中间件指定哪些前缀会被注入到 server ctx。默认 x-md-\n client中间件指定哪些前缀的server ctx会被传递给 client。默认 x-md-"
       },
@@ -1456,8 +1429,7 @@
     },
     ".kratos_foundation_pb.Middleware.RateLimit.BBRLimiter.window": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "每个窗口的时间长度。默认值 10s"
     },
     ".kratos_foundation_pb.Middleware.RateLimit.bbr_limiter": {
@@ -1467,63 +1439,6 @@
     ".kratos_foundation_pb.Middleware.RateLimit.enable": {
       "type": "boolean",
       "description": "是否禁用"
-    },
-    ".kratos_foundation_pb.Middleware.Timeout": {
-      "properties": {
-        "default": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout.default"
-        },
-        "routes": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout.routes"
-        }
-      },
-      "type": "object",
-      "description": "超时控制中间件\n 优化：预编译所有规则，path会转化成hash，前缀匹配利用前缀树\n 优先级：path \u003e 前缀"
-    },
-    ".kratos_foundation_pb.Middleware.Timeout.RouteRule": {
-      "properties": {
-        "path": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout.RouteRule.path"
-        },
-        "prefix": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout.RouteRule.prefix"
-        },
-        "timeout": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout.RouteRule.timeout"
-        }
-      },
-      "type": "object",
-      "required": [
-        "timeout"
-      ]
-    },
-    ".kratos_foundation_pb.Middleware.Timeout.RouteRule.path": {
-      "type": "string",
-      "description": "路径匹配，例如 /pb_package.Service/Rpc"
-    },
-    ".kratos_foundation_pb.Middleware.Timeout.RouteRule.prefix": {
-      "type": "string",
-      "description": "前缀匹配，例如 /pb_package.Se"
-    },
-    ".kratos_foundation_pb.Middleware.Timeout.RouteRule.timeout": {
-      "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "超时"
-    },
-    ".kratos_foundation_pb.Middleware.Timeout.default": {
-      "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "默认超时时间\n 服务端默认超时 1s\n 客户端默认超时 2s"
-    },
-    ".kratos_foundation_pb.Middleware.Timeout.routes": {
-      "additionalItems": {
-        "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout.RouteRule",
-        "description": "指定路由规则"
-      },
-      "type": "array",
-      "description": "指定路由规则"
     },
     ".kratos_foundation_pb.Middleware.Tracing": {
       "properties": {
@@ -1571,12 +1486,12 @@
       "description": "是否禁用"
     },
     ".kratos_foundation_pb.ModuleLog.filter_keys": {
-      "additionalItems": {
+      "items": {
         "type": "string",
-        "description": "打印日志过滤哪些keys（继承log.filter_keys）"
+        "description": "打印日志过滤哪些 keys；尾部 * 表示前缀匹配，例如 secret.*"
       },
       "type": "array",
-      "description": "打印日志过滤哪些keys（继承log.filter_keys）"
+      "description": "打印日志过滤哪些 keys；尾部 * 表示前缀匹配，例如 secret.*"
     },
     ".kratos_foundation_pb.ModuleLog.level": {
       "type": "string",
@@ -1588,16 +1503,74 @@
         "warn",
         "WARN",
         "error",
-        "ERROR"
+        "ERROR",
+        "fatal",
+        "FATAL"
       ],
       "description": "最小日志级别 (默认值为log.level)"
+    },
+    ".kratos_foundation_pb.OSS": {
+      "properties": {
+        "buckets": {
+          "$ref": "#/definitions/.kratos_foundation_pb.OSS.buckets"
+        }
+      },
+      "type": "object",
+      "description": "OSS 按逻辑名管理多个对象存储 bucket。\n\n [需重启] bucket 客户端持有凭证与连接，在构造时一次性建立；新增或修改 bucket 都需要\n 重启进程。"
+    },
+    ".kratos_foundation_pb.OSS.buckets": {
+      "additionalProperties": {
+        "$ref": "#/definitions/.kratos_foundation_pb.OSSBucket"
+      },
+      "type": "object",
+      "description": "buckets 的 key 是应用内使用的逻辑名，bucket 字段是云厂商上的真实名称。"
+    },
+    ".kratos_foundation_pb.OSSBucket": {
+      "properties": {
+        "driver": {
+          "$ref": "#/definitions/.kratos_foundation_pb.OSSBucket.driver"
+        },
+        "bucket": {
+          "$ref": "#/definitions/.kratos_foundation_pb.OSSBucket.bucket"
+        },
+        "domain": {
+          "$ref": "#/definitions/.kratos_foundation_pb.OSSBucket.domain"
+        },
+        "options": {
+          "$ref": "#/definitions/.kratos_foundation_pb.OSSBucket.options"
+        }
+      },
+      "type": "object",
+      "required": [
+        "driver",
+        "bucket"
+      ],
+      "description": "OSSBucket 保留跨厂商通用字段，驱动专属参数放在 options 中。"
+    },
+    ".kratos_foundation_pb.OSSBucket.bucket": {
+      "type": "string",
+      "description": "bucket 是云厂商上的真实 bucket 名。"
+    },
+    ".kratos_foundation_pb.OSSBucket.domain": {
+      "type": "string",
+      "description": "domain 是可选的公开访问域名，可带固定路径前缀。"
+    },
+    ".kratos_foundation_pb.OSSBucket.driver": {
+      "type": "string",
+      "description": "driver 是编译进应用并已注册的驱动名，必须显式配置。"
+    },
+    ".kratos_foundation_pb.OSSBucket.options": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object",
+      "description": "options 是驱动专属配置，具体 key 由 contrib 驱动定义。"
     },
     ".kratos_foundation_pb.Protocol": {
       "type": "string",
       "enum": [
         "GRPC",
         "HTTP",
-        "GRPCS",
         "HTTPS"
       ]
     },
@@ -1619,7 +1592,8 @@
           "$ref": "#/definitions/.kratos_foundation_pb.Redis.metrics"
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Redis [需重启]：Manager 拥有它创建的全部 client，连接参数、日志与遥测配置都在构造时\n 固定，修改后需要重启进程。"
     },
     ".kratos_foundation_pb.Redis.connections": {
       "additionalProperties": {
@@ -1630,7 +1604,7 @@
     },
     ".kratos_foundation_pb.Redis.default": {
       "type": "string",
-      "description": "默认连接"
+      "description": "默认连接。[需重启]"
     },
     ".kratos_foundation_pb.Redis.log": {
       "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
@@ -1739,12 +1713,6 @@
         "conn_max_lifetime": {
           "$ref": "#/definitions/.kratos_foundation_pb.RedisOption.conn_max_lifetime"
         },
-        "read_only": {
-          "$ref": "#/definitions/.kratos_foundation_pb.RedisOption.read_only"
-        },
-        "disable_indentity": {
-          "$ref": "#/definitions/.kratos_foundation_pb.RedisOption.disable_indentity"
-        },
         "disable_identity": {
           "$ref": "#/definitions/.kratos_foundation_pb.RedisOption.disable_identity"
         },
@@ -1770,14 +1738,12 @@
     },
     ".kratos_foundation_pb.RedisOption.conn_max_idle_time": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "ConnMaxIdleTime is the maximum amount of time a connection may be idle.\n\n default: 30 minutes"
     },
     ".kratos_foundation_pb.RedisOption.conn_max_lifetime": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "ConnMaxLifetime is the maximum amount of time a connection may be reused.\n\n default: 0"
     },
     ".kratos_foundation_pb.RedisOption.context_timeout_enabled": {
@@ -1790,8 +1756,7 @@
     },
     ".kratos_foundation_pb.RedisOption.dial_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "DialTimeout for establishing new connections.\n\n default: 5 seconds"
     },
     ".kratos_foundation_pb.RedisOption.dialer_retries": {
@@ -1800,17 +1765,12 @@
     },
     ".kratos_foundation_pb.RedisOption.dialer_retry_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "DialerRetryTimeout is the backoff duration between retry attempts.\n\n default: 100 milliseconds"
     },
     ".kratos_foundation_pb.RedisOption.disable_identity": {
       "type": "boolean",
       "description": "DisableIdentity is used to disable CLIENT SETINFO command on connect."
-    },
-    ".kratos_foundation_pb.RedisOption.disable_indentity": {
-      "type": "boolean",
-      "description": "DisableIndentity - Disable set-lib on connect.\n\n Deprecated: Use DisableIdentity instead."
     },
     ".kratos_foundation_pb.RedisOption.failing_timeout_seconds": {
       "type": "integer",
@@ -1838,8 +1798,7 @@
     },
     ".kratos_foundation_pb.RedisOption.max_retry_backoff": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "MaxRetryBackoff is the maximum backoff between each retry.\n -1 disables backoff.\n\n default: 512 milliseconds;"
     },
     ".kratos_foundation_pb.RedisOption.min_idle_conns": {
@@ -1848,8 +1807,7 @@
     },
     ".kratos_foundation_pb.RedisOption.min_retry_backoff": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "MinRetryBackoff is the minimum backoff between each retry.\n -1 disables backoff.\n\n default: 8 milliseconds"
     },
     ".kratos_foundation_pb.RedisOption.network": {
@@ -1870,8 +1828,7 @@
     },
     ".kratos_foundation_pb.RedisOption.pool_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "PoolTimeout is the amount of time client waits for connection if all connections\n are busy before returning an error.\n\n default: ReadTimeout + 1 second"
     },
     ".kratos_foundation_pb.RedisOption.protocol": {
@@ -1882,14 +1839,9 @@
       "type": "integer",
       "description": "ReadBufferSize is the size of the bufio.Reader buffer for each connection.\n\n default: 32KiB (32768 bytes)"
     },
-    ".kratos_foundation_pb.RedisOption.read_only": {
-      "type": "boolean",
-      "description": "readOnly enables read only queries on slave/follower nodes."
-    },
     ".kratos_foundation_pb.RedisOption.read_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "ReadTimeout for socket reads.\n\n  - -1  no timeout (block indefinitely)\n  - -2  disables SetReadDeadline calls completely\n\n default: 3 seconds"
     },
     ".kratos_foundation_pb.RedisOption.unstable_resp3": {
@@ -1906,8 +1858,7 @@
     },
     ".kratos_foundation_pb.RedisOption.write_timeout": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "WriteTimeout for socket writes.\n\n  - -1  no timeout (block indefinitely)\n  - -2  disables SetWriteDeadline calls completely\n\n default: 3 seconds"
     },
     ".kratos_foundation_pb.RedisTracing": {
@@ -1962,12 +1913,11 @@
         }
       },
       "type": "object",
-      "description": "服务注册"
+      "description": "服务注册。[需重启] 配置在创建 Consul Registrar 时读取一次；修改后需要重启才会以新\n 参数重新注册。"
     },
     ".kratos_foundation_pb.Registry.deregister_critical_service_after": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "deregisterCriticalServiceAfter【默认600s】"
     },
     ".kratos_foundation_pb.Registry.disable_health_check": {
@@ -1980,17 +1930,16 @@
     },
     ".kratos_foundation_pb.Registry.healthcheck_internal": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "健康检查间隔【默认10s】"
     },
     ".kratos_foundation_pb.Registry.tags": {
-      "additionalItems": {
+      "items": {
         "type": "string",
-        "description": "tags"
+        "description": "注册到 Consul 服务实例的标签，用于 Consul 侧分类、查询和 tag 过滤。\n 标签不会自动写入 Kratos ServiceInstance.Metadata。"
       },
       "type": "array",
-      "description": "tags"
+      "description": "注册到 Consul 服务实例的标签，用于 Consul 侧分类、查询和 tag 过滤。\n 标签不会自动写入 Kratos ServiceInstance.Metadata。"
     },
     ".kratos_foundation_pb.Sampler": {
       "properties": {
@@ -2009,62 +1958,56 @@
         "RATIO",
         "ALWAYS",
         "NEVER"
-      ]
+      ],
+      "description": "所有策略均优先继承有效父 Span 的采样决定；以下策略用于本服务创建的根 trace。"
     },
     ".kratos_foundation_pb.Sampler.ratio": {
       "type": "number",
-      "description": "采样率(默认采样率0.05)"
+      "description": "RATIO 策略的采样率（默认 0.05）。"
     },
     ".kratos_foundation_pb.Sampler.sample": {
       "$ref": "#/definitions/.kratos_foundation_pb.Sampler.Sample",
-      "description": "采样配置"
+      "description": "根 trace 采样策略。"
     },
     ".kratos_foundation_pb.Server": {
       "properties": {
-        "stop_delay": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Server.stop_delay"
-        },
-        "middleware": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Server.middleware"
-        },
         "http": {
           "$ref": "#/definitions/.kratos_foundation_pb.Server.http"
         },
         "grpc": {
           "$ref": "#/definitions/.kratos_foundation_pb.Server.grpc"
         },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Server.log"
+        "middleware": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.middleware"
+        },
+        "stop_delay": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.stop_delay"
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Server 只有 middleware 支持热更新：中间件是纯请求策略，可以原子替换；监听地址、\n 端点和停机延迟决定 Server 实例本身，运行期无法安全切换。"
     },
     ".kratos_foundation_pb.Server.grpc": {
       "$ref": "#/definitions/.kratos_foundation_pb.GrpcServerOption",
-      "description": "grpc 服务器配置"
+      "description": "grpc 服务器配置。[需重启]"
     },
     ".kratos_foundation_pb.Server.http": {
       "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption",
-      "description": "http 服务器配置"
-    },
-    ".kratos_foundation_pb.Server.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置"
+      "description": "http 服务器配置。[需重启]"
     },
     ".kratos_foundation_pb.Server.middleware": {
       "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware",
-      "description": "通用中间件配置"
+      "description": "通用中间件配置。[热更新] 逐项发布策略；并发请求可能短暂读取新旧策略组合。"
     },
     ".kratos_foundation_pb.Server.stop_delay": {
       "type": "string",
-      "pattern": "^[0-9]+(.[0-9]+)?s$",
-      "format": "duration",
-      "description": "consul 服务发现会有1s左右延迟，所以在kratos生命周期中，\n 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。\n 因此给servers套上一个wrapper用于延迟停止服务。"
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "consul 服务发现会有1s左右延迟，所以在kratos生命周期中，\n 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。\n 因此给servers套上一个wrapper用于延迟停止服务。\n [需重启] 该值在构造 Server 时冻结，同时参与 app.stop_timeout 的校验。"
     },
     ".kratos_foundation_pb.ServerMiddleware": {
       "properties": {
-        "timeout": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.timeout"
+        "deadline": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.deadline"
         },
         "metadata": {
           "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.metadata"
@@ -2086,108 +2029,62 @@
         }
       },
       "type": "object",
-      "description": "服务器中间件配置"
+      "description": "服务器中间件配置。\n\n [热更新] 全部字段都支持运行期修改，一次更新会先完整校验和构造，再逐项原子替换；并发请求可能短暂读取新旧组合。任何一项非法\n 都会整体拒绝并保留上一次生效的组合。这些中间件常驻调用链，因此把某项从禁用改为\n 启用也不需要重建 Server。\n\n 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成\n 启用也不会产生链路追踪数据。"
+    },
+    ".kratos_foundation_pb.ServerMiddleware.deadline": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline",
+      "description": "请求截止时间。[热更新] 只影响新请求。"
     },
     ".kratos_foundation_pb.ServerMiddleware.logging": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging",
+      "description": "访问日志开关。[热更新] 适合排障时临时打开。"
     },
     ".kratos_foundation_pb.ServerMiddleware.metadata": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata",
+      "description": "元数据透传。[热更新]"
     },
     ".kratos_foundation_pb.ServerMiddleware.metrics": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics",
+      "description": "请求指标开关。[热更新]"
     },
     ".kratos_foundation_pb.ServerMiddleware.rate_limit": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RateLimit"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.timeout": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Timeout"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RateLimit",
+      "description": "自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。"
     },
     ".kratos_foundation_pb.ServerMiddleware.tracing": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
+      "description": "链路追踪开关。[热更新]"
     },
     ".kratos_foundation_pb.ServerMiddleware.validator": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Validator"
-    },
-    ".kratos_foundation_pb.StdLogger": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.StdLogger.disable"
-        },
-        "level": {
-          "$ref": "#/definitions/.kratos_foundation_pb.StdLogger.level"
-        },
-        "filter_keys": {
-          "$ref": "#/definitions/.kratos_foundation_pb.StdLogger.filter_keys"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.StdLogger.disable": {
-      "type": "boolean",
-      "description": "是否禁用std logger"
-    },
-    ".kratos_foundation_pb.StdLogger.filter_keys": {
-      "additionalItems": {
-        "type": "string",
-        "description": "打印日志过滤哪些keys（默认值为 service.id, service.name, service.version）"
-      },
-      "type": "array",
-      "description": "打印日志过滤哪些keys（默认值为 service.id, service.name, service.version）"
-    },
-    ".kratos_foundation_pb.StdLogger.level": {
-      "type": "string",
-      "enum": [
-        "debug",
-        "DEBUG",
-        "info",
-        "INFO",
-        "warn",
-        "WARN",
-        "error",
-        "ERROR"
-      ],
-      "description": "最小日志级别（默认值为父级level）"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Validator",
+      "description": "请求校验开关。[热更新]"
     },
     ".kratos_foundation_pb.Tracing": {
       "properties": {
         "disable": {
           "$ref": "#/definitions/.kratos_foundation_pb.Tracing.disable"
         },
-        "tracer_name": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Tracing.tracer_name"
-        },
         "exporter": {
           "$ref": "#/definitions/.kratos_foundation_pb.Tracing.exporter"
         },
         "sampler": {
           "$ref": "#/definitions/.kratos_foundation_pb.Tracing.sampler"
-        },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Tracing.log"
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Tracing 只有 sampler 支持热更新。disable 决定是否创建真实 Provider，\n exporter 持有网络连接与批处理器，两者都需要重建 Provider。"
     },
     ".kratos_foundation_pb.Tracing.disable": {
       "type": "boolean",
-      "description": "是否禁用链路追踪 local 环境默认为禁用"
+      "description": "是否禁用链路追踪 local 环境默认为禁用。[需重启]"
     },
     ".kratos_foundation_pb.Tracing.exporter": {
       "$ref": "#/definitions/.kratos_foundation_pb.Exporter",
-      "description": "导出配置"
-    },
-    ".kratos_foundation_pb.Tracing.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置"
+      "description": "导出配置。[需重启]"
     },
     ".kratos_foundation_pb.Tracing.sampler": {
       "$ref": "#/definitions/.kratos_foundation_pb.Sampler",
-      "description": "采样率设置"
-    },
-    ".kratos_foundation_pb.Tracing.tracer_name": {
-      "type": "string",
-      "description": "默认 tracer name，默认值为 appinfo.name"
+      "description": "采样率设置。\n [热更新] 立即对后续新建的 span 生效，适合排障时临时提高采样率；已经开始的 trace\n 仍沿用其原有采样决策。"
     }
   },
   "type": "object",

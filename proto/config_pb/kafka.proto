@@ -1,0 +1,80 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+import "google/protobuf/duration.proto";
+import "config_pb/common.proto";
+
+// Kafka [需重启]：连接配置在启动期完成校验与索引，client 按该快照创建，修改后需要
+// 重启进程。
+message Kafka {
+  // 按逻辑名索引的连接配置。[需重启]
+  map<string, KafkaConnection> connections = 1;
+  // logger 配置。[需重启]
+  optional ModuleLog log = 2;
+}
+
+message KafkaConnection {
+  repeated string brokers = 1;
+  optional string client_id = 2;
+  optional google.protobuf.Duration dial_timeout = 3;
+  optional bool allow_auto_topic_creation = 4;
+  optional KafkaTLS tls = 5;
+  optional KafkaSASL sasl = 6;
+  optional KafkaProducer producer = 7;
+  optional KafkaConsumer consumer = 8;
+}
+
+message KafkaTLS {
+  optional string server_name = 1;
+  optional bool insecure_skip_verify = 2;
+  optional string ca_file = 3;
+  optional string cert_file = 4;
+  optional string key_file = 5;
+}
+
+message KafkaSASL {
+  optional KafkaSASLMechanism mechanism = 1;
+  optional string username = 2;
+  optional string password = 3;
+}
+
+enum KafkaSASLMechanism {
+  KAFKA_SASL_MECHANISM_UNSPECIFIED = 0;
+  KAFKA_SASL_MECHANISM_PLAIN = 1;
+  KAFKA_SASL_MECHANISM_SCRAM_SHA_256 = 2;
+  KAFKA_SASL_MECHANISM_SCRAM_SHA_512 = 3;
+}
+
+message KafkaProducer {
+  optional KafkaRequiredAcks required_acks = 1;
+  optional KafkaCompression compression = 2;
+  optional google.protobuf.Duration linger = 3;
+  optional int32 batch_max_bytes = 4;
+}
+
+enum KafkaRequiredAcks {
+  KAFKA_REQUIRED_ACKS_UNSPECIFIED = 0;
+  KAFKA_REQUIRED_ACKS_NONE = 1;
+  KAFKA_REQUIRED_ACKS_LEADER = 2;
+  KAFKA_REQUIRED_ACKS_ALL = 3;
+}
+
+enum KafkaCompression {
+  KAFKA_COMPRESSION_UNSPECIFIED = 0;
+  KAFKA_COMPRESSION_NONE = 1;
+  KAFKA_COMPRESSION_GZIP = 2;
+  KAFKA_COMPRESSION_SNAPPY = 3;
+  KAFKA_COMPRESSION_LZ4 = 4;
+  KAFKA_COMPRESSION_ZSTD = 5;
+}
+
+message KafkaConsumer {
+  optional google.protobuf.Duration session_timeout = 1;
+  optional google.protobuf.Duration heartbeat_interval = 2;
+  optional google.protobuf.Duration rebalance_timeout = 3;
+  optional int32 fetch_min_bytes = 4;
+  optional int32 fetch_max_bytes = 5;
+  optional google.protobuf.Duration fetch_max_wait = 6;
+}

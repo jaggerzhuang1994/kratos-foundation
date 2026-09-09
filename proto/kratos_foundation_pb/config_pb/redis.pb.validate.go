@@ -282,224 +282,6 @@ var _ interface {
 	ErrorName() string
 } = RedisValidationError{}
 
-// Validate checks the field values on RedisTracing with the rules defined in
-// the proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *RedisTracing) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on RedisTracing with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in RedisTracingMultiError, or
-// nil if none found.
-func (m *RedisTracing) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *RedisTracing) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if m.DbStatement != nil {
-		// no validation rules for DbStatement
-	}
-
-	if m.CallerEnabled != nil {
-		// no validation rules for CallerEnabled
-	}
-
-	if m.DialFilter != nil {
-		// no validation rules for DialFilter
-	}
-
-	if len(errors) > 0 {
-		return RedisTracingMultiError(errors)
-	}
-
-	return nil
-}
-
-// RedisTracingMultiError is an error wrapping multiple validation errors
-// returned by RedisTracing.ValidateAll() if the designated constraints aren't met.
-type RedisTracingMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m RedisTracingMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m RedisTracingMultiError) AllErrors() []error { return m }
-
-// RedisTracingValidationError is the validation error returned by
-// RedisTracing.Validate if the designated constraints aren't met.
-type RedisTracingValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e RedisTracingValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e RedisTracingValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e RedisTracingValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e RedisTracingValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e RedisTracingValidationError) ErrorName() string { return "RedisTracingValidationError" }
-
-// Error satisfies the builtin error interface
-func (e RedisTracingValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sRedisTracing.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = RedisTracingValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = RedisTracingValidationError{}
-
-// Validate checks the field values on RedisMetrics with the rules defined in
-// the proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *RedisMetrics) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on RedisMetrics with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in RedisMetricsMultiError, or
-// nil if none found.
-func (m *RedisMetrics) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *RedisMetrics) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if len(errors) > 0 {
-		return RedisMetricsMultiError(errors)
-	}
-
-	return nil
-}
-
-// RedisMetricsMultiError is an error wrapping multiple validation errors
-// returned by RedisMetrics.ValidateAll() if the designated constraints aren't met.
-type RedisMetricsMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m RedisMetricsMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m RedisMetricsMultiError) AllErrors() []error { return m }
-
-// RedisMetricsValidationError is the validation error returned by
-// RedisMetrics.Validate if the designated constraints aren't met.
-type RedisMetricsValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e RedisMetricsValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e RedisMetricsValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e RedisMetricsValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e RedisMetricsValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e RedisMetricsValidationError) ErrorName() string { return "RedisMetricsValidationError" }
-
-// Error satisfies the builtin error interface
-func (e RedisMetricsValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sRedisMetrics.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = RedisMetricsValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = RedisMetricsValidationError{}
-
 // Validate checks the field values on RedisOption with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -891,14 +673,6 @@ func (m *RedisOption) validate(all bool) error {
 
 	}
 
-	if m.ReadOnly != nil {
-		// no validation rules for ReadOnly
-	}
-
-	if m.DisableIndentity != nil {
-		// no validation rules for DisableIndentity
-	}
-
 	if m.DisableIdentity != nil {
 		// no validation rules for DisableIdentity
 	}
@@ -991,3 +765,221 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = RedisOptionValidationError{}
+
+// Validate checks the field values on RedisTracing with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *RedisTracing) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RedisTracing with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in RedisTracingMultiError, or
+// nil if none found.
+func (m *RedisTracing) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RedisTracing) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if m.DbStatement != nil {
+		// no validation rules for DbStatement
+	}
+
+	if m.CallerEnabled != nil {
+		// no validation rules for CallerEnabled
+	}
+
+	if m.DialFilter != nil {
+		// no validation rules for DialFilter
+	}
+
+	if len(errors) > 0 {
+		return RedisTracingMultiError(errors)
+	}
+
+	return nil
+}
+
+// RedisTracingMultiError is an error wrapping multiple validation errors
+// returned by RedisTracing.ValidateAll() if the designated constraints aren't met.
+type RedisTracingMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m RedisTracingMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m RedisTracingMultiError) AllErrors() []error { return m }
+
+// RedisTracingValidationError is the validation error returned by
+// RedisTracing.Validate if the designated constraints aren't met.
+type RedisTracingValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e RedisTracingValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e RedisTracingValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e RedisTracingValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e RedisTracingValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e RedisTracingValidationError) ErrorName() string { return "RedisTracingValidationError" }
+
+// Error satisfies the builtin error interface
+func (e RedisTracingValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sRedisTracing.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = RedisTracingValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = RedisTracingValidationError{}
+
+// Validate checks the field values on RedisMetrics with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *RedisMetrics) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RedisMetrics with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in RedisMetricsMultiError, or
+// nil if none found.
+func (m *RedisMetrics) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RedisMetrics) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if len(errors) > 0 {
+		return RedisMetricsMultiError(errors)
+	}
+
+	return nil
+}
+
+// RedisMetricsMultiError is an error wrapping multiple validation errors
+// returned by RedisMetrics.ValidateAll() if the designated constraints aren't met.
+type RedisMetricsMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m RedisMetricsMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m RedisMetricsMultiError) AllErrors() []error { return m }
+
+// RedisMetricsValidationError is the validation error returned by
+// RedisMetrics.Validate if the designated constraints aren't met.
+type RedisMetricsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e RedisMetricsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e RedisMetricsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e RedisMetricsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e RedisMetricsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e RedisMetricsValidationError) ErrorName() string { return "RedisMetricsValidationError" }
+
+// Error satisfies the builtin error interface
+func (e RedisMetricsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sRedisMetrics.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = RedisMetricsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = RedisMetricsValidationError{}

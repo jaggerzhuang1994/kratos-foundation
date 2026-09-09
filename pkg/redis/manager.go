@@ -1,104 +1,179 @@
 package redis
 
 import (
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
 	"sync"
-	"time"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/metrics"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/tracing"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/utils"
-	"github.com/pkg/errors"
+	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
-	"go.opentelemetry.io/otel/attribute"
+	"google.golang.org/protobuf/proto"
 )
 
+// ErrManagerClosed 表示 Manager 已关闭，不能再解析连接。
+var ErrManagerClosed = errors.New("redis manager is closed")
+
+// Manager 持有 Default 和 Connection 返回的全部 Redis client。
 type Manager interface {
-	defaultClient
-	GetConnection(conn string) (*Client, error)
+	// Default 返回配置的默认 client；Manager 关闭后返回 nil。
+	Default() *redis.Client
+	// Connection 返回或延迟创建具名 client。
+	Connection(name string) (*redis.Client, error)
 }
 
+// todo 想让 Manager 默认实现 redis Client 的一些方法
+
+// manager 持有全部 Redis client、配置快照和关闭状态。
 type manager struct {
-	log.Log
-	tracing           tracing.Tracing
-	metrics           metrics.Metrics
-	serviceAttributes app_info.ServiceAttributes
+	log.Logger
+	tracing tracing.Provider
+	metrics metrics.Provider
 
-	conf        Config
-	connOptions map[string]Option
+	conf        componentConfig
+	connOptions map[string]connectionOption
 
-	// conn store & init locker
-	conn   sync.Map
-	locker sync.Mutex
-
-	// default redis connection
-	defaultConn *Client
+	mu          sync.Mutex
+	connections map[string]*redis.Client
+	defaultConn *redis.Client
+	closed      bool
+	closeOnce   sync.Once
+	closeErr    error
 }
 
+// NewManager 初始化默认连接，并返回可关闭全部连接的幂等 cleanup。
 func NewManager(
-	log log.Log,
-	config Config,
-	tracing tracing.Tracing,
-	metrics metrics.Metrics,
-	serviceAttributes app_info.ServiceAttributes,
+	log log.Logger,
+	configManager foundationconfig.Manager,
+	tracingProvider tracing.Provider,
+	metricsProvider metrics.Provider,
 ) (Manager, func(), error) {
-	c := &manager{
-		Log:               log.WithModule("redis", config.GetLog()),
-		tracing:           tracing,
-		metrics:           metrics,
-		serviceAttributes: serviceAttributes,
-
-		conf:        config,
-		connOptions: map[string]Option{},
-	}
-
-	for name, option := range config.GetConnections() {
-		c.connOptions[name] = option
-	}
-
-	defaultConnection, err := c.GetConnection(config.GetDefault())
+	config, err := loadConfig(configManager)
 	if err != nil {
 		return nil, nil, err
 	}
+	config = proto.CloneOf(config)
+	moduleLogger, err := log.WithModuleConfig("redis", config.GetLog())
+	if err != nil {
+		return nil, nil, fmt.Errorf("configure redis logger: %w", err)
+	}
+	c := &manager{
+		Logger:  moduleLogger,
+		tracing: tracingProvider,
+		metrics: metricsProvider,
 
-	c.defaultConn = defaultConnection
+		conf:        config,
+		connOptions: map[string]connectionOption{},
+		connections: map[string]*redis.Client{},
+	}
 
-	return c, func() {
-		c.release(0)
-	}, nil
+	maps.Copy(c.connOptions, config.GetConnections())
+
+	if err := initializeManager(c, config.GetDefault()); err != nil {
+		return nil, nil, err
+	}
+
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			if closeErr := c.Close(); closeErr != nil {
+				c.With("error", closeErr).Error("redis manager cleanup failed")
+			}
+		})
+	}
+	return c, cleanup, nil
 }
 
-func (m *manager) GetConnection(conn string) (*Client, error) {
-	// 如果已经初始化，则直接返回
-	if rds, ok := m.conn.Load(conn); ok {
-		return rds.(*Client), nil
+// initializeManager 初始化默认连接；失败时同步回收已经创建的 client。
+func initializeManager(m *manager, defaultName string) (err error) {
+	if m == nil {
+		return errors.New("redis manager is nil")
 	}
-	// 开始初始化
-	m.locker.Lock()
-	defer m.locker.Unlock()
+	if m.connections == nil {
+		m.connections = make(map[string]*redis.Client)
+	}
+	defer func() {
+		if err != nil {
+			// 构造失败也必须回收部分 client，否则一次启动失败就会遗留连接池。
+			err = errors.Join(err, m.Close())
+		}
+	}()
 
-	// 如果两个协程同时 lock，有一个初始化完，另一个则判断是否有初始化的链接，防止重复初始化
-	if rds, ok := m.conn.Load(conn); ok {
-		return rds.(*Client), nil
-	}
-	// 开始初始化
-	rds, err := m.newConnection(conn)
+	defaultConnection, err := m.Connection(defaultName)
 	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return ErrManagerClosed
+	}
+	m.defaultConn = defaultConnection
+	m.mu.Unlock()
+	return nil
+}
+
+// Connection 延迟创建由 Manager 持有的具名 client；调用方不能单独关闭它。
+func (m *manager) Connection(name string) (*redis.Client, error) {
+	if m == nil {
+		return nil, errors.New("redis manager is nil")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return nil, ErrManagerClosed
+	}
+	if client, ok := m.connections[name]; ok {
+		return client, nil
+	}
+	// 创建与 Close 串行，保证刚创建的 client 必然被 Manager 接管或立即回收。
+	client, err := m.newConnection(name)
+	if err != nil {
+		if client != nil {
+			err = errors.Join(
+				err,
+				wrapRedisCloseError(name, client.Close()),
+			)
+		}
 		return nil, err
 	}
-	m.conn.Store(conn, rds)
-	return rds, nil
+	if client == nil {
+		return nil, fmt.Errorf(
+			"create redis connection %q: client is nil",
+			name,
+		)
+	}
+	m.connections[name] = client
+	return client, nil
 }
 
-func (m *manager) newConnection(name string) (*Client, error) {
+// Default 返回 Manager 持有的默认 client；关闭后返回 nil。
+func (m *manager) Default() *redis.Client {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return nil
+	}
+	return m.defaultConn
+}
+
+// newConnection 按只读配置创建 client，并按组件开关安装遥测钩子。
+func (m *manager) newConnection(name string) (*redis.Client, error) {
 	option := m.connOptions[name]
 	if option == nil {
-		return nil, errors.Errorf("redis connection [%s] option is nil", name)
+		return nil, fmt.Errorf("redis connection %q option is nil", name)
 	}
 
-	cc := redis.NewClient(&redis.Options{
+	options := &redis.Options{
 		Network:               option.GetNetwork(),
 		Addr:                  option.GetAddr(),
 		ClientName:            option.GetClientName(),
@@ -126,62 +201,87 @@ func (m *manager) newConnection(name string) (*Client, error) {
 		MaxActiveConns:        int(option.GetMaxActiveConns()),
 		ConnMaxIdleTime:       option.GetConnMaxIdleTime().AsDuration(),
 		ConnMaxLifetime:       option.GetConnMaxLifetime().AsDuration(),
-		//DisableIndentity:      option.GetDisableIndentity(),
 		DisableIdentity:       option.GetDisableIdentity(),
 		IdentitySuffix:        option.GetIdentitySuffix(),
 		UnstableResp3:         option.GetUnstableResp3(),
 		FailingTimeoutSeconds: int(option.GetFailingTimeoutSeconds()),
-	})
+	}
+	options.Dialer = reconnectDialer(options)
+	cc := redis.NewClient(options)
 	tracingCfg := m.conf.GetTracing()
 
-	if !tracingCfg.GetDisable() {
+	if !tracingCfg.GetDisable() &&
+		!m.tracing.Disabled() {
 		err := redisotel.InstrumentTracing(cc,
-			redisotel.WithTracerProvider(m.tracing.GetTracerProvider()),
-			redisotel.WithAttributes(m.serviceAttributes...),
+			redisotel.WithTracerProvider(m.tracing.TracerProvider()),
 			redisotel.WithDBStatement(tracingCfg.GetDbStatement()),
 			redisotel.WithCallerEnabled(tracingCfg.GetCallerEnabled()),
 			redisotel.WithDialFilter(tracingCfg.GetDialFilter()),
 		)
 		if err != nil {
-			m.Warn("redisotel.InstrumentTracing error ", err)
+			return cc, fmt.Errorf(
+				"instrument redis connection %q tracing: %w",
+				name,
+				err,
+			)
 		}
 	}
 
 	if !m.conf.GetMetrics().GetDisable() {
 		err := redisotel.InstrumentMetrics(cc,
-			redisotel.WithMeterProvider(m.metrics.GetMeterProvider()),
-			redisotel.WithAttributes(addOtelScopePrefix(m.serviceAttributes)...),
+			redisotel.WithMeterProvider(m.metrics.MeterProvider()),
 		)
 		if err != nil {
-			m.Warn("redisotel.InstrumentMetrics error ", err)
+			return cc, fmt.Errorf(
+				"instrument redis connection %q metrics: %w",
+				name,
+				err,
+			)
 		}
 	}
 
 	return cc, nil
 }
 
-func addOtelScopePrefix(attrs []attribute.KeyValue) []attribute.KeyValue {
-	return utils.Map(attrs, func(attr attribute.KeyValue) attribute.KeyValue {
-		return attribute.KeyValue{
-			Key:   "otel_scope_" + attr.Key,
-			Value: attr.Value,
+// Close 释放 Manager 创建的全部 client，并聚合关闭错误；重复调用返回同一结果。
+func (m *manager) Close() error {
+	if m == nil {
+		return errors.New("redis manager is nil")
+	}
+	m.closeOnce.Do(func() {
+		m.mu.Lock()
+		m.closed = true
+		names := make([]string, 0, len(m.connections))
+		for name := range m.connections {
+			names = append(names, name)
 		}
+		slices.Sort(names)
+		clients := make([]*redis.Client, 0, len(names))
+		for _, name := range names {
+			clients = append(clients, m.connections[name])
+		}
+		m.connections = nil
+		m.defaultConn = nil
+		m.mu.Unlock()
+
+		closeErrors := make([]error, 0, len(clients))
+		for index, client := range clients {
+			if err := wrapRedisCloseError(
+				names[index],
+				client.Close(),
+			); err != nil {
+				closeErrors = append(closeErrors, err)
+			}
+		}
+		m.closeErr = errors.Join(closeErrors...)
 	})
+	return m.closeErr
 }
 
-func (m *manager) release(after time.Duration) {
-	// 释放所有连接
-	m.Log.Info("release all redis connections, after ", after)
-	m.conn.Range(func(key, value any) bool {
-		if after > 0 {
-			go func() {
-				time.Sleep(after)
-				_ = value.(*Client).Close()
-			}()
-		} else {
-			_ = value.(*Client).Close()
-		}
-		m.conn.Delete(key)
-		return true
-	})
+// wrapRedisCloseError 给关闭错误补充连接名，便于多连接聚合后定位来源。
+func wrapRedisCloseError(name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("close redis connection %q: %w", name, err)
 }

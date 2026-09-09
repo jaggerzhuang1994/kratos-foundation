@@ -1,662 +1,219 @@
-# Kratos Foundation
+# kratos-foundation
 
-[![Go Version](https://img.shields.io/badge/Go-1.24.12-blue)](https://go.dev/)
-[![Kratos](https://img.shields.io/badge/Kratos-v2.9.2-orange)](https://go-kratos.dev/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+`kratos-foundation` 是基于 [go-kratos](https://github.com/go-kratos/kratos) 的 Go 应用基础库，统一组装日志、配置、服务端、客户端、数据库、缓存、队列、任务与可观测性能力。
 
-Kratos Foundation 是一个基于 [Go-Kratos](https://go-kratos.dev/) 框架的企业级微服务基础库，提供了一套完整的生产就绪功能模块，帮助开发者快速构建可扩展、可观测的微服务应用。
+> 项目尚未正式发布，公开 API 仍可能在首个稳定版本前调整。
 
-## 核心特性
+## 环境要求
 
-- 🚀 **开箱即用** - 提供企业级微服务常用功能模块，按需配置
-- 🔌 **Hook 机制** - 灵活的应用生命周期、日志和上下文扩展机制
-- 📦 **统一配置** - 基于 Protobuf 的配置定义，强类型且自动验证
-- 🔍 **可观测性** - 内置日志、监控指标、链路追踪完整方案
-- 🛠️ **依赖注入** - 基于 Wire 的编译时依赖注入
-- 🌐 **服务治理** - 集成 Consul 服务注册、发现与配置中心
-- 💾 **数据访问** - GORM ORM 集成，支持主从数据库、ClickHouse
-- ⏰ **定时任务** - 基于 Cron 的定时任务调度，支持并发策略
-- 🔄 **RPC 客户端** - HTTP/gRPC 客户端工厂，支持服务发现与负载均衡
-- 🔌 **WebSocket** - 原生 WebSocket 支持
+- Go 1.25+
+- 使用 Protocol Buffers 或 Wire 生成功能时，需先安装对应工具链
 
-## 功能模块
+## 配置参考
 
-| 模块                               | 说明                   | 状态   |
-|----------------------------------|----------------------|------|
-| **Hook 机制** (`pkg/app/hook.go`)  | 应用生命周期、日志、上下文扩展      | ✨ 新增 |
-| **应用管理** (`pkg/app`)             | 应用生命周期管理、Hook 集成     | ✅ 稳定 |
-| **日志** (`pkg/log`)               | 结构化日志、Hook、文件轮转      | ✅ 稳定 |
-| **上下文** (`pkg/context`)          | 上下文管理、Hook 扩展        | ✅ 稳定 |
-| **监控** (`pkg/metrics`)           | Prometheus 指标采集与导出   | ✅ 稳定 |
-| **链路追踪** (`pkg/tracing`)         | OpenTelemetry 分布式追踪  | ✅ 稳定 |
-| **HTTP 服务器** (`pkg/server/http`) | HTTP 服务器、WebSocket   | ✅ 稳定 |
-| **gRPC 服务器** (`pkg/server/grpc`) | gRPC 服务器、反射服务        | ✅ 稳定 |
-| **数据库** (`pkg/database`)         | GORM、主从分离、ClickHouse | ✅ 稳定 |
-| **Redis** (`pkg/redis`)          | Redis 客户端、集群支持       | ✅ 稳定 |
-| **服务发现** (`pkg/discovery`)       | Consul 服务发现          | ✅ 稳定 |
-| **服务注册** (`pkg/registry`)        | Consul 服务注册          | ✅ 稳定 |
-| **配置中心** (`pkg/config`)          | Consul KV 配置源        | ✅ 稳定 |
-| **RPC 客户端** (`pkg/client`)       | HTTP/gRPC 客户端工厂      | ✅ 稳定 |
-| **定时任务** (`pkg/job`)             | Cron 任务调度            | ✅ 稳定 |
-| **中间件** (`internal/middleware`)  | 通用中间件集合              | ✅ 稳定 |
+- [`config.example.yaml`](config.example.yaml)：当前 Foundation YAML 配置参考，包含可选字段的注释示例。
+- [`config.schema.json`](config.schema.json)：编辑器补全与结构校验；由 [`proto/config.proto`](proto/config.proto) 及其导入协议生成，不能手工修改。
+- [`pkg/config`](pkg/config/README.md)：配置源合并、类型解码、占位符、订阅及错误语义。
 
-## Hook 机制
+示例覆盖未弃用的协议字段；连接级 `database.connections.*.gorm` 与全局 `database.gorm` 共用字段，示例只列出部分覆盖值，完整字段看全局块。弃用的 `database.tracing.exclude_metrics` 仅保留说明，数据库指标统一使用 `database.metrics`。
 
-Kratos Foundation 提供了强大的 Hook 机制，允许开发者在应用的关键生命周期点插入自定义逻辑。
+示例值不等于默认值：例如 `server.stop_delay: 3s`、客户端超时和 Redis 连接池大小都是显式设置。注释中的 `[默认: ...]` 说明省略字段后的行为；显式 `0`、`false` 或 `0s` 是否等同省略由具体字段决定。Duration 使用 protobuf 秒字符串，如 `10s`、`0.2s`、`0s`，不能使用 `10m` 或裸数字。Redis 的负时长哨兵 `-1ns`、`-2ns` 分别写为 `-0.000000001s`、`-0.000000002s`，不是 `-1s`、`-2s`。
 
-### 1. 应用生命周期 Hook
+| YAML 顶层配置 | 用途 | 支持热更新的范围 |
+| --- | --- | --- |
+| `app` | 注册端点、metadata、注册与停机期限 | 仅 `stop_timeout`；停机开始后预算固定 |
+| `tracing` | OTLP 导出器与采样器 | 仅 `sampler`；构造时已禁用的 Provider 不能靠热更新启用 |
+| `server` | HTTP/gRPC、中间件、健康与指标端点 | 仅 `middleware`；地址、端点和停机延迟需重启 |
+| `discovery` | Consul 查询超时、单/多数据中心 | 无 |
+| `registry` | Consul 健康检查、心跳、实例标签 | 无；`tags` 与 `app.metadata` 分开配置 |
+| `database` | 具名连接、GORM、连接池及观测 | 仅各连接的 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime`、`conn_max_idle_time` |
+| `redis` | 具名连接、追踪与指标 | 无 |
+| `client` | 具名服务客户端、调用中间件与清理预算 | 仅 `clients`；`log`、`cleanup_timeout` 需重启 |
+| `kafka` | 具名 broker 连接、TLS/SASL、生产/消费参数 | 无 |
+| `oss` | 按逻辑名配置 bucket 和驱动参数 | 无 |
 
-在应用启动和停止的四个阶段注入自定义逻辑：
+热更新按组件生效，不能视为整份应用配置同时切换。Server 中间件会先校验组合再逐项发布；Database 同次更新若含需重启字段，会跳过整次数据库更新，连接池参数也不应用；Client 的日志或 cleanup 预算变更只提示需重启，不阻止有效的 `clients` 更新。配置 Manager 接受快照也不代表每个组件都已应用，具体边界见各包 README。
+
+### 加载与部署
+
+框架不会自动寻找 `config.example.yaml`。应用将需要的配置复制到部署文件，替换地址、连接名和凭据，并通过 [`contrib/config/file`](contrib/config/file/README.md) 的 `NewSources(logger, PathList{...})` 或 [`contrib/config/consul`](contrib/config/consul/README.md) 创建源，再交给 `config.NewManager`。只有应用显式构造的组件才会消费对应配置块；删除数据库或 Redis 配置时，也应调整相应组件的组装。
+
+Sources 按传入顺序合并，后面的源优先级更高；map 递归合并，slice、标量和显式 `null` 整体覆盖。`${host}`、`${host:fallback}` 引用的是合并后的配置路径，不会自动读取同名环境变量。凭据应由实际部署配置源提供，示例中的占位值不能用于连接真实服务。
+
+```mermaid
+flowchart TD
+    A([应用组装配置源]) --> B[文件源 或 Consul KV 外部配置源]
+    B --> C[NewManager 加载并合并快照]
+    C --> D{加载 解码 占位符与已删除字段检查通过?}
+    D -- 否 --> E[释放配置源 返回构造错误]
+    D -- 是 --> F[组件 Load 合并默认值并校验配置]
+    F --> G{组件配置有效?}
+    G -- 否 --> H[返回构造错误 Wire 逆序 cleanup]
+    G -- 是 --> I([交给后续组件构造与应用组装])
+    E --> J([启动失败])
+    H --> J
+```
+
+以下能力不属于 Foundation YAML 顶层协议，不能把旧字段补回示例：
+
+| 能力 | 当前配置入口 |
+| --- | --- |
+| 应用环境 | `APP_ENV`，其次 `KRATOS_ENV`，均未设置时为 `local`；见 [`pkg/env`](pkg/env/README.md) |
+| 根日志 | `LOG_*` 环境变量及 `pkg/log` 的 Config/Override；模块级 `database/redis/client/kafka.log` 仍保留 |
+| Consul 地址与认证 | 环境变量（如 `CONSUL_HTTP_ADDR`）或 `pkg/consul.Options`；在 Manager 之前构造共享客户端，见 [`pkg/consul`](pkg/consul/README.md) |
+| Metrics Provider | 显式构造和注入；HTTP 暴露位置仍由 `server.http.metrics` 配置 |
+| Job、Queue | 强类型 Spec/构造配置及显式 Bootstrap；Kafka 连接配置仍位于 `kafka` |
+
+旧顶层 `log`、`metrics`、`job`、`queue` 以及其他 reserved 字段即使设为 `null` 或空对象也会被拒绝，详见 [配置迁移表](pkg/config/README.md) 和 [v2 迁移清单](MIGRATION_V2.md)。
+
+### 健康检查与配置观测
+
+默认业务 HTTP 端口提供 `/metrics`、`/healthz` 和 `/readyz`。`/healthz` 表示 HTTP 能响应；`/readyz` 在全部启动后钩子完成、关键依赖检查通过且未停机时返回 200，否则返回 503。`bootstrap.NewServerBootstrap` 自动绑定应用就绪状态；直接使用 Runtime 时需要显式绑定，否则 readiness 保持 503。
+
+设置 `server.http.metrics.addr` 和 `server.http.health.addr` 可独立监听，例如同时设为 `127.0.0.1:9001` 会共享一个管理监听。空地址复用业务 HTTP；业务 HTTP 禁用时，管理端点只有显式设置地址才会启动。管理端点独立于业务路由前缀、Filter 和鉴权；独立监听使用普通 HTTP，不继承业务 TLS，也不进入业务服务发现。完整地址规则、探针流程及停机边界见 [`pkg/server`](pkg/server/README.md)。
+
+依赖检查通过 `spec.HTTP().HealthChecks(...)` 追加，地址、路径和总检查期限保留 YAML 配置；`Health(HealthConfig{...})` 则整体覆盖文件中的健康端点配置。
+
+配置监听状态、快照接受/拒绝和订阅过载可通过 `config.StatusReader` 查看。应用可显式组装 `bootstrap.NewConfigObservabilityBootstrap`，通过已有 metrics 端点暴露 `foundation_config_*` 指标；仅填写 YAML 不会自动启用该 collector。接入步骤、指标与流程图见 [配置观测组装](pkg/bootstrap/README.md#配置观测组装)。
+
+## 构造依赖约定
+
+Wire 或手工组装层负责提供非空的必需组件依赖（如 Config Manager、Logger、AppInfo、遥测 Provider、Spec 和 Runtime）。构造函数及 Bootstrap 不重复检查这些依赖是否为 `nil`；直接调用时也必须遵守该前置条件。配置、外部输入、回调以及来源不确定的返回值继续按各包契约校验。显式支持禁用的可选依赖（如 Consul Client、Registrar 和 Discovery）保留 `nil` 语义。
+
+## 核心组装流程
+
+```mermaid
+flowchart LR
+    A[Wire: app.NewSpec / app.NewConfig] --> B[构造组件]
+    B --> C[bootstrap.NewXXXBootstrap 同步贡献]
+    C --> D[bootstrap.InfrastructureBootstrap]
+    D --> U[业务提供 bootstrap.UserBootstrap]
+    U --> V[bootstrap.Bootstrap]
+    V --> E[bootstrap.NewKratosApp 调用 app.NewApp 冻结 Spec]
+    E --> F[application.Run 启动 Runtime]
+    F --> G[Wire cleanup 逆序释放资源]
+```
+
+`pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → UserBootstrap（业务提供）→ Bootstrap → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
 ```go
-import "github.com/jaggerzhuang1994/kratos-foundation/pkg/app/hook"
-
-// 方式一：函数式注册
-hook.BeforeStart(func (ctx context.Context) error {
-// 启动前：检查依赖、预热缓存等
-return nil
-})
-
-hook.AfterStart(func (ctx context.Context) error {
-// 启动后：发送启动通知、注册服务发现等
-return nil
-})
-
-hook.BeforeStop(func (ctx context.Context) error {
-// 停止前：优雅关闭连接、释放资源等
-return nil
-})
-
-hook.AfterStop(func (ctx context.Context) error {
-// 停止后：清理临时文件、发送停止通知等
-return nil
-})
-
-// 方式二：接口实现
-type MyHook struct{}
-
-func (h *MyHook) OnBeforeStart(ctx context.Context) error {
-// 自定义逻辑
-return nil
-}
-
-// ... 实现其他接口方法
-
-hook.Register(&MyHook{})
+spec := app.NewSpec()
+appConfig, err := app.NewConfig(configManager)
+stopPolicy, cleanupStopPolicy, err := app.NewStopPolicy(
+	appConfig, configManager, logger, serverStopDelay,
+)
+application, err := bootstrap.NewKratosApp(ctx, spec, applicationBootstrap, appConfig, stopPolicy)
 ```
 
-### 2. 日志 Hook
+上例中的 `applicationBootstrap` 是 `bootstrap.NewBootstrap` 返回的最终标记；业务提供 `bootstrap.UserBootstrap` provider，完整示例见 [`bootstrap`](pkg/bootstrap/README.md)。`cleanupStopPolicy` 与其他构造 cleanup 由 Wire 逆序调用。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
 
-为所有日志自动注入全局字段：
+## 日志
+
+`pkg/log` 提供：
+
+- 基于 `LOG_*` 环境变量的严格配置解析。
+- stdout/stderr 分流与可轮转文件输出。
+- SharedLogger 进程选项：由 Foundation Bootstrap 声明、在应用装配时一次发布。
+- Config 热更新与进程选项分离；更新 Config 不会重新应用进程选项。
+- 不可变的模块、上下文、级别和敏感字段派生。
+
+完整用法、配置表和设计边界见 [`pkg/log/README.md`](pkg/log/README.md)。
+
+## Database 与 OSS 驱动注册
+
+Database 和 OSS 满足“一个 Manager 管理多份具名资源，并按配置选择不同驱动”的条件，因此使用 `init + frozen registry`。业务/Wire 通过空导入明确决定哪些驱动进入最终二进制；驱动的 `init` 只注册 factory，不读取配置或创建外部资源。
+
+Database 可同时编译 MySQL 与 SQLite3，具体连接由 `database.connections[*].driver` 选择：
 
 ```go
-import "github.com/jaggerzhuang1994/kratos-foundation/pkg/log/hook"
-
-logHook.With("service", "user-service")
-logHook.With("version", "v1.0.0")
-logHook.With("environment", "production")
-
-// 之后所有日志都会自动包含这些字段
-log.Info("处理请求") // 输出: {"service":"user-service","version":"v1.0.0","environment":"production","msg":"处理请求"}
-```
-
-### 3. 上下文 Hook
-
-为所有请求上下文注入自定义数据：
-
-```go
-import "github.com/jaggerzhuang1994/kratos-foundation/pkg/context/hook"
-
-contextHook.WithContext(func (ctx context.Context) context.Context {
-// 自动生成请求 ID
-requestID := uuid.New().String()
-return context.WithValue(ctx, "request_id", requestID)
-})
-
-// 之后所有处理器的 context 都会包含 request_id
-```
-
-## 快速开始
-
-### 环境要求
-
-- Go >= 1.24.12
-- Protoc >= 3.x
-- Wire (编译时安装)
-- Consul (可选，用于服务治理)
-
-### 安装
-
-```bash
-go get github.com/jaggerzhuang1994/kratos-foundation
-```
-
-### 初始化开发工具
-
-```bash
-# 安装所有必需的工具
-make init
-```
-
-这将安装以下工具：
-
-- `wire` - 依赖注入代码生成器
-- `protoc` 相关插件 - Protobuf 代码生成
-- `kratos` - Kratos CLI 工具
-- `golangci-lint` - 代码检查工具
-
-### 基本使用
-
-#### 1. 定义配置
-
-在 `proto/config.proto` 中定义你的配置：
-
-```protobuf
-syntax = "proto3";
-package kratos_foundation_pb;
-
-import "config_pb/app.proto";
-import "config_pb/server.proto";
-import "config_pb/database.proto";
-// ... 其他模块
-
-message Config {
-  App app = 1;
-  Server server = 2;
-  Database database = 3;
-  // ... 其他配置
-}
-```
-
-#### 2. 生成配置代码
-
-```bash
-make proto
-```
-
-这将生成：
-
-- Protobuf Go 代码
-- 配置 JSON Schema (`config.schema.json`)
-
-#### 3. 创建应用主入口
-
-```go
-package main
+package assembly
 
 import (
-	"flag"
-
-	"github.com/jaggerzhuang1994/kratos-foundation-template/internal/conf"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
-	_ "github.com/jaggerzhuang1994/kratos-foundation/pkg/setup"
-	_ "go.uber.org/automaxprocs"
+	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/database/mysql"
+	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/database/sqlite"
 )
-
-// go build -ldflags "-X main.Version=x.y.z"
-var (
-	// Version is the version of the compiled software.
-	Version string
-	// flagconf is the config flag.
-	flagconf string
-)
-
-func init() {
-	flag.StringVar(&flagconf, "conf", "../../configs", "config path, eg: -conf config.yaml")
-}
-
-func main() {
-	flag.Parse()
-
-	// wireApp
-	app, cleanup, err := wireApp(app_info.Version(Version), conf.FileConfigSource(flagconf))
-	if err != nil {
-		panic(err)
-	}
-	defer cleanup()
-
-	// start and wait for stop signal
-	if err := app.Run(); err != nil {
-		panic(err)
-	}
-}
 ```
 
-#### 4. 使用 Hook 机制
+OSS 默认提供阿里云实现，bucket 由 `oss.buckets[*].driver: aliyun` 选择：
 
 ```go
-package main
+package assembly
 
-import (
-	"context"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app/hook"
-	logHook "github.com/jaggerzhuang1994/kratos-foundation/pkg/log/hook"
-	contextHook "github.com/jaggerzhuang1994/kratos-foundation/pkg/context/hook"
+import _ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/oss/aliyun"
+```
+
+注册完成后，组装层只调用公共的 `database.NewManager(...)` 和 `oss.NewManager(...)`。驱动注册表在首次构造 Manager 时冻结；需要新增 PostgreSQL、七牛云等实现时，应增加对应 `contrib/<domain>/<driver>` 包，而不是把具体 SDK 放进领域包。
+
+## 队列运行时
+
+`pkg/queue` 提供驱动无关的消息契约、生产者观测装饰和单消费者运行时；Kafka 与 Redis 的强类型构造器位于 `contrib/queue`。业务在组装层显式通过组件或业务自定义 Bootstrap 向 [`app.Spec`](pkg/app/README.md) 登记消费者运行时，不使用基于字符串查找的隐式拓扑。
+
+```go
+rawProducer, releaseProducer, err := kafkaqueue.NewProducer(
+	kafkaManager,
+	kafkaqueue.ProducerConfig{Connection: "events", Topic: "orders.created"},
 )
+producer, err := queue.NewProducer("orders.created", rawProducer, observability)
+```
 
-func init() {
-	// 注册应用生命周期 Hook
-	hook.BeforeStart(func(ctx context.Context) error {
-		// 预热缓存
-		return warmupCache(ctx)
-	})
+这里的 Kafka/Redis adapter 使用显式构造和注入，不进入全局 Driver Registry。
 
-	hook.AfterStop(func(ctx context.Context) error {
-		// 清理资源
-		return cleanupResources(ctx)
-	})
+完整的 Runtime/Bootstrap 契约和自定义运行时登记见 [`pkg/app/README.md`](pkg/app/README.md)；生产、消费、重试、死信、资源所有权和观测边界见 [`pkg/queue/README.md`](pkg/queue/README.md)。
 
-	// 注册日志 Hook
-	logHook.With("service", "my-service")
-	logHook.With("version", app_info.Version().String())
+## Job 并发协调
 
-	// 注册上下文 Hook
-	contextHook.WithContext(func(ctx context.Context) context.Context {
-		requestID := generateRequestID()
-		return context.WithValue(ctx, "request_id", requestID)
-	})
+`pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择：
+
+```go
+coordinator, err := jobredis.NewLockCoordinator(
+	redisManager,
+	job.LockCoordinatorConfig{},
+	lockredis.WithConnection("locks"),
+)
+if err != nil {
+	return nil, err
 }
+jobSpec.Coordinator(coordinator)
 ```
 
-#### 5. 生成依赖注入代码
+这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。详见 [`contrib/job/redis`](contrib/job/redis/README.md)。
+
+## 主要目录
+
+完整包分类见 [`pkg/README.md`](pkg/README.md)，新增工具、契约、资源组件、Runtime、Bootstrap 或第三方适配时，参考[包开发模式指南](pkg/DEVELOPMENT.md)。指南包含 watchdog 看门狗锁的包归属、生命周期与开发示例。
+
+```text
+api/                              对外 Protocol Buffers 定义及生成产物
+pkg/<domain>/                     公共契约、构造入口与同领域实现
+pkg/<domain>/internal/<capability>/ 按需拆出的独立私有子能力
+contrib/<domain>/<driver>/        业务 App/Wire 可选择的公共第三方实现
+internal/<capability>/            至少由两个领域直接复用的私有能力及测试设施
+proto/                            仓库内部 Protocol Buffers 定义及生成产物
+```
+
+例如，Tracing 的配置、Exporter 与 Sampler 按文件组织在 `pkg/tracing`，进程信息采集位于 `pkg/appinfo/appinfo.go`。日志输出、配置解码、队列遥测以及 client/server 专属中间件具有独立职责，保留所属领域的嵌套 `internal`。优先用非导出标识符隐藏实现，不增加纯转发层。
+
+手写实现文件通常控制在 150–300 行，超过 400 行检查职责是否需要拆分；不为行数或目录一致性机械拆包。Wire 仍通过公开构造函数创建依赖并持有 cleanup，Bootstrap 在构造期贡献 `app.Spec`，`app.NewApp` 在最终屏障后冻结并组装应用。
+
+## v2 迁移与发布
+
+从 main 升级时，按 [v2 迁移与发布清单](MIGRATION_V2.md) 核对接口、配置、生成器和业务验收。
+`make lint` 覆盖全部 Go 模块；`make test-business` 验证 Wire、HTTP/SQLite 订单事务和生成客户端契约。
+发布前运行 `make verify-release`，并完成清单中的业务环境验收。该命令不会推送、打 tag 或部署。
+
+## 开发与验证
 
 ```bash
-make generate
-```
-
-#### 6. 配置文件示例
-
-参考 `config.example.yaml` 创建你的配置文件：
-
-```yaml
-app:
-  name: my-service
-  version: v1.0.0
-
-server:
-  http:
-    addr: 0.0.0.0:8000
-  grpc:
-    addr: 0.0.0.0:9000
-
-database:
-  default: primary
-  connections:
-    primary:
-      dsn: root:password@tcp(127.0.0.1:3306)/mydb
-      driver: mysql
-```
-
-## 配置模块详解
-
-### 应用配置 (App)
-
-```yaml
-app:
-  name: my-service          # 服务名称
-  version: v1.0.0          # 版本
-  metadata: # 元数据（会注册到服务发现）
-    env: production
-    region: cn-north
-```
-
-### 日志配置 (Log)
-
-```yaml
-log:
-  level: info              # 日志级别: debug/info/warn/error
-  std: # 标准输出
-    disable: false
-  file: # 文件输出
-    path: ./logs/app.log
-    rotating:
-      max_size: 100        # MB
-      max_age: 30          # days
-      compress: true
-  caller: # 调用位置信息
-    skip: 0                # 跳过的栈帧数
-```
-
-### 监控配置 (Metrics)
-
-```yaml
-metrics:
-  meter_name: my-service   # 指标命名空间
-```
-
-访问 `http://localhost:8000/metrics` 查看 Prometheus 指标。
-
-### 链路追踪配置 (Tracing)
-
-```yaml
-tracing:
-  disable: false
-  exporter:
-    endpoint_url: http://jaeger:14268/api/traces
-    compression: GZIP
-  sampler:
-    sample: RATIO          # 采样策略: ALWAYS/NEVER/RATIO
-    ratio: 0.1            # 采样率 10%
-```
-
-### 服务器配置 (Server)
-
-```yaml
-server:
-  http:
-    addr: 0.0.0.0:8000
-    timeout: 30s
-    middleware:
-      logging:
-        disable: false
-      metrics:
-        disable: false
-      tracing:
-        disable: false
-  grpc:
-    addr: 0.0.0.0:9000
-    timeout: 30s
-```
-
-### 数据库配置 (Database)
-
-```yaml
-database:
-  default: primary
-  connections:
-    primary:
-      dsn: root:password@tcp(127.0.0.1:3306)/mydb
-      driver: mysql
-      max_open_conns: 100
-      max_idle_conns: 10
-      conn_max_lifetime: 1h
-    replica:
-      - dsn: root:password@tcp(127.0.0.1:3307)/mydb
-        driver: mysql
-    clickhouse:
-      dsn: tcp://127.0.0.1:9000/mydb
-      driver: clickhouse
-  gorm:
-    skip_default_transaction: true
-    logger:
-      level: Warn
-      slow_threshold: 200ms
-```
-
-### Redis 配置 (Redis)
-
-```yaml
-redis:
-  default: cache
-  connections:
-    cache:
-      addr: 127.0.0.1:6379
-      password: ""
-      db: 0
-      pool_size: 10
-      read_timeout: 3s
-      write_timeout: 3s
-```
-
-### 服务发现与注册 (Discovery & Registry)
-
-```yaml
-discovery:
-  timeout: 10s
-
-registry:
-  disable_health_check: false
-  healthcheck_internal: 10s
-  tags:
-    - production
-    - v1
-```
-
-### 客户端配置 (Client)
-
-```yaml
-client:
-  clients:
-    user-service:
-      target: discovery:///user-service  # 服务发现
-      protocol: GRPC
-      middleware:
-        timeout:
-          default: 5s
-        tracing:
-          disable: false
-        metrics:
-          disable: false
-```
-
-### 定时任务配置 (Job)
-
-```yaml
-job:
-  timezone: Asia/Shanghai
-  jobs:
-    cleanup:
-      schedule: "@daily"              # 每天 0 点
-      immediately: true               # 启动时立即执行一次
-      concurrent_policy: SKIP         # 并发策略: OVERLAP/DELAY/SKIP
-    backup:
-      schedule: "0 2 * * *"          # 每天凌晨 2 点
-```
-
-## 常用命令
-
-```bash
-# 生成 Proto 代码和配置 Schema
-make proto
-
-# 生成所有代码 (Wire 等)
-make generate
-
-# 运行代码检查
+make test
+make vet
+make race
 make lint
-
-# 一次性执行所有命令
-make all
 ```
 
-## 项目结构
+一次执行不需外部基础设施的完整验证：
 
-```
-kratos-foundation/
-├── cmd/                               # 命令行工具和代码生成器
-│   ├── protoc-gen-kratos-foundation-client/    # gRPC 客户端代码生成器
-│   ├── protoc-gen-kratos-foundation-errors/     # 错误代码生成器
-│   └── protoc-gen-jsonschema/                  # JSON Schema 生成器
-├── internal/                          # 内部实现（不对外暴露）
-│   ├── middleware/                    # 中间件实现
-│   ├── logger/                       # 日志具体实现（基于 Zap）
-│   └── filter/                       # 过滤器实现
-├── pkg/                               # 公共 API（可被外部依赖）
-│   ├── app/                          # 应用管理模块
-│   │   └── hook.go                   # 应用生命周期 Hook
-│   ├── app_info/                     # 应用元信息
-│   ├── bootstrap/                    # 引导程序
-│   ├── client/                       # RPC 客户端工厂
-│   ├── config/                       # 配置加载与管理
-│   ├── consul/                       # Consul 客户端
-│   ├── context/                      # 上下文管理（支持 Hook）
-│   │   └── hook.go                   # 上下文 Hook
-│   ├── database/                     # 数据库（GORM 集成）
-│   ├── discovery/                    # 服务发现
-│   ├── errors/                       # 错误处理
-│   ├── job/                          # 定时任务（Cron）
-│   ├── log/                          # 日志系统（支持 Hook）
-│   │   └── hook.go                   # 日志 Hook
-│   ├── metrics/                      # 监控指标（Prometheus）
-│   ├── redis/                        # Redis 客户端
-│   ├── registry/                     # 服务注册
-│   ├── server/                       # HTTP/gRPC 服务器
-│   ├── setup/                        # 设置模块
-│   ├── tracing/                      # 链路追踪（OpenTelemetry）
-│   ├── transport/                    # 传输层
-│   ├── utils/                        # 工具函数
-│   └── websocket/                    # WebSocket 支持
-├── proto/                             # Protobuf 定义
-│   ├── config.proto                  # 主配置定义
-│   ├── config_pb/                    # 配置子模块
-│   ├── app_info.proto                # 应用信息定义
-│   ├── error_reason.proto            # 错误定义
-│   └── kratos_foundation_pb/         # 生成的 protobuf 代码
-├── third_party/                       # 第三方 proto 定义
-├── config.example.yaml                # 配置文件示例
-├── config.schema.json                 # 配置 JSON Schema
-├── Makefile                           # 构建脚本
-└── go.mod                             # Go 模块定义
+```bash
+make verify
 ```
 
-## 中间件
-
-框架提供以下中间件：
-
-### 服务端中间件
-
-- **Timeout** - 超时控制，支持按路由配置
-- **Metrics** - Prometheus 指标采集
-- **Tracing** - OpenTelemetry 链路追踪
-- **Logging** - 结构化日志记录
-- **Metadata** - 元数据传递
-- **Validator** - 请求参数验证
-- **RateLimit** - BBR 自适应限流
-- **CircuitBreaker** - SRE 熔断器
-
-### 客户端中间件
-
-- **Timeout** - 超时控制
-- **Metrics** - 客户端指标
-- **Tracing** - 链路追踪上下文传递
-- **Logging** - 请求/响应日志
-- **CircuitBreaker** - 客户端熔断
-
-## 依赖注入
-
-Kratos Foundation 使用 [Wire](https://github.com/google/wire) 进行编译时依赖注入。
-
-```go
-//go:build wireinject
-// +build wireinject
-
-package main
-
-import (
-	"github.com/go-kratos/kratos/v2"
-	"github.com/google/wire"
-	"github.com/jaggerzhuang1994/kratos-foundation-template/internal"
-	"github.com/jaggerzhuang1994/kratos-foundation-template/internal/conf"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg"
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/app_info"
-)
-
-// wireApp init kratos application.
-func wireApp(app_info.Version, conf.FileConfigSource) (*kratos.App, func(), error) {
-	panic(wire.Build(
-		kratos_foundation.ProviderSet,
-		internal.ProviderSet,
-		NewBootstrap,
-	))
-}
-```
-
-## 可观测性
-
-### 日志
-
-结构化日志，支持 JSON 格式输出，自动注入：
-
-- 时间戳
-- Trace ID / Span ID
-- 服务名称 / 版本
-- 调用位置
-- 自定义全局字段（通过 Hook）
-
-### 监控指标
-
-Prometheus 指标包括：
-
-- HTTP/gRPC 请求计数、延迟
-- 数据库连接池、查询统计
-- Redis 操作统计
-- 定时任务执行统计
-
-### 链路追踪
-
-OpenTelemetry 集成，支持导出到：
-
-- Jaeger
-- Zipkin
-- OTLP-compatible 系统
-
-## 最佳实践
-
-1. **配置管理** - 使用环境变量覆盖配置，敏感信息通过环境变量注入
-2. **错误处理** - 使用定义的 Error Reason 统一错误码
-3. **日志规范** - 保持日志结构化，避免打印敏感信息，使用 Hook 注入公共字段
-4. **资源管理** - 合理配置连接池大小，设置合理的超时时间
-5. **监控告警** - 关键指标配置告警规则
-6. **优雅停机** - 使用 Hook 机制处理应用启动和停止逻辑
-7. **上下文传递** - 使用 Context Hook 在请求链路中传递公共数据
-
-## 技术栈
-
-- **Go**: 1.24.12
-- **框架**: Go-Kratos v2.9.2
-- **依赖注入**: Google Wire
-- **日志**: Zap Logger
-- **ORM**: GORM v1.31.1
-    - MySQL Driver
-    - PostgreSQL Driver
-    - SQLite Driver
-    - ClickHouse Driver
-- **缓存**: Redis v9.17.2
-- **监控**: Prometheus + OpenTelemetry
-- **服务治理**: Consul
-- **定时任务**: Cron v3.0.1
-- **配置**: Consul KV + Protobuf 强类型配置
-- **WebSocket**: Gorilla WebSocket v1.5.3
-
-## 代码生成工具
-
-Kratos Foundation 提供了以下代码生成工具：
-
-### protoc-gen-kratos-foundation-client
-
-生成类型安全的 gRPC 客户端代码，自动处理服务发现和负载均衡。
-
-### protoc-gen-kratos-foundation-errors
-
-生成错误处理相关代码，统一的错误码和错误消息。
-
-### protoc-gen-jsonschema
-
-从 Protobuf 定义生成 JSON Schema，用于配置验证。
-
-## 贡献指南
-
-欢迎贡献代码！请确保：
-
-1. 通过 `make lint` 代码检查
-2. 添加必要的单元测试
-3. 更新相关文档
-4. 遵循现有代码风格
-5. 为新增功能添加示例
-
-## 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-## 相关链接
-
-- [Go-Kratos 官方文档](https://go-kratos.dev/)
-- [Wire 文档](https://github.com/google/wire)
-- [GORM 文档](https://gorm.io/)
-- [OpenTelemetry Go](https://opentelemetry.io/docs/instrumentation/go/)
-- [Consul 文档](https://www.consul.io/docs)
-- [Prometheus 文档](https://prometheus.io/docs/)
-
-## 支持
-
-如有问题或建议，欢迎提交 Issue 或 Pull Request。
+修改 Protocol Buffers 或 Wire 等生成源后，使用仓库对应的 `make proto` 或 `make generate` 目标，不要手工修改生成文件。

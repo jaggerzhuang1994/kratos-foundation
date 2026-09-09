@@ -1,0 +1,54 @@
+version: "2"
+
+# 默认上限（每类 50 条、同类 3 条）会静默截断报告，让门禁看起来比实际干净。
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+# 只启用能发现真实缺陷的检查器，不引入纯风格偏好，避免门禁沦为噪音。
+linters:
+  default: standard
+
+  settings:
+    errcheck:
+      # Close 与 AddError 的返回值在这些类型上无法被调用方有效处理：
+      # 解压器的校验错误由 Read 到 EOF 时返回，sql.Rows 的错误由 rows.Err() 反映，
+      # gorm 的 AddError 本身就是把错误累积到 db.Error，返回值仅用于链式调用。
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (*database/sql.Rows).Close
+        - (*gorm.io/gorm.DB).AddError
+
+    staticcheck:
+      # 前 6 项是 golangci-lint 的默认排除集（命名与包注释类风格约定），
+      # 显式列出是因为一旦自定义 checks 就必须重新声明，否则会意外启用。
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # 保留嵌入字段的显式选择器，读代码时能直接看出字段来自哪一层。
+        - -QF1008
+        # 允许先声明默认值再按条件覆盖，与本仓库表达配置默认值的方式一致。
+        - -QF1007
+        # Go 惯例允许错误信息以专有名词开头，而本仓库大量错误以品牌名或人名起头
+        # （Aliyun、Schnorr 等），ST1005 无法识别这类词，只会产生误报。
+        - -ST1005
+
+  exclusions:
+    rules:
+      # 测试用例会故意传入 nil Context 来验证参数校验分支。
+      - path: _test\.go
+        text: do not pass a nil Context
+        linters:
+          - staticcheck
+      # ECIES 加密与 Schnorr 零知识证明都需要底层椭圆曲线点运算，crypto/ecdh 只覆盖
+      # 密钥交换，不提供等价替代，因此这里只能继续使用已废弃的 elliptic 低层 API。
+      - path: pkg/crypto/(ecc|schnorr)/
+        text: "SA1019"
+        linters:
+          - staticcheck

@@ -103,6 +103,10 @@ func (m *Database) validate(all bool) error {
 		}
 	}
 
+	if m.Default != nil {
+		// no validation rules for Default
+	}
+
 	if m.Gorm != nil {
 
 		if all {
@@ -167,10 +171,6 @@ func (m *Database) validate(all bool) error {
 			}
 		}
 
-	}
-
-	if m.Default != nil {
-		// no validation rules for Default
 	}
 
 	if m.Tracing != nil {
@@ -316,61 +316,187 @@ var _ interface {
 	ErrorName() string
 } = DatabaseValidationError{}
 
-// Validate checks the field values on GormTracing with the rules defined in
+// Validate checks the field values on DBConnection with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *GormTracing) Validate() error {
+func (m *DBConnection) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on GormTracing with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in GormTracingMultiError, or
+// ValidateAll checks the field values on DBConnection with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DBConnectionMultiError, or
 // nil if none found.
-func (m *GormTracing) ValidateAll() error {
+func (m *DBConnection) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *GormTracing) validate(all bool) error {
+func (m *DBConnection) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.Disable != nil {
-		// no validation rules for Disable
+	// no validation rules for Dsn
+
+	if m.Driver != nil {
+		// no validation rules for Driver
 	}
 
-	if m.ExcludeQueryVars != nil {
-		// no validation rules for ExcludeQueryVars
+	if m.MaxIdleConns != nil {
+		// no validation rules for MaxIdleConns
 	}
 
-	if m.ExcludeMetrics != nil {
-		// no validation rules for ExcludeMetrics
+	if m.MaxOpenConns != nil {
+		// no validation rules for MaxOpenConns
 	}
 
-	if m.RecordStackTraceInSpan != nil {
-		// no validation rules for RecordStackTraceInSpan
+	if m.ConnMaxLifetime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "ConnMaxLifetime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DBConnectionValidationError{
+					field:  "ConnMaxLifetime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
-	if m.ExcludeServerAddress != nil {
-		// no validation rules for ExcludeServerAddress
+	if m.ConnMaxIdleTime != nil {
+
+		if all {
+			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "ConnMaxIdleTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DBConnectionValidationError{
+					field:  "ConnMaxIdleTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Aes != nil {
+
+		if all {
+			switch v := interface{}(m.GetAes()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "Aes",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "Aes",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetAes()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DBConnectionValidationError{
+					field:  "Aes",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Gorm != nil {
+
+		if all {
+			switch v := interface{}(m.GetGorm()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "Gorm",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DBConnectionValidationError{
+						field:  "Gorm",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetGorm()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DBConnectionValidationError{
+					field:  "Gorm",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	}
 
 	if len(errors) > 0 {
-		return GormTracingMultiError(errors)
+		return DBConnectionMultiError(errors)
 	}
 
 	return nil
 }
 
-// GormTracingMultiError is an error wrapping multiple validation errors
-// returned by GormTracing.ValidateAll() if the designated constraints aren't met.
-type GormTracingMultiError []error
+// DBConnectionMultiError is an error wrapping multiple validation errors
+// returned by DBConnection.ValidateAll() if the designated constraints aren't met.
+type DBConnectionMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m GormTracingMultiError) Error() string {
+func (m DBConnectionMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -379,11 +505,11 @@ func (m GormTracingMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m GormTracingMultiError) AllErrors() []error { return m }
+func (m DBConnectionMultiError) AllErrors() []error { return m }
 
-// GormTracingValidationError is the validation error returned by
-// GormTracing.Validate if the designated constraints aren't met.
-type GormTracingValidationError struct {
+// DBConnectionValidationError is the validation error returned by
+// DBConnection.Validate if the designated constraints aren't met.
+type DBConnectionValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -391,22 +517,22 @@ type GormTracingValidationError struct {
 }
 
 // Field function returns field value.
-func (e GormTracingValidationError) Field() string { return e.field }
+func (e DBConnectionValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e GormTracingValidationError) Reason() string { return e.reason }
+func (e DBConnectionValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e GormTracingValidationError) Cause() error { return e.cause }
+func (e DBConnectionValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e GormTracingValidationError) Key() bool { return e.key }
+func (e DBConnectionValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e GormTracingValidationError) ErrorName() string { return "GormTracingValidationError" }
+func (e DBConnectionValidationError) ErrorName() string { return "DBConnectionValidationError" }
 
 // Error satisfies the builtin error interface
-func (e GormTracingValidationError) Error() string {
+func (e DBConnectionValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -418,14 +544,14 @@ func (e GormTracingValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sGormTracing.%s: %s%s",
+		"invalid %sDBConnection.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = GormTracingValidationError{}
+var _ error = DBConnectionValidationError{}
 
 var _ interface {
 	Field() string
@@ -433,115 +559,51 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = GormTracingValidationError{}
+} = DBConnectionValidationError{}
 
-// Validate checks the field values on GormMetrics with the rules defined in
+// Validate checks the field values on DatabaseAes with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *GormMetrics) Validate() error {
+func (m *DatabaseAes) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on GormMetrics with the rules defined in
+// ValidateAll checks the field values on DatabaseAes with the rules defined in
 // the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in GormMetricsMultiError, or
+// result is a list of violation errors wrapped in DatabaseAesMultiError, or
 // nil if none found.
-func (m *GormMetrics) ValidateAll() error {
+func (m *DatabaseAes) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *GormMetrics) validate(all bool) error {
+func (m *DatabaseAes) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	// no validation rules for Labels
-
-	if m.Disable != nil {
-		// no validation rules for Disable
+	if m.Key != nil {
+		// no validation rules for Key
 	}
 
-	if m.RefreshInterval != nil {
-
-		if all {
-			switch v := interface{}(m.GetRefreshInterval()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, GormMetricsValidationError{
-						field:  "RefreshInterval",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, GormMetricsValidationError{
-						field:  "RefreshInterval",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetRefreshInterval()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return GormMetricsValidationError{
-					field:  "RefreshInterval",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Mysql != nil {
-
-		if all {
-			switch v := interface{}(m.GetMysql()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, GormMetricsValidationError{
-						field:  "Mysql",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, GormMetricsValidationError{
-						field:  "Mysql",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMysql()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return GormMetricsValidationError{
-					field:  "Mysql",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
+	if m.Algorithm != nil {
+		// no validation rules for Algorithm
 	}
 
 	if len(errors) > 0 {
-		return GormMetricsMultiError(errors)
+		return DatabaseAesMultiError(errors)
 	}
 
 	return nil
 }
 
-// GormMetricsMultiError is an error wrapping multiple validation errors
-// returned by GormMetrics.ValidateAll() if the designated constraints aren't met.
-type GormMetricsMultiError []error
+// DatabaseAesMultiError is an error wrapping multiple validation errors
+// returned by DatabaseAes.ValidateAll() if the designated constraints aren't met.
+type DatabaseAesMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m GormMetricsMultiError) Error() string {
+func (m DatabaseAesMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -550,11 +612,11 @@ func (m GormMetricsMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m GormMetricsMultiError) AllErrors() []error { return m }
+func (m DatabaseAesMultiError) AllErrors() []error { return m }
 
-// GormMetricsValidationError is the validation error returned by
-// GormMetrics.Validate if the designated constraints aren't met.
-type GormMetricsValidationError struct {
+// DatabaseAesValidationError is the validation error returned by
+// DatabaseAes.Validate if the designated constraints aren't met.
+type DatabaseAesValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -562,22 +624,22 @@ type GormMetricsValidationError struct {
 }
 
 // Field function returns field value.
-func (e GormMetricsValidationError) Field() string { return e.field }
+func (e DatabaseAesValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e GormMetricsValidationError) Reason() string { return e.reason }
+func (e DatabaseAesValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e GormMetricsValidationError) Cause() error { return e.cause }
+func (e DatabaseAesValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e GormMetricsValidationError) Key() bool { return e.key }
+func (e DatabaseAesValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e GormMetricsValidationError) ErrorName() string { return "GormMetricsValidationError" }
+func (e DatabaseAesValidationError) ErrorName() string { return "DatabaseAesValidationError" }
 
 // Error satisfies the builtin error interface
-func (e GormMetricsValidationError) Error() string {
+func (e DatabaseAesValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -589,14 +651,14 @@ func (e GormMetricsValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sGormMetrics.%s: %s%s",
+		"invalid %sDatabaseAes.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = GormMetricsValidationError{}
+var _ error = DatabaseAesValidationError{}
 
 var _ interface {
 	Field() string
@@ -604,7 +666,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = GormMetricsValidationError{}
+} = DatabaseAesValidationError{}
 
 // Validate checks the field values on Gorm with the rules defined in the proto
 // definition for this message. If any rules are violated, the first error
@@ -995,159 +1057,61 @@ var _ interface {
 	ErrorName() string
 } = GormLoggerValidationError{}
 
-// Validate checks the field values on DBConnection with the rules defined in
+// Validate checks the field values on GormTracing with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *DBConnection) Validate() error {
+func (m *GormTracing) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on DBConnection with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in DBConnectionMultiError, or
+// ValidateAll checks the field values on GormTracing with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in GormTracingMultiError, or
 // nil if none found.
-func (m *DBConnection) ValidateAll() error {
+func (m *GormTracing) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *DBConnection) validate(all bool) error {
+func (m *GormTracing) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	// no validation rules for Dsn
-
-	for idx, item := range m.GetReplicas() {
-		_, _ = idx, item
-
-		if all {
-			switch v := interface{}(item).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DBConnectionValidationError{
-						field:  fmt.Sprintf("Replicas[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DBConnectionValidationError{
-						field:  fmt.Sprintf("Replicas[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DBConnectionValidationError{
-					field:  fmt.Sprintf("Replicas[%v]", idx),
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
+	if m.Disable != nil {
+		// no validation rules for Disable
 	}
 
-	if m.Driver != nil {
-		// no validation rules for Driver
+	if m.ExcludeQueryVars != nil {
+		// no validation rules for ExcludeQueryVars
 	}
 
-	if m.TraceResolverMode != nil {
-		// no validation rules for TraceResolverMode
+	if m.ExcludeMetrics != nil {
+		// no validation rules for ExcludeMetrics
 	}
 
-	if m.MaxIdleConns != nil {
-		// no validation rules for MaxIdleConns
+	if m.RecordStackTraceInSpan != nil {
+		// no validation rules for RecordStackTraceInSpan
 	}
 
-	if m.MaxOpenConns != nil {
-		// no validation rules for MaxOpenConns
-	}
-
-	if m.ConnMaxLifetime != nil {
-
-		if all {
-			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DBConnectionValidationError{
-						field:  "ConnMaxLifetime",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DBConnectionValidationError{
-						field:  "ConnMaxLifetime",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DBConnectionValidationError{
-					field:  "ConnMaxLifetime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.ConnMaxIdleTime != nil {
-
-		if all {
-			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DBConnectionValidationError{
-						field:  "ConnMaxIdleTime",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DBConnectionValidationError{
-						field:  "ConnMaxIdleTime",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DBConnectionValidationError{
-					field:  "ConnMaxIdleTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
+	if m.ExcludeServerAddress != nil {
+		// no validation rules for ExcludeServerAddress
 	}
 
 	if len(errors) > 0 {
-		return DBConnectionMultiError(errors)
+		return GormTracingMultiError(errors)
 	}
 
 	return nil
 }
 
-// DBConnectionMultiError is an error wrapping multiple validation errors
-// returned by DBConnection.ValidateAll() if the designated constraints aren't met.
-type DBConnectionMultiError []error
+// GormTracingMultiError is an error wrapping multiple validation errors
+// returned by GormTracing.ValidateAll() if the designated constraints aren't met.
+type GormTracingMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m DBConnectionMultiError) Error() string {
+func (m GormTracingMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1156,11 +1120,11 @@ func (m DBConnectionMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m DBConnectionMultiError) AllErrors() []error { return m }
+func (m GormTracingMultiError) AllErrors() []error { return m }
 
-// DBConnectionValidationError is the validation error returned by
-// DBConnection.Validate if the designated constraints aren't met.
-type DBConnectionValidationError struct {
+// GormTracingValidationError is the validation error returned by
+// GormTracing.Validate if the designated constraints aren't met.
+type GormTracingValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1168,22 +1132,22 @@ type DBConnectionValidationError struct {
 }
 
 // Field function returns field value.
-func (e DBConnectionValidationError) Field() string { return e.field }
+func (e GormTracingValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e DBConnectionValidationError) Reason() string { return e.reason }
+func (e GormTracingValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e DBConnectionValidationError) Cause() error { return e.cause }
+func (e GormTracingValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e DBConnectionValidationError) Key() bool { return e.key }
+func (e GormTracingValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e DBConnectionValidationError) ErrorName() string { return "DBConnectionValidationError" }
+func (e GormTracingValidationError) ErrorName() string { return "GormTracingValidationError" }
 
 // Error satisfies the builtin error interface
-func (e DBConnectionValidationError) Error() string {
+func (e GormTracingValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1195,14 +1159,14 @@ func (e DBConnectionValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sDBConnection.%s: %s%s",
+		"invalid %sGormTracing.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = DBConnectionValidationError{}
+var _ error = GormTracingValidationError{}
 
 var _ interface {
 	Field() string
@@ -1210,69 +1174,61 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = DBConnectionValidationError{}
+} = GormTracingValidationError{}
 
-// Validate checks the field values on GormDialector with the rules defined in
+// Validate checks the field values on GormMetrics with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *GormDialector) Validate() error {
+func (m *GormMetrics) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on GormDialector with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in GormDialectorMultiError, or
+// ValidateAll checks the field values on GormMetrics with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in GormMetricsMultiError, or
 // nil if none found.
-func (m *GormDialector) ValidateAll() error {
+func (m *GormMetrics) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *GormDialector) validate(all bool) error {
+func (m *GormMetrics) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	// no validation rules for Dsn
+	// no validation rules for Labels
 
-	if m.Driver != nil {
-		// no validation rules for Driver
+	if m.Disable != nil {
+		// no validation rules for Disable
 	}
 
-	if m.MaxIdleConns != nil {
-		// no validation rules for MaxIdleConns
-	}
-
-	if m.MaxOpenConns != nil {
-		// no validation rules for MaxOpenConns
-	}
-
-	if m.ConnMaxLifetime != nil {
+	if m.RefreshInterval != nil {
 
 		if all {
-			switch v := interface{}(m.GetConnMaxLifetime()).(type) {
+			switch v := interface{}(m.GetRefreshInterval()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, GormDialectorValidationError{
-						field:  "ConnMaxLifetime",
+					errors = append(errors, GormMetricsValidationError{
+						field:  "RefreshInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, GormDialectorValidationError{
-						field:  "ConnMaxLifetime",
+					errors = append(errors, GormMetricsValidationError{
+						field:  "RefreshInterval",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetConnMaxLifetime()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetRefreshInterval()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return GormDialectorValidationError{
-					field:  "ConnMaxLifetime",
+				return GormMetricsValidationError{
+					field:  "RefreshInterval",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1281,31 +1237,31 @@ func (m *GormDialector) validate(all bool) error {
 
 	}
 
-	if m.ConnMaxIdleTime != nil {
+	if m.Mysql != nil {
 
 		if all {
-			switch v := interface{}(m.GetConnMaxIdleTime()).(type) {
+			switch v := interface{}(m.GetMysql()).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, GormDialectorValidationError{
-						field:  "ConnMaxIdleTime",
+					errors = append(errors, GormMetricsValidationError{
+						field:  "Mysql",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, GormDialectorValidationError{
-						field:  "ConnMaxIdleTime",
+					errors = append(errors, GormMetricsValidationError{
+						field:  "Mysql",
 						reason: "embedded message failed validation",
 						cause:  err,
 					})
 				}
 			}
-		} else if v, ok := interface{}(m.GetConnMaxIdleTime()).(interface{ Validate() error }); ok {
+		} else if v, ok := interface{}(m.GetMysql()).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return GormDialectorValidationError{
-					field:  "ConnMaxIdleTime",
+				return GormMetricsValidationError{
+					field:  "Mysql",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -1315,19 +1271,18 @@ func (m *GormDialector) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return GormDialectorMultiError(errors)
+		return GormMetricsMultiError(errors)
 	}
 
 	return nil
 }
 
-// GormDialectorMultiError is an error wrapping multiple validation errors
-// returned by GormDialector.ValidateAll() if the designated constraints
-// aren't met.
-type GormDialectorMultiError []error
+// GormMetricsMultiError is an error wrapping multiple validation errors
+// returned by GormMetrics.ValidateAll() if the designated constraints aren't met.
+type GormMetricsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m GormDialectorMultiError) Error() string {
+func (m GormMetricsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1336,11 +1291,11 @@ func (m GormDialectorMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m GormDialectorMultiError) AllErrors() []error { return m }
+func (m GormMetricsMultiError) AllErrors() []error { return m }
 
-// GormDialectorValidationError is the validation error returned by
-// GormDialector.Validate if the designated constraints aren't met.
-type GormDialectorValidationError struct {
+// GormMetricsValidationError is the validation error returned by
+// GormMetrics.Validate if the designated constraints aren't met.
+type GormMetricsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1348,22 +1303,22 @@ type GormDialectorValidationError struct {
 }
 
 // Field function returns field value.
-func (e GormDialectorValidationError) Field() string { return e.field }
+func (e GormMetricsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e GormDialectorValidationError) Reason() string { return e.reason }
+func (e GormMetricsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e GormDialectorValidationError) Cause() error { return e.cause }
+func (e GormMetricsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e GormDialectorValidationError) Key() bool { return e.key }
+func (e GormMetricsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e GormDialectorValidationError) ErrorName() string { return "GormDialectorValidationError" }
+func (e GormMetricsValidationError) ErrorName() string { return "GormMetricsValidationError" }
 
 // Error satisfies the builtin error interface
-func (e GormDialectorValidationError) Error() string {
+func (e GormMetricsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1375,14 +1330,14 @@ func (e GormDialectorValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sGormDialector.%s: %s%s",
+		"invalid %sGormMetrics.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = GormDialectorValidationError{}
+var _ error = GormMetricsValidationError{}
 
 var _ interface {
 	Field() string
@@ -1390,7 +1345,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = GormDialectorValidationError{}
+} = GormMetricsValidationError{}
 
 // Validate checks the field values on GormMetrics_Mysql with the rules defined
 // in the proto definition for this message. If any rules are violated, the

@@ -165,7 +165,18 @@ func (m *ModuleLog) validate(all bool) error {
 	}
 
 	if m.Level != nil {
-		// no validation rules for Level
+
+		if _, ok := _ModuleLog_Level_InLookup[m.GetLevel()]; !ok {
+			err := ModuleLogValidationError{
+				field:  "Level",
+				reason: "value must be in list [debug DEBUG info INFO warn WARN error ERROR fatal FATAL]",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if len(errors) > 0 {
@@ -244,3 +255,1689 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ModuleLogValidationError{}
+
+var _ModuleLog_Level_InLookup = map[string]struct{}{
+	"debug": {},
+	"DEBUG": {},
+	"info":  {},
+	"INFO":  {},
+	"warn":  {},
+	"WARN":  {},
+	"error": {},
+	"ERROR": {},
+	"fatal": {},
+	"FATAL": {},
+}
+
+// Validate checks the field values on Middleware with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Middleware) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in MiddlewareMultiError, or
+// nil if none found.
+func (m *Middleware) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return MiddlewareMultiError(errors)
+	}
+
+	return nil
+}
+
+// MiddlewareMultiError is an error wrapping multiple validation errors
+// returned by Middleware.ValidateAll() if the designated constraints aren't met.
+type MiddlewareMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m MiddlewareMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m MiddlewareMultiError) AllErrors() []error { return m }
+
+// MiddlewareValidationError is the validation error returned by
+// Middleware.Validate if the designated constraints aren't met.
+type MiddlewareValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e MiddlewareValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e MiddlewareValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e MiddlewareValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e MiddlewareValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e MiddlewareValidationError) ErrorName() string { return "MiddlewareValidationError" }
+
+// Error satisfies the builtin error interface
+func (e MiddlewareValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = MiddlewareValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = MiddlewareValidationError{}
+
+// Validate checks the field values on Middleware_Metadata with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Metadata) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Metadata with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_MetadataMultiError, or nil if none found.
+func (m *Middleware_Metadata) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Metadata) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Constants
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if len(errors) > 0 {
+		return Middleware_MetadataMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_MetadataMultiError is an error wrapping multiple validation
+// errors returned by Middleware_Metadata.ValidateAll() if the designated
+// constraints aren't met.
+type Middleware_MetadataMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_MetadataMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_MetadataMultiError) AllErrors() []error { return m }
+
+// Middleware_MetadataValidationError is the validation error returned by
+// Middleware_Metadata.Validate if the designated constraints aren't met.
+type Middleware_MetadataValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_MetadataValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_MetadataValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_MetadataValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_MetadataValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_MetadataValidationError) ErrorName() string {
+	return "Middleware_MetadataValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_MetadataValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Metadata.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_MetadataValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_MetadataValidationError{}
+
+// Validate checks the field values on Middleware_Tracing with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Tracing) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Tracing with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_TracingMultiError, or nil if none found.
+func (m *Middleware_Tracing) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Tracing) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if len(errors) > 0 {
+		return Middleware_TracingMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_TracingMultiError is an error wrapping multiple validation errors
+// returned by Middleware_Tracing.ValidateAll() if the designated constraints
+// aren't met.
+type Middleware_TracingMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_TracingMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_TracingMultiError) AllErrors() []error { return m }
+
+// Middleware_TracingValidationError is the validation error returned by
+// Middleware_Tracing.Validate if the designated constraints aren't met.
+type Middleware_TracingValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_TracingValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_TracingValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_TracingValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_TracingValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_TracingValidationError) ErrorName() string {
+	return "Middleware_TracingValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_TracingValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Tracing.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_TracingValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_TracingValidationError{}
+
+// Validate checks the field values on Middleware_Metrics with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Metrics) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Metrics with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_MetricsMultiError, or nil if none found.
+func (m *Middleware_Metrics) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Metrics) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if len(errors) > 0 {
+		return Middleware_MetricsMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_MetricsMultiError is an error wrapping multiple validation errors
+// returned by Middleware_Metrics.ValidateAll() if the designated constraints
+// aren't met.
+type Middleware_MetricsMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_MetricsMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_MetricsMultiError) AllErrors() []error { return m }
+
+// Middleware_MetricsValidationError is the validation error returned by
+// Middleware_Metrics.Validate if the designated constraints aren't met.
+type Middleware_MetricsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_MetricsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_MetricsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_MetricsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_MetricsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_MetricsValidationError) ErrorName() string {
+	return "Middleware_MetricsValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_MetricsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Metrics.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_MetricsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_MetricsValidationError{}
+
+// Validate checks the field values on Middleware_Logging with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Logging) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Logging with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_LoggingMultiError, or nil if none found.
+func (m *Middleware_Logging) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Logging) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if len(errors) > 0 {
+		return Middleware_LoggingMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_LoggingMultiError is an error wrapping multiple validation errors
+// returned by Middleware_Logging.ValidateAll() if the designated constraints
+// aren't met.
+type Middleware_LoggingMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_LoggingMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_LoggingMultiError) AllErrors() []error { return m }
+
+// Middleware_LoggingValidationError is the validation error returned by
+// Middleware_Logging.Validate if the designated constraints aren't met.
+type Middleware_LoggingValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_LoggingValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_LoggingValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_LoggingValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_LoggingValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_LoggingValidationError) ErrorName() string {
+	return "Middleware_LoggingValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_LoggingValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Logging.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_LoggingValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_LoggingValidationError{}
+
+// Validate checks the field values on Middleware_Validator with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Validator) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Validator with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_ValidatorMultiError, or nil if none found.
+func (m *Middleware_Validator) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Validator) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Disable != nil {
+		// no validation rules for Disable
+	}
+
+	if len(errors) > 0 {
+		return Middleware_ValidatorMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_ValidatorMultiError is an error wrapping multiple validation
+// errors returned by Middleware_Validator.ValidateAll() if the designated
+// constraints aren't met.
+type Middleware_ValidatorMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_ValidatorMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_ValidatorMultiError) AllErrors() []error { return m }
+
+// Middleware_ValidatorValidationError is the validation error returned by
+// Middleware_Validator.Validate if the designated constraints aren't met.
+type Middleware_ValidatorValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_ValidatorValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_ValidatorValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_ValidatorValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_ValidatorValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_ValidatorValidationError) ErrorName() string {
+	return "Middleware_ValidatorValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_ValidatorValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Validator.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_ValidatorValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_ValidatorValidationError{}
+
+// Validate checks the field values on Middleware_RateLimit with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_RateLimit) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_RateLimit with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_RateLimitMultiError, or nil if none found.
+func (m *Middleware_RateLimit) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_RateLimit) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Enable != nil {
+		// no validation rules for Enable
+	}
+
+	if m.BbrLimiter != nil {
+
+		if all {
+			switch v := interface{}(m.GetBbrLimiter()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_RateLimitValidationError{
+						field:  "BbrLimiter",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_RateLimitValidationError{
+						field:  "BbrLimiter",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetBbrLimiter()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_RateLimitValidationError{
+					field:  "BbrLimiter",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return Middleware_RateLimitMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_RateLimitMultiError is an error wrapping multiple validation
+// errors returned by Middleware_RateLimit.ValidateAll() if the designated
+// constraints aren't met.
+type Middleware_RateLimitMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_RateLimitMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_RateLimitMultiError) AllErrors() []error { return m }
+
+// Middleware_RateLimitValidationError is the validation error returned by
+// Middleware_RateLimit.Validate if the designated constraints aren't met.
+type Middleware_RateLimitValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_RateLimitValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_RateLimitValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_RateLimitValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_RateLimitValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_RateLimitValidationError) ErrorName() string {
+	return "Middleware_RateLimitValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_RateLimitValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_RateLimit.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_RateLimitValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_RateLimitValidationError{}
+
+// Validate checks the field values on Middleware_CircuitBreaker with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_CircuitBreaker) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_CircuitBreaker with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_CircuitBreakerMultiError, or nil if none found.
+func (m *Middleware_CircuitBreaker) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_CircuitBreaker) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Enable != nil {
+		// no validation rules for Enable
+	}
+
+	if m.Sre != nil {
+
+		if all {
+			switch v := interface{}(m.GetSre()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_CircuitBreakerValidationError{
+						field:  "Sre",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_CircuitBreakerValidationError{
+						field:  "Sre",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetSre()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_CircuitBreakerValidationError{
+					field:  "Sre",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return Middleware_CircuitBreakerMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_CircuitBreakerMultiError is an error wrapping multiple validation
+// errors returned by Middleware_CircuitBreaker.ValidateAll() if the
+// designated constraints aren't met.
+type Middleware_CircuitBreakerMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_CircuitBreakerMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_CircuitBreakerMultiError) AllErrors() []error { return m }
+
+// Middleware_CircuitBreakerValidationError is the validation error returned by
+// Middleware_CircuitBreaker.Validate if the designated constraints aren't met.
+type Middleware_CircuitBreakerValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_CircuitBreakerValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_CircuitBreakerValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_CircuitBreakerValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_CircuitBreakerValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_CircuitBreakerValidationError) ErrorName() string {
+	return "Middleware_CircuitBreakerValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_CircuitBreakerValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_CircuitBreaker.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_CircuitBreakerValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_CircuitBreakerValidationError{}
+
+// Validate checks the field values on Middleware_Deadline with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Deadline) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Deadline with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_DeadlineMultiError, or nil if none found.
+func (m *Middleware_Deadline) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Deadline) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetRoutes() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  fmt.Sprintf("Routes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  fmt.Sprintf("Routes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_DeadlineValidationError{
+					field:  fmt.Sprintf("Routes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.FallbackTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetFallbackTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  "FallbackTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  "FallbackTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetFallbackTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_DeadlineValidationError{
+					field:  "FallbackTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MaxTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetMaxTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  "MaxTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  "MaxTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMaxTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_DeadlineValidationError{
+					field:  "MaxTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MinBudget != nil {
+
+		if all {
+			switch v := interface{}(m.GetMinBudget()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  "MinBudget",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_DeadlineValidationError{
+						field:  "MinBudget",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMinBudget()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_DeadlineValidationError{
+					field:  "MinBudget",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return Middleware_DeadlineMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_DeadlineMultiError is an error wrapping multiple validation
+// errors returned by Middleware_Deadline.ValidateAll() if the designated
+// constraints aren't met.
+type Middleware_DeadlineMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_DeadlineMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_DeadlineMultiError) AllErrors() []error { return m }
+
+// Middleware_DeadlineValidationError is the validation error returned by
+// Middleware_Deadline.Validate if the designated constraints aren't met.
+type Middleware_DeadlineValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_DeadlineValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_DeadlineValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_DeadlineValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_DeadlineValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_DeadlineValidationError) ErrorName() string {
+	return "Middleware_DeadlineValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_DeadlineValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Deadline.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_DeadlineValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_DeadlineValidationError{}
+
+// Validate checks the field values on Middleware_RateLimit_BBRLimiter with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_RateLimit_BBRLimiter) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_RateLimit_BBRLimiter with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// Middleware_RateLimit_BBRLimiterMultiError, or nil if none found.
+func (m *Middleware_RateLimit_BBRLimiter) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_RateLimit_BBRLimiter) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Window != nil {
+
+		if all {
+			switch v := interface{}(m.GetWindow()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_RateLimit_BBRLimiterValidationError{
+						field:  "Window",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_RateLimit_BBRLimiterValidationError{
+						field:  "Window",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetWindow()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_RateLimit_BBRLimiterValidationError{
+					field:  "Window",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Bucket != nil {
+		// no validation rules for Bucket
+	}
+
+	if m.CpuThreshold != nil {
+		// no validation rules for CpuThreshold
+	}
+
+	if m.CpuQuota != nil {
+		// no validation rules for CpuQuota
+	}
+
+	if len(errors) > 0 {
+		return Middleware_RateLimit_BBRLimiterMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_RateLimit_BBRLimiterMultiError is an error wrapping multiple
+// validation errors returned by Middleware_RateLimit_BBRLimiter.ValidateAll()
+// if the designated constraints aren't met.
+type Middleware_RateLimit_BBRLimiterMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_RateLimit_BBRLimiterMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_RateLimit_BBRLimiterMultiError) AllErrors() []error { return m }
+
+// Middleware_RateLimit_BBRLimiterValidationError is the validation error
+// returned by Middleware_RateLimit_BBRLimiter.Validate if the designated
+// constraints aren't met.
+type Middleware_RateLimit_BBRLimiterValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_RateLimit_BBRLimiterValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_RateLimit_BBRLimiterValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_RateLimit_BBRLimiterValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_RateLimit_BBRLimiterValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_RateLimit_BBRLimiterValidationError) ErrorName() string {
+	return "Middleware_RateLimit_BBRLimiterValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_RateLimit_BBRLimiterValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_RateLimit_BBRLimiter.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_RateLimit_BBRLimiterValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_RateLimit_BBRLimiterValidationError{}
+
+// Validate checks the field values on Middleware_CircuitBreaker_SREBreaker
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the first error encountered is returned, or nil if
+// there are no violations.
+func (m *Middleware_CircuitBreaker_SREBreaker) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_CircuitBreaker_SREBreaker
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// Middleware_CircuitBreaker_SREBreakerMultiError, or nil if none found.
+func (m *Middleware_CircuitBreaker_SREBreaker) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_CircuitBreaker_SREBreaker) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Success != nil {
+		// no validation rules for Success
+	}
+
+	if m.Request != nil {
+		// no validation rules for Request
+	}
+
+	if m.Bucket != nil {
+		// no validation rules for Bucket
+	}
+
+	if m.Window != nil {
+
+		if all {
+			switch v := interface{}(m.GetWindow()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_CircuitBreaker_SREBreakerValidationError{
+						field:  "Window",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_CircuitBreaker_SREBreakerValidationError{
+						field:  "Window",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetWindow()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_CircuitBreaker_SREBreakerValidationError{
+					field:  "Window",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return Middleware_CircuitBreaker_SREBreakerMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_CircuitBreaker_SREBreakerMultiError is an error wrapping multiple
+// validation errors returned by
+// Middleware_CircuitBreaker_SREBreaker.ValidateAll() if the designated
+// constraints aren't met.
+type Middleware_CircuitBreaker_SREBreakerMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_CircuitBreaker_SREBreakerMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_CircuitBreaker_SREBreakerMultiError) AllErrors() []error { return m }
+
+// Middleware_CircuitBreaker_SREBreakerValidationError is the validation error
+// returned by Middleware_CircuitBreaker_SREBreaker.Validate if the designated
+// constraints aren't met.
+type Middleware_CircuitBreaker_SREBreakerValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_CircuitBreaker_SREBreakerValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_CircuitBreaker_SREBreakerValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_CircuitBreaker_SREBreakerValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_CircuitBreaker_SREBreakerValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_CircuitBreaker_SREBreakerValidationError) ErrorName() string {
+	return "Middleware_CircuitBreaker_SREBreakerValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_CircuitBreaker_SREBreakerValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_CircuitBreaker_SREBreaker.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_CircuitBreaker_SREBreakerValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_CircuitBreaker_SREBreakerValidationError{}
+
+// Validate checks the field values on Middleware_Deadline_RouteRule with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Deadline_RouteRule) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Deadline_RouteRule with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// Middleware_Deadline_RouteRuleMultiError, or nil if none found.
+func (m *Middleware_Deadline_RouteRule) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Deadline_RouteRule) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	switch v := m.Rule.(type) {
+	case *Middleware_Deadline_RouteRule_Path:
+		if v == nil {
+			err := Middleware_Deadline_RouteRuleValidationError{
+				field:  "Rule",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+		// no validation rules for Path
+	case *Middleware_Deadline_RouteRule_Prefix:
+		if v == nil {
+			err := Middleware_Deadline_RouteRuleValidationError{
+				field:  "Rule",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+		// no validation rules for Prefix
+	default:
+		_ = v // ensures v is used
+	}
+
+	if m.FallbackTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetFallbackTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_Deadline_RouteRuleValidationError{
+						field:  "FallbackTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_Deadline_RouteRuleValidationError{
+						field:  "FallbackTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetFallbackTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_Deadline_RouteRuleValidationError{
+					field:  "FallbackTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MaxTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetMaxTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_Deadline_RouteRuleValidationError{
+						field:  "MaxTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_Deadline_RouteRuleValidationError{
+						field:  "MaxTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMaxTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_Deadline_RouteRuleValidationError{
+					field:  "MaxTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MinBudget != nil {
+
+		if all {
+			switch v := interface{}(m.GetMinBudget()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, Middleware_Deadline_RouteRuleValidationError{
+						field:  "MinBudget",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, Middleware_Deadline_RouteRuleValidationError{
+						field:  "MinBudget",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMinBudget()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Middleware_Deadline_RouteRuleValidationError{
+					field:  "MinBudget",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return Middleware_Deadline_RouteRuleMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_Deadline_RouteRuleMultiError is an error wrapping multiple
+// validation errors returned by Middleware_Deadline_RouteRule.ValidateAll()
+// if the designated constraints aren't met.
+type Middleware_Deadline_RouteRuleMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_Deadline_RouteRuleMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_Deadline_RouteRuleMultiError) AllErrors() []error { return m }
+
+// Middleware_Deadline_RouteRuleValidationError is the validation error
+// returned by Middleware_Deadline_RouteRule.Validate if the designated
+// constraints aren't met.
+type Middleware_Deadline_RouteRuleValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_Deadline_RouteRuleValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_Deadline_RouteRuleValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_Deadline_RouteRuleValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_Deadline_RouteRuleValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_Deadline_RouteRuleValidationError) ErrorName() string {
+	return "Middleware_Deadline_RouteRuleValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_Deadline_RouteRuleValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Deadline_RouteRule.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_Deadline_RouteRuleValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_Deadline_RouteRuleValidationError{}

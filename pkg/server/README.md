@@ -1,0 +1,267 @@
+# Server
+
+`pkg/server` 是业务与 Wire 声明 HTTP、gRPC 和 WebSocket 服务并构造服务器运行时的公共入口。业务只依赖 `Spec`、Builder、协议契约、`NewRuntime`；应用登记由 `pkg/bootstrap` 提供的 `NewServerBootstrap` 负责；不应导入 `pkg/server/internal/*`。
+
+```go
+spec := server.NewSpec()
+spec.HTTP().Endpoint(registerHTTP)
+spec.GRPC().Service(registerGRPC)
+runtime, cleanup, err := server.NewRuntime(
+	configManager,
+	logger,
+	metricsProvider,
+	tracingProvider,
+	spec,
+)
+contribution, err := bootstrap.NewServerBootstrap(appSpec, runtime)
+```
+
+`bootstrap.NewServerBootstrap` 只同步将启用的 HTTP 和 gRPC Runtime 分别登记到 `app.Spec`，不启动协议、不创建 goroutine，也不返回 cleanup。`NewRuntime` 返回的 cleanup 仍由 Wire 拥有；Runtime 的 Start/Stop 由 `app.NewApp` 创建的应用生命周期监督层拥有。
+
+协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
+
+启用 BBR 时，`bucket` 必须为正数，`window` 必须是可精确表示为 Go `time.Duration` 的正时长，整除后的每桶时长必须在 1ns–1s 内。`cpu_threshold` 必须为正数；`cpu_quota` 必须是有限非负数，零值沿用默认 CPU 采样。缺失字段沿用 Aegis 默认值（10s、100 桶、阈值 800），仍参与组合校验。禁用 BBR 时忽略其参数。`NewRuntime` 和中间件热更新使用相同校验；非法更新保留全部旧策略。更新先完成变化项的构造，再沿用逐项原子替换，不重建未变化的统计窗口；并发请求仍可能短暂读到新旧策略组合。
+
+```mermaid
+flowchart TD
+    A([构造或串行中间件订阅回调]) --> B{完整配置校验通过?}
+    B -- 否 --> C[构造返回错误 或 ERROR server middleware config update rejected]
+    C --> D([保留旧策略 结束])
+    B -- 是 --> E[构造变化项 包括外部 Aegis BBR]
+    E --> F{构造成功?}
+    F -- 否 --> C
+    F -- 是 --> G[首次创建 或逐项原子发布策略]
+    G --> H{属于热更新?}
+    H -- 是 --> M[INFO server middleware config updated]
+    H -- 否 --> I([结束])
+    M --> I
+    J[并发请求] --> K[原子读取各策略快照 无额外锁]
+    G -. 共享策略快照 .-> K
+    K --> L([执行对应请求策略])
+```
+
+WebSocket 的 `OnHandshake` 接收中间件派生的上下文，包含身份、metadata 和握手截止时间。升级成功后，`WebSocketConn.Request().Context()` 保留这些上下文值，同时脱离 HTTP 握手请求的取消和截止时间；连接关闭时取消。`OnConnect`、`OnMessage`、`OnError` 和 `OnClose` 均可通过 `Request()` 读取这些值。正常关闭及停机强制中断会先取消连接上下文，读循环退出时的 `OnClose` 看到已取消状态。应用如需连接最大存活时间，应自行按业务策略调用 `Close()`。
+
+```mermaid
+flowchart TD
+    A([HTTP 升级请求]) --> B[中间件派生身份 metadata 和握手截止时间]
+    B --> C[OnHandshake 使用派生上下文]
+    C --> D{握手与 Gorilla 升级成功?}
+    D -- 否 --> E[WARN websocket upgrade failed]
+    E --> F([返回请求错误 释放握手上下文])
+    D -- 是 --> G[保留上下文值 创建独立连接取消函数]
+    G --> V{hub 锁内检查 是否已停机?}
+    V -- 是 --> W[释放 hub 锁 Close 取消上下文并关闭连接]
+    W --> X[关闭失败时 WARN websocket connection close failed]
+    X --> Y[WARN websocket server is stopping]
+    Y --> S
+    V -- 否 --> H[hub 锁内登记连接 释放锁后启动读循环]
+    H --> I[OnConnect 与 OnMessage 使用连接上下文]
+    I --> J{读失败或对端断开?}
+    J -- 是 --> K[OnError]
+    J -- 否 --> I
+    K --> L[closeOnce 内取消连接上下文]
+    M[并发 Close 或停机关闭] --> L
+    L --> N[写锁内发送可选关闭帧并关闭 socket 释放写锁]
+    N --> O{关闭错误?}
+    O -- 是 --> P[读循环 WARN websocket connection close failed]
+    O -- 否 --> Q[OnClose 读取已取消的连接上下文]
+    P --> Q
+    Q --> R[hub 锁内移除连接 释放锁]
+    R --> S([连接结束])
+    T[停机超时 强制 abort] --> U[取消连接上下文并直接关闭 socket]
+    U --> K
+```
+
+WebSocket 读失败会结束该连接；写失败后也会关闭已不可复用的连接，使阻塞的读循环退出并执行既有 OnClose 与 hub 清理。关闭发生在释放写锁之后，不会自锁。其他连接与服务监听继续运行，重新连接由客户端发起。
+
+服务停机时会并发关闭已有 WebSocket 连接，共享调用方传入的总时间预算。预算耗尽后直接关闭底层 socket，以打断仍在进行的读写；读循环随后仍按原有路径执行一次 OnClose 和 hub 清理。
+
+```mermaid
+flowchart TD
+    A[stop 接收已有连接快照] --> B[每条连接启动一个正常关闭 goroutine]
+    B --> C[关闭结果写入按连接数缓冲的 channel]
+    C --> D{全部关闭且读循环退出?}
+    D -->|是| E[汇总关闭结果并返回]
+    D -->|Context 到期| F[直接关闭每条底层 socket]
+    F --> G[立即返回 Context 错误]
+    F --> H[读写解除阻塞]
+    H --> I[读循环执行 closeOnce 和 OnClose]
+    I --> J[从 hub 移除连接]
+```
+
+框架可以用底层连接关闭打断网络读写，但不能强制终止业务实现的 `OnConnect`、`OnMessage`、`OnError` 或 `OnClose`；这些回调必须自行及时返回。缓冲结果 channel 保证停机超时返回后，已启动的关闭 goroutine 不会因上报结果再次阻塞。
+
+## 截止时间
+
+`middleware.deadline.fallback_timeout` 缺失时默认 **10s**，未配置 `middleware` 或 `deadline` 也采用该默认值。只有父 Context 没有截止时间时才使用 fallback；显式 `fallback_timeout: 0s` 关闭回退超时。`max_timeout` 大于零时始终参与计算，并取更早的截止时间，因此关闭 fallback 后仍可能被父 Context 或 `max_timeout` 限制。`max_timeout` 与 `min_budget` 默认 0s，不启用对应限制。
+
+路由按精确 `path`、最长 `prefix`、全局配置的顺序匹配；路由缺失的字段继承全局值，显式 `0s` 关闭对应限制。热更新删除全局 fallback 显式值后恢复默认 10s。`min_budget` 不能超过任何已启用的 fallback 或 max 超时，因此未指定 fallback 时也会按默认 10s 校验。
+
+下图同时适用于服务端处理与客户端调用。HTTP 服务端会先将有效的 `x-request-timeout-ms` 请求头转换为上游截止时间，客户端则将最终剩余预算传播到请求头；gRPC 使用 Context 传播预算。
+
+```mermaid
+flowchart TD
+    A([开始请求或调用]) --> B{父 Context 已取消或超时?}
+    B -- 是 --> E([返回 Context 错误])
+    B -- 否 --> C[读取策略并匹配路由 缺失全局 fallback 默认 10s]
+    C --> D{父 Context 有截止时间?}
+    D -- 是 --> F[沿用父截止时间]
+    D -- 否 --> G{fallback 大于 0?}
+    G -- 是 --> H[候选截止时间为当前时间加 fallback]
+    G -- 否 --> I[无候选截止时间]
+    F --> J{max_timeout 大于 0?}
+    H --> J
+    I --> J
+    J -- 是 --> K[与当前时间加 max 比较 采用更早者或唯一候选]
+    J -- 否 --> L{有最终截止时间?}
+    K --> L
+    L -- 否 --> M[创建仅继承取消的 Context]
+    L -- 是 --> N{剩余预算大于 0 且不低于 min_budget?}
+    N -- 否 --> O([返回超时或预算不足错误])
+    N -- 是 --> P[创建带截止时间的 Context 并记录预算信息]
+    P --> Q[执行 Handler 或外部调用 超时取消 Context]
+    M --> Q
+    Q --> R([返回结果并释放 Context])
+```
+
+## 默认健康检查
+
+未指定独立地址时，启用业务 HTTP 默认提供 `GET/HEAD /healthz` 和 `GET/HEAD /readyz`。成功返回 200，未就绪返回
+503，其他方法返回 405；不返回内部错误或依赖地址。它们是独立于业务 `PathPrefix` 的保留路径，
+优先于业务路由、Filter、鉴权和限流。不要在这些路径注册业务接口；需要复用路径时先关闭健康检查。
+同一监听上的健康路径不能与 metrics 路径相同。
+
+`bootstrap.NewServerBootstrap` 自动绑定 `app.Spec.Ready`：全部启动后钩子成功才就绪，收到停机
+请求立即不就绪，不等待 `stop_delay`。直接使用 Runtime 时，必须在启动前调用
+`runtime.SetReadinessSource(readyFunc)`；未绑定时 `/readyz` 保持 503。Runtime.Stop 或 Wire cleanup
+也会关闭就绪状态。`/healthz` 仅证明 HTTP 处理路径仍能响应，不代表所有后台任务正常。
+
+```go
+spec.HTTP().Health(server.HealthConfig{
+    LivenessPath: "/healthz",
+    ReadinessPath: "/readyz",
+    Timeout: time.Second,
+    Checks: []server.ReadinessCheck{
+        {Name: "database", Check: sqlDB.PingContext},
+    },
+})
+```
+
+零值配置启用默认路径和一秒总检查期限；`HealthConfig{Disable: true}` 关闭端点。Checks 按顺序
+执行，只注册接收业务流量必需的依赖。检查函数必须支持 Context、可并发调用、无写入副作用；
+超时通知不能强杀不合作的检查函数，框架不另起可能泄漏的 goroutine 包装检查。
+配置在组装后固定；不得并发修改 Spec 或 SetReadinessSource。普通探针不逐次记录日志，readiness
+结果变化记录 `healthState.ready | readiness.changed`（成功 INFO、失败 WARN），只包含状态和检查名。
+
+```mermaid
+flowchart TD
+    A([并发 HTTP 探针入口]) --> B{保留路径?}
+    B -- 否 --> C[业务 Filter 与路由]
+    B -- 是 --> D{GET 或 HEAD?}
+    D -- 否 --> E[405]
+    D -- 是 --> F{healthz?}
+    F -- 是 --> G[200]
+    F -- 否 --> H[原子读取应用完成启动与停机状态]
+    H --> I{已就绪且未停机?}
+    I -- 否 --> J[503]
+    I -- 是 --> K[不持锁调用关键依赖 共用检查期限]
+    K --> L{检查失败 超时 或期间停机?}
+    L -- 是 --> J
+    L -- 否 --> G
+    G --> M{readiness 结果变化?}
+    J --> M
+    M -- 是 --> N[INFO 或 WARN readiness.changed]
+    M -- 否 --> O([结束])
+    N --> O
+    E --> O
+    C --> O
+```
+
+## 监控端点监听地址
+
+监听位置统一由 `server.http` 管理：metrics 领域负责指标数据，app 提供就绪状态，server 负责将
+HTTP 处理器挂载到具体地址。`server.http.metrics` 保持现有配置位置，健康检查配置为
+`server.http.health`。这些配置需要重启，不属于热更新字段。
+
+```yaml
+server:
+  http:
+    addr: "0.0.0.0:8000"
+    metrics:
+      disable: false
+      path: /metrics
+      addr: "127.0.0.1:9001"
+    health:
+      disable: false
+      addr: "127.0.0.1:9001"
+      liveness_path: /healthz
+      readiness_path: /readyz
+      timeout: 1s
+```
+
+该示例启动业务端口 8000 和一个管理端口 9001；9001 同时提供 metrics 和健康检查，8000 不再
+重复提供它们。省略两个管理 addr 时，三个端点默认都挂载到业务 HTTP。
+
+| 地址与开关 | 行为 |
+| --- | --- |
+| addr 为空 | 复用业务 HTTP；业务 HTTP 禁用时该端点不启动 |
+| addr 与启用的 server.http.addr 相同 | 复用业务监听，不重复绑定 |
+| addr 与业务地址不同 | 只在新增监听上提供对应监控端点 |
+| metrics.addr 与 health.addr 相同 | 两个端点共享一个新增监听 |
+| 两个管理地址不同 | 分别监听，可同时存在三个 HTTP 监听 |
+| 业务 HTTP 禁用，但管理 addr 显式指定 | 独立管理监听仍启用，包括地址与原业务配置相同的情况 |
+| 某个端点 disable=true | 不挂载该端点，也不会仅为该端点创建监听 |
+
+地址使用 `host:port`，IPv6 使用 `[::1]:9001`，不接受 URL 或服务名端口。比较会规范化数字端口、
+IP 表示及 `0.0.0.0`/空 host；不通过 DNS 推断 localhost 与 IP 等价，也不猜测 IPv4/IPv6 的系统
+绑定重叠。不同地址因通配绑定或端口占用发生冲突时，启动失败并触发应用统一停止。复用依据是
+`server.http.addr` 配置；不要用原生 `HTTP.Option(http.Address(...))` 隐式改写需要参与复用的地址。
+
+端点路径均相对于所选监听的根路径，独立于业务 PathPrefix、Filter 和鉴权。独立监听不继承业务
+路由、WebSocket、TLS 或全局 DefaultServeMux，默认使用普通 HTTP；通过绑定地址控制监听范围。
+同一监听上的 metrics 和健康路径不能冲突，不同监听可以使用相同路径。
+
+业务通过代码添加检查函数时，推荐只设置 Checks，保留文件中的部署配置：
+
+```go
+spec.HTTP().HealthChecks(server.ReadinessCheck{
+    Name: "database",
+    Check: sqlDB.PingContext,
+})
+```
+
+前文的 `Health(HealthConfig{...})` 是显式代码覆盖，会整体替换文件中的健康端点配置；
+`HealthChecks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
+
+`NewServerBootstrap` 自动登记全部监听。手工组装保留 `Runtime.Servers()` 的业务 HTTP/gRPC
+返回值，并额外登记 `Runtime.ManagementServers()` 中的运行时。管理运行时不实现 Endpointer，
+避免管理地址进入业务服务发现；不能将它们当作业务服务地址发布。监听在 Start 时创建，错误通过
+现有 App 运行时传播；Stop 先撤销就绪，再按现有停机策略释放监听，构造期不打开 socket。
+
+```mermaid
+flowchart TD
+    A([读取 server.http 配置]) --> B{监控端点启用?}
+    B -- 否 --> Z([不创建该端点])
+    B -- 是 --> C{地址为空?}
+    C -- 是 --> D{业务 HTTP 启用?}
+    D -- 否 --> Z
+    D -- 是 --> E[挂载业务 HTTP]
+    C -- 否 --> F[校验并规范化 host:port]
+    F --> G{与启用的业务地址相同?}
+    G -- 是 --> E
+    G -- 否 --> H[按地址合并独立监听 仅挂载管理处理器]
+    E --> I{同一监听路径冲突?}
+    H --> I
+    I -- 是 --> J([构造失败 返回错误])
+    I -- 否 --> K[Bootstrap 登记运行时 管理端口不参与发现]
+    K --> L[App 并发启动监听]
+    L --> M{绑定成功?}
+    M -- 否 --> N[现有运行时错误传播 请求应用停止]
+    M -- 是 --> O[HTTP INFO server listening]
+    O --> P[等待请求或停机]
+    P --> Q[原子撤销就绪 HTTP INFO server stopping]
+    N --> Q
+    Q --> R[按停止期限 Shutdown 超时则 Close]
+    R --> S([释放监听并结束])
+```

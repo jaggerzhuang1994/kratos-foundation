@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package pubg.jsonschema;
 
-option go_package = "github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/pkg/proto";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/jsonschema_pb";
 
 import "google/protobuf/descriptor.proto";
 import "google/protobuf/any.proto";
@@ -126,4 +126,3 @@ extend google.protobuf.EnumOptions {
 extend google.protobuf.EnumValueOptions {
   EnumValueOptions enum_value = 11345;
 }
-

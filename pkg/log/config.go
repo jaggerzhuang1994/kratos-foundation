@@ -1,48 +1,49 @@
 package log
 
 import (
-	"time"
-
-	"github.com/jaggerzhuang1994/kratos-foundation/pkg/env"
-	"github.com/jaggerzhuang1994/kratos-foundation/proto/kratos_foundation_pb/config_pb"
-	"google.golang.org/protobuf/proto"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
-type Config = *config_pb.Log
+// OutputConfig 描述单个日志输出端的启用、级别和字段过滤策略。
+type OutputConfig struct {
+	Disable    bool
+	Level      kratoslog.Level
+	FilterKeys []string
+}
 
-type DefaultConfig Config
+// RotatingConfig 描述文件轮转策略。
+type RotatingConfig struct {
+	Disable    bool
+	MaxSize    int
+	MaxFileAge int
+	MaxFiles   int
+	LocalTime  bool
+	Compress   bool
+}
 
-func NewDefaultConfig() DefaultConfig {
-	var defaultLevel = "info"
-	if env.AppDebug() || env.IsLocal() {
-		defaultLevel = "debug"
-	}
-	return &config_pb.Log{
-		Level:       proto.String(defaultLevel),
-		FilterEmpty: proto.Bool(true),
-		FilterKeys:  []string{},
-		TimeFormat:  proto.String(time.RFC3339),
-		Std: &config_pb.StdLogger{
-			Disable: proto.Bool(false),
-			Level:   proto.String(defaultLevel),
-			FilterKeys: []string{
-				"service.id", "service.name", "service.version",
-			},
-		},
-		File: &config_pb.FileLogger{
-			Disable:    proto.Bool(false),
-			Level:      proto.String(defaultLevel),
-			FilterKeys: nil,
-			Path:       proto.String("./app.log"),
-			Rotating: &config_pb.FileRotating{
-				Disable:    proto.Bool(false),
-				MaxSize:    proto.Int64(100),
-				MaxFileAge: proto.Int32(0),
-				MaxFiles:   proto.Int32(0),
-				LocalTime:  proto.Bool(false),
-				Compress:   proto.Bool(false),
-			},
-		},
-		Preset: []string{}, // 空表示所有
-	}
+// FileConfig 描述文件输出端及其轮转策略。
+type FileConfig struct {
+	OutputConfig
+	Path     string
+	Rotating RotatingConfig
+}
+
+// Config 描述可动态更新的日志配置。
+type Config struct {
+	Level       kratoslog.Level
+	FilterEmpty bool
+	FilterKeys  []string
+	TimeFormat  string
+	Std         OutputConfig
+	File        FileConfig
+}
+
+// UpdateLogger 提供动态更新日志配置的能力。
+type UpdateLogger interface {
+	Update(Config) error
+}
+
+// NewUpdateLogger 返回仅暴露配置更新能力的 SharedState 视图。
+func NewUpdateLogger(shared *SharedState) UpdateLogger {
+	return shared
 }
