@@ -1,6 +1,7 @@
 package bootstrap_test
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
@@ -65,14 +65,14 @@ func newTestRuntime(
 ) *server.Runtime {
 	t.Helper()
 	info := appinfo.New("test")
-	shared, cleanupLog, err := log.NewSharedState(log.Config{
+	shared, cleanupLog, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: log.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: log.FileConfig{OutputConfig: log.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -97,7 +97,7 @@ func newTestRuntime(
 	}
 	runtime, cleanupRuntime, err := server.NewRuntime(
 		manager,
-		log.NewLogger(shared),
+		shared,
 		metricsProvider,
 		tracingProvider,
 		spec,

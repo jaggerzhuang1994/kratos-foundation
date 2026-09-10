@@ -1,4 +1,4 @@
-package log
+package testlog
 
 import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
@@ -28,7 +28,7 @@ type FileConfig struct {
 	Rotating RotatingConfig
 }
 
-// Config 描述可动态更新的日志配置。
+// Config 仅用于跨包测试生成 LOG_* 环境变量，不属于日志公共契约。
 type Config struct {
 	Level       kratoslog.Level
 	FilterEmpty bool
@@ -36,14 +36,4 @@ type Config struct {
 	TimeFormat  string
 	Std         OutputConfig
 	File        FileConfig
-}
-
-// UpdateLogger 提供动态更新日志配置的能力。
-type UpdateLogger interface {
-	Update(Config) error
-}
-
-// NewUpdateLogger 返回仅暴露配置更新能力的 SharedState 视图。
-func NewUpdateLogger(shared *SharedState) UpdateLogger {
-	return shared
 }

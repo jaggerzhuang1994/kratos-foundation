@@ -3,6 +3,7 @@ package bootstrap_test
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func TestBootstrapSkipsEmptyManager(t *testing.T) {
 
 func TestBootstrapRegistersNonEmptyManagerAllowsRepeatedRegistration(t *testing.T) {
 	jobSpec := job.NewSpec()
-	jobSpec.Daemon("worker", job.TaskFunc(func(context.Context) error { return nil }))
+	jobSpec.RegisterDaemon("worker", job.TaskFunc(func(context.Context) error { return nil }))
 	manager := newTestManager(t, jobSpec)
 	spec := app.NewSpec()
 	if _, err := bootstrap.NewJobBootstrap(spec, manager); err != nil {
@@ -59,14 +60,14 @@ func newTestManager(t *testing.T, spec *job.Spec) *job.Manager {
 func newTestObservability(t *testing.T) (log.Logger, tracing.Provider, metrics.Provider) {
 	t.Helper()
 	info := appinfo.New("test")
-	shared, cleanupLog, err := log.NewSharedState(log.Config{
+	shared, cleanupLog, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: log.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: log.FileConfig{OutputConfig: log.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -86,7 +87,7 @@ func newTestObservability(t *testing.T) (log.Logger, tracing.Provider, metrics.P
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanupTracing)
-	return log.NewLogger(shared), tracingProvider, metricsProvider
+	return shared, tracingProvider, metricsProvider
 }
 
 // 通过真实 App 生命周期验证组装适配：成功完成退出，失败仍可由 errors.Is 找到。
@@ -98,7 +99,7 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 	}{{"completed", nil}, {"failed", failure}} {
 		t.Run(tt.name, func(t *testing.T) {
 			jobSpec := job.NewSpec()
-			jobSpec.Once("once", job.TaskFunc(func(context.Context) error { return tt.result })).ExitWhenDone()
+			jobSpec.RegisterOnce("once", job.TaskFunc(func(context.Context) error { return tt.result })).ExitWhenDone()
 			manager := newTestManager(t, jobSpec)
 			spec := app.NewSpec()
 			if _, err := bootstrap.NewJobBootstrap(spec, manager); err != nil {

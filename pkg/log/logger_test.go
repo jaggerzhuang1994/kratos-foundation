@@ -1,6 +1,7 @@
 package log
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -23,17 +26,17 @@ type capturedLogRecord struct {
 
 func TestLoggerHelperMethodsEmitExpectedLevelsAndPayloads(t *testing.T) {
 	var records []capturedLogRecord
-	shared := &SharedState{}
-	shared.config.Store(&configState{
+	shared := &sharedState{}
+	base := &configState{
 		level:  kratoslog.LevelDebug,
 		msgKey: defaultMsgKey,
 		output: &outputLogger{output: loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
 			records = append(records, capturedLogRecord{level: level, keyvals: append([]any(nil), keyvals...)})
 			return nil
 		})},
-	})
+	}
 	shared.custom.Store(&customState{})
-	logger := &logger{shared: shared}
+	logger := &logger{shared: shared, config: base}
 
 	logger.Debug("debug")
 	logger.Debugf("debug-%d", 2)
@@ -72,8 +75,8 @@ func TestLoggerHelperMethodsEmitExpectedLevelsAndPayloads(t *testing.T) {
 func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 	var mu sync.Mutex
 	var written []any
-	shared := &SharedState{}
-	shared.config.Store(&configState{
+	shared := &sharedState{}
+	base := &configState{
 		level:       kratoslog.LevelInfo,
 		filterEmpty: false,
 		msgKey:      defaultMsgKey,
@@ -83,33 +86,21 @@ func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 			written = append([]any(nil), keyvals...)
 			return nil
 		})},
-	})
+	}
 	shared.custom.Store(&customState{})
-	if err := shared.WithFilterEmpty(true); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithFilterKeys("global.secret"); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithKV("global", "value"); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithCallerDepth(1); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithTimeFormat("2006"); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithMsgKey("message"); err != nil {
-		t.Fatal(err)
-	}
+	shared.WithFilterEmpty(true)
+	shared.WithFilterKeys("global.secret")
+	shared.WithKV("global", "value")
+	shared.WithCallerDepth(1)
+	shared.WithTimeFormat("2006")
+	shared.WithMsgKey("message")
 	ctx := WithKv(context.Background(), "request.id", "r1")
-	contextCopy := KvFromCtx(ctx)
+	contextCopy := kvFromCtx(ctx)
 	contextCopy[1] = "mutated"
-	if KvFromCtx(ctx)[1] != "r1" {
-		t.Fatal("KvFromCtx returned aliased state")
+	if kvFromCtx(ctx)[1] != "r1" {
+		t.Fatal("kvFromCtx returned aliased state")
 	}
-	derived, err := NewLogger(shared).WithModuleConfig("orders", testModuleConfig{
+	derived, err := (&logger{shared: shared, config: base}).WithModuleConfig("orders", testModuleConfig{
 		level:      "debug",
 		filterKeys: []string{"module.secret"},
 	})
@@ -202,43 +193,47 @@ func TestWithModulePanicsForInvalidConstant(t *testing.T) {
 }
 
 func TestPublicLoggerConstructsLogger(t *testing.T) {
-	config := Config{
+	config := envConfig{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: OutputConfig{
+		Std: outputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: FileConfig{
-			OutputConfig: OutputConfig{
+		File: fileConfig{
+			outputConfig: outputConfig{
 				Disable: true,
 				Level:   kratoslog.LevelInfo,
 			},
 		},
 	}
-	shared, cleanup, err := NewSharedState(config)
+	shared := &sharedState{}
+	shared.custom.Store(&customState{})
+	rootLogger, cleanup, err := newLogger(shared, config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	if logger := NewLogger(shared); logger == nil {
+	if rootLogger == nil {
 		t.Fatal("NewLogger returned nil")
 	}
 }
 
 func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "foundation.log")
-	config := Config{
+	config := envConfig{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std:        OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: FileConfig{
-			OutputConfig: OutputConfig{Level: kratoslog.LevelDebug},
+		Std:        outputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		File: fileConfig{
+			outputConfig: outputConfig{Level: kratoslog.LevelDebug},
 			Path:         path,
-			Rotating:     RotatingConfig{Disable: true},
+			Rotating:     rotatingConfig{Disable: true},
 		},
 	}
-	shared, cleanup, err := NewSharedState(config)
+	shared := &sharedState{}
+	shared.custom.Store(&customState{})
+	rootLogger, cleanup, err := newLogger(shared, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,33 +241,19 @@ func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 
 	ctx := WithKv(context.Background(), "request.id", "r1")
 	ctx = WithKv(ctx, "tenant", "acme")
-	contextFields := KvFromCtx(ctx)
+	contextFields := kvFromCtx(ctx)
 	contextFields[1] = "mutated"
-	if got := KvFromCtx(ctx); len(got) != 4 || got[1] != "r1" || got[3] != "acme" {
+	if got := kvFromCtx(ctx); len(got) != 4 || got[1] != "r1" || got[3] != "acme" {
 		t.Fatalf("context fields were not appended and copied: %#v", got)
 	}
-	if err := shared.WithLevel(kratoslog.LevelDebug); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithFilterEmpty(true); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithFilterKeys("secret"); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithKV("global", "value"); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithCallerDepth(1); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithTimeFormat("2006-01-02"); err != nil {
-		t.Fatal(err)
-	}
-	if err := shared.WithMsgKey("message"); err != nil {
-		t.Fatal(err)
-	}
-	logger := NewLogger(shared).
+	shared.WithLevel(kratoslog.LevelDebug)
+	shared.WithFilterEmpty(true)
+	shared.WithFilterKeys("secret")
+	shared.WithKV("global", "value")
+	shared.WithCallerDepth(1)
+	shared.WithTimeFormat("2006-01-02")
+	shared.WithMsgKey("message")
+	logger := rootLogger.
 		WithModule("orders").
 		WithContext(ctx).
 		With("secret", "private", "empty", "")
@@ -291,13 +272,7 @@ func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 		t.Fatalf("log filters were not applied: %s", line)
 	}
 
-	if err := shared.WithLevel(kratoslog.LevelError); err != nil {
-		t.Fatal(err)
-	}
-	config.Level = kratoslog.LevelError
-	if err := NewUpdateLogger(shared).Update(config); err != nil {
-		t.Fatal(err)
-	}
+	shared.WithLevel(kratoslog.LevelError)
 	before := len(written)
 	logger.Info("filtered")
 	written, err = os.ReadFile(path)
@@ -340,17 +315,17 @@ func TestLoggerFatalHelperProcess(t *testing.T) {
 		return
 	}
 
-	shared := &SharedState{}
-	shared.config.Store(&configState{
+	shared := &sharedState{}
+	base := &configState{
 		level:  kratoslog.LevelDebug,
 		msgKey: defaultMsgKey,
 		output: &outputLogger{output: loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
 			_, err := fmt.Fprintf(os.Stderr, "level=%s keyvals=%v\n", level, keyvals)
 			return err
 		})},
-	})
+	}
 	shared.custom.Store(&customState{})
-	logger := &logger{shared: shared}
+	logger := &logger{shared: shared, config: base}
 
 	switch mode {
 	case "fatal":
@@ -363,4 +338,251 @@ func TestLoggerFatalHelperProcess(t *testing.T) {
 		t.Fatalf("unknown fatal helper mode %q", mode)
 	}
 	t.Fatal("fatal logger returned without exiting")
+}
+
+func contributionLogConfig(path string) envConfig {
+	return envConfig{
+		Level:       kratoslog.LevelInfo,
+		FilterEmpty: false,
+		TimeFormat:  time.RFC3339,
+		Std: outputConfig{
+			Disable: true,
+			Level:   kratoslog.LevelInfo,
+		},
+		File: fileConfig{
+			outputConfig: outputConfig{Level: kratoslog.LevelInfo},
+			Path:         path,
+			Rotating:     rotatingConfig{Disable: true},
+		},
+	}
+}
+
+// setSharedLogEnvironment 通过正式 env 初始化入口准备全局日志测试，不绕过资源生命周期。
+
+func setSharedLogEnvironment(t *testing.T, path string) {
+	t.Helper()
+	clearEnvironment(t, logEnvironmentKeys...)
+	t.Setenv(EnvLevel, "info")
+	t.Setenv(EnvStdDisable, "true")
+	t.Setenv(EnvFileDisable, "false")
+	t.Setenv(EnvFilePath, path)
+	t.Setenv(EnvFileRotatingDisable, "true")
+}
+
+func TestLoggerDeduplicatesCompleteKeyvalsBeforeOutput(t *testing.T) {
+	var writtenKeyvals []any
+	config := &configState{
+		level:  kratoslog.LevelDebug,
+		msgKey: defaultMsgKey,
+		output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, keyvals ...any) error {
+			writtenKeyvals = append([]any(nil), keyvals...)
+			return nil
+		})},
+	}
+	custom := &customState{kv: []any{"request.id", "custom"}}
+	shared := &sharedState{}
+	shared.custom.Store(custom)
+	l := &logger{shared: shared, config: config, kv: []any{"request.id", "derived"}}
+
+	if err := l.Log(kratoslog.LevelInfo, "request.id", "call"); err != nil {
+		t.Fatal(err)
+	}
+
+	values := make([]any, 0, 1)
+	for index := 0; index+1 < len(writtenKeyvals); index += 2 {
+		if writtenKeyvals[index] == "request.id" {
+			values = append(values, writtenKeyvals[index+1])
+		}
+	}
+	if len(values) != 1 || values[0] != "call" {
+		t.Fatalf("request.id values = %#v, want []any{%q}; keyvals = %#v", values, "call", writtenKeyvals)
+	}
+}
+
+// loggerFunc 供同包测试观察最终输出，不持有外部资源。
+type loggerFunc func(kratoslog.Level, ...any) error
+
+func (f loggerFunc) Log(level kratoslog.Level, keyvals ...any) error { return f(level, keyvals...) }
+
+// TestLoggerInstancesOwnOutputsAndShareSettings 验证 Wire 实例资源隔离且进程设置统一生效。
+func TestLoggerInstancesOwnOutputsAndShareSettings(t *testing.T) {
+	previous := processState.custom.Load()
+	t.Cleanup(func() { processState.custom.Store(previous) })
+	processState.custom.Store(&customState{})
+	firstPath := filepath.Join(t.TempDir(), "first.log")
+	setSharedLogEnvironment(t, firstPath)
+	first, releaseFirst, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseFirst()
+	secondPath := filepath.Join(t.TempDir(), "second.log")
+	t.Setenv(EnvFilePath, secondPath)
+	second, releaseSecond, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseSecond()
+	derived := first.WithModule("worker")
+	WithKV("shared_field", "before")
+	WithFilterEmpty(true)
+	first.Infow("msg", "first", "empty_field", "")
+	second.Infow("msg", "second", "empty_field", "")
+	releaseFirst()
+	releaseFirst()
+	for _, closed := range []Logger{first, derived} {
+		if err := closed.Log(kratoslog.LevelInfo, "msg", "after-close"); !errors.Is(err, os.ErrClosed) {
+			t.Fatalf("closed instance write = %v, want os.ErrClosed", err)
+		}
+	}
+	WithKV("shared_field", "after")
+	second.Info("still-open")
+	WithLevel(kratoslog.LevelError)
+	second.Info("filtered")
+	releaseSecond()
+	for path, want := range map[string][]string{
+		firstPath:  {"shared_field=before", "msg=first"},
+		secondPath: {"shared_field=before", "shared_field=after", "msg=still-open"},
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, value := range want {
+			if !strings.Contains(string(data), value) {
+				t.Fatalf("%s lacks %s: %s", path, value, data)
+			}
+		}
+		if strings.Contains(string(data), "after-close") || strings.Contains(string(data), "filtered") || strings.Contains(string(data), "empty_field") {
+			t.Fatalf("unexpected write: %s", data)
+		}
+	}
+	if processState.custom.Load().level == nil || *processState.custom.Load().level != kratoslog.LevelError {
+		t.Fatal("instance cleanup reset shared settings")
+	}
+	// 创建后续实例不会重新打开已关闭实例的输出，也不清除共享设置。
+	t.Setenv(EnvFilePath, filepath.Join(t.TempDir(), "third.log"))
+	third, cleanup, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if third.(*logger).shared != processState {
+		t.Fatal("new instance lost shared state")
+	}
+	if err := first.Log(kratoslog.LevelError, "msg", "closed"); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("old output reopened: %v", err)
+	}
+}
+
+func TestNewLoggerReportsEnvironmentErrors(t *testing.T) {
+	t.Setenv(EnvLevel, "not-a-level")
+	logger, cleanup, err := NewLogger()
+	if err == nil || logger != nil || cleanup != nil {
+		t.Fatal("invalid environment was accepted")
+	}
+}
+
+func TestLoggerConcurrentWritesAndSharedUpdates(t *testing.T) {
+	previous := processState.custom.Load()
+	t.Cleanup(func() { processState.custom.Store(previous) })
+	processState.custom.Store(&customState{})
+	path := filepath.Join(t.TempDir(), "concurrent.log")
+	setSharedLogEnvironment(t, path)
+	logger, cleanup, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	const writers, entries = 4, 100
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for writer := range writers {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			for entry := range entries {
+				if err := logger.Log(kratoslog.LevelInfo, "entry", fmt.Sprintf("%d:%d", writer, entry)); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		<-start
+		for i := range 100 {
+			WithKV("revision", i)
+		}
+	}()
+	close(start)
+	workers.Wait()
+	cleanup()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for writer := range writers {
+		for entry := range entries {
+			if count := strings.Count(string(data), fmt.Sprintf("entry=%d:%d\n", writer, entry)); count != 1 {
+				t.Fatalf("entry %d:%d count=%d", writer, entry, count)
+			}
+		}
+	}
+}
+
+func TestLoggerCleanupReleasesRotationWorkers(t *testing.T) {
+	workers := func() int {
+		var stacks bytes.Buffer
+		if err := pprof.Lookup("goroutine").WriteTo(&stacks, 2); err != nil {
+			t.Fatal(err)
+		}
+		return strings.Count(stacks.String(), ".(*Logger).millRun(")
+	}
+	before := workers()
+	path := filepath.Join(t.TempDir(), "rotating.log")
+	setSharedLogEnvironment(t, path)
+	t.Setenv(EnvFileRotatingDisable, "false")
+	t.Setenv(EnvFileRotatingMaxSize, "1")
+	for range 3 {
+		logger, cleanup, err := NewLogger()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := logger.Log(kratoslog.LevelInfo, "msg", "rotation owner"); err != nil {
+			cleanup()
+			t.Fatal(err)
+		}
+		cleanup()
+		cleanup()
+	}
+	deadline := time.Now().Add(time.Second)
+	for workers() > before && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if after := workers(); after > before {
+		t.Fatalf("rotation workers leaked: before=%d after=%d", before, after)
+	}
+}
+
+func TestBuildCacheDoesNotPublishStaleSharedSettings(t *testing.T) {
+	shared := &sharedState{}
+	old := &customState{version: 1}
+	current := &customState{version: 2}
+	shared.custom.Store(current)
+	l := &logger{shared: shared, config: &configState{
+		output: &outputLogger{output: loggerFunc(func(kratoslog.Level, ...any) error { return nil })},
+	}}
+	if !l.buildCache(current) {
+		t.Fatal("current settings were rejected")
+	}
+	if l.buildCache(old) {
+		t.Fatal("stale settings were accepted")
+	}
+	if l.cache.customVersion != current.version {
+		t.Fatalf("cache version = %d", l.cache.customVersion)
+	}
 }

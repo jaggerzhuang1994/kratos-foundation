@@ -2,12 +2,12 @@ package log
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 )
 
 // ModuleConfig 定义模块日志配置所需的最小契约。
@@ -72,9 +72,10 @@ type Logger interface {
 	Fatalw(keyvals ...any)
 }
 
-// logger 是绑定 SharedState 的不可变业务 Logger。
+// logger 是绑定 sharedState 的不可变业务 Logger。
 type logger struct {
-	shared *SharedState
+	shared *sharedState
+	config *configState
 
 	disabled         bool
 	level            *kratoslog.Level
@@ -92,9 +93,41 @@ type logger struct {
 	cache *loggerCache
 }
 
-// NewLogger 返回绑定 SharedState 的业务 Logger。
-func NewLogger(shared *SharedState) Logger {
-	return &logger{shared: shared}
+// configState 是单个 Wire Logger 持有的不可变默认配置及输出，派生 Logger 复用它。
+type configState struct {
+	output      *outputLogger
+	level       kratoslog.Level
+	filterEmpty bool
+	filterKeys  []string
+	callerDepth int
+	timeFormat  string
+	msgKey      string
+}
+
+// NewLogger 读取 LOG_* 并创建独立输出；cleanup 由对应 Wire 实例持有和释放。
+// 派生 Logger 复用该实例输出，进程级 WithXXX 设置由所有实例共享。
+func NewLogger() (Logger, func(), error) {
+	config, err := newEnvConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+	return newLogger(processState, config)
+}
+
+// newLogger 构造实例资源；关闭只影响本实例及其派生 Logger。
+func newLogger(shared *sharedState, config envConfig) (Logger, func(), error) {
+	if err := validateConfig(config); err != nil {
+		return nil, nil, err
+	}
+	output, cleanup, err := newOutputLogger(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &logger{shared: shared, config: &configState{
+		output: output, level: config.Level, filterEmpty: config.FilterEmpty,
+		filterKeys:  append([]string(nil), config.FilterKeys...),
+		callerDepth: defaultCallerDepth, timeFormat: config.TimeFormat, msgKey: defaultMsgKey,
+	}}, cleanup, nil
 }
 
 func (l *logger) With(kv ...any) Logger {
@@ -171,6 +204,7 @@ func (l *logger) WithFilterKeys(filterKeys ...string) Logger {
 func (l *logger) clone() *logger {
 	return &logger{
 		shared:           l.shared,
+		config:           l.config,
 		disabled:         l.disabled,
 		level:            l.level,
 		filterEmpty:      l.filterEmpty,
@@ -185,16 +219,13 @@ func (l *logger) clone() *logger {
 	}
 }
 
-// log 在旧输出已关闭且新 Config 版本已发布时重新读取状态并重试。
+// log 按共享配置版本刷新包装；实例输出关闭后返回错误，不切换到其他实例。
 func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) error {
 	if l.disabled {
 		return nil
 	}
 	for {
-		config := l.shared.config.Load()
-		if config == nil {
-			return errSharedStateReleased
-		}
+		config := l.config
 		custom := l.shared.custom.Load()
 
 		minimum := config.level
@@ -207,7 +238,7 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 			return nil
 		}
 
-		if l.expired(config, custom) && !l.buildCache(config, custom) {
+		if l.expired(custom) && !l.buildCache(custom) {
 			continue
 		}
 
@@ -222,10 +253,6 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 			return l.cache.logger.Log(level, writeKeyvals...)
 		}()
 
-		latest := l.shared.config.Load()
-		if errors.Is(err, os.ErrClosed) && latest != nil && latest != config {
-			continue
-		}
 		return err
 	}
 }
@@ -295,4 +322,90 @@ func (l *logger) Fatalf(format string, a ...any) {
 func (l *logger) Fatalw(keyvals ...any) {
 	_ = l.log(kratoslog.LevelFatal, false, keyvals...)
 	os.Exit(1)
+}
+
+// loggerCache 保存实例输出与指定共享配置版本对应的写入链。
+type loggerCache struct {
+	customVersion uint64
+	msgKey        string
+	logger        kratoslog.Logger
+}
+
+func (l *logger) expired(custom *customState) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	return l.cache == nil || l.cache.customVersion != custom.version
+}
+
+// buildCache 仅发布仍与 sharedState 当前快照一致的写入链。
+func (l *logger) buildCache(custom *customState) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.shared.custom.Load() != custom {
+		return false
+	}
+	if l.cache != nil && l.cache.customVersion == custom.version {
+		return true
+	}
+
+	config := l.config
+	cache := kratoslog.Logger(config.output)
+	cache = output.NewDedupe(cache)
+
+	filterEmpty := config.filterEmpty
+	if l.filterEmpty != nil {
+		filterEmpty = *l.filterEmpty
+	} else if custom.filterEmpty != nil {
+		filterEmpty = *custom.filterEmpty
+	}
+	filterKeys := make([]string, 0, len(config.filterKeys)+len(custom.filterKeys)+len(l.filterKeys))
+	filterKeys = append(filterKeys, config.filterKeys...)
+	filterKeys = append(filterKeys, custom.filterKeys...)
+	filterKeys = append(filterKeys, l.filterKeys...)
+	cache = output.NewFilter(cache, filterEmpty, output.FilterKeysSet(filterKeys))
+
+	timeFormat := config.timeFormat
+	if l.timeFormat != "" {
+		timeFormat = l.timeFormat
+	} else if custom.timeFormat != "" {
+		timeFormat = custom.timeFormat
+	}
+	callerDepth := config.callerDepth
+	if l.callerDepth > 0 {
+		callerDepth = l.callerDepth
+	} else if custom.callerDepth > 0 {
+		callerDepth = custom.callerDepth
+	}
+	callerDepth += l.callerDepthDelta
+	preset := newPreset(timeFormat, callerDepth)
+	kvs := make([]any, 0, len(preset)+len(custom.kv)+len(l.kv)+2)
+	kvs = append(kvs, preset...)
+	if l.module != "" {
+		kvs = append(kvs, moduleKey, l.module)
+	}
+	kvs = append(kvs, custom.kv...)
+	kvs = append(kvs, l.kv...)
+	if l.ctx != nil {
+		kvs = append(kvs, kvFromCtx(l.ctx)...)
+	}
+	cache = kratoslog.With(cache, kvs...)
+
+	if l.ctx != nil {
+		cache = kratoslog.WithContext(l.ctx, cache)
+	}
+
+	msgKey := config.msgKey
+	if l.msgKey != "" {
+		msgKey = l.msgKey
+	} else if custom.msgKey != "" {
+		msgKey = custom.msgKey
+	}
+
+	l.cache = &loggerCache{
+		customVersion: custom.version,
+		logger:        cache,
+		msgKey:        msgKey,
+	}
+	return true
 }

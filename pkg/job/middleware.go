@@ -23,7 +23,9 @@ func withJobName(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, jobNameKey{}, name)
 }
 
-func jobNameFromContext(ctx context.Context) string {
+// JobNameFromContext 返回当前任务的注册名称；非任务 Context 返回空字符串。
+// 名称由任务执行器注入，可在任务实现和中间件中读取。
+func JobNameFromContext(ctx context.Context) string {
 	name, _ := ctx.Value(jobNameKey{}).(string)
 	return name
 }

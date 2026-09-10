@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"os"
 	"strings"
 	"testing"
@@ -43,14 +44,14 @@ func newTestManager(t *testing.T, spec *Spec) *Manager {
 func newTestObservability(t *testing.T) (log.Logger, tracing.Provider, metrics.Provider) {
 	t.Helper()
 	info := appinfo.New("test")
-	shared, cleanupLog, err := log.NewSharedState(log.Config{
+	shared, cleanupLog, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: log.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: log.FileConfig{OutputConfig: log.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -70,7 +71,7 @@ func newTestObservability(t *testing.T) (log.Logger, tracing.Provider, metrics.P
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanupTracing)
-	return log.NewLogger(shared), tracingProvider, metricsProvider
+	return shared, tracingProvider, metricsProvider
 }
 
 type runtimeTracingProvider struct {
@@ -157,7 +158,7 @@ func (p runtimeTracingProvider) Tracer(
 func TestNewManagerValidatesSpecBeforeCreatingMetrics(t *testing.T) {
 	observability := newRuntimeObservability(t)
 	metricsProvider := &runtimeMetricsProvider{Provider: observability.metricsProvider}
-	invalid := NewSpec().Once("missing-task", nil).(*Spec)
+	invalid := NewSpec().RegisterOnce("missing-task", nil).(*Spec)
 	manager, err := NewManager(
 		observability.logger,
 		invalid,
@@ -239,8 +240,8 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 	observability := newRuntimeObservability(t)
 	var gotJobName string
 	spec := NewSpec().
-		Once("invoice", TaskFunc(func(ctx context.Context) error {
-			gotJobName = jobNameFromContext(ctx)
+		RegisterOnce("invoice", TaskFunc(func(ctx context.Context) error {
+			gotJobName = JobNameFromContext(ctx)
 			return nil
 		})).
 		ExitWhenDone().(*Spec)
@@ -280,7 +281,7 @@ func TestNewManagerCanDisableObservabilityWithoutDisablingRecovery(t *testing.T)
 	observability := newRuntimeObservability(t)
 	spec := NewSpec().
 		Option(WithTracing(false), WithMetrics(false), WithLogging(false)).
-		Once("panic", TaskFunc(func(context.Context) error { panic("recovered") })).
+		RegisterOnce("panic", TaskFunc(func(context.Context) error { panic("recovered") })).
 		ExitWhenDone().(*Spec)
 	manager, err := NewManager(
 		observability.logger,

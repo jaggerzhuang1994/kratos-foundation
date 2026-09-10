@@ -3,6 +3,7 @@ package bootstrap_test
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"go.opentelemetry.io/otel/metric/noop"
 )
@@ -46,11 +47,11 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 			if err := spec.RegisterLogger(logger); err != nil {
 				t.Fatal(err)
 			}
-			infrastructure := bootstrap.NewInfrastructureBootstrap(bootstrap.AppInfoBootstrap{}, bootstrap.LogBootstrap{}, bootstrap.TracingBootstrap{}, bootstrap.MetricsBootstrap{})
+			infrastructure := bootstrap.NewInfrastructureBootstrap(bootstrap.AppInfoBootstrap{}, bootstrap.LogBootstrap{}, bootstrap.TracingBootstrap{}, bootstrap.MetricsBootstrap{}, bootstrap.ConfigObservabilityBootstrap{})
 			if err := spec.AddMetadata(map[string]string{"business": "ready"}); err != nil {
 				t.Fatal(err)
 			}
-			completed := bootstrap.NewBootstrap(infrastructure, bootstrap.UserBootstrap{})
+			completed := bootstrap.NewBootstrap(infrastructure, bootstrap.Bootstrap{})
 			application, err := bootstrap.NewKratosApp(tt.ctx, spec, completed, config, policy)
 			if tt.wantErr {
 				if err == nil || application != nil {
@@ -72,13 +73,13 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 }
 
 func TestContributionsRejectFrozenSpec(t *testing.T) {
-	shared, release, err := log.NewSharedState(bootstrapConfig())
+	shared, release, err := testlog.New(bootstrapConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(release)
 	jobSpec := job.NewSpec()
-	jobSpec.Once("once", job.TaskFunc(func(context.Context) error { return nil }))
+	jobSpec.RegisterOnce("once", job.TaskFunc(func(context.Context) error { return nil }))
 	manager := newTestManager(t, jobSpec)
 	httpRuntime := newTestRuntime(t, testconfig.Empty(t))
 	grpcSpec := server.NewSpec()
@@ -89,7 +90,7 @@ func TestContributionsRejectFrozenSpec(t *testing.T) {
 		register func(*app.Spec) error
 	}{
 		{"appinfo", func(spec *app.Spec) error {
-			_, err := bootstrap.NewAppInfoBootstrap(appinfo.New("test"), spec, shared)
+			_, err := bootstrap.NewAppInfoBootstrap(appinfo.New("test"), spec)
 			return err
 		}},
 		{"log", func(spec *app.Spec) error {

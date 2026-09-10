@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -152,22 +153,22 @@ func (*testHTTPTransport) PathTemplate() string            { return "/socket" }
 func newTestLogger(t *testing.T) (foundationlog.Logger, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "access.log")
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelInfo},
 			Path:         path,
-			Rotating:     foundationlog.RotatingConfig{Disable: true},
+			Rotating:     testlog.RotatingConfig{Disable: true},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared), path
+	return shared, path
 }

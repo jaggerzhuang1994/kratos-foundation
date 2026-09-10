@@ -22,7 +22,7 @@ var errInvalidAmount = errors.New("order amount must be positive")
 func newServerSpec(manager database.Manager) *server.Spec {
 	spec := server.NewSpec()
 	spec.GRPC().Disable()
-	spec.HTTP().Endpoint(func(srv server.HTTPServer) error {
+	spec.HTTP().Register(func(srv server.HTTPServer) error {
 		srv.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				w.WriteHeader(http.StatusMethodNotAllowed)

@@ -1,7 +1,6 @@
 package log
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -9,22 +8,32 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
-var errSharedStateReleased = errors.New("shared state is released")
+var processState = func() *sharedState {
+	state := &sharedState{}
+	state.custom.Store(&customState{})
+	return state
+}()
 
-// configState 保存一份不可变的 Config 版本。
-type configState struct {
-	version uint64
+// WithLevel 修改进程共享最低日志级别。
+func WithLevel(level kratoslog.Level) { processState.WithLevel(level) }
 
-	output      *outputLogger
-	level       kratoslog.Level
-	filterEmpty bool
-	filterKeys  []string
-	callerDepth int
-	timeFormat  string
-	msgKey      string
+// WithFilterEmpty 修改进程共享空字段过滤策略。
+func WithFilterEmpty(value bool) { processState.WithFilterEmpty(value) }
 
-	release func()
-}
+// WithFilterKeys 修改进程共享字段过滤列表。
+func WithFilterKeys(keys ...string) { processState.WithFilterKeys(keys...) }
+
+// WithKV 合并进程共享日志字段。
+func WithKV(values ...any) { processState.WithKV(values...) }
+
+// WithCallerDepth 修改进程共享调用深度。
+func WithCallerDepth(depth int) { processState.WithCallerDepth(depth) }
+
+// WithTimeFormat 修改进程共享时间格式。
+func WithTimeFormat(format string) { processState.WithTimeFormat(format) }
+
+// WithMsgKey 修改进程共享消息字段名。
+func WithMsgKey(key string) { processState.WithMsgKey(key) }
 
 // customState 保存一份不可变的进程级自定义配置快照。
 type customState struct {
@@ -39,87 +48,14 @@ type customState struct {
 	msgKey      string
 }
 
-// SharedState 保存根 Logger 与派生 Logger 共享的版本化状态。
-type SharedState struct {
-	config atomic.Pointer[configState]
+// sharedState 仅保存进程共享的非资源配置，不拥有输出、cleanup 或引用计数。
+type sharedState struct {
 	custom atomic.Pointer[customState]
 }
 
-var _ UpdateLogger = (*SharedState)(nil)
-
-// NewSharedState 创建首个 Config 版本并持有输出资源，不修改全局 Logger。
-func NewSharedState(config Config) (*SharedState, func(), error) {
-	state, err := newConfigState(config)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	shared := &SharedState{}
-	shared.config.Store(state)
-	shared.custom.Store(&customState{})
-
-	cleanup := func() {
-		old := shared.config.Swap(nil)
-		if old != nil {
-			old.release()
-		}
-	}
-
-	return shared, cleanup, nil
-}
-
-// Update 完整构建并原子发布下一个 Config 版本，成功后释放旧输出。
-func (s *SharedState) Update(config Config) error {
-	for {
-		old := s.config.Load()
-		if old == nil {
-			return errSharedStateReleased
-		}
-
-		next, err := newConfigState(config)
-		if err != nil {
-			return err
-		}
-		next.version = old.version + 1
-
-		if s.config.CompareAndSwap(old, next) {
-			old.release()
-			return nil
-		}
-		next.release()
-	}
-}
-
-func newConfigState(config Config) (*configState, error) {
-	// 复制所有 slice，避免运行期配置引用调用方内存。
-	config.FilterKeys = append([]string(nil), config.FilterKeys...)
-	config.Std.FilterKeys = append([]string(nil), config.Std.FilterKeys...)
-	config.File.FilterKeys = append([]string(nil), config.File.FilterKeys...)
-
-	if err := validateConfig(config); err != nil {
-		return nil, err
-	}
-
-	output, release, err := newOutputLogger(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &configState{
-		output:      output,
-		level:       config.Level,
-		filterEmpty: config.FilterEmpty,
-		filterKeys:  append([]string(nil), config.FilterKeys...),
-		callerDepth: defaultCallerDepth,
-		timeFormat:  config.TimeFormat,
-		release:     release,
-		msgKey:      defaultMsgKey,
-	}, nil
-}
-
 // WithLevel 设置进程级最低日志级别。
-func (s *SharedState) WithLevel(level kratoslog.Level) error {
-	return s.updateCustom(func(state *customState) error {
+func (s *sharedState) WithLevel(level kratoslog.Level) {
+	s.updateCustom("level", func(state *customState) error {
 		if level < kratoslog.LevelDebug || level > kratoslog.LevelFatal {
 			return fmt.Errorf("log level is invalid")
 		}
@@ -129,17 +65,17 @@ func (s *SharedState) WithLevel(level kratoslog.Level) error {
 }
 
 // WithFilterEmpty 设置进程级空值过滤策略。
-func (s *SharedState) WithFilterEmpty(filterEmpty bool) error {
-	return s.updateCustom(func(state *customState) error {
+func (s *sharedState) WithFilterEmpty(filterEmpty bool) {
+	s.updateCustom("filter_empty", func(state *customState) error {
 		state.filterEmpty = &filterEmpty
 		return nil
 	})
 }
 
 // WithFilterKeys 增加进程级敏感字段过滤规则。
-func (s *SharedState) WithFilterKeys(keys ...string) error {
+func (s *sharedState) WithFilterKeys(keys ...string) {
 	values := append([]string(nil), keys...)
-	return s.updateCustom(func(state *customState) error {
+	s.updateCustom("filter_keys", func(state *customState) error {
 		seen := make(map[string]struct{}, len(state.filterKeys)+len(values))
 		for _, key := range state.filterKeys {
 			seen[key] = struct{}{}
@@ -159,9 +95,9 @@ func (s *SharedState) WithFilterKeys(keys ...string) error {
 }
 
 // WithKV 增加进程级字段；重复字符串 key 使用后声明的值。
-func (s *SharedState) WithKV(keyvals ...any) error {
+func (s *sharedState) WithKV(keyvals ...any) {
 	values := append([]any(nil), keyvals...)
-	return s.updateCustom(func(state *customState) error {
+	s.updateCustom("kv", func(state *customState) error {
 		if len(values)%2 != 0 {
 			return fmt.Errorf("log KV requires key/value pairs")
 		}
@@ -189,8 +125,8 @@ func (s *SharedState) WithKV(keyvals ...any) error {
 }
 
 // WithCallerDepth 设置进程级 caller depth。
-func (s *SharedState) WithCallerDepth(depth int) error {
-	return s.updateCustom(func(state *customState) error {
+func (s *sharedState) WithCallerDepth(depth int) {
+	s.updateCustom("caller_depth", func(state *customState) error {
 		if depth <= 0 {
 			return fmt.Errorf("log caller depth must be positive")
 		}
@@ -200,8 +136,8 @@ func (s *SharedState) WithCallerDepth(depth int) error {
 }
 
 // WithTimeFormat 设置进程级时间戳格式。
-func (s *SharedState) WithTimeFormat(timeFormat string) error {
-	return s.updateCustom(func(state *customState) error {
+func (s *sharedState) WithTimeFormat(timeFormat string) {
+	s.updateCustom("time_format", func(state *customState) error {
 		if strings.TrimSpace(timeFormat) == "" {
 			return fmt.Errorf("log time format is empty")
 		}
@@ -211,8 +147,8 @@ func (s *SharedState) WithTimeFormat(timeFormat string) error {
 }
 
 // WithMsgKey 设置消息类 Helper 使用的字段名。
-func (s *SharedState) WithMsgKey(msgKey string) error {
-	return s.updateCustom(func(state *customState) error {
+func (s *sharedState) WithMsgKey(msgKey string) {
+	s.updateCustom("msg_key", func(state *customState) error {
 		if strings.TrimSpace(msgKey) == "" {
 			return fmt.Errorf("log msgKey is empty")
 		}
@@ -221,8 +157,9 @@ func (s *SharedState) WithMsgKey(msgKey string) error {
 	})
 }
 
-// updateCustom 仅供本包方法发布快照；回调只操作副本，不执行外部调用。
-func (s *SharedState) updateCustom(update func(*customState) error) error {
+// updateCustom 仅供本包方法发布快照；校验失败保留原状态，并记录失败项和原因。
+// 回调只操作副本，不执行外部调用；warning 在回调失败后记录。
+func (s *sharedState) updateCustom(field string, update func(*customState) error) {
 	for {
 		old := s.custom.Load()
 		next := &customState{version: 1}
@@ -234,10 +171,11 @@ func (s *SharedState) updateCustom(update func(*customState) error) error {
 			next.filterKeys = append([]string(nil), old.filterKeys...)
 		}
 		if err := update(next); err != nil {
-			return err
+			kratoslog.Warnw("msg", "log custom state update failed", "state", field, "error", err)
+			return
 		}
 		if s.custom.CompareAndSwap(old, next) {
-			return nil
+			return
 		}
 		// 从最新快照重试，保留其他并发方法调用成功发布的设置。
 	}

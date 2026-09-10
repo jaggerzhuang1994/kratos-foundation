@@ -72,8 +72,8 @@ func TestHTTPAndGRPCRuntimeRespectProtocolEnablementAndRegisterCallbacks(t *test
 	}
 	spec := NewSpec()
 	var httpRegistered, grpcRegistered bool
-	spec.HTTP().Endpoint(func(HTTPServer) error { httpRegistered = true; return nil })
-	spec.GRPC().Service(func(GRPCServer) error { grpcRegistered = true; return nil })
+	spec.HTTP().Register(func(HTTPServer) error { httpRegistered = true; return nil })
+	spec.GRPC().Register(func(GRPCServer) error { grpcRegistered = true; return nil })
 	httpServer, err := newHTTPServer(config, newHTTPServerOptions(config, nil, spec), spec, nil, newWebSocketHub())
 	if err != nil || httpServer == nil || !httpRegistered {
 		t.Fatalf("http=%v registered=%t err=%v", httpServer, httpRegistered, err)

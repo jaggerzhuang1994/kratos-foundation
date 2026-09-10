@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"reflect"
 	"strings"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	goredis "github.com/redis/go-redis/v9"
@@ -33,11 +33,11 @@ func (p disabledTracingProvider) Tracer(name string, options ...trace.TracerOpti
 }
 
 func TestNewManagerBuildsCachesAndCleansUpConfiguredClients(t *testing.T) {
-	loggerState, releaseLogger, err := foundationlog.NewSharedState(foundationlog.Config{
+	loggerState, releaseLogger, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std:        foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		Std:        testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -63,7 +63,7 @@ func TestNewManagerBuildsCachesAndCleansUpConfiguredClients(t *testing.T) {
 	})
 
 	manager, cleanup, err := NewManager(
-		foundationlog.NewLogger(loggerState),
+		loggerState,
 		configManager,
 		disabledTracingProvider{provider: noop.NewTracerProvider()},
 		metricProvider,

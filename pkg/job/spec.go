@@ -62,7 +62,7 @@ func WithLogging(enabled bool) ManagerOption {
 
 // WithErrorHandler 设置任务最终失败时的回调。不同任务可能并发调用该回调，因此实现
 // 必须保证并发安全。
-func WithErrorHandler(handler func(context.Context, string, error)) ManagerOption {
+func WithErrorHandler(handler func(ctx context.Context, name string, err error)) ManagerOption {
 	return func(options *managerOptions) {
 		options.ErrorHandler = handler
 	}
@@ -99,12 +99,12 @@ type Builder interface {
 	Option(...ManagerOption) Builder
 	// Coordinator 提供分布式并发策略所需的跨进程协调能力。
 	Coordinator(ConcurrencyCoordinator) Builder
-	// Cron 注册周期任务。
-	Cron(name, schedule string, job Task, options ...CronOption) Builder
-	// Once 注册启动后执行一次的任务。
-	Once(name string, job Task) Builder
-	// Daemon 注册随 Context 取消而退出的常驻任务。
-	Daemon(name string, job Task) Builder
+	// RegisterCron 注册周期任务。
+	RegisterCron(name, schedule string, job Task, options ...CronOption) Builder
+	// RegisterOnce 注册启动后执行一次的任务。
+	RegisterOnce(name string, job Task) Builder
+	// RegisterDaemon 注册随 Context 取消而退出的常驻任务。
+	RegisterDaemon(name string, job Task) Builder
 	// ExitWhenDone 要求所有 Once 任务结束后停止应用。
 	ExitWhenDone() Builder
 }
@@ -155,8 +155,8 @@ func (s *Spec) Coordinator(coordinator ConcurrencyCoordinator) Builder {
 	return s
 }
 
-// Cron 向 Spec 注册周期任务。
-func (s *Spec) Cron(name, schedule string, job Task, options ...CronOption) Builder {
+// RegisterCron 向 Spec 注册周期任务。
+func (s *Spec) RegisterCron(name, schedule string, job Task, options ...CronOption) Builder {
 	cron := cronOptions{concurrentPolicy: AllowOverlap}
 	for _, option := range options {
 		if option != nil {
@@ -173,8 +173,8 @@ func (s *Spec) Cron(name, schedule string, job Task, options ...CronOption) Buil
 	return s
 }
 
-// Once 向 Spec 注册启动后执行一次的任务。
-func (s *Spec) Once(name string, job Task) Builder {
+// RegisterOnce 向 Spec 注册启动后执行一次的任务。
+func (s *Spec) RegisterOnce(name string, job Task) Builder {
 	s.definitions = append(s.definitions, definition{
 		name: name,
 		kind: kindOnce,
@@ -183,8 +183,8 @@ func (s *Spec) Once(name string, job Task) Builder {
 	return s
 }
 
-// Daemon 向 Spec 注册常驻任务。
-func (s *Spec) Daemon(name string, job Task) Builder {
+// RegisterDaemon 向 Spec 注册常驻任务。
+func (s *Spec) RegisterDaemon(name string, job Task) Builder {
 	s.definitions = append(s.definitions, definition{
 		name: name,
 		kind: kindDaemon,

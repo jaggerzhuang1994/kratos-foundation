@@ -65,7 +65,7 @@ func (provider *jobMetricsProvider) reportStart(ctx context.Context) {
 	if provider.disabled {
 		return
 	}
-	name := jobNameFromContext(ctx)
+	name := JobNameFromContext(ctx)
 	if name == "" {
 		return
 	}
@@ -76,7 +76,7 @@ func (provider *jobMetricsProvider) reportDone(ctx context.Context, err error, d
 	if provider.disabled {
 		return
 	}
-	name := jobNameFromContext(ctx)
+	name := JobNameFromContext(ctx)
 	if name == "" {
 		return
 	}
@@ -115,7 +115,7 @@ func newJobTracingProvider(provider foundationtracing.Provider, enabled bool) jo
 func (provider *jobTracingProvider) recordStart(ctx context.Context) (context.Context, trace.Span) {
 	return provider.tracer.Start(
 		ctx,
-		jobNameFromContext(ctx),
+		JobNameFromContext(ctx),
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
 }

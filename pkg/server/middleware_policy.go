@@ -97,6 +97,10 @@ func newMiddlewarePolicies(
 			if updateErr == nil {
 				updateErr = validateMiddlewareConfig(next)
 			}
+			// 订阅会回放当前快照；内容未变时不重建，也不误报配置更新。
+			if updateErr == nil && proto.Equal(policies.current, next) {
+				return
+			}
 			if updateErr == nil {
 				updateErr = policies.update(
 					logger,

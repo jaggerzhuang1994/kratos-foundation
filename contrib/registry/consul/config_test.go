@@ -1,13 +1,13 @@
 package consul
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"testing"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	consulapi "github.com/hashicorp/consul/api"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -62,26 +62,26 @@ func TestIntervalSecondsAndTagsRejectInvalidBoundaries(t *testing.T) {
 }
 
 func TestNewRegistryDisablesWithoutClient(t *testing.T) {
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339,
-		Std:  foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
+		Std:  testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	registrar, err := NewRegistry(foundationlog.NewLogger(shared), nil, nil)
+	registrar, err := NewRegistry(shared, nil, nil)
 	if err != nil || registrar != nil {
 		t.Fatalf("NewRegistry(nil client) = %v, %v", registrar, err)
 	}
 }
 
 func TestNewRegistryBuildsAdapterForSharedClient(t *testing.T) {
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339,
-		Std:  foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
+		Std:  testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestNewRegistryBuildsAdapterForSharedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registrar, err := NewRegistry(foundationlog.NewLogger(shared), testconfig.Empty(t), client)
+	registrar, err := NewRegistry(shared, testconfig.Empty(t), client)
 	if err != nil || registrar == nil {
 		t.Fatalf("NewRegistry() = %v, %v", registrar, err)
 	}

@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"reflect"
 	"strings"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -26,14 +26,14 @@ func TestNilManagerHasNoConnection(t *testing.T) {
 }
 
 func TestNewClientFactoryValidatesAndBuildsEmptySnapshot(t *testing.T) {
-	shared, release, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, release, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -42,7 +42,7 @@ func TestNewClientFactoryValidatesAndBuildsEmptySnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(release)
-	manager, err := NewClientFactory(foundationlog.NewLogger(shared), testconfig.Empty(t))
+	manager, err := NewClientFactory(shared, testconfig.Empty(t))
 	if err != nil {
 		t.Fatal(err)
 	}

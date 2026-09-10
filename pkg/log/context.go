@@ -18,7 +18,7 @@ func WithKv(ctx context.Context, kv ...any) context.Context {
 	return context.WithValue(ctx, contextKVKey{}, values)
 }
 
-// KvFromCtx 返回 Context 日志字段的独立副本。
-func KvFromCtx(ctx context.Context) []any {
+// kvFromCtx 返回 Context 日志字段的独立副本。
+func kvFromCtx(ctx context.Context) []any {
 	return append([]any(nil), kvFromContext(ctx)...)
 }

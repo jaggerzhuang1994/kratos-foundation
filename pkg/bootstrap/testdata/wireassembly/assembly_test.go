@@ -9,13 +9,12 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
 func TestGeneratedAssemblyAndCleanup(t *testing.T) {
 	previous := kratoslog.GetLogger()
-	built, cleanup, err := initialize(context.Background(), businessSources(t), loggerConfig(), "wire-test", 0)
+	built, cleanup, err := initialize(context.Background(), businessSources(t), "wire-test", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func TestGeneratedAssemblyAndCleanup(t *testing.T) {
 func TestGeneratedAssemblyRollsBackOnAppConstructionFailure(t *testing.T) {
 	previous := kratoslog.GetLogger()
 	// Bootstrap 安装全局 Logger 后，nil Context 让 NewApp 失败并触发 Wire 逆序回滚。
-	built, cleanup, err := initialize(nil, businessSources(t), loggerConfig(), "wire-test", 0)
+	built, cleanup, err := initialize(nil, businessSources(t), "wire-test", 0)
 	if cleanup != nil {
 		t.Cleanup(cleanup)
 	}
@@ -70,11 +69,21 @@ func TestGeneratedAssemblyRollsBackOnAppConstructionFailure(t *testing.T) {
 	}
 }
 
-func loggerConfig() log.Config {
-	return log.Config{
-		Level:      kratoslog.LevelInfo,
-		TimeFormat: time.RFC3339,
-		Std:        log.OutputConfig{Disable: true},
-		File:       log.FileConfig{OutputConfig: log.OutputConfig{Disable: true}},
+func TestComponentsDeclaredInBootRun(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	application, cleanup, err := initializeComponents(ctx, businessSources(t), "boot-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if application.Metadata()["boot"] != "declared" {
+		t.Fatal("Boot contribution missing")
+	}
+	if err := application.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("Boot job did not run and stop application")
 	}
 }

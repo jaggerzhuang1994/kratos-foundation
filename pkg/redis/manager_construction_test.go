@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"strings"
 	"testing"
 	"time"
@@ -73,14 +74,14 @@ func (p *localMetricsProvider) PrometheusRegisterer() prometheus.Registerer {
 
 func newRedisTestLogger(t testing.TB) foundationlog.Logger {
 	t.Helper()
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -89,7 +90,7 @@ func newRedisTestLogger(t testing.TB) foundationlog.Logger {
 		t.Fatalf("create test logger: %v", err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared)
+	return shared
 }
 
 func validRedisConfig() *config_pb.Redis {

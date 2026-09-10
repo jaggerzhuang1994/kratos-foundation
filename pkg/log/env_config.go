@@ -10,6 +10,40 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
+// outputConfig 描述单个日志输出端的启用、级别和字段过滤策略。
+type outputConfig struct {
+	Disable    bool
+	Level      kratoslog.Level
+	FilterKeys []string
+}
+
+// rotatingConfig 描述文件轮转策略。
+type rotatingConfig struct {
+	Disable    bool
+	MaxSize    int
+	MaxFileAge int
+	MaxFiles   int
+	LocalTime  bool
+	Compress   bool
+}
+
+// fileConfig 描述文件输出端及其轮转策略。
+type fileConfig struct {
+	outputConfig
+	Path     string
+	Rotating rotatingConfig
+}
+
+// envConfig 保存从 LOG_* 环境变量解析的实例启动配置。
+type envConfig struct {
+	Level       kratoslog.Level
+	FilterEmpty bool
+	FilterKeys  []string
+	TimeFormat  string
+	Std         outputConfig
+	File        fileConfig
+}
+
 const (
 	// EnvLevel 配置根 Logger 的最低级别。
 	EnvLevel = "LOG_LEVEL"
@@ -47,26 +81,26 @@ const (
 	EnvFileRotatingCompress = "LOG_FILE_ROTATING_COMPRESS"
 )
 
-// NewConfig 一次性读取并校验全部 LOG_* 环境变量。
-func NewConfig() (Config, error) {
+// newEnvConfig 一次性读取并校验全部 LOG_* 环境变量。
+func newEnvConfig() (envConfig, error) {
 	level, err := envLevel(EnvLevel, kratoslog.LevelInfo)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	filterEmpty, err := envBool(EnvFilterEmpty, true)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	filterKeys := envCSV(EnvFilterKeys, nil)
 	timeFormat := envString(EnvTimeFormat, time.RFC3339)
 
 	stdDisable, err := envBool(EnvStdDisable, false)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	stdLevel, err := envLevel(EnvStdLevel, level)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	stdFilterKeys := envCSV(EnvStdFilterKeys, []string{
 		ServiceIDKey,
@@ -76,57 +110,57 @@ func NewConfig() (Config, error) {
 
 	fileDisable, err := envBool(EnvFileDisable, false)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	fileLevel, err := envLevel(EnvFileLevel, level)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	filePath := envString(EnvFilePath, "./app.log")
 	fileFilterKeys := envCSV(EnvFileFilterKeys, nil)
 	rotatingDisable, err := envBool(EnvFileRotatingDisable, false)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	maxSize, err := envNonNegativeInt(EnvFileRotatingMaxSize, 100)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	maxFileAge, err := envNonNegativeInt(EnvFileRotatingMaxFileAge, 0)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	maxFiles, err := envNonNegativeInt(EnvFileRotatingMaxFiles, 0)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	localTime, err := envBool(EnvFileRotatingLocalTime, false)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 	compress, err := envBool(EnvFileRotatingCompress, false)
 	if err != nil {
-		return Config{}, err
+		return envConfig{}, err
 	}
 
-	config := Config{
+	config := envConfig{
 		Level:       level,
 		FilterEmpty: filterEmpty,
 		FilterKeys:  filterKeys,
 		TimeFormat:  timeFormat,
-		Std: OutputConfig{
+		Std: outputConfig{
 			Disable:    stdDisable,
 			Level:      stdLevel,
 			FilterKeys: stdFilterKeys,
 		},
-		File: FileConfig{
-			OutputConfig: OutputConfig{
+		File: fileConfig{
+			outputConfig: outputConfig{
 				Disable:    fileDisable,
 				Level:      fileLevel,
 				FilterKeys: fileFilterKeys,
 			},
 			Path: filePath,
-			Rotating: RotatingConfig{
+			Rotating: rotatingConfig{
 				Disable:    rotatingDisable,
 				MaxSize:    maxSize,
 				MaxFileAge: maxFileAge,
@@ -139,13 +173,13 @@ func NewConfig() (Config, error) {
 	if err := validateConfig(config); err != nil {
 		switch {
 		case strings.TrimSpace(config.TimeFormat) == "":
-			return Config{}, fmt.Errorf("%s: %w", EnvTimeFormat, err)
+			return envConfig{}, fmt.Errorf("%s: %w", EnvTimeFormat, err)
 		case !config.File.Disable && strings.TrimSpace(config.File.Path) == "":
-			return Config{}, fmt.Errorf("%s: %w", EnvFilePath, err)
+			return envConfig{}, fmt.Errorf("%s: %w", EnvFilePath, err)
 		case !config.File.Disable && !config.File.Rotating.Disable && config.File.Rotating.MaxSize == 0:
-			return Config{}, fmt.Errorf("%s: %w", EnvFileRotatingMaxSize, err)
+			return envConfig{}, fmt.Errorf("%s: %w", EnvFileRotatingMaxSize, err)
 		}
-		return Config{}, err
+		return envConfig{}, err
 	}
 	return config, nil
 }

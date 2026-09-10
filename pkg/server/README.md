@@ -4,8 +4,8 @@
 
 ```go
 spec := server.NewSpec()
-spec.HTTP().Endpoint(registerHTTP)
-spec.GRPC().Service(registerGRPC)
+spec.HTTP().Register(registerHTTP)
+spec.GRPC().Register(registerGRPC)
 runtime, cleanup, err := server.NewRuntime(
 	configManager,
 	logger,
@@ -265,3 +265,6 @@ flowchart TD
     Q --> R[按停止期限 Shutdown 超时则 Close]
     R --> S([释放监听并结束])
 ```
+
+中间件配置订阅的首次快照回放及内容相同的重复通知不会打印 `server middleware config updated`；
+只有配置实际变化且成功应用后才记录更新日志，非法更新仍记录 rejected 并保留旧配置。

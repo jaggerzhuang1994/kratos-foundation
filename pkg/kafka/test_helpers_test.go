@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,24 +21,24 @@ func boolp(value bool) *bool { return &value }
 func newProviderTestLogger(t testing.TB) (foundationlog.Logger, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "kafka.log")
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelDebug,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelDebug,
 		},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{Level: kratoslog.LevelDebug},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelDebug},
 			Path:         path,
-			Rotating:     foundationlog.RotatingConfig{Disable: true},
+			Rotating:     testlog.RotatingConfig{Disable: true},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared), path
+	return shared, path
 }
 
 type failingKafkaModuleLogger struct {

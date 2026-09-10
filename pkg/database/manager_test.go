@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -325,14 +326,14 @@ func TestNewManagerRollsBackConnectionsAndMetricsWhenSubscriptionFails(t *testin
 
 func newManagerTestLogger(t testing.TB) foundationlog.Logger {
 	t.Helper()
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -341,7 +342,7 @@ func newManagerTestLogger(t testing.TB) foundationlog.Logger {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared)
+	return shared
 }
 
 func assertManagerRecord(t testing.TB, db *gorm.DB, id int, wantName string) {

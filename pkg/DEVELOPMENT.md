@@ -101,9 +101,9 @@
 **使用条件**：一个已有对象需要登记到 App Spec，或同步贡献身份、日志字段、上下文等装配信息。Bootstrap 统一属于 `pkg/bootstrap` 组装层；领域包只声明真实依赖并提供普通 Go 构造函数。
 
 - **目录/API**：`pkg/bootstrap/<domain>.go`，暴露 `XXXBootstrap` 标记类型及 `NewXXXBootstrap(...)`。一般返回 `(XXXBootstrap, error)`；存在可恢复的构造期副作用时返回 cleanup。
-- **依赖**：接收 `*app.Spec` 或明确的贡献目标及已构造组件；具体签名按需要，例如 TracingBootstrap 的目标是 Log SharedState。
+- **依赖**：接收 `*app.Spec` 或明确的贡献目标及已构造组件；具体签名按需要，例如 TracingBootstrap 通过 log 全局方法登记追踪字段。
 - **行为**：只同步登记，不启动业务循环、不偷偷创建连接。Runtime 和 Context 贡献按登记顺序追加，不使用名称去重，冻结后登记应失败；禁用能力的行为需明确定义。
-- **Wire**：ProviderSet 与 injector 由业务组装层维护，领域包不导入 Wire。组装层按 `bootstrap.InfrastructureBootstrap → bootstrap.UserBootstrap（用户 provider）→ bootstrap.Bootstrap → bootstrap.NewKratosApp` 分阶段；用户 provider 显式接收基础设施阶段标记。`app.NewApp` 只消费依赖，不参与阶段组织；只把 Provider 放进 set，并不能保证 Wire 执行它。
+- **Wire**：ProviderSet 与 injector 由业务组装层维护，领域包不导入 Wire。组装层按 `bootstrap.InfrastructureBootstrap → bootstrap.Bootstrap（用户 provider）→ bootstrap.StartupReady → bootstrap.NewKratosApp` 分阶段；用户 provider 显式接收基础设施阶段标记。`app.NewApp` 只消费依赖，不参与阶段组织；只把 Provider 放进 set，并不能保证 Wire 执行它。
 - **验收**：贡献确实存在、无启动副作用、重复登记、冻结后登记、禁用分支和注册错误；有 cleanup 时验证副作用恢复。
 
 **现有示例**：MetricsBootstrap 只注入上下文；ServerBootstrap 登记运行时；LogBootstrap 还返回全局 Logger 恢复函数。queue 没有统一 Bootstrap，按消费者实例由业务显式登记。

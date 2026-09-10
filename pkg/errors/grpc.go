@@ -1,8 +1,10 @@
 package errors
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-kratos/kratos/v2/errors"
 	httpstatus "github.com/go-kratos/kratos/v2/transport/http/status"
@@ -24,6 +26,13 @@ func (e *Error) grpcMetadata() map[string]string {
 	}
 	// 必须以状态字段为准，避免调用方通过同名 metadata 伪造传输状态码。
 	md[mdHTTPCodeKey] = strconv.FormatInt(int64(e.Code), 10)
+	// HTTP 网关需要跨 gRPC 恢复业务 data；仅发送可编码的快照，不发送栈和响应头。
+	if e.httpData != nil {
+		encoded, err := json.Marshal(e.httpData)
+		if err == nil {
+			md[mdHTTPDataKey] = string(encoded)
+		}
+	}
 	return md
 }
 
@@ -59,7 +68,18 @@ func FromError(err error) *Error {
 		case *errdetails.ErrorInfo:
 			ret.Reason = d.Reason
 			ret.Code = restoreUnknownHTTPCode(gs.Code(), d.Metadata, ret.Code)
-			return ret.WithMetadata(d.Metadata)
+			ret = ret.WithMetadata(d.Metadata)
+			// UseNumber 保留大整数精度；无效远端 data 不影响原有错误码和 reason。
+			raw := d.Metadata[mdHTTPDataKey]
+			if json.Valid([]byte(raw)) {
+				var data any
+				decoder := json.NewDecoder(strings.NewReader(raw))
+				decoder.UseNumber()
+				if err := decoder.Decode(&data); err == nil {
+					ret = ret.WithHTTPData(data)
+				}
+			}
+			return ret
 		}
 	}
 	return ret

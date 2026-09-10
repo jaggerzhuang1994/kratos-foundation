@@ -15,17 +15,15 @@ import (
 type AppInfoBootstrap struct{}
 
 // NewAppInfoBootstrap 将已有组件接入应用组装，不启动运行时。
-func NewAppInfoBootstrap(info appinfo.AppInfo, spec *app.Spec, shared *log.SharedState) (AppInfoBootstrap, error) {
+func NewAppInfoBootstrap(info appinfo.AppInfo, spec *app.Spec) (AppInfoBootstrap, error) {
 	if err := spec.RegisterAppInfo(info); err != nil {
 		return AppInfoBootstrap{}, fmt.Errorf("appinfo bootstrap: register app info: %w", err)
 	}
-	if err := shared.WithKV(
+	log.WithKV(
 		log.ServiceIDKey, info.ID(),
 		log.ServiceNameKey, info.Name(),
 		log.ServiceVersionKey, info.Version(),
-	); err != nil {
-		return AppInfoBootstrap{}, fmt.Errorf("appinfo bootstrap: apply service log fields: %w", err)
-	}
+	)
 	return AppInfoBootstrap{}, nil
 }
 
@@ -33,15 +31,17 @@ func NewAppInfoBootstrap(info appinfo.AppInfo, spec *app.Spec, shared *log.Share
 type LogBootstrap struct{}
 
 // NewLogBootstrap 将已有组件接入应用组装，不启动运行时。
-func NewLogBootstrap(shared *log.SharedState, spec *app.Spec) (LogBootstrap, func(), error) {
-	global := log.NewLogger(shared)
+func NewLogBootstrap(logger log.Logger, spec *app.Spec) (LogBootstrap, func(), error) {
+	global := logger
 	if err := spec.RegisterLogger(global); err != nil {
 		return LogBootstrap{}, nil, fmt.Errorf("log bootstrap: register app logger: %w", err)
 	}
+	// Kratos 全局 Infof 等函数比直接注入 Logger 多一层包装，单独调整其 caller。
+	installed := global.AddCallerDepth(1)
 	previous := log.GetLogger()
-	log.SetLogger(global)
+	log.SetLogger(installed)
 	cleanup := func() {
-		if log.GetLogger() == global {
+		if log.GetLogger() == installed {
 			log.SetLogger(previous)
 		}
 	}
@@ -52,13 +52,11 @@ func NewLogBootstrap(shared *log.SharedState, spec *app.Spec) (LogBootstrap, fun
 type TracingBootstrap struct{}
 
 // NewTracingBootstrap 将已有组件接入应用组装，不启动运行时。
-func NewTracingBootstrap(shared *log.SharedState) (TracingBootstrap, error) {
-	if err := shared.WithKV(
+func NewTracingBootstrap() (TracingBootstrap, error) {
+	log.WithKV(
 		log.TraceIDKey, tracing.TraceID(),
 		log.SpanIDKey, tracing.SpanID(),
-	); err != nil {
-		return TracingBootstrap{}, fmt.Errorf("tracing bootstrap: apply trace log fields: %w", err)
-	}
+	)
 	return TracingBootstrap{}, nil
 }
 

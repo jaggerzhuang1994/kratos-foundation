@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"strings"
 	"testing"
 	"time"
@@ -125,5 +126,38 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 	cancel()
 	if manager.cancelCount != 1 {
 		t.Fatalf("cancel count = %d, want 1", manager.cancelCount)
+	}
+}
+
+type policyUpdateLogger struct {
+	foundationlog.Logger
+	updates int
+}
+
+func (l *policyUpdateLogger) Info(values ...any) { l.updates++ }
+
+func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
+	logger := &policyUpdateLogger{Logger: newRuntimeTestLogger(t)}
+	manager := &serverManagerStub{}
+	initial := proto.CloneOf(defaultMiddlewareConfig)
+	_, cleanup, err := newMiddlewarePolicies(manager, logger, &config_pb.Server{Middleware: initial},
+		testMetricsProvider{registry: prometheus.NewRegistry()}, runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	manager.observer("server.middleware", proto.CloneOf(initial), nil)
+	if logger.updates != 0 {
+		t.Fatal("initial snapshot logged as update")
+	}
+	next := proto.CloneOf(initial)
+	next.Logging = &config_pb.Middleware_Logging{Disable: proto.Bool(!initial.GetLogging().GetDisable())}
+	manager.observer("server.middleware", next, nil)
+	if logger.updates != 1 {
+		t.Fatalf("changed config logged %d updates", logger.updates)
+	}
+	manager.observer("server.middleware", proto.CloneOf(next), nil)
+	if logger.updates != 1 {
+		t.Fatal("duplicate snapshot logged as update")
 	}
 }

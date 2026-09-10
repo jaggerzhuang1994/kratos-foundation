@@ -14,7 +14,7 @@ type moduleLog log.Logger
 
 // nameValuer 延迟从每次执行上下文读取任务名，避免创建派生日志器时捕获旧值。
 var nameValuer = log2.Valuer(func(ctx context.Context) any {
-	return jobNameFromContext(ctx)
+	return JobNameFromContext(ctx)
 })
 
 // newJobLog 根据运行时开关选择真实或禁用日志，并显式返回模块配置错误。

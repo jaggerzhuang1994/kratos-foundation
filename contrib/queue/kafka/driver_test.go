@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -194,14 +195,14 @@ func TestProducerCleanupClosesOwnedClientOnce(t *testing.T) {
 
 func newQueueKafkaTestLogger(t testing.TB) foundationlog.Logger {
 	t.Helper()
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelDebug,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelDebug,
 		},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelDebug,
 		}},
@@ -210,30 +211,30 @@ func newQueueKafkaTestLogger(t testing.TB) foundationlog.Logger {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared)
+	return shared
 }
 
 func newQueueKafkaFileLogger(t testing.TB) (foundationlog.Logger, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "queue-kafka.log")
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelDebug,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelDebug,
 		},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{Level: kratoslog.LevelDebug},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelDebug},
 			Path:         path,
-			Rotating:     foundationlog.RotatingConfig{Disable: true},
+			Rotating:     testlog.RotatingConfig{Disable: true},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared), path
+	return shared, path
 }
 
 func newQueueKafkaManager(

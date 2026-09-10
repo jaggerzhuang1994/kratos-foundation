@@ -19,7 +19,11 @@ func TestNewSourcesPreservesFilePriorityInManager(t *testing.T) {
 	if err := os.WriteFile(second, []byte("value: two\n"), 0o600); err != nil {
 		t.Fatalf("write second config: %v", err)
 	}
-	logger := log.NewLogger(&log.SharedState{})
+	logger, releaseLogger, logErr := log.NewLogger()
+	if logErr != nil {
+		t.Fatal(logErr)
+	}
+	t.Cleanup(releaseLogger)
 	paths := PathList{first, second}
 
 	sources, err := NewSources(logger, paths)
@@ -54,7 +58,11 @@ func TestNewSourcesPreservesFilePriorityInManager(t *testing.T) {
 }
 
 func TestNewSourcesHandlesEmptyUnmatchedInvalidAndDuplicatePaths(t *testing.T) {
-	logger := log.NewLogger(&log.SharedState{})
+	logger, releaseLogger, logErr := log.NewLogger()
+	if logErr != nil {
+		t.Fatal(logErr)
+	}
+	t.Cleanup(releaseLogger)
 
 	empty, err := NewSources(logger, nil)
 	if err != nil || empty != nil {

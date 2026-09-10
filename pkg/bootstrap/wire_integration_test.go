@@ -48,7 +48,7 @@ func TestWireAssemblyGeneratesAndRunsCleanup(t *testing.T) {
 	for _, args := range [][]string{{"tool", "wire", "."}, {"test", "-race", "-count=1", "-timeout=60s", "-v", "."}} {
 		cmd := exec.CommandContext(ctx, "go", args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GOWORK=off", "APP_ENV=local")
+		cmd.Env = append(os.Environ(), "GOWORK=off", "APP_ENV=local", "LOG_STD_DISABLE=true", "LOG_FILE_DISABLE=true")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, output)
@@ -63,7 +63,7 @@ func TestWireAssemblyGeneratesAndRunsCleanup(t *testing.T) {
 			}
 			// 检查真实依赖图形成阶段链，不约束各阶段内部 provider 的排序。
 			previous := -1
-			for _, call := range []string{"bootstrap.NewInfrastructureBootstrap(", "newBootstrap(", "bootstrap.NewBootstrap(", "bootstrap.NewKratosApp("} {
+			for _, call := range []string{"bootstrap.NewConfigObservabilityBootstrap(", "bootstrap.NewInfrastructureBootstrap(", "newBootstrap(", "bootstrap.NewBootstrap(", "bootstrap.NewKratosApp("} {
 				position := strings.Index(string(generated), call)
 				if position <= previous {
 					t.Fatalf("generated stage %s is missing or out of order", call)

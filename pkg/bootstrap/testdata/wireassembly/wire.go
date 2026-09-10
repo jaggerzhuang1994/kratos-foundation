@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-kratos/kratos/v2"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
@@ -19,7 +20,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-func initialize(ctx context.Context, sources config.Sources, logConfig log.Config, version string, stopDelay time.Duration) (*assembly, func(), error) {
+func initialize(ctx context.Context, sources config.Sources, version string, stopDelay time.Duration) (*assembly, func(), error) {
 	wire.Build(
 		config.NewManager,
 		app.NewSpec,
@@ -27,7 +28,6 @@ func initialize(ctx context.Context, sources config.Sources, logConfig log.Confi
 		app.NewStopPolicy,
 		appinfo.New,
 		bootstrap.NewAppInfoBootstrap,
-		log.NewSharedState,
 		log.NewLogger,
 		bootstrap.NewLogBootstrap,
 		wire.Bind(new(kratoslog.Logger), new(log.Logger)),
@@ -47,6 +47,21 @@ func initialize(ctx context.Context, sources config.Sources, logConfig log.Confi
 		bootstrap.NewBootstrap,
 		bootstrap.NewKratosApp,
 		wire.Struct(new(assembly), "*"),
+	)
+	return nil, nil, nil
+}
+
+func initializeComponents(ctx context.Context, sources config.Sources, version string) (*kratos.App, func(), error) {
+	wire.Build(
+		config.NewManager, bootstrap.ApplicationSpec, app.NewConfig, bootstrap.NewStopPolicy,
+		appinfo.New, log.NewLogger,
+		wire.Bind(new(kratoslog.Logger), new(log.Logger)),
+		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,
+		bootstrap.NewAppInfoBootstrap, bootstrap.NewLogBootstrap,
+		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,
+		bootstrap.NewInfrastructureBootstrap, bootstrap.NewConfigObservabilityBootstrap, bootstrap.NewSpec,
+		componentsBoot, bootstrap.NewComponentsBootstrap,
+		bootstrap.NewApplicationBootstrap, bootstrap.NewKratosApp,
 	)
 	return nil, nil, nil
 }

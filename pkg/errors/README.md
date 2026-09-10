@@ -92,3 +92,21 @@ WithValidationError(validationErrors)
 - `%+v` 和 `ErrStack` 会包含调用栈及底层 cause，只能写入受控的内部日志。
 - `message`、HTTP data、validation error 和普通 metadata 都可能离开进程，必须在创建错误时完成脱敏。
 - 底层包应返回带 `%w` 的原因错误；决定 HTTP/gRPC 呈现的边界层再创建本包状态错误。
+
+### HTTP data 跨 gRPC 恢复
+
+可 JSON 编码的 `WithHTTPData` 快照通过 `ErrorInfo.Metadata` 的私有 `http_data` 字段传输，
+`FromError` 恢复后可继续供 HTTP 网关编码或再次经 gRPC 转发。数字保留为 `json.Number`；
+栈和 HTTP headers 不随之传输。不可编码的数据或损坏的远端 JSON 会被省略，错误身份保持不变。
+
+```mermaid
+flowchart LR
+ A[业务错误 WithHTTPData] --> B{JSON 可编码?}
+ B -- 是 --> C[gRPC ErrorInfo 私有 http_data]
+ B -- 否 --> D[只传错误身份和已有元数据]
+ C --> E{FromError 收到有效 JSON?}
+ E -- 是 --> F[恢复独立 data 快照并保留数字精度]
+ E -- 否 --> D
+ F --> G[HTTP 网关编码或 gRPC 再次转发]
+ D --> H[返回无 data 的错误]
+```

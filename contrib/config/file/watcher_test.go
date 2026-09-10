@@ -28,7 +28,12 @@ func nextFileUpdate(watcher config.Watcher) <-chan watchResult {
 
 func newFileWatcher(t *testing.T, path string) config.Watcher {
 	t.Helper()
-	sources, err := NewSources(log.NewLogger(&log.SharedState{}), PathList{path})
+	logger, releaseLogger, logErr := log.NewLogger()
+	if logErr != nil {
+		t.Fatal(logErr)
+	}
+	t.Cleanup(releaseLogger)
+	sources, err := NewSources(logger, PathList{path})
 	if err != nil || len(sources) != 1 {
 		t.Fatalf("sources=%v err=%v", sources, err)
 	}

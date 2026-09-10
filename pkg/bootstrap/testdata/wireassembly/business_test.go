@@ -45,7 +45,7 @@ func businessSources(t *testing.T) config.Sources {
 func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	built, cleanup, err := initialize(ctx, businessSources(t), loggerConfig(), "business-test", 0)
+	built, cleanup, err := initialize(ctx, businessSources(t), "business-test", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestBusinessRejectsRemovedConfig(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, cleanup, err := initialize(context.Background(), config.NewSources(source), loggerConfig(), "legacy-test", 0)
+			_, cleanup, err := initialize(context.Background(), config.NewSources(source), "legacy-test", 0)
 			if cleanup != nil {
 				t.Cleanup(cleanup)
 			}
@@ -195,7 +195,7 @@ func TestMonitoringBindFailureStopsApplication(t *testing.T) {
 	sources := append(businessSources(t), source)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	built, cleanup, err := initialize(ctx, sources, loggerConfig(), "monitoring-test", 0)
+	built, cleanup, err := initialize(ctx, sources, "monitoring-test", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,7 +29,7 @@ func TestSpecOptionsAndMiddlewareDriveRealCronManager(t *testing.T) {
 			WithMetrics(false),
 			WithLogging(false),
 		).
-		Cron("refresh", "@hourly", TaskFunc(func(context.Context) error {
+		RegisterCron("refresh", "@hourly", TaskFunc(func(context.Context) error {
 			events = append(events, "task")
 			run <- struct{}{}
 			return nil

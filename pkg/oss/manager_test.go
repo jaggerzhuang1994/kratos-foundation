@@ -3,6 +3,7 @@ package oss
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"os"
 	"path/filepath"
@@ -269,19 +270,19 @@ func TestPublicNewManagerIsLazyAndCleanupIsIdempotent(t *testing.T) {
 
 func newPublicManagerLogger(t testing.TB, path string) foundationlog.Logger {
 	t.Helper()
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{Disable: path == "", Level: kratoslog.LevelInfo},
-			Path:         path, Rotating: foundationlog.RotatingConfig{Disable: true},
+		Std: testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Disable: path == "", Level: kratoslog.LevelInfo},
+			Path:         path, Rotating: testlog.RotatingConfig{Disable: true},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared)
+	return shared
 }
 
 func TestPublicNewManagerReturnsNoResourcesForInvalidConfiguration(t *testing.T) {

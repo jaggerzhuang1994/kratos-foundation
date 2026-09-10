@@ -255,3 +255,16 @@ func TestTelemetryIgnoresUnnamedJobsAndDisabledTracingProvider(t *testing.T) {
 		t.Fatalf("disabled tracing exported %d spans", len(spans))
 	}
 }
+
+func TestJobNameFromContext(t *testing.T) {
+	base := context.Background()
+	if got := JobNameFromContext(base); got != "" {
+		t.Fatalf("non-job context name = %q", got)
+	}
+	ctx := withJobName(base, "reconcile")
+	derived, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if got := JobNameFromContext(derived); got != "reconcile" {
+		t.Fatalf("derived context name = %q", got)
+	}
+}

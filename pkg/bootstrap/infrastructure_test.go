@@ -2,6 +2,7 @@ package bootstrap_test
 
 import (
 	"context"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,21 +32,21 @@ func (bootstrapAppInfo) Metadata() map[string]string { return nil }
 
 func TestBootstrapRegistersAppInfoAndAddsServiceLogFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "app.log")
-	shared, cleanup, err := foundationlog.NewSharedState(bootstrapLogConfig(path))
+	shared, cleanup, err := testlog.New(bootstrapLogConfig(path))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
 
 	info := bootstrapAppInfo{id: "orders-1", name: "orders", version: "v1.2.3"}
-	got, err := bootstrap.NewAppInfoBootstrap(info, app.NewSpec(), shared)
+	got, err := bootstrap.NewAppInfoBootstrap(info, app.NewSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != (bootstrap.AppInfoBootstrap{}) {
 		t.Fatalf("bootstrap = %#v, want zero value", got)
 	}
-	if err := foundationlog.NewLogger(shared).Log(kratoslog.LevelInfo, "event", "started"); err != nil {
+	if err := shared.Log(kratoslog.LevelInfo, "event", "started"); err != nil {
 		t.Fatal(err)
 	}
 	cleanup()
@@ -64,7 +65,7 @@ func TestBootstrapRegistersAppInfoAndAddsServiceLogFields(t *testing.T) {
 
 func TestBootstrapStopsBeforeLogOverrideWhenAppInfoRegistrationFails(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "app.log")
-	shared, cleanup, err := foundationlog.NewSharedState(bootstrapLogConfig(path))
+	shared, cleanup, err := testlog.New(bootstrapLogConfig(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,11 +73,11 @@ func TestBootstrapStopsBeforeLogOverrideWhenAppInfoRegistrationFails(t *testing.
 
 	spec := app.NewSpec()
 	first := bootstrapAppInfo{id: "orders-1", name: "orders", version: "v1"}
-	if _, err := bootstrap.NewAppInfoBootstrap(first, spec, shared); err != nil {
+	if _, err := bootstrap.NewAppInfoBootstrap(first, spec); err != nil {
 		t.Fatal(err)
 	}
 	second := bootstrapAppInfo{id: "billing-1", name: "billing", version: "v2"}
-	got, err := bootstrap.NewAppInfoBootstrap(second, spec, shared)
+	got, err := bootstrap.NewAppInfoBootstrap(second, spec)
 	if err == nil || !strings.Contains(err.Error(), "register app info") ||
 		!strings.Contains(err.Error(), "already registered") {
 		t.Fatalf("duplicate bootstrap error = %v", err)
@@ -84,7 +85,7 @@ func TestBootstrapStopsBeforeLogOverrideWhenAppInfoRegistrationFails(t *testing.
 	if got != (bootstrap.AppInfoBootstrap{}) {
 		t.Fatalf("bootstrap = %#v, want zero value", got)
 	}
-	if err := foundationlog.NewLogger(shared).Log(kratoslog.LevelInfo, "event", "started"); err != nil {
+	if err := shared.Log(kratoslog.LevelInfo, "event", "started"); err != nil {
 		t.Fatal(err)
 	}
 	cleanup()
@@ -99,19 +100,19 @@ func TestBootstrapStopsBeforeLogOverrideWhenAppInfoRegistrationFails(t *testing.
 	}
 }
 
-func bootstrapLogConfig(path string) foundationlog.Config {
-	return foundationlog.Config{
+func bootstrapLogConfig(path string) testlog.Config {
+	return testlog.Config{
 		Level:       kratoslog.LevelInfo,
 		FilterEmpty: false,
 		TimeFormat:  time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelInfo},
 			Path:         path,
-			Rotating:     foundationlog.RotatingConfig{Disable: true},
+			Rotating:     testlog.RotatingConfig{Disable: true},
 		},
 	}
 }
@@ -124,7 +125,7 @@ func (logBootstrapAppInfo) Version() string             { return "bootstrap-vers
 func (logBootstrapAppInfo) Metadata() map[string]string { return nil }
 
 func TestBootstrapRegistersStableLoggerAndRestoresPreviousGlobal(t *testing.T) {
-	shared, release, err := foundationlog.NewSharedState(bootstrapConfig())
+	shared, release, err := testlog.New(bootstrapConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +165,7 @@ func TestBootstrapRegistersStableLoggerAndRestoresPreviousGlobal(t *testing.T) {
 }
 
 func TestBootstrapLoggerSurvivesNewAppAndCleanupRestoresPreviousGlobal(t *testing.T) {
-	shared, release, err := foundationlog.NewSharedState(bootstrapConfig())
+	shared, release, err := testlog.New(bootstrapConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +214,7 @@ func TestBootstrapLoggerSurvivesNewAppAndCleanupRestoresPreviousGlobal(t *testin
 }
 
 func TestBootstrapRegistrationFailureLeavesGlobalLoggerUntouched(t *testing.T) {
-	shared, release, err := foundationlog.NewSharedState(bootstrapConfig())
+	shared, release, err := testlog.New(bootstrapConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,16 +245,16 @@ func TestBootstrapRegistrationFailureLeavesGlobalLoggerUntouched(t *testing.T) {
 	}
 }
 
-func bootstrapConfig() foundationlog.Config {
-	return foundationlog.Config{
+func bootstrapConfig() testlog.Config {
+	return testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{
 				Disable: true,
 				Level:   kratoslog.LevelInfo,
 			},
@@ -261,29 +262,30 @@ func bootstrapConfig() foundationlog.Config {
 	}
 }
 
-func TestBootstrapAddsTraceAndSpanFieldsWithoutServiceName(t *testing.T) {
+func TestBootstrapAddsTraceAndSpanFieldsPreservingGlobalServiceName(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "app.log")
-	config := foundationlog.Config{
+	config := testlog.Config{
 		Level:       kratoslog.LevelInfo,
 		FilterEmpty: false,
 		TimeFormat:  time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{
-			OutputConfig: foundationlog.OutputConfig{Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelInfo},
 			Path:         path,
-			Rotating:     foundationlog.RotatingConfig{Disable: true},
+			Rotating:     testlog.RotatingConfig{Disable: true},
 		},
 	}
-	shared, cleanup, err := foundationlog.NewSharedState(config)
+	shared, cleanup, err := testlog.New(config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
 
-	got, err := bootstrap.NewTracingBootstrap(shared)
+	foundationlog.WithKV(foundationlog.ServiceNameKey, "existing-service")
+	got, err := bootstrap.NewTracingBootstrap()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +297,7 @@ func TestBootstrapAddsTraceAndSpanFieldsWithoutServiceName(t *testing.T) {
 		SpanID:  trace.SpanID{17, 18, 19, 20, 21, 22, 23, 24},
 	})
 	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
-	logger := foundationlog.NewLogger(shared).WithContext(ctx)
+	logger := shared.WithContext(ctx)
 	if err := logger.Log(kratoslog.LevelInfo, "event", "traced"); err != nil {
 		t.Fatal(err)
 	}
@@ -314,8 +316,8 @@ func TestBootstrapAddsTraceAndSpanFieldsWithoutServiceName(t *testing.T) {
 			t.Fatalf("log line lacks %q: %s", field, line)
 		}
 	}
-	if strings.Contains(line, foundationlog.ServiceNameKey+"=") {
-		t.Fatalf("tracing bootstrap added service.name: %s", line)
+	if !strings.Contains(line, foundationlog.ServiceNameKey+"=existing-service") {
+		t.Fatalf("tracing bootstrap changed service.name: %s", line)
 	}
 }
 

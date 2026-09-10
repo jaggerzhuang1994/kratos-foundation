@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"slices"
 	"testing"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -28,14 +28,14 @@ type publicManagerRecord struct {
 func (publicManagerRecord) TableName() string { return "public_manager_records" }
 
 func TestNewManagerBuildsRegisteredSQLiteDriverAndCleansUp(t *testing.T) {
-	shared, releaseLogger, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, releaseLogger, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -73,7 +73,7 @@ func TestNewManagerBuildsRegisteredSQLiteDriverAndCleansUp(t *testing.T) {
 		Metrics: &config_pb.GormMetrics{Disable: &disabled},
 	})
 	manager, cleanup, err := database.NewManager(
-		foundationlog.NewLogger(shared),
+		shared,
 		configManager,
 		application,
 		tracingProvider,

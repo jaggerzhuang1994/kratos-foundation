@@ -27,8 +27,8 @@ type HTTPBuilder interface {
 	MiddlewareSpec(...MiddlewareSpec) HTTPBuilder
 	// Option 追加原生 Kratos HTTP ServerOption。
 	Option(...http.ServerOption) HTTPBuilder
-	// Endpoint 追加应用路由注册回调。
-	Endpoint(...HTTPEndpoint) HTTPBuilder
+	// Register 追加应用路由注册回调。
+	Register(...HTTPEndpoint) HTTPBuilder
 	// Health 配置默认健康端点及关键依赖检查。
 	Health(HealthConfig) HTTPBuilder
 	// HealthChecks 追加关键依赖检查，不覆盖配置文件中的监听地址、路径或开关。
@@ -49,8 +49,8 @@ type GRPCBuilder interface {
 	MiddlewareSpec(...MiddlewareSpec) GRPCBuilder
 	// Option 追加原生 Kratos gRPC ServerOption。
 	Option(...grpc.ServerOption) GRPCBuilder
-	// Service 追加应用服务注册回调。
-	Service(...GRPCService) GRPCBuilder
+	// Register 追加应用服务注册回调。
+	Register(...GRPCService) GRPCBuilder
 }
 
 // Spec 是 HTTP 与 gRPC 构建器共享的服务定义。
@@ -189,8 +189,8 @@ func (s *httpSpec) Option(options ...http.ServerOption) HTTPBuilder {
 	return s
 }
 
-// Endpoint 追加非 nil 的 HTTP 路由注册回调。
-func (s *httpSpec) Endpoint(endpoints ...HTTPEndpoint) HTTPBuilder {
+// Register 追加非 nil 的 HTTP 路由注册回调。
+func (s *httpSpec) Register(endpoints ...HTTPEndpoint) HTTPBuilder {
 	for _, endpoint := range endpoints {
 		if endpoint != nil {
 			s.endpoints = append(s.endpoints, endpoint)
@@ -252,8 +252,8 @@ func (s *grpcSpec) Option(options ...grpc.ServerOption) GRPCBuilder {
 	return s
 }
 
-// Service 追加非 nil 的 gRPC 服务注册回调。
-func (s *grpcSpec) Service(services ...GRPCService) GRPCBuilder {
+// Register 追加非 nil 的 gRPC 服务注册回调。
+func (s *grpcSpec) Register(services ...GRPCService) GRPCBuilder {
 	for _, service := range services {
 		if service != nil {
 			s.services = append(s.services, service)

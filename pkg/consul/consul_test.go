@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"net"
 	"net/http"
@@ -38,12 +39,12 @@ func TestConsulCleanupIsIdempotent(t *testing.T) {
 
 func testLogger(t *testing.T) log.Logger {
 	t.Helper()
-	shared, cleanup, err := log.NewSharedState(log.Config{TimeFormat: time.RFC3339, Std: log.OutputConfig{Disable: true}, File: log.FileConfig{OutputConfig: log.OutputConfig{Disable: true}}})
+	shared, cleanup, err := testlog.New(testlog.Config{TimeFormat: time.RFC3339, Std: testlog.OutputConfig{Disable: true}, File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return log.NewLogger(shared)
+	return shared
 }
 
 func TestNewSkipsWhenExplicitlyDisabled(t *testing.T) {
@@ -190,14 +191,14 @@ func TestNewProbesLocalLeaderAndRejectsEmptyOrError(t *testing.T) {
 
 func TestNewReturnsDisabledClientWithoutNetworkProbe(t *testing.T) {
 	t.Setenv(DisableConsul, "true")
-	shared, release, err := log.NewSharedState(log.Config{
+	shared, release, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: log.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: log.FileConfig{OutputConfig: log.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -207,7 +208,7 @@ func TestNewReturnsDisabledClientWithoutNetworkProbe(t *testing.T) {
 	}
 	t.Cleanup(release)
 
-	client, cleanup, err := New(log.NewLogger(shared), NewOptions())
+	client, cleanup, err := New(shared, NewOptions())
 	if err != nil {
 		t.Fatal(err)
 	}

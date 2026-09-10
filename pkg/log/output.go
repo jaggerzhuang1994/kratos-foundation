@@ -8,7 +8,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 )
 
-// outputLogger 只持有一代 file/std 输出栈。
+// outputLogger 持有一个 Logger 实例的 file/std 输出栈。
 type outputLogger struct {
 	output kratoslog.Logger
 	mu     sync.RWMutex
@@ -16,7 +16,7 @@ type outputLogger struct {
 }
 
 // newOutputLogger 组装一组启用的输出端；根级别和根字段过滤由业务 Logger 应用。
-func newOutputLogger(config Config) (*outputLogger, func(), error) {
+func newOutputLogger(config envConfig) (*outputLogger, func(), error) {
 	loggers := make([]kratoslog.Logger, 0, 2)
 	releases := make([]func(), 0, 1)
 
@@ -73,7 +73,7 @@ func newOutputLogger(config Config) (*outputLogger, func(), error) {
 	return out, release, nil
 }
 
-// Log 允许同代输出并发写入；释放后的旧引用交给 logger.log 切换到新版 Config 重试。
+// Log 允许实例内并发写入；实例释放后的写入返回 os.ErrClosed。
 func (l *outputLogger) Log(level kratoslog.Level, keyvals ...any) error {
 	l.mu.RLock()
 	defer l.mu.RUnlock()

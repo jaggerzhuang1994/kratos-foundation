@@ -87,14 +87,14 @@ flowchart LR
     A[Wire: app.NewSpec / app.NewConfig] --> B[构造组件]
     B --> C[bootstrap.NewXXXBootstrap 同步贡献]
     C --> D[bootstrap.InfrastructureBootstrap]
-    D --> U[业务提供 bootstrap.UserBootstrap]
-    U --> V[bootstrap.Bootstrap]
+    D --> U[业务提供 bootstrap.Bootstrap]
+    U --> V[bootstrap.StartupReady]
     V --> E[bootstrap.NewKratosApp 调用 app.NewApp 冻结 Spec]
     E --> F[application.Run 启动 Runtime]
     F --> G[Wire cleanup 逆序释放资源]
 ```
 
-`pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → UserBootstrap（业务提供）→ Bootstrap → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
+`pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ Bootstrap → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
 ```go
 spec := app.NewSpec()
@@ -105,7 +105,7 @@ stopPolicy, cleanupStopPolicy, err := app.NewStopPolicy(
 application, err := bootstrap.NewKratosApp(ctx, spec, applicationBootstrap, appConfig, stopPolicy)
 ```
 
-上例中的 `applicationBootstrap` 是 `bootstrap.NewBootstrap` 返回的最终标记；业务提供 `bootstrap.UserBootstrap` provider，完整示例见 [`bootstrap`](pkg/bootstrap/README.md)。`cleanupStopPolicy` 与其他构造 cleanup 由 Wire 逆序调用。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
+上例中的 `applicationBootstrap` 是 `bootstrap.NewBootstrap` 返回的最终标记；业务提供 `bootstrap.Bootstrap` provider，完整示例见 [`bootstrap`](pkg/bootstrap/README.md)。`cleanupStopPolicy` 与其他构造 cleanup 由 Wire 逆序调用。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
 
 ## 日志
 
@@ -113,7 +113,7 @@ application, err := bootstrap.NewKratosApp(ctx, spec, applicationBootstrap, appC
 
 - 基于 `LOG_*` 环境变量的严格配置解析。
 - stdout/stderr 分流与可轮转文件输出。
-- SharedLogger 进程选项：由 Foundation Bootstrap 声明、在应用装配时一次发布。
+- 进程级全局日志状态：任意位置通过 log.WithXXX 修改，已有 Logger 和全局日志共享生效。
 - Config 热更新与进程选项分离；更新 Config 不会重新应用进程选项。
 - 不可变的模块、上下文、级别和敏感字段派生。
 

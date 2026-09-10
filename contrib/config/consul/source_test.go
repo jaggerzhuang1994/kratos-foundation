@@ -21,7 +21,11 @@ func TestNewSourcesReturnsOneSourcePerPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create Consul client: %v", err)
 	}
-	logger := log.NewLogger(&log.SharedState{})
+	logger, releaseLogger, logErr := log.NewLogger()
+	if logErr != nil {
+		t.Fatal(logErr)
+	}
+	t.Cleanup(releaseLogger)
 	paths := PathList{"service/base", "service/override"}
 
 	sources, err := NewSources(client, logger, paths)
@@ -43,7 +47,11 @@ func TestNewSourcesHandlesDisabledAndInvalidInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create Consul client: %v", err)
 	}
-	logger := log.NewLogger(&log.SharedState{})
+	logger, releaseLogger, logErr := log.NewLogger()
+	if logErr != nil {
+		t.Fatal(logErr)
+	}
+	t.Cleanup(releaseLogger)
 
 	empty, err := NewSources(client, logger, nil)
 	if err != nil || empty != nil {

@@ -29,7 +29,7 @@ func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T
 		managerOptions{
 			Location: time.UTC,
 			ErrorHandler: func(ctx context.Context, name string, err error) {
-				failures <- cronFailure{ctxName: jobNameFromContext(ctx), name: name, err: err}
+				failures <- cronFailure{ctxName: JobNameFromContext(ctx), name: name, err: err}
 			},
 		},
 		parser,

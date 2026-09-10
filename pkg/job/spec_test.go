@@ -9,7 +9,7 @@ import (
 
 func TestSpecRequiresCoordinatorForDistributedPolicy(t *testing.T) {
 	spec := NewSpec()
-	spec.Cron(
+	spec.RegisterCron(
 		"cleanup",
 		"@every 1m",
 		TaskFunc(func(context.Context) error { return nil }),
@@ -36,7 +36,7 @@ func TestPublicManagerAndCronOptionsDriveImmediateFailureHandling(t *testing.T) 
 			}
 			reported <- err
 		}),
-	).Cron(
+	).RegisterCron(
 		"report",
 		"@hourly",
 		TaskFunc(func(context.Context) error { return wantErr }),
@@ -74,13 +74,13 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 		name string
 		spec *Spec
 	}{
-		{name: "empty name", spec: NewSpec().Once("", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
-		{name: "nil task", spec: NewSpec().Once("once", nil).(*Spec)},
-		{name: "missing cron schedule", spec: NewSpec().Cron("cron", "", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
-		{name: "duplicate names", spec: NewSpec().Once("same", TaskFunc(func(context.Context) error { return nil })).Daemon("same", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
-		{name: "distributed without coordinator", spec: NewSpec().Cron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(SkipIfDistributedRunning)).(*Spec)},
-		{name: "exit without once", spec: NewSpec().Daemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
-		{name: "exit with background work", spec: NewSpec().Once("once", TaskFunc(func(context.Context) error { return nil })).Daemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
+		{name: "empty name", spec: NewSpec().RegisterOnce("", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
+		{name: "nil task", spec: NewSpec().RegisterOnce("once", nil).(*Spec)},
+		{name: "missing cron schedule", spec: NewSpec().RegisterCron("cron", "", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
+		{name: "duplicate names", spec: NewSpec().RegisterOnce("same", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("same", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
+		{name: "distributed without coordinator", spec: NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(SkipIfDistributedRunning)).(*Spec)},
+		{name: "exit without once", spec: NewSpec().RegisterDaemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
+		{name: "exit with background work", spec: NewSpec().RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if err := test.spec.Validate(); err == nil {
@@ -88,11 +88,11 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 			}
 		})
 	}
-	invalid := NewSpec().Cron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(ConcurrentPolicy(99))).(*Spec)
+	invalid := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(ConcurrentPolicy(99))).(*Spec)
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("invalid policy accepted")
 	}
-	valid := NewSpec().Coordinator(&testCoordinator{}).Cron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(DelayIfDistributedRunning)).Once("once", TaskFunc(func(context.Context) error { return nil })).(*Spec)
+	valid := NewSpec().Coordinator(&testCoordinator{}).RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(DelayIfDistributedRunning)).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).(*Spec)
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}

@@ -4,7 +4,7 @@
 
 ```go
 spec := job.NewSpec()
-spec.Cron("cleanup", "@every 1m", cleanupTask, job.WithConcurrentPolicy(job.SkipIfRunning))
+spec.RegisterCron("cleanup", "@every 1m", cleanupTask, job.WithConcurrentPolicy(job.SkipIfRunning))
 manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider)
 contribution, err := bootstrap.NewJobBootstrap(appSpec, manager)
 ```
@@ -43,3 +43,6 @@ Job 不使用全局驱动注册表，也不会读取 `job.lock.driver` 自动选
 租约续租失败或超过 `OperationTimeout` 时，执行 Context 会独立取消并携带 `ErrCoordinationLost`，即使底层 `Refresh` 尚未返回；晚到的成功不会恢复旧任务。Handler 应响应 Context 取消。协调器不会重新拿锁继续旧任务，后续周期调度仍按原计划运行。
 
 Release 先取消旧执行和续租，再最多等待 `OperationTimeout` 让在途续租退出。超过等待预算便返回错误，不与在途刷新并发 Unlock，而让租约自然过期。Redis 在途 I/O 仍遵守原客户端配置；默认读取超时有限。显式配置无限读取且禁用 Context 超时时，旧任务仍及时取消、Release 仍可返回，但原续租调用需等网络返回或 Redis Manager cleanup 关闭连接后收尾。第三方 Lease 仍须遵守 Context 约定，完全不可取消的实现无法被 Go 强制终止。协调器不为每次调用额外创建阻塞 goroutine；超时只触发短取消回调。
+
+任务实现和中间件可通过 `job.JobNameFromContext(ctx)` 读取任务的注册名称。
+名称由执行器注入，派生 Context 会继承；非任务 Context 返回空字符串。

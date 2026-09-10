@@ -7,6 +7,7 @@ import (
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/gorilla/websocket"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -158,14 +159,14 @@ func TestWebSocketHandshakeCanRejectBeforeUpgrade(t *testing.T) {
 
 func newRuntimeTestLogger(t *testing.T) foundationlog.Logger {
 	t.Helper()
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
-		Std: foundationlog.OutputConfig{
+		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,
 		}},
@@ -174,7 +175,7 @@ func newRuntimeTestLogger(t *testing.T) foundationlog.Logger {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared)
+	return shared
 }
 
 type serverManagerStub struct {

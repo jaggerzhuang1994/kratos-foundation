@@ -14,7 +14,7 @@
 
 ## 构造边界
 
-本包描述应用所需依赖并提供 `NewApp(ctx, spec, config, stopPolicy)`，不选择领域组件、不聚合 Bootstrap，也不决定整个应用的组装阶段。所有阶段标记（包括用户提供的 `bootstrap.UserBootstrap`）均定义在组装包。
+本包描述应用所需依赖并提供 `NewApp(ctx, spec, config, stopPolicy)`，不选择领域组件、不聚合 Bootstrap，也不决定整个应用的组装阶段。所有阶段标记（包括用户提供的 `bootstrap.Bootstrap`）均定义在组装包。
 
 应用组装与 Wire 示例见 [`bootstrap`](../bootstrap/README.md)。`NewApp` 消费已登记的 Spec 并冻结它；直接调用时由调用方保证贡献已全部完成。
 
@@ -40,7 +40,7 @@ flowchart TD
 
 ## Spec 约束
 
-`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会返回错误。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会返回错误。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。AppInfo、Logger 和 Registrar 是单例贡献。组装层通过最终 `bootstrap.Bootstrap` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。
+`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会返回错误。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会返回错误。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。AppInfo、Logger 和 Registrar 是单例贡献。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。
 
 ## 运行时故障与停止结果
 

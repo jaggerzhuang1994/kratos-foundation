@@ -1,6 +1,7 @@
 package consul
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"testing"
 	"time"
 
@@ -75,14 +76,14 @@ func TestNewDiscoveryBuildsAdapterForSharedClient(t *testing.T) {
 
 func testLogger(t *testing.T) foundationlog.Logger {
 	t.Helper()
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{
+	shared, cleanup, err := testlog.New(testlog.Config{
 		Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339,
-		Std:  foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
+		Std:  testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	return foundationlog.NewLogger(shared)
+	return shared
 }

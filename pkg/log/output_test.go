@@ -10,9 +10,9 @@ import (
 )
 
 func TestOutputReleaseRejectsLaterWritesWithoutFileSink(t *testing.T) {
-	out, release, err := newOutputLogger(Config{
-		Std:  OutputConfig{Disable: true},
-		File: FileConfig{OutputConfig: OutputConfig{Disable: true}},
+	out, release, err := newOutputLogger(envConfig{
+		Std:  outputConfig{Disable: true},
+		File: fileConfig{outputConfig: outputConfig{Disable: true}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -28,9 +28,9 @@ func TestOutputReleaseRejectsLaterWritesWithoutFileSink(t *testing.T) {
 }
 
 func TestOutputReleaseWaitsForActiveWrite(t *testing.T) {
-	out, release, err := newOutputLogger(Config{
-		Std:  OutputConfig{Disable: true},
-		File: FileConfig{OutputConfig: OutputConfig{Disable: true}},
+	out, release, err := newOutputLogger(envConfig{
+		Std:  outputConfig{Disable: true},
+		File: fileConfig{outputConfig: outputConfig{Disable: true}},
 	})
 	if err != nil {
 		t.Fatal(err)

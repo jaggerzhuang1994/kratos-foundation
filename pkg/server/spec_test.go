@@ -20,8 +20,8 @@ func (testSocketHandler) OnClose(WebSocketConn) {}
 
 func TestSpecBuildersValidateAndOverrideProtocolConfig(t *testing.T) {
 	spec := NewSpec()
-	spec.HTTP().Middleware(nil).Endpoint(nil).Option(nil).WebSocket("/ws", testSocketHandler{})
-	spec.GRPC().Middleware(nil).Service(nil).Option(nil)
+	spec.HTTP().Middleware(nil).Register(nil).Option(nil).WebSocket("/ws", testSocketHandler{})
+	spec.GRPC().Middleware(nil).Register(nil).Option(nil)
 	if err := spec.Validate(); err != nil {
 		t.Fatal(err)
 	}

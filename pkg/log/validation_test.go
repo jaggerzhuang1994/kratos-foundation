@@ -6,7 +6,7 @@ import (
 )
 
 func TestValidateConfigRejectsOutputAndFilterErrors(t *testing.T) {
-	valid := Config{Level: kratoslog.LevelInfo, TimeFormat: "2006-01-02", Std: OutputConfig{Disable: true, Level: kratoslog.LevelInfo}, File: FileConfig{OutputConfig: OutputConfig{Disable: true, Level: kratoslog.LevelInfo}}}
+	valid := envConfig{Level: kratoslog.LevelInfo, TimeFormat: "2006-01-02", Std: outputConfig{Disable: true, Level: kratoslog.LevelInfo}, File: fileConfig{outputConfig: outputConfig{Disable: true, Level: kratoslog.LevelInfo}}}
 	if err := validateConfig(valid); err != nil {
 		t.Fatal(err)
 	}

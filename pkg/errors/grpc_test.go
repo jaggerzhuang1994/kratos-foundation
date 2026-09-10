@@ -1,8 +1,10 @@
 package errors
 
 import (
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -140,5 +142,51 @@ func TestFromErrorHandlesPlainAndGRPCStatuses(t *testing.T) {
 	restored := FromError(withDetails.Err())
 	if restored.Code != 403 || restored.Reason != "FORBIDDEN" || restored.PublicMetadata()["tenant"] != "acme" {
 		t.Fatalf("gRPC details conversion = %+v", restored)
+	}
+}
+
+func TestGRPCStatusRoundTripPreservesHTTPData(t *testing.T) {
+	want := map[string]any{"rpId": "example.com", "credentialId": "-_8AAQ", "uid": json.Number("9007199254740993")}
+	original := New(400, "CREDENTIAL_REVOKED", "revoked").WithReasonCode(40123).WithHTTPData(want).WithErrStack()
+	restored := FromError(roundTripGRPCStatus(t, original.GRPCStatus()).Err())
+	if got := restored.HTTPData(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("HTTP data = %#v, want %#v", got, want)
+	}
+	if restored.Code != 400 || restored.ReasonCode() != 40123 {
+		t.Fatalf("error identity changed: %v", restored)
+	}
+	if _, ok := restored.PublicMetadata()[mdHTTPDataKey]; ok {
+		t.Fatal("HTTP data leaked into public metadata")
+	}
+	if restored.ErrStack() != "" {
+		t.Fatal("error stack crossed gRPC")
+	}
+	restored.HTTPData().(map[string]any)["rpId"] = "changed"
+	if got := restored.HTTPData().(map[string]any)["rpId"]; got != "example.com" {
+		t.Fatalf("HTTP data snapshot mutated: %v", got)
+	}
+	// 再次转发仍保留 data，覆盖多级网关场景。
+	forwarded := FromError(roundTripGRPCStatus(t, restored.GRPCStatus()).Err())
+	if !reflect.DeepEqual(forwarded.HTTPData(), want) {
+		t.Fatalf("forwarded data = %#v", forwarded.HTTPData())
+	}
+}
+
+func TestFromErrorIgnoresMalformedHTTPData(t *testing.T) {
+	for _, raw := range []string{"", "{", "{} trailing"} {
+		t.Run(raw, func(t *testing.T) {
+			wireStatus, err := status.New(codes.InvalidArgument, "invalid").WithDetails(&errdetails.ErrorInfo{Reason: "INVALID", Metadata: map[string]string{mdHTTPDataKey: raw, mdReasonCodeKey: "40123"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored := FromError(roundTripGRPCStatus(t, wireStatus).Err())
+			if restored.HTTPData() != nil || restored.ReasonCode() != 40123 {
+				t.Fatalf("malformed data changed error: %v", restored)
+			}
+		})
+	}
+	invalid := New(400, "INVALID", "invalid").WithHTTPData(make(chan int))
+	if got := FromError(invalid.GRPCStatus().Err()); got.HTTPData() != nil || got.Reason != "INVALID" {
+		t.Fatalf("unencodable data changed error: %v", got)
 	}
 }

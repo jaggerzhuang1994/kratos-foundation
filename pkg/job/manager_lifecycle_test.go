@@ -12,7 +12,7 @@ import (
 // These tests kill mutations that classify task kinds incorrectly, delay Cron
 // startup behind an external barrier, or leave Done open after an ExitWhenDone run.
 func TestNewManagerClassifiesAndSchedulesJobs(t *testing.T) {
-	spec := NewSpec().Cron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil })).Once("once", TaskFunc(func(context.Context) error { return nil })).Daemon("daemon", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
+	spec := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil })).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("daemon", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
 	parser := &testParser{schedule: testSchedule{next: time.Now().Add(time.Hour)}}
 	scheduler := &testScheduler{}
 	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, parser)
@@ -44,7 +44,7 @@ func TestNewManagerClassifiesAndSchedulesJobs(t *testing.T) {
 
 func TestManagerExitWhenDoneRequestsApplicationStopAndClosesDone(t *testing.T) {
 	run := 0
-	spec := NewSpec().Once("migrate", TaskFunc(func(context.Context) error { run++; return nil })).ExitWhenDone().(*Spec)
+	spec := NewSpec().RegisterOnce("migrate", TaskFunc(func(context.Context) error { run++; return nil })).ExitWhenDone().(*Spec)
 	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}})
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestManagerExitWhenDoneRequestsApplicationStopAndClosesDone(t *testing.T) {
 
 func TestManagerDaemonFailureStopsApplication(t *testing.T) {
 	want := errors.New("daemon failed")
-	spec := NewSpec().Daemon("worker", TaskFunc(func(context.Context) error { return want })).(*Spec)
+	spec := NewSpec().RegisterDaemon("worker", TaskFunc(func(context.Context) error { return want })).(*Spec)
 	var observed error
 	spec.Option(WithErrorHandler(func(_ context.Context, name string, err error) {
 		if name != "worker" {
@@ -87,7 +87,7 @@ func TestManagerDaemonFailureStopsApplication(t *testing.T) {
 }
 
 func TestManagerStartRejectsDuplicateStart(t *testing.T) {
-	spec := NewSpec().Daemon("wait", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
+	spec := NewSpec().RegisterDaemon("wait", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
 	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{})
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestManagerStartRejectsDuplicateStart(t *testing.T) {
 
 func TestManagerParentCancellationBeforeStartClosesRuntime(t *testing.T) {
 	runs := 0
-	spec := NewSpec().Daemon("worker", TaskFunc(func(context.Context) error {
+	spec := NewSpec().RegisterDaemon("worker", TaskFunc(func(context.Context) error {
 		runs++
 		return nil
 	})).(*Spec)
@@ -141,7 +141,7 @@ func TestManagerParentCancellationBeforeStartClosesRuntime(t *testing.T) {
 
 func TestManagerStopUnblocksStart(t *testing.T) {
 	ran := make(chan struct{})
-	spec := NewSpec().Once("migration", TaskFunc(func(context.Context) error {
+	spec := NewSpec().RegisterOnce("migration", TaskFunc(func(context.Context) error {
 		close(ran)
 		return nil
 	})).(*Spec)
@@ -174,7 +174,7 @@ func TestManagerStopUnblocksStart(t *testing.T) {
 
 func TestManagerParentCancellationStopsRunningDaemon(t *testing.T) {
 	started := make(chan struct{})
-	spec := NewSpec().Daemon("worker", TaskFunc(func(ctx context.Context) error {
+	spec := NewSpec().RegisterDaemon("worker", TaskFunc(func(ctx context.Context) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
@@ -204,7 +204,7 @@ func TestManagerParentCancellationStopsRunningDaemon(t *testing.T) {
 func TestManagerParentCancellationStopsOneShotWait(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	spec := NewSpec().Once("migration", TaskFunc(func(ctx context.Context) error {
+	spec := NewSpec().RegisterOnce("migration", TaskFunc(func(ctx context.Context) error {
 		close(started)
 		<-release
 		return ctx.Err()
@@ -234,7 +234,7 @@ func TestManagerParentCancellationStopsOneShotWait(t *testing.T) {
 
 func TestManagerStopBeforeStartPreventsLaterLaunch(t *testing.T) {
 	runs := 0
-	spec := NewSpec().Once("migration", TaskFunc(func(context.Context) error {
+	spec := NewSpec().RegisterOnce("migration", TaskFunc(func(context.Context) error {
 		runs++
 		return nil
 	})).(*Spec)
@@ -261,7 +261,7 @@ func TestManagerStopBeforeStartPreventsLaterLaunch(t *testing.T) {
 }
 
 func TestManagerStartJobsRefusesWorkAfterShutdownBegins(t *testing.T) {
-	spec := NewSpec().Once("migration", TaskFunc(func(context.Context) error { return nil })).(*Spec)
+	spec := NewSpec().RegisterOnce("migration", TaskFunc(func(context.Context) error { return nil })).(*Spec)
 	manager, err := newManager(
 		testModuleLog(t),
 		nil,
@@ -284,7 +284,7 @@ func TestManagerStartJobsRefusesWorkAfterShutdownBegins(t *testing.T) {
 func TestManagerStopHonorsContextWhileUncooperativeTaskFinishes(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	spec := NewSpec().Daemon("worker", TaskFunc(func(context.Context) error {
+	spec := NewSpec().RegisterDaemon("worker", TaskFunc(func(context.Context) error {
 		close(started)
 		<-release
 		return nil
@@ -331,7 +331,7 @@ func TestManagerReportsOnceFailuresWithoutStoppingApplication(t *testing.T) {
 				err  error
 			}{name: name, err: err}
 		})).
-		Once("migration", TaskFunc(func(context.Context) error { return wantErr })).(*Spec)
+		RegisterOnce("migration", TaskFunc(func(context.Context) error { return wantErr })).(*Spec)
 	manager, err := newManager(
 		testModuleLog(t),
 		nil,
@@ -359,7 +359,7 @@ func TestManagerReportsOnceFailuresWithoutStoppingApplication(t *testing.T) {
 
 func TestManagerDefaultErrorHandlerLogsOnceFailure(t *testing.T) {
 	log, logPath := testFileModuleLog(t)
-	spec := NewSpec().Once("migration", TaskFunc(func(context.Context) error {
+	spec := NewSpec().RegisterOnce("migration", TaskFunc(func(context.Context) error {
 		return errors.New("migration failed")
 	})).(*Spec)
 	manager, err := newManager(
@@ -401,7 +401,7 @@ func TestManagerTreatsUnexpectedSuccessfulDaemonExitAsFailure(t *testing.T) {
 	reported := make(chan error, 1)
 	spec := NewSpec().
 		Option(WithErrorHandler(func(_ context.Context, _ string, err error) { reported <- err })).
-		Daemon("worker", TaskFunc(func(context.Context) error { return nil })).(*Spec)
+		RegisterDaemon("worker", TaskFunc(func(context.Context) error { return nil })).(*Spec)
 	manager, err := newManager(
 		testModuleLog(t),
 		nil,
@@ -424,7 +424,7 @@ func TestManagerTreatsUnexpectedSuccessfulDaemonExitAsFailure(t *testing.T) {
 
 func TestNewManagerReturnsCronParseFailureWithoutStartingScheduler(t *testing.T) {
 	wantErr := errors.New("invalid schedule")
-	spec := NewSpec().Cron("report", "bad", TaskFunc(func(context.Context) error { return nil })).(*Spec)
+	spec := NewSpec().RegisterCron("report", "bad", TaskFunc(func(context.Context) error { return nil })).(*Spec)
 	scheduler := &testScheduler{}
 	manager, err := newManager(
 		testModuleLog(t),

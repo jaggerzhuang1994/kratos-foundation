@@ -157,25 +157,25 @@ func TestEnvCSVCopiesFallbackAndNormalizesExplicitList(t *testing.T) {
 	}
 }
 
-func TestNewConfigAppliesDocumentedDefaults(t *testing.T) {
+func TestNewEnvConfigAppliesDocumentedDefaults(t *testing.T) {
 	clearEnvironment(t, logEnvironmentKeys...)
 
-	got, err := NewConfig()
+	got, err := newEnvConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Config{
+	want := envConfig{
 		Level:       kratoslog.LevelInfo,
 		FilterEmpty: true,
 		TimeFormat:  time.RFC3339,
-		Std: OutputConfig{
+		Std: outputConfig{
 			Level:      kratoslog.LevelInfo,
 			FilterKeys: []string{"service.id", "service.name", "service.version"},
 		},
-		File: FileConfig{
-			OutputConfig: OutputConfig{Level: kratoslog.LevelInfo},
+		File: fileConfig{
+			outputConfig: outputConfig{Level: kratoslog.LevelInfo},
 			Path:         "./app.log",
-			Rotating: RotatingConfig{
+			Rotating: rotatingConfig{
 				MaxSize: 100,
 			},
 		},
@@ -185,7 +185,7 @@ func TestNewConfigAppliesDocumentedDefaults(t *testing.T) {
 	}
 }
 
-func TestNewConfigLoadsEveryEnvironmentVariable(t *testing.T) {
+func TestNewEnvConfigLoadsEveryEnvironmentVariable(t *testing.T) {
 	clearEnvironment(t, logEnvironmentKeys...)
 	values := map[string]string{
 		EnvLevel:                  "warn",
@@ -210,28 +210,28 @@ func TestNewConfigLoadsEveryEnvironmentVariable(t *testing.T) {
 		t.Setenv(key, value)
 	}
 
-	got, err := NewConfig()
+	got, err := newEnvConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Config{
+	want := envConfig{
 		Level:       kratoslog.LevelWarn,
 		FilterEmpty: false,
 		FilterKeys:  []string{"token", "password"},
 		TimeFormat:  "2006",
-		Std: OutputConfig{
+		Std: outputConfig{
 			Disable:    true,
 			Level:      kratoslog.LevelError,
 			FilterKeys: []string{"request.id"},
 		},
-		File: FileConfig{
-			OutputConfig: OutputConfig{
+		File: fileConfig{
+			outputConfig: outputConfig{
 				Disable:    true,
 				Level:      kratoslog.LevelFatal,
 				FilterKeys: []string{"secret"},
 			},
 			Path: "",
-			Rotating: RotatingConfig{
+			Rotating: rotatingConfig{
 				Disable:    true,
 				MaxSize:    9,
 				MaxFileAge: 4,
@@ -246,7 +246,7 @@ func TestNewConfigLoadsEveryEnvironmentVariable(t *testing.T) {
 	}
 }
 
-func TestNewConfigRejectsMalformedAndOutOfRangeEnvironment(t *testing.T) {
+func TestNewEnvConfigRejectsMalformedAndOutOfRangeEnvironment(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		key   string
@@ -274,9 +274,9 @@ func TestNewConfigRejectsMalformedAndOutOfRangeEnvironment(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			clearEnvironment(t, logEnvironmentKeys...)
 			t.Setenv(test.key, test.value)
-			_, err := NewConfig()
+			_, err := newEnvConfig()
 			if err == nil || !strings.Contains(err.Error(), test.key) {
-				t.Fatalf("NewConfig error = %v, want error naming %s", err, test.key)
+				t.Fatalf("newEnvConfig error = %v, want error naming %s", err, test.key)
 			}
 		})
 	}
@@ -300,40 +300,5 @@ func clearEnvironment(t testing.TB, keys ...string) {
 				t.Errorf("clear %s: %v", key, err)
 			}
 		})
-	}
-}
-
-// These cases kill mutations that change documented environment defaults or
-// silently accept malformed values before constructing a shared logger.
-func TestNewConfigDefaultsAndEnvironment(t *testing.T) {
-	config, err := NewConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if config.Level != kratoslog.LevelInfo || !config.FilterEmpty || config.Std.Disable || config.File.Disable {
-		t.Fatalf("defaults = %#v", config)
-	}
-	t.Setenv(EnvLevel, "debug")
-	t.Setenv(EnvStdDisable, "true")
-	t.Setenv(EnvFileDisable, "true")
-	t.Setenv(EnvFilterKeys, "token,password")
-	config, err = NewConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if config.Level != kratoslog.LevelDebug || !config.Std.Disable || !config.File.Disable || len(config.FilterKeys) != 2 {
-		t.Fatalf("environment config = %#v", config)
-	}
-}
-
-func TestNewConfigRejectsInvalidEnvironment(t *testing.T) {
-	t.Setenv(EnvLevel, "verbose")
-	if _, err := NewConfig(); err == nil {
-		t.Fatal("invalid level accepted")
-	}
-	t.Setenv(EnvLevel, "info")
-	t.Setenv(EnvFileRotatingMaxSize, "0")
-	if _, err := NewConfig(); err == nil {
-		t.Fatal("zero rotating max size accepted")
 	}
 }

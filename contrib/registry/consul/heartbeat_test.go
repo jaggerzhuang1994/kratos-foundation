@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,6 @@ import (
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/hashicorp/consul/api"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -147,12 +147,12 @@ func newTestRegistrar(t *testing.T, handler http.HandlerFunc, timeout time.Durat
 	if err != nil {
 		t.Fatal(err)
 	}
-	shared, cleanup, err := foundationlog.NewSharedState(foundationlog.Config{TimeFormat: time.RFC3339, Std: foundationlog.OutputConfig{Disable: true}, File: foundationlog.FileConfig{OutputConfig: foundationlog.OutputConfig{Disable: true}}})
+	shared, cleanup, err := testlog.New(testlog.Config{TimeFormat: time.RFC3339, Std: testlog.OutputConfig{Disable: true}, File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	reg, err := NewRegistry(foundationlog.NewLogger(shared), testconfig.New(t, "registry", &config_pb.Registry{HealthcheckInternal: durationpb.New(time.Second)}), client)
+	reg, err := NewRegistry(shared, testconfig.New(t, "registry", &config_pb.Registry{HealthcheckInternal: durationpb.New(time.Second)}), client)
 	if err != nil {
 		t.Fatal(err)
 	}

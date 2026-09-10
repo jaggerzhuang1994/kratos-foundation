@@ -24,7 +24,12 @@ func consulTestSource(t *testing.T, handler http.HandlerFunc) (kratosconfig.Sour
 	if err != nil {
 		t.Fatal(err)
 	}
-	sources, err := NewSources(client, log.NewLogger(&log.SharedState{}), PathList{"settings"})
+	logger, releaseLogger, logErr := log.NewLogger()
+	if logErr != nil {
+		t.Fatal(logErr)
+	}
+	t.Cleanup(releaseLogger)
+	sources, err := NewSources(client, logger, PathList{"settings"})
 	if err != nil {
 		t.Fatal(err)
 	}
