@@ -2,13 +2,49 @@
 
 生成基于 `pkg/client.Factory` 的非流式 HTTP/gRPC 客户端适配器。它与 protobuf、gRPC，以及有 HTTP 注解时的 Kratos HTTP 生成代码放在同一 Go 包中。
 
-在本目录构建插件，再在业务协议目录运行 protoc：
+需要 Go、`protoc`、`protoc-gen-go` 和 `protoc-gen-go-grpc`；第三方插件由根 [Makefile](../../Makefile) 的 `make init` 安装。以下命令从**仓库根目录**执行，在临时目录生成最小 gRPC 示例，包含服务选项的 import 和伴随生成物：
 
 ```sh
-go build -o /tmp/protoc-gen-kratos-foundation-client-v2 .
-protoc --proto_path=. \
-  --plugin=protoc-gen-kratos-foundation-client-v2=/tmp/protoc-gen-kratos-foundation-client-v2 \
-  --kratos-foundation-client-v2_out=paths=source_relative:. orders/v1/order.proto
+set -eu
+repo_dir="$PWD"
+client_demo_dir="$(mktemp -d)"
+(cd cmd/protoc-gen-kratos-foundation-client-v2 && go build -o "$client_demo_dir/protoc-gen-kratos-foundation-client-v2" .)
+cat > "$client_demo_dir/order.proto" <<'PROTO'
+syntax = "proto3";
+package demo;
+option go_package = "example.com/demo;demo";
+import "kratos_foundation_client/client.proto";
+service OrderService {
+  option (kratos_foundation_client.client_name) = "orders";
+  rpc GetOrder(GetOrderRequest) returns (GetOrderReply);
+}
+message GetOrderRequest {}
+message GetOrderReply {}
+PROTO
+protoc --proto_path="$client_demo_dir" --proto_path="$repo_dir/proto" \
+  --proto_path="$repo_dir/third_party" \
+  --go_out=paths=source_relative:"$client_demo_dir" \
+  --go-grpc_out=paths=source_relative:"$client_demo_dir" \
+  --plugin=protoc-gen-kratos-foundation-client-v2="$client_demo_dir/protoc-gen-kratos-foundation-client-v2" \
+  --kratos-foundation-client-v2_out=paths=source_relative:"$client_demo_dir" \
+  "$client_demo_dir/order.proto"
+test -s "$client_demo_dir/order.pb.go"
+test -s "$client_demo_dir/order_grpc.pb.go"
+test -s "$client_demo_dir/order_client.pb.go"
+```
+
+业务模块需要依赖本仓库 `/v2` 模块、gRPC 和 Wire。使用 HTTP 时，还须导入 `google/api/annotations.proto`、为方法声明 `google.api.http` 注解，并在同一 protoc 命令加入 `--go-http_out=paths=source_relative:"$client_demo_dir"`；`protoc-gen-go-http` 同样由 `make init` 安装。HTTP 与 gRPC 生成物必须与适配器同包。
+
+```mermaid
+flowchart TD
+    A([开始]) --> B[构建当前插件并声明服务选项]
+    B --> C[protoc 读取 proto 和 third_party]
+    C --> D{解析、插件执行成功?}
+    D -- 否 --> E([返回错误并停止])
+    D -- 是 --> F[同包生成消息、协议客户端和 Factory 适配器]
+    F --> G{预期产物非空?}
+    G -- 否 --> E
+    G -- 是 --> H([完成])
 ```
 
 生成的 `NewOrderService(factory)` 使用服务选项 `kratos_foundation_client.client_name` 指定的连接名；未指定时使用 proto 所在目录名，顶层文件使用文件名。服务选项不能是空白或包含首尾空白。

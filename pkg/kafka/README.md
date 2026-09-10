@@ -2,6 +2,18 @@
 
 `pkg/kafka` 提供业务与 Wire 使用的 `ClientFactory`，按具名配置创建 franz-go 客户端。工厂只保存连接配置，不持有或共享创建出的客户端，因此不使用 Driver Registry，也不返回资源 cleanup。
 
+先在配置 Manager 的 `kafka.connections` 中声明示例引用的 `events`：
+
+```yaml
+kafka:
+  connections:
+    events:
+      brokers:
+        - 127.0.0.1:9092
+```
+
+连接配置由工厂在构造时保存为快照，变更后需要重启应用。TLS、SASL 和生产/消费选项见 [kafka.proto](../../proto/config_pb/kafka.proto)。下面的 logger 和配置 Manager 由业务 Wire 提供；创建 client 成功不代表 Broker 已可用，实际操作仍须处理连接和认证错误。
+
 ```go
 factory, err := kafka.NewClientFactory(logger, configManager)
 if err != nil {

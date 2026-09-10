@@ -16,11 +16,11 @@ import (
 
 | 子包       | 用途                                             | 新系统建议                         |
 |------------|--------------------------------------------------|------------------------------------|
-| `aes`      | 数据库字段的 AES-CBC 静态加密                    | 仅用于仓库声明的数据库泄漏威胁模型 |
-| `ecc`      | 认证临时公钥和正文的 ECIES 加解密及 ECDSA 密钥编解码 | 仅在双方采用该 ECIES 格式时使用    |
-| `password` | Argon2id 密码哈希、验证和升级判断                | 推荐                               |
-| `rsa`      | 分块 RSA PKCS#1 v1.5 加解密及 PKCS#1 密钥编解码  | 仅兼容旧协议，不用于新设计         |
-| `schnorr`  | GG18 风格的 ECDSA 私钥知识证明                   | 仅用于明确采用该转录格式的协议     |
+| [`aes`](aes/README.md)      | 数据库字段的 AES-CBC 静态加密                    | 仅用于仓库声明的数据库泄漏威胁模型 |
+| [`ecc`](ecc/README.md)      | 认证临时公钥和正文的 ECIES 加解密及 ECDSA 密钥编解码 | 仅在双方采用该 ECIES 格式时使用    |
+| [`password`](password/README.md) | Argon2id 密码哈希、验证和升级判断                | 推荐                               |
+| [`rsa`](rsa/README.md)      | 分块 RSA PKCS#1 v1.5 加解密及 PKCS#1 密钥编解码  | 仅兼容旧协议，不用于新设计         |
+| [`schnorr`](schnorr/README.md)  | GG18 风格的 ECDSA 私钥知识证明                   | 仅用于明确采用该转录格式的协议     |
 
 ## AES-CBC
 
@@ -29,13 +29,19 @@ import (
 ```go
 cipher := foundationaes.CBC{}
 ciphertext, err := cipher.Encrypt(plain, key)
+if err != nil {
+    return err
+}
 plain, err = cipher.Decrypt(ciphertext, key)
+if err != nil {
+    return err
+}
 ```
 
 `Encrypt`/`Decrypt` 处理字节，`EncryptString`/`DecryptString` 处理字符串和标准 Base64 密文；四个方法共同组成 `Cipher` 接口。
 
 - key 必须是 AES 支持的 16、24 或 32 字节。
-- 二进制密文格式是 `IV || PKCS#7(AES-CBC(plaintext))`；字符串 API 使用标准 Base64。
+- 二进制密文格式是 `IV || AES-CBC(PKCS#7(plaintext))`；字符串 API 使用标准 Base64。
 - 每次加密都会生成随机 IV。
 - CBC 不验证密文完整性或来源，不能替代 AEAD。密文经过不可信通道、可能被攻击者修改，或解密成败可被外部观察时，应使用 AES-GCM
   等认证加密方案。
@@ -55,6 +61,9 @@ if err != nil {
     return err
 }
 plain, err := ecc.Decrypt(ciphertext, privateKey)
+if err != nil {
+    return err
+}
 ```
 
 ECIES 支持 P-256、P-384 和 P-521，密文格式为 `R || IV || ciphertext || HMAC`，其中 HMAC 覆盖 `R || IV || ciphertext`。
@@ -68,7 +77,7 @@ ECIES 支持 P-256、P-384 和 P-521，密文格式为 `R || IV || ciphertext ||
 | `EncodePublicKey` / `ParsePublicKey`                | 编解码 EC 公钥 PEM         |
 | `Encrypt` / `Decrypt`                               | 使用二进制 ECIES 密文      |
 | `EncryptToBase64String` / `DecryptFromBase64String` | 使用标准 Base64 ECIES 密文 |
-| `EncryptToBase64StringByPubHex`                     | 使用 P-256 `X              || Y` 十六进制公钥加密 |
+| `EncryptToBase64StringByPubHex`                     | 使用 P-256 `X \|\| Y` 十六进制公钥加密 |
 
 此实现不应被理解为通用或可协商的 ECIES 协议。双方必须使用相同曲线、KDF、哈希和密文格式。当前认证临时公钥的格式与旧版只认证
 `IV || ciphertext` 的密文不兼容，升级时必须迁移或重新加密旧数据。
@@ -124,6 +133,12 @@ valid, err := schnorr.SchnorrProofVerify(
   &privateKey.PublicKey,
   session,
 )
+if err != nil {
+    return err
+}
+if !valid {
+    return errInvalidProof
+}
 ```
 
 - `session` 必须非空，并且每次协议操作使用新的、不可混淆的会话值。

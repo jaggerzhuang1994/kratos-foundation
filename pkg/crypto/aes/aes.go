@@ -28,7 +28,7 @@ type Cipher interface {
 	DecryptString(encrypted, key string) (string, error)
 }
 
-// CBC 使用随机 IV；密文格式为 IV || PKCS#7(AES-CBC(plaintext))。
+// CBC 使用随机 IV；密文格式为 IV || AES-CBC(PKCS#7(plaintext))。
 type CBC struct{}
 
 // Encrypt 使用 AES-CBC 加密字节并在密文前放置随机 IV。

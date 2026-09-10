@@ -4,46 +4,81 @@
 
 If you’d like to support another specification, contributions are always welcome! Feel free to submit a PR.
 
-# Installation
+# 安装与最小示例
 
-If you have go runtime, you can `go install` it.
-```
-go install github.com/pubg/protoc-gen-jsonschema
-```
+本工具基于 [pubg/protoc-gen-jsonschema](https://github.com/pubg/protoc-gen-jsonschema) 维护；该链接仅说明上游来源。请使用本仓库源码构建，避免安装上游二进制后遗漏本仓库的行为修复。需要 Go（版本见本模块 `go.mod`）和已安装的 `protoc`；仓库根目录的 `make init` 也会安装本工具，`make proto` 会直接构建当前源码。
 
-Alternatively, you can download a pre-built binary from [GitHub Release](https://github.com/pubg/protoc-gen-jsonschema/releases).
+以下命令从**仓库根目录**执行，在临时目录创建和生成示例，不修改仓库产物：
 
-# Usage
-
-Refer to the [Plugin Options](#plugin-options) section below for various options available for this plugin.
-
-### I'm not sure which options to use
-This plugin provides default options that are ready to use. For testing or generating a basic json-schema file, the following command is sufficient without extra options.
-```
-protoc --jsonschema_out=. *.proto
-```
-
-### Generate with yaml format
-```
-protoc --jsonschema_out=. --jsonschema_opt=output_file_suffix=.yaml *.proto
-```
-
-### Shrink bytes for transfer over network
-```
-protoc --jsonschema_out=. --jsonschema_opt=pretty_json_output=false *.proto
+```sh
+set -eu
+repo_dir="$PWD"
+schema_demo_dir="$(mktemp -d)"
+(cd cmd/protoc-gen-jsonschema && go build -o "$schema_demo_dir/protoc-gen-jsonschema" .)
+cat > "$schema_demo_dir/config.proto" <<'PROTO'
+syntax = "proto3";
+package demo;
+option go_package = "example.com/demo;demo";
+message Config {
+  optional string name = 1;
+}
+PROTO
+protoc --proto_path="$schema_demo_dir" \
+  --plugin=protoc-gen-jsonschema="$schema_demo_dir/protoc-gen-jsonschema" \
+  --jsonschema_out="$schema_demo_dir" \
+  --jsonschema_opt=entrypoint_message=Config "$schema_demo_dir/config.proto"
+test -s "$schema_demo_dir/config.schema.json"
 ```
 
-### I'd like to comply with the protobuf JSON mapping standard
-By default, this plugin does not comply with the Protobuf standard because most plugins and other JSON libraries do not address integers larger than a 53-bit value. To ensure greater compatibility with other libraries, this plugin converts int64 values to integers instead of strings. However, to comply with the Protobuf standard, int64 values should be converted to strings. The below options will assist you.
-```
-protoc --jsonschema_out=. --jsonschema_opt=respect_protojson_int64=true --jsonschema_opt=respect_protojson_presence=true *.proto
+`entrypoint_message` 必须指定当前文件中的顶层消息名；没有入口或找不到匹配消息时，插件输出提示并跳过该文件，不生成 schema。入口也可使用下面的文件级选项配置，文件级非空值优先于命令行参数。
+
+继续在同一 shell 使用上述变量，给 protoc 命令增加以下选项可改变输出：
+
+| 用途 | 附加选项 |
+|---|---|
+| YAML | `--jsonschema_opt=output_file_suffix=.yaml` |
+| 紧凑 JSON | `--jsonschema_opt=pretty_json_output=false` |
+| int64 系列字段映射为字符串 | `--jsonschema_opt=respect_protojson_int64=true` |
+| 按当前 presence 策略生成 required | `--jsonschema_opt=respect_protojson_presence=true` |
+
+这些选项仍须与入口配置一起使用。Presence 策略见下文，不代表完整覆盖所有 ProtoJSON 接受形式。
+
+## 自定义字段与文件选项
+
+使用仓库的 `third_party/pubg/jsonschema.proto`，不需要复制协议文件。继续在同一 shell 覆盖临时示例：
+
+```sh
+cat > "$schema_demo_dir/config.proto" <<'PROTO'
+syntax = "proto3";
+package demo;
+option go_package = "example.com/demo;demo";
+import "pubg/jsonschema.proto";
+option (pubg.jsonschema.file) = { entrypoint_message: "Config" };
+message Config {
+  optional string name = 1 [(pubg.jsonschema.field) = { nullable: true }];
+}
+PROTO
+protoc --proto_path="$schema_demo_dir" --proto_path="$repo_dir/third_party" \
+  --plugin=protoc-gen-jsonschema="$schema_demo_dir/protoc-gen-jsonschema" \
+  --jsonschema_out="$schema_demo_dir" "$schema_demo_dir/config.proto"
+test -s "$schema_demo_dir/config.schema.json"
 ```
 
-### I'm not satisfied with the plugin's options. I want to customize every field
-This plugin offers options for fields, messages, and enums. You can utilize these options in the jsonschema.proto file within your proto.
-```
-cp jsonschema.proto examples/jsonschema.proto
-protoc --jsonschema_out=. --proto_path=examples examples/jsonschema.proto
+此例通过字段选项让 `name` 接受 null。文件、消息、字段和枚举选项见 [options.md](./options.md)。
+
+```mermaid
+flowchart TD
+    A([开始]) --> B[从当前源码构建插件]
+    B --> C{构建及 protoc 解析成功?}
+    C -- 否 --> X([命令失败并停止])
+    C -- 是 --> D{匹配文件级或命令行入口?}
+    D -- 否 --> E[Log: Cannot find matched entrypointMessage]
+    E --> F([跳过该文件])
+    D -- 是 --> G[生成 schema 并序列化]
+    G --> H{生成成功?}
+    H -- 否 --> X
+    H -- 是 --> I[写入临时产物并检查文件非空]
+    I --> J([完成])
 ```
 
 # Options
@@ -84,7 +119,9 @@ example:
 ### draft
 ```
 draft is used to determine which draft version should be used.
-The value should be one of Draft04, Draft05, Draft06, Draft07, Draft201909, Draft202012.
+支持值为 Draft04、Draft06、Draft07、Draft201909、Draft202012。
+Draft05 虽存在于内部枚举中，但当前不支持生成，选择后会跳过产物。
+无法识别的 draft 字符串当前回退到默认 Draft202012。
 
 default: Draft202012
 example:
@@ -93,12 +130,12 @@ example:
 
 ### mandatory_nullable
 ```
-mandatory_nullable determines whether this plugin should treat optional field as nullable.
-Many programming languages do not differentiate between undefined and null.
-However, scripting languages like JavaScript and TypeScript can distinguish between them.
-By default, optional field is treated as nullable and undefined.
+mandatory_nullable 默认 true：不会自动为 optional 或真实 oneof 成员添加 null。
+设为 false 时，这些字段会生成包含 null 的 oneOf。
+字段选项 nullable=true 不受该开关限制，始终允许 null。
+此选项控制 null 值，字段能否省略由 required 策略决定。
 
-default: false
+default: true
 example:
     - --jsonschema_opt=mandatory_nullable=true
     - --jsonschema_opt=mandatory_nullable=false
@@ -152,9 +189,9 @@ example:
 
 ### respect_protojson_presence
 ```
-This options is used to determine if the plugin should respect the presence of fields
-in the ProtoJSON format. If set to true and fields that does have presence, plugin will
-generate the `required` keyword in the output schema for those fields.
+设为 true 时，非真实 oneof 成员且 HasPresence 的字段加入 required。
+默认 false 时，非真实 oneof、无 optional keyword、非 repeated/map 的字段加入 required。
+因此默认策略也会要求普通 proto3 标量字段；真实 oneof 成员不会单独加入 required。
 
 default: false
 example:
@@ -182,7 +219,7 @@ Check out the [Options](./options.md) file to see auto-generated options.
 | protobuf label | jsonschema                           |
 |----------------|--------------------------------------|
 | required       | $.required.append(field)             |
-| optional       | oneof {type: null, $original_schema} |
+| optional       | 默认不自动包含 null；`mandatory_nullable=false` 或字段 `nullable=true` 时添加含 null 的 oneOf |
 | repeated       | type: array, items: $original_schema |
 
 | WellKnown Types                                 |

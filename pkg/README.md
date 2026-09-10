@@ -26,11 +26,11 @@
 | [`config`](config/README.md) | 基础配置服务 + Source 抽象 | M3 资源 + M2 契约 | Manager 构造时加载并监听；cleanup 关闭监听和源；非 Runtime |
 | [`env`](env/README.md) | 基础环境工具 | M1 工具 | 按调用读取环境；依赖进程环境，不是纯函数；无 cleanup |
 | [`errors`](errors/README.md) | 基础错误模型与协议转换 | M1 值对象/工具 | 无常驻资源；包含 Kratos、HTTP/gRPC 等语义，不是仅含接口的抽象包 |
-| [`log`](log/README.md) | 基础日志服务 | M3 资源 | SharedState 拥有输出资源；组装层登记并替换全局 Logger，cleanup 恢复；非 Runtime |
+| [`log`](log/README.md) | 基础日志服务 | M3 资源 | 每次 NewLogger 拥有独立输出及 cleanup；包级设置仅共享非资源状态；组装层 cleanup 恢复全局 Logger 绑定；非 Runtime |
 | [`appinfo`](appinfo/README.md) | 应用身份与元数据 | M1 值对象 | 同步采集身份，组装层贡献 AppInfo 和日志字段；非 Runtime |
 | [`metrics`](metrics/README.md) | 指标服务 | M3 Provider | Provider cleanup 关闭资源；组装层注入 ContextDecorator，不启动 Runtime |
 | [`tracing`](tracing/README.md) | 链路追踪服务 | M3 Provider | Provider 管理 exporter/sampler 等资源；组装层贡献日志字段；非 Runtime |
-| [`compress`](compress/README.md) | 压缩工具 | M1 工具 | 单次调用完成；校验输入及解压限制 |
+| [`compress`](compress/readme.md) | 压缩工具 | M1 工具 | 单次调用完成；校验输入及解压限制 |
 | [`crypto`](crypto/README.md) | 密码学工具集合 | M1 工具 | `aes`、`ecc`、`password`、`rsa`、`schnorr` 分包；具体算法边界见各实现 |
 | [`totp`](totp/README.md) | 一次性验证码工具 | M1 工具 | Authenticator 是配置对象，`Current` 等依赖时间；不需要 Manager/Runtime |
 | [`gormscope`](gormscope/README.md) | GORM 查询辅助 | M1 工具 | 依赖 GORM，但不拥有数据库连接或事务 |

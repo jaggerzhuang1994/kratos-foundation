@@ -51,7 +51,7 @@ Boot 不得依赖 ComponentsBootstrap，否则形成循环；Boot 只接收 *boo
 底层数据库、消息客户端和消费者资源的 cleanup 仍归各自 provider；运行时 Start/Stop 由 app 生命周期管理。
 bootstrap.Spec 按模块提供 Http()、Grpc()、Job()；业务无需接收第二个 Spec。
 生命周期方法直接挂在 spec 上；日志仅通过 log.WithKV、log.WithTimeFormat 等包级方法修改全局状态，不再提供 spec.Log()。
-最终 app.NewApp 冻结的正是这份内嵌状态；冻结后直接调用 BeforeStart、AddMetadata 等方法会返回 app.ErrSpecFrozen。
+最终 app.NewApp 冻结的正是这份由私有字段持有的状态；冻结后直接调用 BeforeStart、AddMetadata 等方法会返回 app.ErrSpecFrozen。
 请使用 bootstrap.NewSpec 创建统一声明，不能使用其零值；app 包仍然不依赖 server、job、queue。
 
 ```mermaid
@@ -115,7 +115,7 @@ flowchart TD
 构造错误由调用方处理，登记函数本身不重复记录日志。NewLogBootstrap 为 Kratos 全局日志函数单独增加一层 caller 跳过，使日志指向业务调用位置；直接注入的 Logger 保持默认深度。
 日志全局安装沿用单应用、逆序释放的约定；多个应用并发安装或交错释放全局 Logger 不受本包保障。优先将实例 Logger 显式注入组件。
 
-`JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `ConsumerRuntime` 通过 Go 方法集隐式满足 `app.Runtime`；统一入口可代为构造和登记，旧接口仍支持业务显式登记。
+`JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `ConsumerRuntime` 通过 Go 方法集隐式满足 `app.Runtime`；由 Wire 调用 `queue.NewConsumerRuntime` 构造，再通过 `spec.RegisterRuntime` 登记；统一入口不代为构造消费者。
 
 ```mermaid
 flowchart TD

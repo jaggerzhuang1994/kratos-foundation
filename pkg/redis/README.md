@@ -2,6 +2,21 @@
 
 `pkg/redis` 提供业务与 Wire 使用的公共 `Manager`、具名连接查询和订阅辅助函数。一个 Manager 通过同一套 go-redis SDK 管理多份连接，因此这里不使用 Driver Registry。
 
+先向配置 Manager 提供具名连接，例如：
+
+```yaml
+redis:
+  default: cache
+  connections:
+    cache:
+      addr: 127.0.0.1:6379
+    locks:
+      addr: 127.0.0.1:6379
+      db: 1
+```
+
+`default` 必须引用已声明的连接；省略时引用名称 `default`，不会自动选择第一个连接。字段定义见 [redis.proto](../../proto/config_pb/redis.proto)。下面的 `logger`、配置 Manager 和遥测 Provider 由业务 Wire 提供，手工组装时由外层按逆序调用各自 cleanup。
+
 ```go
 manager, cleanup, err := redis.NewManager(
 	logger,
@@ -15,7 +30,13 @@ if err != nil {
 defer cleanup()
 
 client, err := manager.Connection("cache")
+if err != nil {
+	return err
+}
+// 使用 client 执行 Redis 操作，并处理各命令返回的错误。
 ```
+
+连接参数、日志与遥测配置在 `NewManager` 构造时固定为启动快照，不订阅热更新；修改地址、凭据或连接集合后需要重启应用。之后首次解析的具名连接也使用这份旧快照。默认 client 在构造时创建，其他具名 client 按需创建；创建 client 不等于服务端连接验证成功。
 
 配置解析位于同包 `config.go`，连接延迟创建、遥测安装、缓存和幂等关闭状态由 `manager.go` 的非导出实现持有。业务只能借用 `Default` 或 `Connection` 返回的 client，不应单独关闭；统一由 cleanup 释放。
 

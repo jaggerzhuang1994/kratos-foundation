@@ -58,7 +58,7 @@ flowchart TD
     F --> L
 ```
 
-`Transaction` 使用 GORM 事务：回调成功时提交，回调返回错误或 panic 时回滚；嵌套事务使用 GORM savepoint，显式 SQL 选项不能用于嵌套事务。连接选择或事务失败由调用层处理，底层不重复记录错误。
+`Transaction` 使用 GORM 事务：顶层回调成功时提交，返回错误或 panic 时回滚。默认情况下，嵌套事务使用 GORM savepoint，内层失败只回滚到该保存点。若所选连接的有效 `gorm.disable_nested_transaction` 为 `true`，内层直接复用外层事务，不建立保存点，也不独立回滚；外层若捕获内层错误后返回 `nil`，内层已执行的写入也会提交。需要整体回滚时，应把错误继续返回给顶层回调。显式 SQL 选项始终不能用于嵌套事务。连接选择或事务失败由调用层处理，底层不重复记录错误。
 
 ```mermaid
 flowchart TD
@@ -67,15 +67,28 @@ flowchart TD
     B -- 是 --> D[Connection 取得固定事务或所选独立连接]
     D --> E{会话有错误?}
     E -- 是 --> F([返回原连接错误])
-    E -- 否 --> G[外部数据库 Begin 或嵌套 SavePoint]
-    G -- 失败 --> H([返回数据库错误])
-    G -- 成功 --> I[将事务压入当前 Manager 的 Context frame]
+    E -- 否 --> G{是否嵌套调用?}
+    G -- 否 --> H[外部数据库 Begin]
+    G -- 是 --> O{disable_nested_transaction?}
+    O -- 否 --> P[外部数据库 SavePoint]
+    O -- 是 --> Q[直接复用外层事务，无独立回滚边界]
+    H -- 失败 --> R([返回数据库错误])
+    P -- 失败 --> R
+    H -- 成功 --> I[将事务压入当前 Manager 的 Context frame]
+    P -- 成功 --> I
+    Q --> I
     I --> J[执行回调，SQL 受请求取消与事务超时约束]
-    J -- 错误或 panic --> K[外部数据库 Rollback 或 RollbackTo]
-    K --> L([返回错误或重新抛出 panic])
-    J -- 成功 --> M[顶层事务提交，嵌套事务返回]
-    M -- 提交失败 --> H
-    M -- 成功 --> N([完成])
+    J -- 错误或 panic --> K{当前调用建立了哪种边界?}
+    K -- 顶层 --> L[外部数据库 Rollback]
+    K -- 保存点 --> M[外部数据库 RollbackTo]
+    K -- 无 --> S([返回错误或重新抛出 panic，由外层决定是否回滚])
+    L --> S
+    M --> S
+    J -- 成功 --> T{顶层事务?}
+    T -- 否 --> U([返回 nil，等待外层决定最终结果])
+    T -- 是 --> V[外部数据库 Commit]
+    V -- 失败 --> R
+    V -- 成功 --> W([完成])
 ```
 
 ## AES 字段

@@ -29,11 +29,11 @@ flowchart TD
 
 ## 贡献和所有权
 
-- `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并向 Log SharedState 加入 service ID、name、version 字段。
-- `bootstrap.NewTracingBootstrap` 向 Log SharedState 加入 `trace.id` 和 `span.id` 动态字段。
+- `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并通过 `log.WithKV` 加入进程共享的 service ID、name、version 字段。
+- `bootstrap.NewTracingBootstrap` 通过 `log.WithKV` 加入进程共享的 `trace.id` 和 `span.id` 动态字段。
 - `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
-- `bootstrap.NewServerBootstrap` 仅登记启用的 HTTP/gRPC Runtime；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
+- `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
 - 可选 Registrar 由业务组装层通过 `Spec.RegisterRegistrar` 登记；不登记表示禁用服务注册。
 
 构造函数拥有资源创建，Wire 接收并逆序调用其 cleanup。Bootstrap 本身通常没有 cleanup；例外是 `bootstrap.NewLogBootstrap` 的全局 Logger 恢复函数。Runtime 的 `Start`/`Stop`、Hook、Registrar 补偿和停机预算由 App 直接管理。

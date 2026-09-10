@@ -31,7 +31,7 @@ Manager 在首次加载及每次更新发布前检查 Foundation 协议中的 re
 
 | 已删除配置 | 迁移方式 |
 |---|---|
-| 顶层 `log` | 使用 `LOG_*` 环境变量及 `pkg/log` Config/Override |
+| 顶层 `log` | 使用 `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` |
 | 顶层 `metrics` | 显式构造 Provider，HTTP 暴露开关使用 `server.http.metrics` |
 | 顶层 `job`、`queue` | 使用各组件的强类型 Spec/构造配置并显式组装 |
 | `app.disable_registrar` | 在组装层决定是否登记 Registrar |
@@ -132,6 +132,46 @@ defer cancel()
 Subscribe 在返回前同步回放一次当前值。后续每次回调都会分配新的同类型对象，调用方可以直接保存。单个订阅的回调按顺序执行，同时最多运行一个；不同订阅互不阻塞。
 
 每个订阅有独立的有界更新队列。回调持续落后时，该订阅会在已接受更新之后收到 `ErrObserverOverloaded` 并停止。cancel 和 Manager cleanup 不等待已经开始的业务回调，因此回调仍需自行保证最终可返回。
+
+## 读取热更新快照
+
+只需要读取最新值时，可使用 `NewHotReloadValue`。以下片段中的 manager 已按前文构造；泛型参数是值类型，默认值和读取结果为其指针：
+
+```go
+type Limits struct {
+    MaxBatch int `json:"max_batch"`
+}
+hot, cancel, err := config.NewHotReloadValue[Limits](
+    manager, "business.limits", &Limits{MaxBatch: 100},
+)
+if err != nil {
+    return err
+}
+defer cancel() // Wire 中由 provider 返回，在 Manager cleanup 前取消订阅。
+latest, version := hot.GetCurrent()
+maxBatch := latest.MaxBatch
+_ = maxBatch // 使用只读字段处理本次工作。
+_ = version  // 可用于避免对同一版本重复计算。
+```
+
+`GetCurrent` 返回一致的值与版本对，值是共享只读快照，不能修改其字段或嵌套 map/slice；需要修改时先复制，嵌套对象也应复制。原子发布只保护快照指针，不保护调用方对值的写入；修改共享值会绕过版本机制，并可能导致并发数据竞争。版本是本实例的成功通知计数，不是配置中心 revision，也不应假定初始版本为零。
+
+首次加载或订阅失败会返回错误；后续错误记录 `config subscribe` WARN 并保留旧值。辅助类型不校验业务约束、不暴露订阅终止状态，也不会自动重订阅；需要可靠感知过载或监听终止时，使用 `Subscribe` 的错误回调或 `StatusReader`。取消订阅后已开始的回调仍可能结束，读取对象仍保留最近快照；调用方负责停止使用并释放引用。
+
+```mermaid
+flowchart TD
+    A([NewHotReloadValue]) --> B[加载初值并订阅 同步回放]
+    B -- 失败 --> C([返回错误 由调用方处理])
+    B -- 成功 --> D[返回快照容器和 cancel]
+    E[订阅更新] --> F{通知成功?}
+    F -- 否 --> G[WARN config subscribe 保留旧值]
+    F -- 是 --> H[CAS 原子发布值与递增版本 冲突时重试]
+    D --> I[并发 GetCurrent 原子读取同一快照]
+    H --> I
+    I --> J([调用方只读使用])
+    D --> K[Wire cleanup 取消订阅 不等待已开始回调]
+    K --> L([随后释放 Manager])
+```
 
 ## 错误语义
 

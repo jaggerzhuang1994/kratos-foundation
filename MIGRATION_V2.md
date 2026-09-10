@@ -36,7 +36,7 @@
 
 | 旧字段 | 迁移方式 |
 |---|---|
-| 顶层 `log` | `LOG_*` 环境变量及 `pkg/log` Config/Override |
+| 顶层 `log` | `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` 设置 |
 | 顶层 `metrics` | 显式构造 Provider，HTTP 指标端点使用 `server.http.metrics` |
 | 顶层 `job`、`queue` | 强类型 Spec/构造配置与显式组装 |
 | `app.disable_registrar` | 在组装层决定是否登记 Registrar |

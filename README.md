@@ -59,7 +59,7 @@ flowchart TD
 | 能力 | 当前配置入口 |
 | --- | --- |
 | 应用环境 | `APP_ENV`，其次 `KRATOS_ENV`，均未设置时为 `local`；见 [`pkg/env`](pkg/env/README.md) |
-| 根日志 | `LOG_*` 环境变量及 `pkg/log` 的 Config/Override；模块级 `database/redis/client/kafka.log` 仍保留 |
+| 根日志 | `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` 设置；模块级 `database/redis/client/kafka.log` 仍保留 |
 | Consul 地址与认证 | 环境变量（如 `CONSUL_HTTP_ADDR`）或 `pkg/consul.Options`；在 Manager 之前构造共享客户端，见 [`pkg/consul`](pkg/consul/README.md) |
 | Metrics Provider | 显式构造和注入；HTTP 暴露位置仍由 `server.http.metrics` 配置 |
 | Job、Queue | 强类型 Spec/构造配置及显式 Bootstrap；Kafka 连接配置仍位于 `kafka` |
@@ -94,18 +94,9 @@ flowchart LR
     F --> G[Wire cleanup 逆序释放资源]
 ```
 
-`pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ Bootstrap → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
+`pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-```go
-spec := app.NewSpec()
-appConfig, err := app.NewConfig(configManager)
-stopPolicy, cleanupStopPolicy, err := app.NewStopPolicy(
-	appConfig, configManager, logger, serverStopDelay,
-)
-application, err := bootstrap.NewKratosApp(ctx, spec, applicationBootstrap, appConfig, stopPolicy)
-```
-
-上例中的 `applicationBootstrap` 是 `bootstrap.NewBootstrap` 返回的最终标记；业务提供 `bootstrap.Bootstrap` provider，完整示例见 [`bootstrap`](pkg/bootstrap/README.md)。`cleanupStopPolicy` 与其他构造 cleanup 由 Wire 逆序调用。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
+完整的构造、错误处理和 Wire cleanup 示例见 [`bootstrap`](pkg/bootstrap/README.md)。显式组装时，业务提供 `bootstrap.Bootstrap`，由 `bootstrap.NewBootstrap` 返回 `StartupReady`；统一 Spec 入口使用 `bootstrap.NewApplicationBootstrap` 返回相同的最终标记。资源 cleanup 由 Wire 逆序执行。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
 
 ## 日志
 
@@ -114,7 +105,7 @@ application, err := bootstrap.NewKratosApp(ctx, spec, applicationBootstrap, appC
 - 基于 `LOG_*` 环境变量的严格配置解析。
 - stdout/stderr 分流与可轮转文件输出。
 - 进程级全局日志状态：任意位置通过 log.WithXXX 修改，已有 Logger 和全局日志共享生效。
-- Config 热更新与进程选项分离；更新 Config 不会重新应用进程选项。
+- 每次 `NewLogger` 构造独立输出并返回 cleanup；输出配置构造后固定，包级 `WithXXX` 只更新共享的非资源设置。
 - 不可变的模块、上下文、级别和敏感字段派生。
 
 完整用法、配置表和设计边界见 [`pkg/log/README.md`](pkg/log/README.md)。
@@ -153,7 +144,14 @@ rawProducer, releaseProducer, err := kafkaqueue.NewProducer(
 	kafkaManager,
 	kafkaqueue.ProducerConfig{Connection: "events", Topic: "orders.created"},
 )
+if err != nil {
+	return err
+}
+defer releaseProducer() // 手工组装示例；Wire 中由 provider 返回 cleanup。
 producer, err := queue.NewProducer("orders.created", rawProducer, observability)
+if err != nil {
+	return err
+}
 ```
 
 这里的 Kafka/Redis adapter 使用显式构造和注入，不进入全局 Driver Registry。
@@ -176,7 +174,7 @@ if err != nil {
 jobSpec.Coordinator(coordinator)
 ```
 
-这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。详见 [`contrib/job/redis`](contrib/job/redis/README.md)。
+协调器须在 `job.NewManager` 之前注入，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。详见 [`contrib/job/redis`](contrib/job/redis/README.md)。
 
 ## 主要目录
 

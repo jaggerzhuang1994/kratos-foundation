@@ -10,6 +10,47 @@
 
 生产者先由后端直接构造，再由 `queue.NewProducer` 装饰。装饰器深复制单条或批量输入，调用方继续拥有原始 `Message`、`Key`、`Body`、Header Value 及其批次切片；批量中任一输入无效时，整个批次都不会发送。
 
+批量输入校验全部通过，只保证可以开始发送，不保证发送原子性。驱动可能已成功发送部分消息，再返回 `*queue.BatchError`；其中 `Failures` 的 `Index` 对应原输入下标。不要因一个错误直接重发整个批次。以下函数只提取失败项，由调用方决定是否重试；网络错误仍可能表示结果不确定，重试失败项也需要业务幂等。需要跨重试保持消息身份时，发布前由业务设置稳定的 `Message.ID`。
+
+```go
+package assembly
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
+)
+
+func publishBatch(ctx context.Context, producer queue.Producer, messages []*queue.Message) ([]*queue.Message, error) {
+	err := producer.PublishBatch(ctx, messages)
+	if err == nil {
+		return nil, nil
+	}
+	var batchErr *queue.BatchError
+	if !errors.As(err, &batchErr) {
+		return nil, err // 输入校验等错误没有逐条发送结果。
+	}
+	failed := make([]*queue.Message, 0, len(batchErr.Failures))
+	for _, failure := range batchErr.Failures {
+		failed = append(failed, messages[failure.Index])
+	}
+	return failed, err // 保留原错误供调用层分类、记录和决定重试。
+}
+```
+
+```mermaid
+flowchart TD
+    A([PublishBatch]) --> B[复制并校验整个批次]
+    B -- 无效输入 --> C[WARN queue.publish.rejected]
+    C --> D([返回校验错误，不发送])
+    B -- 全部有效 --> E[外部驱动批量发送]
+    E -- 全部成功 --> F([返回 nil])
+    E -- 部分失败或结果不确定 --> G[ERROR queue.publish.failed]
+    G --> H[返回 BatchError，按原下标提取失败项]
+    H --> I([调用方判断重试，保持业务幂等])
+```
+
 它会校验 Header Key，在缺少时生成消息 ID；仅当 `Timestamp` 为零值时才生成 UTC 时间，业务提供的非零时间戳会保留。它还会将 W3C TraceContext 和 Baggage 写入消息 Header。
 
 ### Kafka

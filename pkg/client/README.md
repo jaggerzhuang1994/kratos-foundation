@@ -21,6 +21,26 @@ defer release()
 
 除 `discovery` 外，构造依赖必须非 nil，由组装层保证，构造函数不重复判空。服务发现仅在使用 `discovery:///...` 目标时需要；直连客户端可传 nil。名称不能为空，未配置的名称按 `discovery:///<name>` 构造默认 gRPC 客户端。
 
+最小直连配置如下，先由配置源交给 config.Manager，再构造 Factory：
+
+```yaml
+client:
+  clients:
+    orders:
+      protocol: GRPC
+      target: "127.0.0.1:9000"
+    catalog:
+      protocol: HTTP
+      target: "http://127.0.0.1:8000"
+    payments:
+      protocol: HTTPS
+      target: "https://payments.example.com:443"
+```
+
+`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，需注入匹配的 Discovery；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。删除具名配置后再次获取会退回默认 discovery gRPC 配置，不会禁用该名称。
+
+当前 Factory 的 gRPC 使用 `DialInsecure`，不提供 gRPC TLS/mTLS 配置，`GRPCS` 已移除；目标 URL 和单次调用选项不能启用 gRPC TLS。HTTPS 使用 TLS，标准 Transport 至少要求 TLS 1.2，并保留其已有 TLS 配置；自定义 RoundTripper/TLS 拨号函数须自行实现安全与取消策略。需要 gRPC TLS 时应由应用单独构造并管理原生客户端。
+
 Factory 在构造时读取 `appInfo.Metadata()` 中的环境和主机名并保存独立快照。后续修改进程环境或原始 Metadata 不影响该 Factory 的路由。非 local 环境只匹配同环境节点；local 环境依次优先同环境同主机、同环境，均无匹配时保留全部节点。协议过滤和目标 URL 中的元数据过滤仍会继续应用。
 
 每次成功获取连接都必须在调用完成后执行幂等 `release`。同名同版本客户端共享底层连接；配置更新后旧版本继续服务已有租约，最后一个租约释放后关闭。客户端连接配置可热更新，日志模块和 `client.cleanup_timeout` 变化需重启。cleanup 幂等取消订阅、阻止新租约、取消未完成构建，并最多等待 `client.cleanup_timeout`（默认 **30s**，必须为正的 Go duration）。预算耗尽后记录 WARN 并强制关闭仍被租用的当前及退役连接，晚到的幂等 release 不会重复关闭连接。该设置限制排空等待，不包含底层 Close 和日志输出耗时；业务回调及外部 I/O 仍必须遵守取消和有界返回约定，Go 无法强制终止任意阻塞函数。HTTP 正在执行的请求可能被取消，gRPC 在途 RPC 可能失败。它是 Wire 资源释放阶段的独立预算，不自动继承 app.stop_timeout。

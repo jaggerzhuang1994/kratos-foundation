@@ -2,6 +2,8 @@
 
 `pkg/server` 是业务与 Wire 声明 HTTP、gRPC 和 WebSocket 服务并构造服务器运行时的公共入口。业务只依赖 `Spec`、Builder、协议契约、`NewRuntime`；应用登记由 `pkg/bootstrap` 提供的 `NewServerBootstrap` 负责；不应导入 `pkg/server/internal/*`。
 
+下面是手工组装片段：配置 Manager、Logger、Metrics/Tracing Provider 和 appSpec 已由外层创建，外层最后逆序释放它们；注册回调由业务提供。完整 Wire 组装见 [bootstrap](../bootstrap/README.md)。
+
 ```go
 spec := server.NewSpec()
 spec.HTTP().Register(registerHTTP)
@@ -13,10 +15,17 @@ runtime, cleanup, err := server.NewRuntime(
 	tracingProvider,
 	spec,
 )
-contribution, err := bootstrap.NewServerBootstrap(appSpec, runtime)
+if err != nil {
+	return err
+}
+defer cleanup() // 此作用域须覆盖应用 Run，确保运行时停止后才释放。
+if _, err := bootstrap.NewServerBootstrap(appSpec, runtime); err != nil {
+	return err
+}
+// 此后构造并运行应用；Run 返回后才离开当前作用域。
 ```
 
-`bootstrap.NewServerBootstrap` 只同步将启用的 HTTP 和 gRPC Runtime 分别登记到 `app.Spec`，不启动协议、不创建 goroutine，也不返回 cleanup。`NewRuntime` 返回的 cleanup 仍由 Wire 拥有；Runtime 的 Start/Stop 由 `app.NewApp` 创建的应用生命周期监督层拥有。
+`bootstrap.NewServerBootstrap` 同步将启用的业务 HTTP/gRPC Runtime 和独立管理监听分别登记到 `app.Spec`，不启动协议、不创建 goroutine，也不返回 cleanup。`NewRuntime` 返回的 cleanup 由构造调用方持有，使用 Wire 时由 Wire 逆序释放；Runtime 的 Start/Stop 由 `app.NewApp` 创建的应用生命周期监督层拥有。
 
 协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
 

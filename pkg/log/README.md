@@ -52,7 +52,9 @@ log.WithKV("region", "hk", "deployment", "blue")
 
 每次方法调用只更新对应设置并原子发布新快照，其他设置保持不变。KV 按 key 合并并使用后调用的值，filter keys 追加且拒绝重复项；空的 `WithKV()` 或 `WithFilterKeys()` 不清空已有数据。校验失败不发布本次修改。连续多次方法调用分别生效，不构成一个整体事务；后续调用失败不会回滚此前成功的调用，也不会阻止后续设置更新。
 
-单值的优先级为：派生 Logger > Override > Config/包内默认值。filter keys 按 Config、Override、派生 Logger 三层取并集，高层不能取消低层的敏感字段过滤规则。
+根过滤及其他共享单值的优先级为：派生 Logger > 进程级设置 > 环境配置/包内默认值。filter keys 按 Config、Override、派生 Logger 三层取并集，高层不能取消低层的敏感字段过滤规则。
+
+输出端级别在 `NewLogger` 时固定，仍会独立过滤。例如默认 `LOG_LEVEL=info` 时，之后调用 `log.WithLevel(kratoslog.LevelDebug)` 只放宽根过滤，stdout/file 仍过滤 debug；需要运行期打开 debug 时，应在构造前将相应 `LOG_STD_LEVEL` / `LOG_FILE_LEVEL` 设置为 `debug`。
 
 ## 组件日志字段
 
@@ -65,7 +67,7 @@ flowchart TD
     A([开始：并发 log.With 方法]) --> C[原子读取共享 customState 快照]
     C --> D[复制状态及切片，执行本方法的校验和更新]
     D --> E{校验成功?}
-    E -- 否 --> X([返回错误，由调用方处理])
+    E -- 否 --> X([记录 warning，保留原状态并返回])
     E -- 是 --> F{CAS 原子发布成功?}
     F -- 否 --> C
     F -- 是 --> G([结束：Logger 按新版本重建缓存])
@@ -173,7 +175,7 @@ logger.AddCallerDepth(2).WithCallerDepth(8) // 最终为 8
 ## 设计边界
 
 - 业务代码只依赖顶层 `Logger`；Wire 只注入 log.NewLogger；状态和环境配置的创建在包内完成。
-- Config、Override 和派生 Logger 都持有调用方 slice 的独立快照。
+- 环境配置、进程级设置和派生 Logger 保存自己的 slice 副本；KV 中的对象不会深拷贝，调用方仍需保证其读取安全。
 - 派生 Logger 不会反向修改父 Logger；首次写入或 version 变化时才重建缓存。
 - cleanup 只关闭对应实例的输出；新实例拥有自己的输出，不能复活旧实例。
 - 不提供外部 Backend 注入入口；自定义输出应在本包内部扩展并统一处理生命周期。
