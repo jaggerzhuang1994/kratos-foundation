@@ -17,6 +17,9 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# 应用与测试运行产生的日志
+app.log
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
