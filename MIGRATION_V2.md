@@ -39,7 +39,7 @@
 | 顶层 `log` | `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` 设置 |
 | 顶层 `metrics` | 显式构造 Provider，HTTP 指标端点使用 `server.http.metrics` |
 | 顶层 `job`、`queue` | 强类型 Spec/构造配置与显式组装 |
-| `app.disable_registrar` | 在组装层决定是否登记 Registrar |
+| `app.disable_registrar` | 由 Wire provider 返回 `registry.Registrar`；返回 nil 禁用服务注册 |
 | `server.middleware.timeout`、`client.clients.*.middleware.timeout` | 改成 `deadline`，按需求设置 fallback_timeout/max_timeout/min_budget |
 | `database.connections.*.replicas/datas/trace_resolver_mode` | 删除，改为独立连接和显式选择 |
 | `server.log`、`tracing.log`、`tracing.tracer_name` | Logger 派生和 Provider instrumentation scope |
@@ -52,6 +52,16 @@ Deadline 缺失时默认回退超时为 10s，仅在父 Context 没有截止时�
 仅支持文档声明的热更新范围：app.stop_timeout、server.middleware、client.clients、
 tracing.sampler 和数据库连接池参数。DSN、驱动、连接集合、服务监听地址等变化需要重启。
 恢复 main 的 protobuf 字段编号后，此前未发布 v2 的二进制配置不能复用；从 YAML/JSON 重新生成。
+
+### v2 开发期可选依赖迁移
+
+此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 和
+`job.Spec.Coordinator`（包括 `job.Builder.Coordinator`）已移除。Registrar 改为
+`app.NewApp` / `bootstrap.NewKratosApp` 的最后一个构造参数；Coordinator 改为
+`job.NewManager` / `bootstrap.NewComponentsBootstrap` 的最后一个构造参数。
+删除 Boot 中的对应登记，给 Wire 增加返回目标接口的 provider，再重新生成 injector。
+禁用时返回 nil interface，启用时选择对应 contrib 实现；分布式 Cron 在协调器为 nil 时仍报构造错误。
+完整示例和构造流程见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)。
 
 ### CallOptions 迁移示例
 

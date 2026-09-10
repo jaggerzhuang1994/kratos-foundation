@@ -34,7 +34,7 @@ Manager 在首次加载及每次更新发布前检查 Foundation 协议中的 re
 | 顶层 `log` | 使用 `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` |
 | 顶层 `metrics` | 显式构造 Provider，HTTP 暴露开关使用 `server.http.metrics` |
 | 顶层 `job`、`queue` | 使用各组件的强类型 Spec/构造配置并显式组装 |
-| `app.disable_registrar` | 在组装层决定是否登记 Registrar |
+| `app.disable_registrar` | 由 Wire provider 返回 `registry.Registrar`；返回 nil 禁用服务注册 |
 | `server.middleware.timeout`、`client.clients.*.middleware.timeout` | 改为 `deadline`，明确设置 fallback/max/min 预算 |
 | `database.connections.*.replicas/datas/trace_resolver_mode` | 改为显式连接选择；本版不恢复自动读写路由 |
 | `server.log`、`tracing.log`、`tracing.tracer_name` | 使用 Logger 派生和 Provider 的 instrumentation scope |

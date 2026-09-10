@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-kratos/kratos/v2"
+	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 )
 
@@ -38,8 +39,8 @@ func NewBootstrap(
 
 // NewKratosApp 在最终组装屏障之后构造 Kratos 应用。
 // 不接收提前构造的 App，确保 Spec 冻结发生在全部贡献登记之后。
-func NewKratosApp(ctx context.Context, spec *app.Spec, _ StartupReady, config app.Config, stopPolicy *app.StopPolicy) (*kratos.App, error) {
-	application, err := app.NewApp(ctx, spec, config, stopPolicy)
+func NewKratosApp(ctx context.Context, spec *app.Spec, _ StartupReady, config app.Config, stopPolicy *app.StopPolicy, registrar registry.Registrar) (*kratos.App, error) {
+	application, err := app.NewApp(ctx, spec, config, stopPolicy, registrar)
 	if err != nil {
 		return nil, err
 	}

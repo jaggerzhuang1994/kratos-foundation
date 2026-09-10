@@ -4,14 +4,8 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 )
-
-// RegisterRegistrar 选择当前应用使用的服务注册中心。
-func (s *Spec) RegisterRegistrar(registrar registry.Registrar) error {
-	return s.application.RegisterRegistrar(registrar)
-}
 
 // AddContext 追加应用启动上下文的装饰函数。
 func (s *Spec) AddContext(decorate app.ContextDecorator) error {

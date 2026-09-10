@@ -78,7 +78,7 @@ flowchart TD
 
 ## 构造依赖约定
 
-Wire 或手工组装层负责提供非空的必需组件依赖（如 Config Manager、Logger、AppInfo、遥测 Provider、Spec 和 Runtime）。构造函数及 Bootstrap 不重复检查这些依赖是否为 `nil`；直接调用时也必须遵守该前置条件。配置、外部输入、回调以及来源不确定的返回值继续按各包契约校验。显式支持禁用的可选依赖（如 Consul Client、Registrar 和 Discovery）保留 `nil` 语义。
+Wire 或手工组装层负责提供非空的必需组件依赖（如 Config Manager、Logger、AppInfo、遥测 Provider、Spec 和 Runtime）。构造函数及 Bootstrap 不重复检查这些依赖是否为 `nil`；直接调用时也必须遵守该前置条件。配置、外部输入、回调以及来源不确定的返回值继续按各包契约校验。显式支持禁用的可选依赖（如 Consul Client、Registrar、Discovery 和未使用分布式策略时的 Job Coordinator）保留 `nil` 语义。
 
 ## 核心组装流程
 
@@ -160,21 +160,11 @@ if err != nil {
 
 ## Job 并发协调
 
-`pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择：
+`pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择并通过 `job.NewManager` 的最后一个构造参数注入。统一 Spec 模式由 `bootstrap.NewComponentsBootstrap` 接收并转交协调器，Spec 仅声明任务与策略。
 
-```go
-coordinator, err := jobredis.NewLockCoordinator(
-	redisManager,
-	job.LockCoordinatorConfig{},
-	lockredis.WithConnection("locks"),
-)
-if err != nil {
-	return nil, err
-}
-jobSpec.Coordinator(coordinator)
-```
+不需要跨进程协调时，业务 provider 返回 nil `job.ConcurrencyCoordinator`；启用时提供 Redis contrib 实现，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。分布式策略缺少协调器会在 Manager 构造时返回错误；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。
 
-协调器须在 `job.NewManager` 之前注入，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。详见 [`contrib/job/redis`](contrib/job/redis/README.md)。
+`registry.Registrar` 同样由 Wire 注入 `bootstrap.NewKratosApp`，返回 nil 即禁用服务注册。完整的 nil provider 与 Wire 示例见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)，Redis provider 与租约边界见 [Job 文档](pkg/job/README.md)。
 
 ## 主要目录
 

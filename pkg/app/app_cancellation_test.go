@@ -23,7 +23,7 @@ func TestApplicationRunPreservesRuntimeFailureJoinedWithCancellation(t *testing.
 		}
 		runtime := &cancellationFailureRuntime{release: release, startErr: errors.Join(context.Canceled, failure)}
 		registerApplicationRuntime(t, spec, runtime)
-		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second))
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -50,7 +50,7 @@ func TestApplicationRunPreservesStopFailureJoinedWithCancellation(t *testing.T) 
 		}
 		runtime := &cancellationFailureRuntime{release: release, startErr: ErrStopRequested, stopErr: errors.Join(context.Canceled, failure)}
 		registerApplicationRuntime(t, spec, runtime)
-		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second))
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -110,7 +110,7 @@ func TestApplicationRunTreatsCancellationOnlyAsCleanShutdown(t *testing.T) {
 					t.Fatal(err)
 				}
 				registerApplicationRuntime(t, spec, &cancellationFailureRuntime{release: release, startErr: test.startErr, stopErr: test.stopErr})
-				application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second))
+				application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/registry"
 )
 
 type testRuntime struct{}
@@ -24,11 +23,6 @@ func (testAppInfo) ID() string                  { return "test-id" }
 func (testAppInfo) Name() string                { return "test-name" }
 func (testAppInfo) Version() string             { return "test-version" }
 func (testAppInfo) Metadata() map[string]string { return map[string]string{"source": "info"} }
-
-type testRegistrar struct{}
-
-func (testRegistrar) Register(context.Context, *registry.ServiceInstance) error   { return nil }
-func (testRegistrar) Deregister(context.Context, *registry.ServiceInstance) error { return nil }
 
 func TestFreezeAppliesContextOutsideLockAndPreservesBase(t *testing.T) {
 	type contextKey string
@@ -187,7 +181,6 @@ func TestSpecRejectsContributionsAfterFreeze(t *testing.T) {
 		{name: "runtime", call: func() error { return spec.RegisterRuntime(&testRuntime{}) }},
 		{name: "app info", call: func() error { return spec.RegisterAppInfo(testAppInfo{}) }},
 		{name: "logger", call: func() error { return spec.RegisterLogger(kratoslog.NewStdLogger(nil)) }},
-		{name: "registrar", call: func() error { return spec.RegisterRegistrar(testRegistrar{}) }},
 		{name: "context", call: func() error {
 			return spec.AddContext(func(ctx context.Context) context.Context { return ctx })
 		}},

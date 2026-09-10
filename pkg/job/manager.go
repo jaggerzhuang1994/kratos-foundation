@@ -35,15 +35,23 @@ type scheduledJob struct {
 }
 
 // NewManager 把任务定义解析为一个运行时，调度器和观测中间件不会作为独立生命周期暴露。
+// coordinator 仅在使用分布式并发策略时必需，其他策略可传 nil。
 func NewManager(
 	logger foundationlog.Logger,
 	spec *Spec,
 	tracingProvider foundationtracing.Provider,
 	metricsProvider foundationmetrics.Provider,
+	coordinator ConcurrencyCoordinator,
 ) (*Manager, error) {
 	// 先验证 Spec，避免非法任务触发日志、指标等无意义的构造副作用。
 	if err := spec.Validate(); err != nil {
 		return nil, err
+	}
+	// 分布式策略必须显式注入协调器，不能因漏配而退化为进程内执行。
+	for _, definition := range spec.definitions {
+		if definition.kind == kindCron && definition.cron.concurrentPolicy.distributed() && coordinator == nil {
+			return nil, fmt.Errorf("cron job %q requires a concurrency coordinator", definition.name)
+		}
 	}
 	options := newManagerOptions(spec)
 	jobLogger, err := newJobLog(logger, options)
@@ -77,6 +85,7 @@ func NewManager(
 		options,
 		scheduler,
 		parser,
+		coordinator,
 	)
 }
 
@@ -88,6 +97,7 @@ func newManager(
 	options managerOptions,
 	cron cronScheduler,
 	parser scheduleParserContract,
+	coordinator ConcurrencyCoordinator,
 ) (*Manager, error) {
 	if options.ErrorHandler == nil {
 		options.ErrorHandler = func(_ context.Context, name string, err error) {
@@ -119,7 +129,7 @@ func newManager(
 				concurrentMiddleware(
 					log,
 					definition.cron.concurrentPolicy,
-					spec.coordinator,
+					coordinator,
 					definition.name,
 				),
 			}, baseMiddlewares...)

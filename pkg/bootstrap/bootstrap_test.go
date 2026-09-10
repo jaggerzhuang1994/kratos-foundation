@@ -52,7 +52,7 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 				t.Fatal(err)
 			}
 			completed := bootstrap.NewBootstrap(infrastructure, bootstrap.Bootstrap{})
-			application, err := bootstrap.NewKratosApp(tt.ctx, spec, completed, config, policy)
+			application, err := bootstrap.NewKratosApp(tt.ctx, spec, completed, config, policy, nil)
 			if tt.wantErr {
 				if err == nil || application != nil {
 					t.Fatalf("construction = (%v, %v), want error", application, err)
@@ -112,7 +112,7 @@ func TestContributionsRejectFrozenSpec(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := app.NewSpec()
 			// NewApp 先冻结组装状态，即使后续配置校验失败，也禁止继续贡献。
-			if _, err := app.NewApp(context.Background(), spec, nil, nil); err == nil {
+			if _, err := app.NewApp(context.Background(), spec, nil, nil, nil); err == nil {
 				t.Fatal("expected invalid config")
 			}
 			if err := tt.register(spec); !errors.Is(err, app.ErrSpecFrozen) {

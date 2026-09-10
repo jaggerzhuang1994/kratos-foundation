@@ -7,19 +7,6 @@ import (
 	"time"
 )
 
-func TestSpecRequiresCoordinatorForDistributedPolicy(t *testing.T) {
-	spec := NewSpec()
-	spec.RegisterCron(
-		"cleanup",
-		"@every 1m",
-		TaskFunc(func(context.Context) error { return nil }),
-		WithConcurrentPolicy(SkipIfDistributedRunning),
-	)
-	if err := spec.Validate(); err == nil {
-		t.Fatal("Validate accepted distributed policy without coordinator")
-	}
-}
-
 func TestPublicManagerAndCronOptionsDriveImmediateFailureHandling(t *testing.T) {
 	wantErr := errors.New("task failed")
 	reported := make(chan error, 1)
@@ -78,7 +65,6 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 		{name: "nil task", spec: NewSpec().RegisterOnce("once", nil).(*Spec)},
 		{name: "missing cron schedule", spec: NewSpec().RegisterCron("cron", "", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
 		{name: "duplicate names", spec: NewSpec().RegisterOnce("same", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("same", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
-		{name: "distributed without coordinator", spec: NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(SkipIfDistributedRunning)).(*Spec)},
 		{name: "exit without once", spec: NewSpec().RegisterDaemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
 		{name: "exit with background work", spec: NewSpec().RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
 	} {
@@ -92,7 +78,7 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("invalid policy accepted")
 	}
-	valid := NewSpec().Coordinator(&testCoordinator{}).RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(DelayIfDistributedRunning)).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).(*Spec)
+	valid := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(DelayIfDistributedRunning)).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).(*Spec)
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}

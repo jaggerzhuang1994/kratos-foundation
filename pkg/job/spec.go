@@ -97,8 +97,6 @@ type Builder interface {
 	Middleware(...Middleware) Builder
 	// Option 追加 Manager 运行策略。
 	Option(...ManagerOption) Builder
-	// Coordinator 提供分布式并发策略所需的跨进程协调能力。
-	Coordinator(ConcurrencyCoordinator) Builder
 	// RegisterCron 注册周期任务。
 	RegisterCron(name, schedule string, job Task, options ...CronOption) Builder
 	// RegisterOnce 注册启动后执行一次的任务。
@@ -114,7 +112,6 @@ type Spec struct {
 	middlewares  []Middleware
 	options      []ManagerOption
 	definitions  []definition
-	coordinator  ConcurrencyCoordinator
 	exitWhenDone bool
 }
 
@@ -146,12 +143,6 @@ func (s *Spec) Option(options ...ManagerOption) Builder {
 			s.options = append(s.options, option)
 		}
 	}
-	return s
-}
-
-// Coordinator 设置分布式并发策略使用的协调器。
-func (s *Spec) Coordinator(coordinator ConcurrencyCoordinator) Builder {
-	s.coordinator = coordinator
 	return s
 }
 
@@ -218,14 +209,6 @@ func (s *Spec) Validate() error {
 				"cron job %q has invalid concurrent policy %d",
 				definition.name,
 				definition.cron.concurrentPolicy,
-			)
-		}
-		if definition.kind == kindCron &&
-			definition.cron.concurrentPolicy.distributed() &&
-			s.coordinator == nil {
-			return fmt.Errorf(
-				"cron job %q requires a concurrency coordinator",
-				definition.name,
 			)
 		}
 		if _, ok := names[definition.name]; ok {

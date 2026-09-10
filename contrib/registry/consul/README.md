@@ -2,6 +2,8 @@
 
 `NewRegistry(logger, config, client)` 返回 Kratos `registry.Registrar`。共享客户端为 nil 时禁用，公共 Wire 构造、tags、TCP 健康检查、TTL 心跳开关及间隔配置保持不变。关闭心跳时没有后台续报或恢复任务。`Register` 成功后由 `Deregister` 结束该实例的心跳；共享 HTTP 客户端仍由 `pkg/consul` cleanup 管理。
 
+`NewRegistry` 可直接加入业务 Wire provider 集合，其返回值注入 `bootstrap.NewKratosApp`（或直接调用的 `app.NewApp`）。无需服务注册时，改用返回 nil `registry.Registrar` 的业务 provider；两者只能选择一个。示例见 [Bootstrap 文档](../../../pkg/bootstrap/README.md#可选依赖由-wire-构造注入)。
+
 显式端口必须在 0–65535 范围内，越界端口在远程注册前返回错误。缺失端口继续沿用既有的 0 值语义。
 
 每次登记保存独立载荷快照，保留原有 ID、端点、版本、元数据与检查配置。首次 Register 不额外重试；成功后 TTL 心跳独立于 Register 的短期 context。每个 HTTP 请求最长 10 秒，调用方较短 deadline 和自定义 HttpClient.Timeout 仍有效。临时网络错误、单次请求超时、HTTP 429/5xx 按 100ms 起、5s 封顶、80%–100% 抖动持续指数退避，成功后重置；单次超时不会注销仍在运行的服务。

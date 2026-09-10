@@ -28,6 +28,7 @@ func NewComponentsBootstrap(
 	metricsProvider metrics.Provider,
 	tracingProvider tracing.Provider,
 	_ Bootstrap,
+	coordinator job.ConcurrencyCoordinator,
 ) (ComponentsBootstrap, func(), error) {
 	if spec == nil || spec.assembled {
 		return ComponentsBootstrap{}, nil, fmt.Errorf("components bootstrap: spec is nil or already assembled")
@@ -59,7 +60,7 @@ func NewComponentsBootstrap(
 		}
 	}
 	if spec.jobs != nil {
-		runtime, err := job.NewManager(logger, spec.jobs, tracingProvider, metricsProvider)
+		runtime, err := job.NewManager(logger, spec.jobs, tracingProvider, metricsProvider, coordinator)
 		if err != nil {
 			return fail(err)
 		}

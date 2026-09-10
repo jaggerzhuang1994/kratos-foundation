@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-kratos/kratos/v2"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
 )
 
@@ -56,12 +57,14 @@ type App struct {
 	finalError     func() error
 }
 
-// NewApp 消费已登记的依赖并冻结 Spec，构造应用；组件选择和组装阶段由调用方负责。
+// NewApp 冻结 Spec 并构造应用；serviceRegistrar 为 nil 时关闭服务注册。
+// 组件选择和组装阶段由调用方负责。
 func NewApp(
 	ctx context.Context,
 	spec *Spec,
 	config Config,
 	stopPolicy *StopPolicy,
+	serviceRegistrar registry.Registrar,
 ) (*App, error) {
 	snapshot, err := spec.freeze(ctx)
 	if err != nil {
@@ -101,9 +104,9 @@ func NewApp(
 	}
 
 	var registrar *supervisedRegistrar
-	if snapshot.registrar != nil {
+	if serviceRegistrar != nil {
 		registrar = newSupervisedRegistrar(
-			snapshot.registrar,
+			serviceRegistrar,
 			application,
 			config.GetRegistrarTimeout().AsDuration(),
 		)

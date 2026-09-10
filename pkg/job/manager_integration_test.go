@@ -39,6 +39,7 @@ func TestSpecOptionsAndMiddlewareDriveRealCronManager(t *testing.T) {
 		spec,
 		observability.tracingProvider,
 		observability.metricsProvider,
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -3,7 +3,7 @@ package job
 import (
 	"context"
 	"errors"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -11,6 +11,7 @@ import (
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
@@ -22,7 +23,7 @@ import (
 
 func TestNewManagerConstructsWithObservabilityDependencies(t *testing.T) {
 	logger, tracingProvider, metricsProvider := newTestObservability(t)
-	manager, err := NewManager(logger, NewSpec(), tracingProvider, metricsProvider)
+	manager, err := NewManager(logger, NewSpec(), tracingProvider, metricsProvider, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestNewManagerConstructsWithObservabilityDependencies(t *testing.T) {
 func newTestManager(t *testing.T, spec *Spec) *Manager {
 	t.Helper()
 	logger, tracingProvider, metricsProvider := newTestObservability(t)
-	manager, err := NewManager(logger, spec, tracingProvider, metricsProvider)
+	manager, err := NewManager(logger, spec, tracingProvider, metricsProvider, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,6 +165,7 @@ func TestNewManagerValidatesSpecBeforeCreatingMetrics(t *testing.T) {
 		invalid,
 		observability.tracingProvider,
 		metricsProvider,
+		nil,
 	)
 	if manager != nil || err == nil || !strings.Contains(err.Error(), "missing-task") {
 		t.Fatalf("NewManager(invalid spec) = (%v, %v)", manager, err)
@@ -191,6 +193,7 @@ func TestNewManagerPropagatesMetricsInitializationFailure(t *testing.T) {
 				NewSpec(),
 				observability.tracingProvider,
 				metricsProvider,
+				nil,
 			)
 			if manager != nil || !errors.Is(err, wantErr) {
 				t.Fatalf("NewManager(metrics failure) = (%v, %v)", manager, err)
@@ -225,6 +228,7 @@ func TestNewManagerPropagatesModuleLoggerConfigurationFailures(t *testing.T) {
 				spec,
 				observability.tracingProvider,
 				observability.metricsProvider,
+				nil,
 			)
 			if manager != nil || !errors.Is(err, wantErr) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("NewManager(logger failure) = (%v, %v)", manager, err)
@@ -250,6 +254,7 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 		spec,
 		observability.tracingProvider,
 		observability.metricsProvider,
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -288,6 +293,7 @@ func TestNewManagerCanDisableObservabilityWithoutDisablingRecovery(t *testing.T)
 		spec,
 		observability.tracingProvider,
 		observability.metricsProvider,
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -309,5 +315,39 @@ func TestNewManagerCanDisableObservabilityWithoutDisablingRecovery(t *testing.T)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
+	}
+}
+
+func TestNewManagerInjectsConcurrencyCoordinator(t *testing.T) {
+	for _, policy := range []ConcurrentPolicy{AllowOverlap, DelayIfRunning, SkipIfRunning, DelayIfDistributedRunning, SkipIfDistributedRunning} {
+		t.Run(fmt.Sprint(policy), func(t *testing.T) {
+			logger, tracingProvider, metricsProvider := newTestObservability(t)
+			ran := false
+			spec := NewSpec()
+			spec.RegisterCron("injected", "@hourly", TaskFunc(func(context.Context) error { ran = true; return nil }), WithConcurrentPolicy(policy))
+			manager, err := NewManager(logger, spec, tracingProvider, metricsProvider, nil)
+			if policy.distributed() {
+				if err == nil || manager != nil || !strings.Contains(err.Error(), "requires a concurrency coordinator") {
+					t.Fatalf("missing coordinator = (%v, %v)", manager, err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			guard := &testGuard{ctx: context.Background()}
+			coordinator := &testCoordinator{guard: guard}
+			manager, err = NewManager(logger, spec, tracingProvider, metricsProvider, coordinator)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := manager.cronJobs[0].job.Run(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if !ran {
+				t.Fatal("injected task did not run")
+			}
+			if policy.distributed() && (coordinator.key != "injected" || guard.releases != 1) {
+				t.Fatalf("injected coordinator was not used: %+v, %+v", coordinator, guard)
+			}
+		})
 	}
 }

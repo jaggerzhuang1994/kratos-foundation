@@ -200,7 +200,7 @@ func TestBootstrapLoggerSurvivesNewAppAndCleanupRestoresPreviousGlobal(t *testin
 		t.Fatal(err)
 	}
 	t.Cleanup(releasePolicy)
-	if _, err := app.NewApp(context.Background(), spec, config, policy); err != nil {
+	if _, err := app.NewApp(context.Background(), spec, config, policy, nil); err != nil {
 		t.Fatal(err)
 	}
 	if foundationlog.GetLogger() != installed {

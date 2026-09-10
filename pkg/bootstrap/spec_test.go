@@ -24,7 +24,7 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	}
 	spec.Job().RegisterOnce("finish", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
 	logger, tracing, metrics := newTestObservability(t)
-	_, cleanup, err := bootstrap.NewComponentsBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{})
+	_, cleanup, err := bootstrap.NewComponentsBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,6 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 		t.Fatal("hook registered through bootstrap.Spec did not run")
 	}
 	for name, register := range map[string]func() error{
-		"registrar":    func() error { return spec.RegisterRegistrar(nil) },
 		"context":      func() error { return spec.AddContext(func(ctx context.Context) context.Context { return ctx }) },
 		"metadata":     func() error { return spec.AddMetadata(map[string]string{"late": "value"}) },
 		"endpoints":    func() error { return spec.AddEndpoints() },

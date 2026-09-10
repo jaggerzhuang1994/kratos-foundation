@@ -57,7 +57,7 @@ func TestNewAppRejectsMissingAppInfo(t *testing.T) {
 	spec := NewSpec()
 	registerNewAppTestLogger(t, spec)
 
-	app, err := NewApp(context.Background(), spec, config, policy)
+	app, err := NewApp(context.Background(), spec, config, policy, nil)
 	if app != nil || err == nil || !strings.Contains(err.Error(), "app info") {
 		t.Fatalf("NewApp(missing app info) = (%v, %v), want explicit app info error", app, err)
 	}
@@ -68,7 +68,7 @@ func TestNewAppRejectsMissingLogger(t *testing.T) {
 	spec := NewSpec()
 	registerNewAppTestInfo(t, spec)
 
-	app, err := NewApp(context.Background(), spec, config, policy)
+	app, err := NewApp(context.Background(), spec, config, policy, nil)
 	if app != nil || err == nil || !strings.Contains(err.Error(), "logger") {
 		t.Fatalf("NewApp(missing logger) = (%v, %v), want explicit logger error", app, err)
 	}
@@ -80,7 +80,7 @@ func TestNewAppConstructsApplicationFromSpec(t *testing.T) {
 	registerNewAppTestInfo(t, spec)
 	registerNewAppTestLogger(t, spec)
 
-	application, err := NewApp(context.Background(), spec, config, policy)
+	application, err := NewApp(context.Background(), spec, config, policy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestNewAppRestoresKratosGlobalLoggerAfterConstruction(t *testing.T) {
 	if err := spec.RegisterLogger(registered); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewApp(context.Background(), spec, config, policy); err != nil {
+	if _, err := NewApp(context.Background(), spec, config, policy, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := kratoslog.GetLogger(); got != previous {

@@ -14,7 +14,7 @@
 
 ## 构造边界
 
-本包描述应用所需依赖并提供 `NewApp(ctx, spec, config, stopPolicy)`，不选择领域组件、不聚合 Bootstrap，也不决定整个应用的组装阶段。所有阶段标记（包括用户提供的 `bootstrap.Bootstrap`）均定义在组装包。
+本包描述应用所需依赖并提供 `NewApp(ctx, spec, config, stopPolicy, registrar)`，不选择领域组件、不聚合 Bootstrap，也不决定整个应用的组装阶段。所有阶段标记（包括用户提供的 `bootstrap.Bootstrap`）均定义在组装包。
 
 应用组装与 Wire 示例见 [`bootstrap`](../bootstrap/README.md)。`NewApp` 消费已登记的 Spec 并冻结它；直接调用时由调用方保证贡献已全部完成。
 
@@ -34,13 +34,13 @@ flowchart TD
 - `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
 - `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
-- 可选 Registrar 由业务组装层通过 `Spec.RegisterRegistrar` 登记；不登记表示禁用服务注册。
+- 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 表示禁用服务注册，具体实现可使用 `contrib/registry/consul.NewRegistry`。
 
 构造函数拥有资源创建，Wire 接收并逆序调用其 cleanup。Bootstrap 本身通常没有 cleanup；例外是 `bootstrap.NewLogBootstrap` 的全局 Logger 恢复函数。Runtime 的 `Start`/`Stop`、Hook、Registrar 补偿和停机预算由 App 直接管理。
 
 ## Spec 约束
 
-`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会返回错误。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会返回错误。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。AppInfo、Logger 和 Registrar 是单例贡献。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。
+`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会返回错误。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会返回错误。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。AppInfo 和 Logger 是单例贡献；Registrar 是独立的构造依赖，不保存在 Spec 中。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。
 
 ## 运行时故障与停止结果
 

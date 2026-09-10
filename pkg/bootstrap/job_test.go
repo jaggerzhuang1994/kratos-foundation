@@ -50,7 +50,7 @@ func TestBootstrapRegistersNonEmptyManagerAllowsRepeatedRegistration(t *testing.
 func newTestManager(t *testing.T, spec *job.Spec) *job.Manager {
 	t.Helper()
 	logger, tracingProvider, metricsProvider := newTestObservability(t)
-	manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider)
+	manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 			t.Cleanup(release)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			application, err := app.NewApp(ctx, spec, config, policy)
+			application, err := app.NewApp(ctx, spec, config, policy, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

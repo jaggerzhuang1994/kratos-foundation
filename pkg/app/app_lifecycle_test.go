@@ -179,9 +179,6 @@ func TestNewApplicationRunsSuccessfulLifecycleWithRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	registrar := new(registrarCallFake)
-	if err := spec.RegisterRegistrar(registrar); err != nil {
-		t.Fatal(err)
-	}
 	if err := spec.AddEndpoints(&url.URL{Scheme: "http", Host: "127.0.0.1:8000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -202,6 +199,7 @@ func TestNewApplicationRunsSuccessfulLifecycleWithRegistration(t *testing.T) {
 		spec,
 		config,
 		newStaticStopPolicy(time.Second),
+		registrar,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -273,6 +271,7 @@ func TestApplicationBeforeStartFailureStopsWithoutStartingRuntimes(t *testing.T)
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -300,6 +299,7 @@ func TestApplicationAfterStartFailureStopsStartedRuntime(t *testing.T) {
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -336,6 +336,7 @@ func TestApplicationRuntimeFailureDuringAfterStartPreservesRootFailure(t *testin
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -367,22 +368,21 @@ func TestApplicationStopRequestIgnoresRegistrarCallbackCancellation(t *testing.T
 	registerEntered := make(chan struct{})
 	releaseRuntime := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.RegisterRegistrar(&registrarCallFake{registerFn: func(
+	registrar := &registrarCallFake{registerFn: func(
 		ctx context.Context,
 		_ *registry.ServiceInstance,
 	) error {
 		close(registerEntered)
 		<-ctx.Done()
 		return ctx.Err()
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}}
 	registerApplicationRuntime(t, spec, &applicationStopRequestRuntime{release: releaseRuntime})
 	app, err := NewApp(
 		context.Background(),
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		registrar,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -402,22 +402,21 @@ func TestApplicationStopRequestPreservesUnrelatedRegistrarCallbackError(t *testi
 	registerEntered := make(chan struct{})
 	releaseRuntime := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.RegisterRegistrar(&registrarCallFake{registerFn: func(
+	registrar := &registrarCallFake{registerFn: func(
 		ctx context.Context,
 		_ *registry.ServiceInstance,
 	) error {
 		close(registerEntered)
 		<-ctx.Done()
 		return want
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}}
 	registerApplicationRuntime(t, spec, &applicationStopRequestRuntime{release: releaseRuntime})
 	app, err := NewApp(
 		context.Background(),
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		registrar,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -449,6 +448,7 @@ func TestApplicationStopRequestIgnoresAfterStartCallbackCancellation(t *testing.
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -481,6 +481,7 @@ func TestApplicationStopRequestPreservesUnrelatedAfterStartCallbackError(t *test
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -506,6 +507,7 @@ func TestApplicationCanceledParentStopsBeforeRuntimeStart(t *testing.T) {
 		spec,
 		applicationTestConfig(),
 		newStaticStopPolicy(time.Second),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)

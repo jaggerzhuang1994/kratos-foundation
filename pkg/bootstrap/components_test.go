@@ -19,7 +19,7 @@ import (
 
 func TestComponentsEmptyDoesNotRequireInfrastructure(t *testing.T) {
 	spec := bootstrap.NewSpec()
-	got, cleanup, err := bootstrap.NewComponentsBootstrap(spec, nil, nil, nil, nil, bootstrap.Bootstrap{})
+	got, cleanup, err := bootstrap.NewComponentsBootstrap(spec, nil, nil, nil, nil, bootstrap.Bootstrap{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestComponentsEmptyDoesNotRequireInfrastructure(t *testing.T) {
 	if got.StopDelay() != 0 {
 		t.Fatal("empty application has server stop delay")
 	}
-	if _, _, err := bootstrap.NewComponentsBootstrap(spec, nil, nil, nil, nil, bootstrap.Bootstrap{}); err == nil {
+	if _, _, err := bootstrap.NewComponentsBootstrap(spec, nil, nil, nil, nil, bootstrap.Bootstrap{}, nil); err == nil {
 		t.Fatal("reused Spec was accepted")
 	}
 }
@@ -43,7 +43,7 @@ func TestComponentsPropagateRegistrationFailure(t *testing.T) {
 				spec.Grpc().Register(func(server.GRPCServer) error { return failure })
 			}
 			logger, tracing, metrics := newTestObservability(t)
-			_, cleanup, err := bootstrap.NewComponentsBootstrap(spec, testconfig.Empty(t), logger, metrics, tracing, bootstrap.Bootstrap{})
+			_, cleanup, err := bootstrap.NewComponentsBootstrap(spec, testconfig.Empty(t), logger, metrics, tracing, bootstrap.Bootstrap{}, nil)
 			if !errors.Is(err, failure) {
 				t.Fatalf("error = %v", err)
 			}
@@ -65,7 +65,7 @@ func TestComponentsRejectInvalidSelections(t *testing.T) {
 				spec.RegisterRuntime(nil)
 			}
 			logger, tracing, metrics := newTestObservability(t)
-			if _, _, err := bootstrap.NewComponentsBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{}); err == nil {
+			if _, _, err := bootstrap.NewComponentsBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{}, nil); err == nil {
 				t.Fatal("invalid selection was accepted")
 			}
 		})
@@ -99,7 +99,7 @@ func TestComponentsWorkerLifecycle(t *testing.T) {
 			}
 			spec := bootstrap.ApplicationSpec(components)
 			// nil config manager 证明 worker 没有尝试构造 HTTP/gRPC Runtime。
-			_, cleanup, err := bootstrap.NewComponentsBootstrap(components, nil, logger, metrics, tracing, bootstrap.Bootstrap{})
+			_, cleanup, err := bootstrap.NewComponentsBootstrap(components, nil, logger, metrics, tracing, bootstrap.Bootstrap{}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -140,7 +140,7 @@ func runComponentsApp(t *testing.T, spec *app.Spec) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	ready := bootstrap.NewApplicationBootstrap(bootstrap.InfrastructureBootstrap{}, bootstrap.ComponentsBootstrap{})
-	application, err := bootstrap.NewKratosApp(ctx, spec, ready, config, policy)
+	application, err := bootstrap.NewKratosApp(ctx, spec, ready, config, policy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,4 +149,18 @@ func runComponentsApp(t *testing.T, spec *app.Spec) error {
 		t.Fatal("application did not stop before deadline")
 	}
 	return err
+}
+
+// 嵌入接口仅用于构造契约：Bootstrap 不应在构造期执行任务或调用协调器。
+type constructionCoordinator struct{ job.ConcurrencyCoordinator }
+
+func TestComponentsInjectJobCoordinator(t *testing.T) {
+	logger, tracing, metrics := newTestObservability(t)
+	spec := bootstrap.NewSpec()
+	spec.Job().RegisterCron("distributed", "@hourly", job.TaskFunc(func(context.Context) error { return nil }), job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
+	_, cleanup, err := bootstrap.NewComponentsBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{}, constructionCoordinator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
 }

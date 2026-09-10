@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/registry"
 )
 
 // Spec 保存 Bootstrap 阶段的可变组装状态。
@@ -24,7 +23,6 @@ type Spec struct {
 
 	appInfo   AppInfo
 	logger    kratoslog.Logger
-	registrar registry.Registrar
 	metadata  map[string]string
 	endpoints []*url.URL
 	signals   []os.Signal
@@ -41,7 +39,6 @@ type appSnapshot struct {
 
 	appInfo   AppInfo
 	logger    kratoslog.Logger
-	registrar registry.Registrar
 	metadata  map[string]string
 	endpoints []*url.URL
 	signals   []os.Signal
@@ -93,19 +90,6 @@ func (s *Spec) RegisterLogger(logger kratoslog.Logger) error {
 		return fmt.Errorf("app logger is already registered")
 	}
 	s.logger = logger
-	return nil
-}
-
-func (s *Spec) RegisterRegistrar(registrar registry.Registrar) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
-	if s.registrar != nil {
-		return fmt.Errorf("app registrar is already registered")
-	}
-	s.registrar = registrar
 	return nil
 }
 
@@ -191,7 +175,6 @@ func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
 	snapshot := appSnapshot{
 		appInfo:     s.appInfo,
 		logger:      s.logger,
-		registrar:   s.registrar,
 		metadata:    maps.Clone(s.metadata),
 		endpoints:   append([]*url.URL(nil), s.endpoints...),
 		signals:     append([]os.Signal(nil), s.signals...),

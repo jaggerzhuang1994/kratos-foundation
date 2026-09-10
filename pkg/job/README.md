@@ -2,9 +2,9 @@
 
 `pkg/job` 是业务与 Wire 声明、构造和注册后台任务的公共入口。业务使用 `Spec` 注册 Cron、Once 或 Daemon 任务，再通过 `NewManager` 构造运行时并交给 `bootstrap.NewJobBootstrap`；不应导入 `pkg/job/internal/*`。
 
-并发策略只作用于 Cron：默认 `AllowOverlap` 允许重叠，`SkipIfRunning` / `DelayIfRunning` 只约束当前进程；跨进程控制必须同时注入 `ConcurrencyCoordinator` 并为任务选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。仅注入协调器不会改变任务策略。所有声明必须在 `NewManager` 之前完成，之后修改 Spec 不会重配已创建的 Manager。
+并发策略只作用于 Cron：默认 `AllowOverlap` 允许重叠，`SkipIfRunning` / `DelayIfRunning` 只约束当前进程；跨进程控制必须同时注入 `ConcurrencyCoordinator` 并为任务选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。仅注入协调器不会改变任务策略。`NewManager(logger, spec, tracing, metrics, coordinator)` 的最后一个参数允许 nil，此时仅可使用进程内策略；分布式策略缺少协调器会在构造时返回错误，不会静默退化为无锁执行。所有声明必须在 `NewManager` 之前完成，之后修改 Spec 不会重配已创建的 Manager。
 
-以下组装函数使用 Redis 实现。`redisManager` 已按 [Redis 配置](../redis/README.md) 声明 `locks` 连接；其他依赖由业务 Wire 提供。`appSpec` 必须是最终创建应用使用的同一个 Spec；返回的 `JobBootstrap` 要加入 [Bootstrap 聚合](../bootstrap/README.md)，确保应用构造前完成登记。`cleanupTask` 是实现 `job.Task` 的业务任务。
+以下 Wire provider 分别构造 Redis 协调器和 Job 运行时。`redisManager` 已按 [Redis 配置](../redis/README.md) 声明 `locks` 连接；其他依赖由业务 Wire 提供。`appSpec` 必须是最终创建应用使用的同一个 Spec；返回的 `JobBootstrap` 要加入 [Bootstrap 聚合](../bootstrap/README.md)，确保应用构造前完成登记。`cleanupTask` 是实现 `job.Task` 的业务任务。
 
 ```go
 package assembly
@@ -21,27 +21,26 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
+func newJobCoordinator(redisManager redis.Manager) (job.ConcurrencyCoordinator, error) {
+	return jobredis.NewLockCoordinator(
+		redisManager,
+		job.LockCoordinatorConfig{KeyPrefix: "example:production:job:"},
+		lockredis.WithConnection("locks"),
+	)
+}
+
 func newJobs(
 	logger log.Logger,
-	redisManager redis.Manager,
+	coordinator job.ConcurrencyCoordinator,
 	tracingProvider tracing.Provider,
 	metricsProvider metrics.Provider,
 	appSpec *app.Spec,
 	cleanupTask job.Task,
 ) (bootstrap.JobBootstrap, error) {
-	coordinator, err := jobredis.NewLockCoordinator(
-		redisManager,
-		job.LockCoordinatorConfig{KeyPrefix: "example:production:job:"},
-		lockredis.WithConnection("locks"),
-	)
-	if err != nil {
-		return bootstrap.JobBootstrap{}, err
-	}
 	spec := job.NewSpec()
-	spec.Coordinator(coordinator)
 	spec.RegisterCron("cleanup", "@every 1m", cleanupTask,
 		job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
-	manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider)
+	manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider, coordinator)
 	if err != nil {
 		return bootstrap.JobBootstrap{}, err
 	}
@@ -49,14 +48,16 @@ func newJobs(
 }
 ```
 
+将 `newJobCoordinator` 和 `newJobs` 加入业务 Wire provider 集合，协调器由 Wire 注入。统一 Spec 模式中则注入 `bootstrap.NewComponentsBootstrap`，由它传给 `job.NewManager`；禁用能力的 provider 示例见 [Bootstrap 文档](../bootstrap/README.md#可选依赖由-wire-构造注入)。
+
 `KeyPrefix` 应替换成自己的应用和环境标识；需要互斥的副本使用相同前缀与任务名。任务结束后由协调器释放租约；共享 Redis 连接仍由 Redis Manager cleanup 释放。
 
 ```mermaid
 flowchart TD
     A([开始组装]) --> B[借用 Redis 连接，构造 coordinator]
     B -- 失败 --> X([返回错误])
-    B -- 成功 --> C[Spec 注入 coordinator 并注册带分布式策略的 Cron]
-    C --> D[NewManager 固定任务与策略]
+    B -- 成功 --> C[Spec 注册带分布式策略的 Cron]
+    C --> D[NewManager 接收 coordinator 并校验任务与策略]
     D -- 校验失败 --> X
     D -- 成功 --> E[Bootstrap 同步登记到 app.Spec]
     E -- 登记失败 --> X

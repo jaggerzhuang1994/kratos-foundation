@@ -8,12 +8,14 @@ import (
 
 	"github.com/go-kratos/kratos/v2"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/google/wire"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
@@ -22,6 +24,7 @@ import (
 
 func initialize(ctx context.Context, sources config.Sources, version string, stopDelay time.Duration) (*assembly, func(), error) {
 	wire.Build(
+		newRegistrar,
 		config.NewManager,
 		app.NewSpec,
 		app.NewConfig,
@@ -53,7 +56,7 @@ func initialize(ctx context.Context, sources config.Sources, version string, sto
 
 func initializeComponents(ctx context.Context, sources config.Sources, version string) (*kratos.App, func(), error) {
 	wire.Build(
-		config.NewManager, bootstrap.ApplicationSpec, app.NewConfig, bootstrap.NewStopPolicy,
+		newRegistrar, newCoordinator, config.NewManager, bootstrap.ApplicationSpec, app.NewConfig, bootstrap.NewStopPolicy,
 		appinfo.New, log.NewLogger,
 		wire.Bind(new(kratoslog.Logger), new(log.Logger)),
 		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,
@@ -65,3 +68,6 @@ func initializeComponents(ctx context.Context, sources config.Sources, version s
 	)
 	return nil, nil, nil
 }
+
+func newRegistrar() registry.Registrar           { return nil }
+func newCoordinator() job.ConcurrencyCoordinator { return nil }

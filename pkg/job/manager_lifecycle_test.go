@@ -15,7 +15,7 @@ func TestNewManagerClassifiesAndSchedulesJobs(t *testing.T) {
 	spec := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil })).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("daemon", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
 	parser := &testParser{schedule: testSchedule{next: time.Now().Add(time.Hour)}}
 	scheduler := &testScheduler{}
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, parser)
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, parser, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestNewManagerClassifiesAndSchedulesJobs(t *testing.T) {
 func TestManagerExitWhenDoneRequestsApplicationStopAndClosesDone(t *testing.T) {
 	run := 0
 	spec := NewSpec().RegisterOnce("migrate", TaskFunc(func(context.Context) error { run++; return nil })).ExitWhenDone().(*Spec)
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}})
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestManagerDaemonFailureStopsApplication(t *testing.T) {
 		}
 		observed = err
 	}))
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{})
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestManagerDaemonFailureStopsApplication(t *testing.T) {
 
 func TestManagerStartRejectsDuplicateStart(t *testing.T) {
 	spec := NewSpec().RegisterDaemon("wait", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{})
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +124,7 @@ func TestManagerParentCancellationBeforeStartClosesRuntime(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -152,6 +153,7 @@ func TestManagerStopUnblocksStart(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -186,6 +188,7 @@ func TestManagerParentCancellationStopsRunningDaemon(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +219,7 @@ func TestManagerParentCancellationStopsOneShotWait(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -245,6 +249,7 @@ func TestManagerStopBeforeStartPreventsLaterLaunch(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -269,6 +274,7 @@ func TestManagerStartJobsRefusesWorkAfterShutdownBegins(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -296,6 +302,7 @@ func TestManagerStopHonorsContextWhileUncooperativeTaskFinishes(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -339,6 +346,7 @@ func TestManagerReportsOnceFailuresWithoutStoppingApplication(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -369,6 +377,7 @@ func TestManagerDefaultErrorHandlerLogsOnceFailure(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -409,6 +418,7 @@ func TestManagerTreatsUnexpectedSuccessfulDaemonExitAsFailure(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -433,6 +443,7 @@ func TestNewManagerReturnsCronParseFailureWithoutStartingScheduler(t *testing.T)
 		newManagerOptions(spec),
 		scheduler,
 		&testParser{err: wantErr},
+		nil,
 	)
 	if manager != nil || !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "report") {
 		t.Fatalf("newManager() = (%v, %v)", manager, err)
@@ -451,6 +462,7 @@ func TestManagerWithNoJobsStartsAndStopsCleanly(t *testing.T) {
 		newManagerOptions(spec),
 		&testScheduler{},
 		&testParser{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -19,19 +19,16 @@ Buffers、接口契约及相关文档时，应遵循本规范，并优先保持�
 - 实现应优先保证正确性和可读性，仅在有测量依据时进行性能优化。
 - 提交前必须确保代码通过格式化、静态检查和相关测试。
 - 避免不必要的防御性编程。
-- 语言语法不能超过 go.mod 中 go 指令声明的语言版本。
-- 简单需求改动不需要使用 SDD 模式。
+- 语言语法不能超过被修改文件所属模块 `go.mod` 的 `go` 指令版本；根模块版本不适用于嵌套生成器模块。
+- 简单局部任务使用简短计划和自检即可，不要求额外创建规格或设计文档。
 
 ## 目录边界
 
-### `api/*`
+### 协议与生成器
 
-用于当前仓库定义的对外的 `pb` 结构和对应的产物。
-
-要求：
-
-- 只能放 pb 源文件和对应的 protoc 产物。
-- 应该定义对应的 make api 指令生成 protoc 产物。
+- 当前内部协议位于 `proto/`，共享 include 协议位于 `third_party/`；根 `make proto` 生成内部 Go 协议、校验与错误辅助代码及 `config.schema.json`。不得手改生成产物。
+- `api/` 是未来对外协议目录约定，当前尚不存在。新增时只放 Protocol Buffers 源文件及对应生成产物，并补充实际可执行的生成 target；当前没有 `make api`。
+- `cmd/protoc-gen-*` 是独立 Go 模块，修改时检查各自的 `go.mod` 和 Makefile；根目录的 `go test ./...` 不会覆盖这些嵌套模块。
 
 ### `pkg/<domain>` 与嵌套 `internal`
 
@@ -40,7 +37,7 @@ Buffers、接口契约及相关文档时，应遵循本规范，并优先保持�
 - 不得把整个领域搬进 `internal/provider` 或 `internal/runtime`，再通过类型别名和函数转发形成公共空壳；也不得仅为测试或控制文件行数新建包。
 - 嵌套 internal 不得反向依赖所属领域包；若拆包导致公共契约下沉、循环依赖或额外契约微包，优先回到同包实现。
 - 一个领域不得导入另一个领域的嵌套 internal。
-- 业务 App/Wire 不得导入任何 internal 路径。
+- 业务 App/Wire 不得导入 Foundation 的任何 `internal` 路径；消费项目自身的业务 `internal` 按其包边界组装，不属于此禁令。
 - 根 `internal` 只保存至少被两个独立领域直接复用的能力及模块级测试设施。
 - `contrib/<domain>/<driver>` 是业务/Wire 可导入的公共可选实现。
 - 简单内聚的公共工具可以保留单包结构，禁止为了目录形式创建无意义微包。
@@ -52,6 +49,7 @@ Buffers、接口契约及相关文档时，应遵循本规范，并优先保持�
 - 类型及其紧密关联的方法尽量放在一起；同一职责的短小辅助实现优先留在同一文件，不按每个类型或函数机械拆文件。测试跟随职责组织，避免维护超大测试文件。
 - 保留显式构造函数与 Wire 依赖注入模式；由构造返回 cleanup 的资源继续由组装层负责逆序释放。
 - Bootstrap 统一位于 `pkg/bootstrap`，在构造期同步向 `app.Spec` 登记贡献；业务 Wire 层聚合 `bootstrap.StartupReady` 后通过 `bootstrap.NewKratosApp` 调用 `app.NewApp`。领域包只声明自身依赖并提供普通构造函数，不导入 app、bootstrap 或 Wire 参与组装，也不自行启动应用运行时或管理全局容器。
+- 推荐的统一 Spec 模式由 `bootstrap.NewSpec` 持有唯一的 `app.Spec`，通过 `ApplicationSpec` 共享；业务 Boot 声明后由 `NewComponentsBootstrap` 构造选定组件，`NewApplicationBootstrap` 返回 `StartupReady`。不要同时提供 `app.NewSpec` 或为同一组件重复调用独立 Bootstrap。旧的显式登记模式仍使用 `NewBootstrap` 聚合屏障；两种完整用法见 [Bootstrap 文档](pkg/bootstrap/README.md)。
 
 ### Driver Registry 适用条件
 
@@ -66,9 +64,9 @@ Buffers、接口契约及相关文档时，应遵循本规范，并优先保持�
 用于适配第三方组件、协议、存储系统或框架接口，例如：
 
 ```text
-contrib/cache/redis
-contrib/metrics/prometheus
-contrib/tracing/otel
+contrib/database/mysql
+contrib/queue/kafka
+contrib/config/consul
 ```
 
 要求：
@@ -157,10 +155,7 @@ contrib/tracing/otel
   ```
 - 当锁位于循环、热点路径或需要在函数返回前尽早释放时，可以显式调用 `Unlock`，但必须保证所有控制流都能正确释放。
 - 不要复制包含 `sync.Mutex`、`sync.RWMutex`、`sync.Once` 或其他同步原语的值。
-- 修改并发代码时应运行竞态检测：
-  ```bash
-  go test -race ./...
-  ```
+- 修改并发代码时必须按“验证要求”运行覆盖相关模块的竞态检测。
 - 涉及锁、并发控制、幂等或重试机制的设计与实现，必须在流程图中标注并发入口、共享资源、获取与释放位置、失败或超时路径及相应日志节点。
 
 ## 日志与可观测性
@@ -235,56 +230,9 @@ contrib/tracing/otel
 - Mock 应针对小型接口生成或实现，不要为了使用 Mock 而扩大接口。
 - 除非验证交互本身就是需求，否则优先断言最终状态或输出，而不是内部调用次数。
 
-表驱动测试示例：
+表驱动用例参考 [GORM scope 测试](pkg/gormscope/scopes_test.go)，不在规范中复制一套示例。循环变量捕获按所属模块的语言版本处理，不能把根模块的新语义套用到低版本生成器模块。
 
-```go
-package testcase
-
-import "testing"
-
-func TestParseName(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{
-			name:  "valid name",
-			input: "alice",
-			want:  "alice",
-		},
-		{
-			name:    "empty name",
-			input:   "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := ParseName(tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected an error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("ParseName() error = %v", err)
-			}
-			if got != tt.want {
-				t.Errorf("ParseName() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-```
+现有文件可能尚未满足以上命名与归并规则；这属于待整理项，不代表规则失效。仅在本次修改涉及对应实现时按上述要求处理，不为整理规范发动全仓测试重命名。
 
 ## 集成测试
 
@@ -329,8 +277,8 @@ func TestParseName(t *testing.T) {
 - 控制函数长度和嵌套深度，优先使用提前返回处理错误路径。
 - 不使用无意义的封装函数或只有一层转发的抽象。
 - 不保留注释掉的代码、临时调试输出或无主的 TODO。
-- 所有资源release都按照 wire-style release 模式来实现。
-- 除非明确可能返回nil或者不清楚来源的实例，否则所有构造函数注入的实例都默认为非 nil，不需要防御性check nil。
+- 资源构造返回 cleanup，由 Wire 或显式组装层逆序释放；操作级租约按所属接口释放，不另设隐式全局资源生命周期。
+- 构造函数注入的必需依赖默认为非 nil，不重复防御性判空；接口明确允许 nil、可选依赖或来源不确定的返回值按实际契约处理。
 
 ## 依赖管理
 
@@ -338,11 +286,7 @@ func TestParseName(t *testing.T) {
 - 新增第三方依赖前，应确认其必要性、维护状态、许可证和安全风险。
 - 不要为了少量简单功能引入大型依赖。
 - 依赖版本必须通过 `go.mod` 和 `go.sum` 管理。
-- 修改依赖后运行：
-
-  ```bash
-  go mod tidy
-  ```
+- 修改依赖后，在受影响模块目录运行 `go mod tidy`，检查该模块的 `go.mod`、`go.sum`；根模块 tidy 不会整理嵌套模块。
 
 - 禁止直接编辑 `go.sum`。
 - 不得通过 `replace` 长期指向开发者本地路径。
@@ -353,7 +297,7 @@ func TestParseName(t *testing.T) {
 - Provider 应尽量保持简单，只负责构造并返回依赖。
 - 不要在领域包中引用 Wire。
 - Wire injector 和 provider set 应位于应用入口或专门的组装层。
-- 修改 provider 后应重新生成 Wire 代码。
+- 修改 Wire injector、provider set 或影响现有 injector 的构造签名后，应执行该应用或测试 fixture 的 Wire 生成入口；普通构造函数修改不等于根 `make generate` 一定会重建相关 injector。
 - 生成文件不得手工修改，并应包含标准生成标记：
 
   ```go
@@ -389,16 +333,7 @@ func TestParseName(t *testing.T) {
   ```
 
 - 如果 `Makefile` 已提供对应 target，应优先使用，不要绕过它自行拼装等价命令。
-- 修改 Go 代码后，应优先执行项目约定的验证 target，例如：
-
-  ```bash
-  make fmt
-  make lint
-  make test
-  make generate
-  ```
-
-  具体 target 以仓库实际 `Makefile` 为准，不得假设上述 target 一定存在。
+- 当前实际 target、生成副作用和按改动选择验证的要求统一见“验证要求”，不把安装或代码生成命令当作普通测试命令。
 
 - 不得手工修改由 Makefile 生成的文件。
 - 修改 `Makefile` 时，应：
@@ -441,32 +376,24 @@ func TestParseName(t *testing.T) {
 
 ```mermaid
 flowchart TD
-    A([开始]) --> B[检查 git status 与现有改动]
-    B --> C[读取 AGENTS.md、Makefile、代码与测试]
-C --> D[制定计划并完成五项自检]
-D --> E{范围、风险或方案是否仍有关键未知?}
-E -- 是 --> F[向用户说明影响并请求确认]
-F --> G{用户是否确认?}
-G -- 否 --> H[停止、回退或调整计划]
-H --> D
-G -- 是 --> I
-E -- 否 --> I[实施最小改动]
-I --> J{是否发现并发或共享状态风险?}
-J -- 是 --> K[说明风险与可选并发控制方案]
-K --> L{用户是否确认并发方案?}
-L -- 否 --> H
-L -- 是 --> M[按确认方案实现并标注同步边界]
-J -- 否 --> N
-M --> N[补充测试、中文注释与关键日志]
-N --> O[搜索关联文档与旧引用，同步流程图、生成产物和依赖]
-O --> P[执行格式化、静态检查、测试与竞态检测]
-P --> Q{验证是否通过?}
-Q -- 否 --> R[日志节点 WARN/ERROR: verify.failed]
-R --> S[定位偏差并调整计划或回退]
-S --> D
-Q -- 是 --> T[日志检查节点: 确认关键路径事件可观测]
-T --> U[复查文档示例与链接、无关改动、敏感信息和生成差异]
-U --> V([交付结果与剩余风险])
+    A([开始]) --> B[检查工作树、规范、Makefile、实现和测试]
+    B --> C[制定计划并完成五项自检]
+    C --> D{存在影响方案的关键未知或并发策略变更?}
+    D -- 是 --> E[说明影响及选项，取得必要确认]
+    E -- 未确认 --> F[停止或调整方案]
+    F --> C
+    E -- 已确认 --> G[实施范围内最小改动]
+    D -- 否 --> G
+    G --> H{出现新事实或风险?}
+    H -- 是 --> C
+    H -- 否 --> I[补充相关测试、注释与必要日志]
+    I --> J[搜索关联文档和旧引用，同步生成产物与依赖]
+    J --> K[按改动类型验证代码、示例、链接及流程图]
+    K --> L{验证通过?}
+    L -- 否 --> M[记录实际失败，定位并调整]
+    M --> C
+    L -- 是 --> N[检查改动范围、资源边界和敏感信息]
+    N --> O([交付结果及未验证项])
 ```
 
 ## 多代理协作
@@ -482,25 +409,36 @@ U --> V([交付结果与剩余风险])
 
 ## 验证要求
 
-如果项目提供 Makefile，应优先使用其中实际存在的验证入口。使用前必须阅读 target 定义；不得仅根据名称假设其行为。
+### 当前命令入口
 
-仅当 Makefile 没有提供对应能力时，才直接运行：
+下表对应根 [Makefile](Makefile)，执行前仍须复核其最新定义。当前没有 `help`、`fmt` 或 `api` target。
 
-```bash
-gofmt -w <changed-go-files>
-go test ./...
-go vet ./...
-```
+| 命令 | 实际范围与用途 |
+| --- | --- |
+| `make test` | 遍历所有 Go 模块；要求每个含非测试 Go 源文件的包有独立可运行 Test，并拒绝手写函数覆盖率为 0；不等于所有分支已覆盖 |
+| `make vet` | 遍历所有 Go 模块运行 `go vet` |
+| `make race` | 遍历所有 Go 模块运行竞态测试 |
+| `make lint` | 遍历所有 Go 模块，使用根 `.golangci.yml` |
+| `make verify` | 依赖 test、vet、race；不含 lint，不需外部基础设施 |
+| `make test-business` | 强制执行 Wire/HTTP/SQLite 业务闭环和生成客户端契约测试 |
+| `make verify-release` | 执行 verify、lint、test-business；不打 tag、不推送、不部署 |
+| `make proto` | 构建当前源码中的错误和 JSON Schema 插件，清理并重新生成受控协议产物及配置 schema；不生成业务客户端 |
+| `make generate` | 在根模块执行 tidy、`go generate ./...`、tidy；实际生成取决于存在的指令，不保证执行 Wire，也不遍历嵌套模块 |
+| `make init-proto` / `make init-lint` / `make init` | 安装工具，可能下载依赖并写入 Go 工具目录；版本由 Makefile 变量指定，不属于只读验证 |
+| `make all` | 包含 proto、generate、verify、lint，会改写生成产物和依赖文件 |
 
-根据改动范围补充以下验证：
+JSON Schema 的 [子目录 Makefile](cmd/protoc-gen-jsonschema/Makefile) 另有 `deps`（安装文档生成器）和 `options`（生成 `options.md`），应在该子目录执行。
 
-- 修改并发代码：`go test -race ./...` 或范围更小但足以覆盖改动的竞态测试。
-- 修改依赖：`go mod tidy`，并检查 `go.mod`、`go.sum` 差异。
-- 修改生成源：执行项目规定的生成命令，并确认生成产物无遗漏。
-- 修改业务流程、调用链、状态流转或重试策略：检查对应 Mermaid 流程图与关键日志节点是否同步。
-- 修改公共 API、配置或资源契约及其文档：按“文档同步与防漂移”核对关联描述，并验证受影响的关键示例、命令产物与链接。
+### 按改动选择验证
 
-如果无法完成全部验证，应说明未执行的命令、原因和潜在风险。
+- 修改 Go 逻辑：先对改动文件运行 `gofmt`，可用时同时使用 `goimports`；再优先使用上表中的相关测试、静态检查入口。当前无格式化 target，直接格式化是正确入口。
+- 修改并发代码：优先 `make race`；如采用范围更小的竞态测试，须覆盖受影响模块和调用边界，并说明范围。
+- 修改依赖：在各受影响模块运行 `go mod tidy` 并检查差异。
+- 修改生成源或 Wire 组装：执行其实际生成入口，核对产物和编译结果；`make -n` 只能预览，不能证明生成或测试通过。
+- 修改业务流程、重试或接口契约：同步 Mermaid 图和实际日志节点，并按“文档同步与防漂移”验证关联描述、关键示例、命令产物与链接。
+- 纯文档、注释或帮助文字：检查相关事实、示例、链接和 `git diff --check`，按需编译或运行示例；无需机械执行全量 Go 测试。
+- Makefile 没有对应能力时，才直接运行所属模块下的 `go test`、`go vet` 或文档示例验证命令；针对新增失败的局部诊断可缩小范围，但不能据此声称所有模块已通过。
+- 交付时列出实际执行的 target/命令、结果及未执行项；工具不可用、版本不同或外部服务未验证时，说明限制。代码覆盖率门禁不能代替行为断言或 README 验证。
 
 ## 禁止事项
 
