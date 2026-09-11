@@ -69,7 +69,7 @@ func newCronLogger(
 	log cronLog,
 ) cronLoggerContract {
 	return &cronLogger{
-		log.AddCallerDepth().WithFilterKeys("now"),
+		log.WithFilterKeys("now"),
 	}
 }
 

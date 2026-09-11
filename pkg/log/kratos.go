@@ -31,8 +31,8 @@ var Fatalw = kratoslog.Fatalw
 func init() {
 	fallback := &logger{shared: processState, config: &configState{
 		output: &outputLogger{output: output.NewStd()}, level: kratoslog.LevelInfo,
-		filterEmpty: true, callerDepth: defaultCallerDepth,
-		timeFormat: time.RFC3339, msgKey: defaultMsgKey,
+		filterEmpty: true,
+		timeFormat:  time.RFC3339, msgKey: defaultMsgKey,
 	}}
-	kratoslog.SetLogger(fallback.AddCallerDepth(1))
+	kratoslog.SetLogger(fallback)
 }

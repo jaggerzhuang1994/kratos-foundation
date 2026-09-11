@@ -164,7 +164,6 @@ func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 	shared.WithFilterEmpty(true)
 	shared.WithFilterKeys("global.secret")
 	shared.WithKV("global", "value")
-	shared.WithCallerDepth(1)
 	shared.WithTimeFormat("2006")
 	shared.WithMsgKey("message")
 	ctx := WithKv(context.Background(), "request.id", "r1")
@@ -183,7 +182,6 @@ func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 	derived = derived.
 		WithContext(ctx).
 		WithCallerDepth(2).
-		AddCallerDepth(1).
 		WithFilterKeys("local.secret").
 		With("fixed", "yes", "empty", "")
 	derived.Infow(
@@ -331,7 +329,6 @@ func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 	shared.WithFilterEmpty(true)
 	shared.WithFilterKeys("secret")
 	shared.WithKV("global", "value")
-	shared.WithCallerDepth(1)
 	shared.WithTimeFormat("2006-01-02")
 	shared.WithMsgKey("message")
 	logger := rootLogger.
@@ -809,4 +806,128 @@ func TestIntegrationLoggerEnvironmentSnapshot(t *testing.T) {
 		strings.Contains(string(data), "new-environment-filtered") || strings.Contains(string(data), "old-owner") {
 		t.Fatalf("environment snapshot or append semantics broken: %s", data)
 	}
+}
+
+func TestCallerAcrossLoggingEntrypoints(t *testing.T) {
+	for _, entry := range []struct {
+		name  string
+		write func(Logger) int
+	}{
+		{"direct", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			l.Info("message")
+			return line + 1
+		}},
+		{"derived", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			l.With("key", "value").WithModule("test").WithContext(context.Background()).Infof("%s", "message")
+			return line + 1
+		}},
+		{"structured", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			l.Infow("msg", "message")
+			return line + 1
+		}},
+		{"Log", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			_ = l.Log(kratoslog.LevelInfo, "msg", "message")
+			return line + 1
+		}},
+		{"Helper", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			kratoslog.NewHelper(l).Info("message")
+			return line + 1
+		}},
+		{"HelperContext", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			kratoslog.NewHelper(l).WithContext(context.Background()).Info("message")
+			return line + 1
+		}},
+		{"With", func(l Logger) int {
+			_, _, line, _ := runtime.Caller(0)
+			_ = kratoslog.With(l, "key", "value").Log(kratoslog.LevelInfo, "msg", "message")
+			return line + 1
+		}},
+		{"global", func(l Logger) int {
+			kratoslog.SetLogger(l)
+			_, _, line, _ := runtime.Caller(0)
+			kratoslog.Info("message")
+			return line + 1
+		}},
+		{"globalContext", func(l Logger) int {
+			kratoslog.SetLogger(l)
+			_, _, line, _ := runtime.Caller(0)
+			kratoslog.Context(context.Background()).Info("message")
+			return line + 1
+		}},
+		{"GetLogger", func(l Logger) int {
+			kratoslog.SetLogger(l)
+			_, _, line, _ := runtime.Caller(0)
+			_ = kratoslog.GetLogger().Log(kratoslog.LevelInfo, "msg", "message")
+			return line + 1
+		}},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			previous := kratoslog.GetLogger()
+			defer kratoslog.SetLogger(previous)
+			shared := &sharedState{}
+			shared.custom.Store(&customState{})
+			var caller any
+			l := &logger{shared: shared, config: &configState{msgKey: defaultMsgKey,
+				output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
+					for i := 0; i+1 < len(kv); i += 2 {
+						if kv[i] == CallerKey {
+							caller = kv[i+1]
+						}
+					}
+					return nil
+				})}}}
+			line := entry.write(l)
+			if want := fmt.Sprintf("log/logger_test.go:%d", line); caller != want {
+				t.Fatalf("caller=%v, want %s", caller, want)
+			}
+		})
+	}
+}
+
+func TestCallerDepthCountsOnlyApplicationFrames(t *testing.T) {
+	for _, depth := range []int{-1, 0, 1, 2} {
+		t.Run(fmt.Sprint(depth), func(t *testing.T) {
+			shared := &sharedState{}
+			shared.custom.Store(&customState{})
+			var got any
+			root := &logger{shared: shared, config: &configState{msgKey: defaultMsgKey, output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
+				for i := 0; i+1 < len(kv); i += 2 {
+					if kv[i] == CallerKey {
+						got = kv[i+1]
+					}
+				}
+				return nil
+			})}}}
+			// 后一次设置覆盖前一次，其他派生操作保持选择；根 Logger 不受影响。
+			l := root.WithCallerDepth(9).WithCallerDepth(depth).WithModule("test").WithContext(context.Background())
+			for range 2 {
+				_, _, outerLine, _ := runtime.Caller(0)
+				innerLine := writeCallerThroughWrapper(l)
+				wantLine := innerLine
+				if depth == 2 {
+					wantLine = outerLine + 1
+				}
+				if want := fmt.Sprintf("log/logger_test.go:%d", wantLine); got != want {
+					t.Fatalf("caller=%v, want %s", got, want)
+				}
+			}
+			_, _, line, _ := runtime.Caller(0)
+			root.Info("root unchanged")
+			if want := fmt.Sprintf("log/logger_test.go:%d", line+1); got != want {
+				t.Fatalf("root caller=%v, want %s", got, want)
+			}
+		})
+	}
+}
+
+func writeCallerThroughWrapper(l Logger) int {
+	_, _, line, _ := runtime.Caller(0)
+	kratoslog.NewHelper(l).WithContext(context.Background()).Info("message")
+	return line + 1
 }

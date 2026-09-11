@@ -400,3 +400,24 @@ Grafana 实例明细使用新 target 抓取标签，需同步更新应用与健�
 Foundation Metrics Provider 现在为 OTel `Histogram` 且 `Unit="s"` 的指标统一设置从 0.0001 秒到 86400 秒的显式桶，覆盖 instrument 的建议分桶。修复 Kafka、Queue、OSS 等低延迟操作因 SDK 首桶过大而显示约 4.75 秒 P95 的问题，并保留 Job 的长任务范围。毫秒单位的 Redis SDK 指标和原生 Prometheus collector 不受影响。
 
 指标名称、sum 和 count 不变，bucket 序列会变化。滚动升级期间不要把新旧分桶直接混合解释为稳定的分位数；等待查询窗口全部覆盖新版本，或按版本隔离。详细边界见 [Metrics](pkg/metrics/README.md)，实际验证见 [组件演示](examples/components/README.md)。
+
+## Caller API 简化
+
+本次变更删除 `Logger.AddCallerDepth(...)` 和包级 `log.WithCallerDepth(...)`，仅保留派生方法 `Logger.WithCallerDepth(n)`。其语义从原始 Go 栈深度改为过滤内置日志包装后的第 n 个调用点；默认 1，n <= 0 恢复默认，多次设置以后一次为准。
+
+直接日志、Kratos Helper/Context/全局入口以及内置 Kafka/Cron 适配器无需补偿。删除原有针对这些包装的 +1/+2 配置。业务自定义日志转发函数仍计入调用点：一层包装使用 `logger.WithCallerDepth(2)`，不要把旧的基准 6 或最终栈深度直接复制到新 API。需要不同深度时在对应业务封装入口派生 Logger，不设置全局值。自定义 Logger 实现同步删除旧增量方法，并遵循新深度契约。
+
+GORM 日志优先使用其提供的查询来源作为 caller，查询位置不受深度设置影响；来源无效时按普通日志规则处理。完整边界见 [日志文档](pkg/log/README.md#caller-depth)。
+
+```mermaid
+flowchart TD
+    A([迁移旧 caller 设置]) --> B[删除全局深度和增量调用]
+    B --> C{是否有业务自定义日志转发层?}
+    C -- 否 --> D[使用默认深度 1]
+    C -- 是 --> E[在业务 Logger 上设置过滤后的调用点序号]
+    D --> F[核对实际输出文件及行号]
+    E --> F
+    F --> G{来源是否正确?}
+    G -- 否 --> E
+    G -- 是 --> H([完成迁移])
+```

@@ -36,8 +36,8 @@ func NewLogBootstrap(logger log.Logger, spec *app.Spec) (LogBootstrap, func(), e
 	if err := spec.RegisterLogger(global); err != nil {
 		return LogBootstrap{}, nil, fmt.Errorf("log bootstrap: register app logger: %w", err)
 	}
-	// Kratos 全局 Infof 等函数比直接注入 Logger 多一层包装，单独调整其 caller。
-	installed := global.AddCallerDepth(1)
+	// 保留每次安装的独立身份供 cleanup 判断所有权，不附加固定 caller 跳栈。
+	installed := global.With()
 	previous := log.GetLogger()
 	log.SetLogger(installed)
 	cleanup := func() {

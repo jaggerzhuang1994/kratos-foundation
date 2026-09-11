@@ -112,7 +112,7 @@ flowchart TD
     J --> K([组装完成])
 ```
 
-构造错误由调用方处理，登记函数本身不重复记录日志。NewLogBootstrap 为 Kratos 全局日志函数单独增加一层 caller 跳过，使日志指向业务调用位置；直接注入的 Logger 保持默认深度。
+构造错误由调用方处理，登记函数本身不重复记录日志。NewLogBootstrap 安装共享同一输出的派生 Logger，保留独立的 cleanup 身份，不增加固定 caller 跳过层数；默认模式由日志包统一识别 Kratos 全局函数及 Context/Helper 包装。深度统一按过滤包装后的调用点计数，详见 [日志 caller 规则](../log/README.md#caller-depth)。
 日志全局安装沿用单应用、逆序释放的约定；多个应用并发安装或交错释放全局 Logger 不受本包保障。优先将实例 Logger 显式注入组件。
 
 `JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `ConsumerRuntime` 通过 Go 方法集隐式满足 `app.Runtime`；由 Wire 调用 `queue.NewConsumerRuntime` 构造，再通过 `spec.RegisterRuntime` 登记；统一入口不代为构造消费者。

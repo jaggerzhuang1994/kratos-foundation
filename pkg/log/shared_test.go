@@ -16,7 +16,6 @@ func TestSharedSettingsMergeWithoutMutatingSnapshots(t *testing.T) {
 	shared.WithFilterKeys(filters...)
 	fields := []any{"service", "orders", "scope", "ignored", "scope", "old"}
 	shared.WithKV(fields...)
-	shared.WithCallerDepth(8)
 	shared.WithTimeFormat("2006")
 	shared.WithMsgKey("message")
 	before := shared.custom.Load()
@@ -27,7 +26,7 @@ func TestSharedSettingsMergeWithoutMutatingSnapshots(t *testing.T) {
 	shared.WithKV("trace", "123", "scope", "new")
 	shared.WithKV()
 	got := shared.custom.Load()
-	if got.level == nil || *got.level != kratoslog.LevelWarn || got.filterEmpty == nil || !*got.filterEmpty || got.callerDepth != 8 || got.timeFormat != "2006" || got.msgKey != "message" || !reflect.DeepEqual(got.filterKeys, []string{"secret", "token"}) {
+	if got.level == nil || *got.level != kratoslog.LevelWarn || got.filterEmpty == nil || !*got.filterEmpty || got.timeFormat != "2006" || got.msgKey != "message" || !reflect.DeepEqual(got.filterKeys, []string{"secret", "token"}) {
 		t.Fatalf("previous settings lost: %#v", got)
 	}
 	if !reflect.DeepEqual(got.kv, []any{"service", "orders", "scope", "new", "trace", "123"}) {
@@ -108,7 +107,6 @@ func TestGlobalCustomUpdateWarnsAndPreservesState(t *testing.T) {
 		{"empty key", "kv", func() { WithKV("", "value") }},
 		{"blank key", "kv", func() { WithKV(" ", "value") }},
 		{"partial fields", "kv", func() { WithKV("existing", "changed", "", "invalid") }},
-		{"caller depth", "caller_depth", func() { WithCallerDepth(0) }},
 		{"time format", "time_format", func() { WithTimeFormat(" ") }},
 		{"message key", "msg_key", func() { WithMsgKey(" ") }},
 	} {

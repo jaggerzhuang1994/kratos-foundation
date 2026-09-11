@@ -183,10 +183,6 @@ func (l *testLogger) WithCallerDepth(depth int) foundationlog.Logger {
 	return l.With("caller", kratoslog.Caller(depth))
 }
 
-func (l *testLogger) AddCallerDepth(_ ...int) foundationlog.Logger {
-	return l.WithCallerDepth(3)
-}
-
 func (l *testLogger) WithFilterKeys(keys ...string) foundationlog.Logger {
 	return newTestLogger(kratoslog.NewFilter(l.logger, kratoslog.FilterKey(keys...)))
 }

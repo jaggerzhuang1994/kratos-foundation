@@ -26,9 +26,6 @@ func WithFilterKeys(keys ...string) { processState.WithFilterKeys(keys...) }
 // WithKV 合并进程共享日志字段。
 func WithKV(values ...any) { processState.WithKV(values...) }
 
-// WithCallerDepth 修改进程共享调用深度。
-func WithCallerDepth(depth int) { processState.WithCallerDepth(depth) }
-
 // WithTimeFormat 修改进程共享时间格式。
 func WithTimeFormat(format string) { processState.WithTimeFormat(format) }
 
@@ -43,7 +40,6 @@ type customState struct {
 	filterEmpty *bool
 	filterKeys  []string
 	kv          []any
-	callerDepth int
 	timeFormat  string
 	msgKey      string
 }
@@ -120,17 +116,6 @@ func (s *sharedState) WithKV(keyvals ...any) {
 			positions[key] = len(state.kv)
 			state.kv = append(state.kv, key, values[index+1])
 		}
-		return nil
-	})
-}
-
-// WithCallerDepth 设置进程级 caller depth。
-func (s *sharedState) WithCallerDepth(depth int) {
-	s.updateCustom("caller_depth", func(state *customState) error {
-		if depth <= 0 {
-			return fmt.Errorf("log caller depth must be positive")
-		}
-		state.callerDepth = depth
 		return nil
 	})
 }

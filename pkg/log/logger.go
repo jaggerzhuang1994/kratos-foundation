@@ -33,10 +33,8 @@ type Logger interface {
 	WithModuleConfig(string, ModuleConfig) (Logger, error)
 	// WithContext 返回绑定上下文 Valuer 求值环境的派生 Logger。
 	WithContext(context.Context) Logger
-	// WithCallerDepth 返回使用绝对调用深度的派生 Logger。
+	// WithCallerDepth 选择过滤内置日志包装后的第 n 个调用点，默认 1；n <= 0 恢复默认值。
 	WithCallerDepth(int) Logger
-	// AddCallerDepth 设置相对调用深度增量；无参数时为 1，只使用首个参数，链式调用以后一次为准。
-	AddCallerDepth(optionalCallerDepth ...int) Logger
 	// WithFilterKeys 返回增加敏感字段过滤规则的派生 Logger。
 	WithFilterKeys(...string) Logger
 
@@ -77,17 +75,16 @@ type logger struct {
 	shared *sharedState
 	config *configState
 
-	disabled         bool
-	level            *kratoslog.Level
-	filterEmpty      *bool
-	filterKeys       []string
-	kv               []any
-	callerDepth      int
-	callerDepthDelta int
-	timeFormat       string
-	ctx              context.Context
-	module           string
-	msgKey           string
+	disabled    bool
+	level       *kratoslog.Level
+	filterEmpty *bool
+	filterKeys  []string
+	kv          []any
+	callerDepth int
+	timeFormat  string
+	ctx         context.Context
+	module      string
+	msgKey      string
 
 	mu    sync.RWMutex
 	cache *loggerCache
@@ -99,7 +96,6 @@ type configState struct {
 	level       kratoslog.Level
 	filterEmpty bool
 	filterKeys  []string
-	callerDepth int
 	timeFormat  string
 	msgKey      string
 }
@@ -125,8 +121,8 @@ func newLogger(shared *sharedState, config envConfig) (Logger, func(), error) {
 	}
 	return &logger{shared: shared, config: &configState{
 		output: output, level: config.Level, filterEmpty: config.FilterEmpty,
-		filterKeys:  append([]string(nil), config.FilterKeys...),
-		callerDepth: defaultCallerDepth, timeFormat: config.TimeFormat, msgKey: defaultMsgKey,
+		filterKeys: append([]string(nil), config.FilterKeys...),
+		timeFormat: config.TimeFormat, msgKey: defaultMsgKey,
 	}}, cleanup, nil
 }
 
@@ -175,22 +171,12 @@ func (l *logger) WithContext(ctx context.Context) Logger {
 	return next
 }
 
-func (l *logger) WithCallerDepth(callerDepth int) Logger {
+func (l *logger) WithCallerDepth(depth int) Logger {
 	next := l.clone()
-	next.callerDepth = callerDepth
-	next.callerDepthDelta = 0
-	return next
-}
-
-// AddCallerDepth 设置相对调用深度增量，而不是在已有增量上累加。
-// 无参数时增量为 1；传入多个参数时只使用第一个。
-func (l *logger) AddCallerDepth(optionalCallerDepth ...int) Logger {
-	next := l.clone()
-	callerDepthDelta := 1
-	if len(optionalCallerDepth) > 0 {
-		callerDepthDelta = optionalCallerDepth[0]
+	if depth <= 0 {
+		depth = defaultCallerDepth
 	}
-	next.callerDepthDelta = callerDepthDelta
+	next.callerDepth = depth
 	return next
 }
 
@@ -203,19 +189,18 @@ func (l *logger) WithFilterKeys(filterKeys ...string) Logger {
 // clone 复制派生配置，但不继承 version cache。
 func (l *logger) clone() *logger {
 	return &logger{
-		shared:           l.shared,
-		config:           l.config,
-		disabled:         l.disabled,
-		level:            l.level,
-		filterEmpty:      l.filterEmpty,
-		filterKeys:       append([]string(nil), l.filterKeys...),
-		kv:               append([]any(nil), l.kv...),
-		callerDepth:      l.callerDepth,
-		callerDepthDelta: l.callerDepthDelta,
-		timeFormat:       l.timeFormat,
-		ctx:              l.ctx,
-		module:           l.module,
-		msgKey:           l.msgKey,
+		shared:      l.shared,
+		config:      l.config,
+		disabled:    l.disabled,
+		level:       l.level,
+		filterEmpty: l.filterEmpty,
+		filterKeys:  append([]string(nil), l.filterKeys...),
+		kv:          append([]any(nil), l.kv...),
+		callerDepth: l.callerDepth,
+		timeFormat:  l.timeFormat,
+		ctx:         l.ctx,
+		module:      l.module,
+		msgKey:      l.msgKey,
 	}
 }
 
@@ -403,14 +388,11 @@ func (l *logger) buildCache(custom *customState) bool {
 	} else if custom.timeFormat != "" {
 		timeFormat = custom.timeFormat
 	}
-	callerDepth := config.callerDepth
-	if l.callerDepth > 0 {
-		callerDepth = l.callerDepth
-	} else if custom.callerDepth > 0 {
-		callerDepth = custom.callerDepth
+	depth := l.callerDepth
+	if depth <= 0 {
+		depth = defaultCallerDepth
 	}
-	callerDepth += l.callerDepthDelta
-	preset := newPreset(timeFormat, callerDepth)
+	preset := newPreset(timeFormat, caller(depth))
 	kvs := make([]any, 0, len(preset)+len(custom.kv)+len(l.kv)+2)
 	kvs = append(kvs, preset...)
 	if l.module != "" {

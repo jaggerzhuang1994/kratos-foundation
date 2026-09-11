@@ -147,6 +147,9 @@ func TestBootstrapRegistersStableLoggerAndRestoresPreviousGlobal(t *testing.T) {
 		t.Fatal("cleanup is nil")
 	}
 	global := foundationlog.GetLogger()
+	if global == shared {
+		t.Fatal("global installation must retain its own cleanup identity")
+	}
 	if global == previous {
 		t.Fatal("global logger was not installed")
 	}

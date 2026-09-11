@@ -1,9 +1,12 @@
 package database
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +16,8 @@ import (
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestGORMLoggerWriterClassifiesMessagesAndFlattensFormats(t *testing.T) {
@@ -103,5 +108,65 @@ func TestMergeGORMConfigSlowThresholdReplacesDuration(t *testing.T) {
 				t.Fatal("override was mutated")
 			}
 		})
+	}
+}
+
+func TestGORMCallerUsesQuerySource(t *testing.T) {
+	l, path := newDatabaseFileLogger(t)
+	g := newGORMLogger(l, &config_pb.GormLogger{Level: config_pb.GormLogger_INFO.Enum(), SlowThreshold: durationpb.New(time.Millisecond)})
+	_, _, line, _ := runtime.Caller(0)
+	g.Trace(context.Background(), time.Now().Add(-time.Second), func() (string, int64) { return "SELECT 1", 1 }, nil)
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("caller=database/gorm_config_test.go:%d", line+1); !strings.Contains(string(written), want) {
+		t.Fatalf("want %s in %s", want, written)
+	}
+}
+
+func TestGORMCallerFromRealQuery(t *testing.T) {
+	l, path := newDatabaseFileLogger(t)
+	g := newGORMLogger(l, &config_pb.GormLogger{Level: config_pb.GormLogger_INFO.Enum()})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "caller.db")), &gorm.Config{Logger: g})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	_, _, line, _ := runtime.Caller(0)
+	result := db.Exec("SELECT 1")
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("caller=database/gorm_config_test.go:%d", line+1); !strings.Contains(string(written), want) {
+		t.Fatalf("want %s in %s", want, written)
+	}
+}
+
+func TestGORMLogCallerValidatesAndNormalizesSource(t *testing.T) {
+	for _, tc := range []struct {
+		args []any
+		want string
+	}{
+		{nil, ""}, {[]any{42}, ""}, {[]any{"source"}, ""}, {[]any{"repo.go:x"}, ""}, {[]any{"repo.go:0"}, ""},
+		{[]any{"/srv/service/repo.go:110"}, "service/repo.go:110"},
+		{[]any{`C:\service\repo.go:110`}, "service/repo.go:110"},
+		{[]any{"repo.go:110"}, "repo.go:110"},
+	} {
+		if got := gormLogCaller(tc.args); got != tc.want {
+			t.Errorf("%v: got %q, want %q", tc.args, got, tc.want)
+		}
 	}
 }

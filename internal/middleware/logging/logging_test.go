@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,6 +124,9 @@ func TestMiddlewareDisableAndTransportBranchesPreserveHandlerContract(t *testing
 			}
 			if test.wantLog && len(after) <= len(before) {
 				t.Fatal("enabled middleware did not write an access log")
+			}
+			if test.wantLog && !strings.Contains(string(after[len(before):]), "caller=logging/logging.go:") {
+				t.Fatalf("access log caller did not identify the middleware: %s", after[len(before):])
 			}
 			if !test.wantLog && len(after) != len(before) {
 				t.Fatalf("WebSocket request wrote %d unexpected log bytes", len(after)-len(before))

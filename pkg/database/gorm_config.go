@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -90,7 +91,7 @@ func newGORMLogger(log log.Logger, config *config_pb.GormLogger) logger.Interfac
 	}
 
 	return logger.New(&gormLoggerWriter{
-		logger: log.AddCallerDepth(),
+		logger: log,
 	}, logger.Config{
 		SlowThreshold:             config.GetSlowThreshold().AsDuration(),
 		Colorful:                  config.GetColorful(),
@@ -103,13 +104,19 @@ func newGORMLogger(log log.Logger, config *config_pb.GormLogger) logger.Interfac
 func (writer *gormLoggerWriter) Printf(format string, arguments ...any) {
 	format = strings.ReplaceAll(format, "\n", " ")
 	message := fmt.Sprintf(format, arguments...)
+	// GORM 已在适配之前定位 SQL 来源；优先复用，避免查询回调深度差异。
+	logger := writer.logger
+	if source := gormLogCaller(arguments); source != "" {
+		logger = logger.With(log.CallerKey, source)
+	}
+
 	switch {
 	case strings.Contains(format, "[error]") || secondGORMLogArgumentIsError(arguments):
-		writer.logger.Error(message)
+		logger.Error(message)
 	case strings.Contains(format, "[warn]") || secondGORMLogArgumentIsSlowSQL(arguments):
-		writer.logger.Warn(message)
+		logger.Warn(message)
 	default:
-		writer.logger.Info(message)
+		logger.Info(message)
 	}
 }
 
@@ -127,4 +134,30 @@ func secondGORMLogArgumentIsSlowSQL(arguments []any) bool {
 	}
 	message, ok := arguments[1].(string)
 	return ok && strings.HasPrefix(message, "SLOW SQL >=")
+}
+
+// gormLogCaller 接受 GORM 首参数中的文件行号；格式不完整时退回默认 caller。
+func gormLogCaller(arguments []any) string {
+	if len(arguments) == 0 {
+		return ""
+	}
+	source, ok := arguments[0].(string)
+	if !ok {
+		return ""
+	}
+	source = strings.ReplaceAll(source, "\\", "/")
+	colon := strings.LastIndexByte(source, ':')
+	if colon <= 0 {
+		return ""
+	}
+	line, err := strconv.Atoi(source[colon+1:])
+	if err != nil || line <= 0 {
+		return ""
+	}
+	if slash := strings.LastIndexByte(source[:colon], '/'); slash >= 0 {
+		if parent := strings.LastIndexByte(source[:slash], '/'); parent >= 0 {
+			source = source[parent+1:]
+		}
+	}
+	return source
 }

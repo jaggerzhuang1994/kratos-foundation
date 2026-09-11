@@ -376,7 +376,6 @@ func (l *recordingLogger) WithContext(ctx context.Context) log.Logger {
 	return l
 }
 func (l *recordingLogger) WithCallerDepth(int) log.Logger      { return l }
-func (l *recordingLogger) AddCallerDepth(...int) log.Logger    { return l }
 func (l *recordingLogger) WithFilterKeys(...string) log.Logger { return l }
 func (l *recordingLogger) Debug(a ...any)                      { _ = l.Log(kratoslog.LevelDebug, a...) }
 func (l *recordingLogger) Debugf(format string, a ...any)      { l.Debug(fmt.Sprintf(format, a...)) }

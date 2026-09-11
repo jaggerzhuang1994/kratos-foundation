@@ -4,7 +4,7 @@
 
 ## 初始化与释放
 
-`sharedState` 仅保存进程级非资源设置：最低级别、字段过滤、公共 KV、caller depth、时间格式和消息字段名。它没有输出、cleanup、生命周期锁或资源引用计数。
+`sharedState` 仅保存进程级非资源设置：最低级别、字段过滤、公共 KV、时间格式和消息字段名。它没有输出、cleanup、生命周期锁或资源引用计数。
 每次 `log.NewLogger()` 读取并校验 `LOG_*`，构造独立输出并返回对应 cleanup。Wire 持有该 cleanup，在依赖 Logger 的运行时退出后释放；同一实例派生的 Logger 共用该输出。
 
 ```go
@@ -48,7 +48,7 @@ log.WithFilterKeys("password", "token", "payload.secret*")
 log.WithKV("region", "hk", "deployment", "blue")
 ```
 
-包级 `log` 直接提供 `WithLevel`、`WithFilterEmpty`、`WithFilterKeys`、`WithKV`、`WithCallerDepth`、`WithTimeFormat` 和 `WithMsgKey`，均无返回值，暂不支持链式调用；校验失败时打印包含 `state` 配置项名称和 `error` 原因的 warning。这些方法更新当前共享状态，不创建派生 Logger。
+包级 `log` 直接提供 `WithLevel`、`WithFilterEmpty`、`WithFilterKeys`、`WithKV`、`WithTimeFormat` 和 `WithMsgKey`，均无返回值，暂不支持链式调用；校验失败时打印包含 `state` 配置项名称和 `error` 原因的 warning。这些方法更新当前共享状态，不创建派生 Logger。
 
 每次方法调用只更新对应设置并原子发布新快照，其他设置保持不变。KV 按 key 合并并使用后调用的值，filter keys 追加且拒绝重复项；空的 `WithKV()` 或 `WithFilterKeys()` 不清空已有数据。校验失败不发布本次修改。连续多次方法调用分别生效，不构成一个整体事务；后续调用失败不会回滚此前成功的调用，也不会阻止后续设置更新。
 
@@ -130,19 +130,32 @@ requestLogger.Infow("status", "ready")
 
 ### Caller depth
 
-Caller depth 的计算顺序是：包内默认值 `6` → Override 绝对值 → 派生 Logger 绝对值 → 派生 Logger delta。
+默认 caller 扫描最多 64 个调用帧，跳过 Foundation Logger、Kratos Helper/With/WithContext/全局入口，以及已知的 GORM Writer、Kafka、Cron 日志转发函数。仅按完整函数所属路径识别，不跳过整个业务包；业务辅助函数、访问日志中间件和 SDK 实际产生事件的位置会保留。没有有效来源或深度超过可用调用帧时输出 `unknown`。
 
-- `WithCallerDepth(n)` 设置绝对值，并清除该 Logger 上已有的 delta。
-- `AddCallerDepth()` 将 delta 设置为 `1`。
-- `AddCallerDepth(n)` 将 delta 设置为 `n`；如果传入多个参数，只使用第一个。
-- `AddCallerDepth` 不是累加操作。链式调用时，后一次 delta 覆盖前一次。
+深度唯一入口是派生 Logger 的 `WithCallerDepth(n)`：在过滤内置包装后，选择第 n 个调用点。默认 `1` 为直接调用者；业务额外封装一层日志函数时设置为 `2`。`n <= 0` 恢复默认值 `1`。多次设置以后一次为准，不累加，不修改原 Logger；With/WithModule/WithContext 等派生操作会保留所选深度。没有包级全局深度、增量或原始 Go 栈深度模式。
 
-例如：
+下面片段假定 `logger` 已按上文构造；应将 `wrapped` 交给业务自定义的日志转发函数使用：
 
 ```go
-logger.WithCallerDepth(8).AddCallerDepth(2) // 最终为 10
-logger.AddCallerDepth(2).AddCallerDepth(3)  // 最终为 base + 3
-logger.AddCallerDepth(2).WithCallerDepth(8) // 最终为 8
+wrapped := logger.WithCallerDepth(2) // 跳过一层业务日志封装
+reset := wrapped.WithCallerDepth(1) // 恢复直接调用点
+_ = reset
+```
+
+Foundation 自身的派生方法不增加日志转发帧，内置适配器也无需用户补偿。未识别的自定义包装仍会计入深度。旧版本固定栈数字不能直接沿用，迁移说明见 [caller API 迁移](../../MIGRATION_V2.md#caller-api-简化)。
+
+显式 `caller` 字段沿用字段去重的后值覆盖前值规则（仍受字段过滤规则约束）。GORM Writer 从 GORM 提供的首参数提取查询来源，规范化为 `目录/文件:行号`；有效来源优先于深度选择，来源缺失或行号无效时沿用普通 caller。SQL 消息格式不变。
+
+```mermaid
+flowchart TD
+    A([日志写入]) --> B[扫描调用帧并跳过已知日志转发函数]
+    B --> C{存在所选的第 n 个调用点?}
+    C -- 是 --> D[使用该位置；默认 n 为 1]
+    C -- 否 --> E[caller 为 unknown]
+    D --> F[合并固定字段及当前日志字段]
+    E --> F
+    F --> G[按既有规则过滤字段并去重；显式 caller 后值覆盖]
+    G --> H([按原日志级别输出])
 ```
 
 ## 字段过滤与去重

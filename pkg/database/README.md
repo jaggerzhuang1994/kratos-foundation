@@ -248,3 +248,20 @@ flowchart TD
 ## 可运行的组合用例
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。
+
+## SQL 日志来源
+
+`database/gorm` 日志的结构化 `caller` 使用 GORM 提供的查询来源，格式为 `目录/文件:行号`，与 SQL 消息中的来源对应，不依赖固定跳栈层数。GORM 无法提供有效来源时使用日志包默认 caller。原 SQL 消息、慢 SQL 阈值、参数过滤、RecordNotFound 策略和日志级别保持不变；此调整不会让 Writer 获得 GORM 未传入的请求 Context。
+
+```mermaid
+flowchart TD
+    A([GORM 执行查询或记录事件]) --> B{GORM 日志策略允许输出?}
+    B -- 否 --> C([结束])
+    B -- 是 --> D[GORM 计算来源并调用 Writer.Printf]
+    D --> E{首参数含有效文件行号?}
+    E -- 是 --> F[规范化并附加 caller 字段]
+    E -- 否 --> G[沿用普通 caller]
+    F --> H[按既有规则识别 ERROR/WARN/INFO]
+    G --> H
+    H --> I([按 Foundation 策略过滤并输出日志])
+```
