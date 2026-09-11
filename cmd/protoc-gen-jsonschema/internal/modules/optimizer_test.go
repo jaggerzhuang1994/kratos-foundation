@@ -2,7 +2,6 @@ package modules
 
 import (
 	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/jsonschema"
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/proto"
 	"testing"
 )
 
@@ -13,7 +12,7 @@ func TestOptimizerKeepsOnlyEntrypointLinkedDefinitions(t *testing.T) {
 	registry.AddSchema("orphan", &jsonschema.Schema{})
 	root := registry.GetSchema("root")
 	root.Properties.Set("child", &jsonschema.Schema{Ref: "linked"})
-	optimizer := NewOptimizerImpl(nil, &proto.PluginOptions{})
+	optimizer := NewOptimizerImpl()
 	optimizer.checkAndMarkSchemaToVisitable(registry, "root")
 	optimizer.visitSchema(registry, root)
 	optimizer.optimizeDefinitions(registry)

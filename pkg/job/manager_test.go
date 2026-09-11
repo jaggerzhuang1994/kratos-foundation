@@ -23,7 +23,7 @@ import (
 
 func TestNewManagerConstructsWithObservabilityDependencies(t *testing.T) {
 	logger, tracingProvider, metricsProvider := newTestObservability(t)
-	manager, err := NewManager(logger, NewSpec(), tracingProvider, metricsProvider, nil)
+	manager, err := NewManager(logger, NewSpec(), tracingProvider, metricsProvider, DefaultCoordinator())
 	if err != nil {
 		t.Fatal(err)
 	}

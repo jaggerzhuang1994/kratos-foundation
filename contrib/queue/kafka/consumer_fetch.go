@@ -53,7 +53,14 @@ func processFetches(
 		return &consumerOperationError{err}
 	}
 
-	records := fetches.Records()
+	// 单分区是小批次的常见形状，直接借用 SDK 的记录切片，避免仅为展平再分配。
+	// 不修改该切片；多分区仍沿用 SDK 的顺序和完整提交列表。
+	var records []*kgo.Record
+	if len(fetches) == 1 && len(fetches[0].Topics) == 1 && len(fetches[0].Topics[0].Partitions) == 1 {
+		records = fetches[0].Topics[0].Partitions[0].Records
+	} else {
+		records = fetches.Records()
+	}
 	for _, record := range records {
 		delivery := decodeRecord(record)
 		if err := handler(ctx, delivery); err != nil {
@@ -90,7 +97,7 @@ func classifyFetchErrors(ctx context.Context, fetchErrors []kgo.FetchError) erro
 			// franz-go 已重置到可继续位置；Client 无需因协议级数据丢失事件重建。
 		case errors.As(fetchError.Err, &groupSession):
 			// franz-go 自动恢复暂时会话失败；永久错误也可能是 TLS/首读错误，
-			// 不能只检查 Kafka 协议错误。SDK 自己取消旧会话仍可继续。
+			// 不能只检查 Kafka 协议错误；首读 EOF 交给外层有次数上限的重建路径。SDK 自己取消旧会话仍可继续。
 			// 只放行单一取消链，不能让聚合错误中的取消掩盖另一项永久故障。
 			cause := groupSession.Err
 			for errors.Unwrap(cause) != nil {
@@ -100,7 +107,7 @@ func classifyFetchErrors(ctx context.Context, fetchErrors []kgo.FetchError) erro
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-			} else if !transientKafkaError(groupSession.Err) {
+			} else if !transientKafkaError(groupSession.Err, false) {
 				errorsList = append(errorsList, err)
 			}
 		case errors.Is(fetchError.Err, context.Canceled),

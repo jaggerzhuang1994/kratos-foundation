@@ -3,7 +3,9 @@ package decoder
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,58 @@ import (
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
+
+func TestDecoderKeepsDefaultsAndInputsIndependentAcrossApplications(t *testing.T) {
+	type settings struct {
+		Labels map[string]string `json:"labels"`
+		Values []int             `json:"values"`
+	}
+	defaults := &settings{Labels: map[string]string{"region": "base", "env": "test"}, Values: []int{1, 2}}
+	valueDecoder, err := New(new(settings), []any{defaults})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := map[string]any{"labels": map[string]any{"region": "override"}, "values": []any{3}}
+	for range 2 {
+		target := new(settings)
+		if err := valueDecoder.Apply(input, true, target); err != nil {
+			t.Fatal(err)
+		}
+		want := &settings{Labels: map[string]string{"region": "override", "env": "test"}, Values: []int{3}}
+		if !reflect.DeepEqual(target, want) {
+			t.Fatalf("Apply = %+v, want %+v", target, want)
+		}
+		target.Labels["region"] = "mutated"
+		target.Values[0] = 9
+		if err := valueDecoder.Apply(nil, false, target); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(target, defaults) {
+			t.Fatalf("default fallback = %+v, want %+v", target, defaults)
+		}
+	}
+	if input["labels"].(map[string]any)["env"] != nil || input["values"].([]any)[0] != 3 {
+		t.Fatalf("Apply mutated input: %#v", input)
+	}
+}
+
+func BenchmarkDecoderDefaults(b *testing.B) {
+	defaults := map[string]map[string]int{}
+	for i := range 100 {
+		defaults[fmt.Sprint(i)] = map[string]int{"default": i, "retained": i}
+	}
+	input := map[string]any{"0": map[string]any{"default": 200}}
+	valueDecoder, err := New(new(map[string]map[string]int), []any{&defaults})
+	if err != nil {
+		b.Fatal(err)
+	}
+	for b.Loop() {
+		target := new(map[string]map[string]int)
+		if err := valueDecoder.Apply(input, true, target); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
 func TestDecoderSupportsGoAndProtobufTargets(t *testing.T) {
 	t.Parallel()

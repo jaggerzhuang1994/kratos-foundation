@@ -23,6 +23,8 @@ if err := manager.Load("server", &server); err != nil {
 
 `Sources` 是有序列表，后面的源优先级更高。每个源内部返回的多个 `KeyValue` 也保持原始顺序。map 会递归合并，slice、标量和显式 `null` 整体覆盖。
 
+快照构建只在本次解析产生、尚未发布的私有树上合并；发布后仍按只读快照使用。重建不会修改旧快照或配置源原始数据，删除高优先级源后会重新显露低优先级配置。
+
 Manager 在首次加载及每次更新发布前检查 Foundation 协议中的 reserved 字段。
 已删除字段即使为 null 或空对象也会返回 `ErrRemovedField`，错误只包含字段路径，不包含值。
 其他业务字段仍允许存在；protobuf Load/Subscribe 也检查对应消息的 reserved 字段。
@@ -47,8 +49,11 @@ Deadline 使用新的字段编号，旧 Timeout 二进制不会被误解释成�
 
 ```mermaid
 flowchart TD
-    A([初始加载或配置源更新]) --> B[解析 合并 展开占位符]
-    B -- 失败 --> E[返回或通知错误 保留已有有效快照]
+    A([初始加载或配置源更新]) --> V[KeyValue Compose 环境模板替换 默认值与必填检查]
+    V --> B[解析 JSON/YAML 在本次私有树中按优先级合并]
+    V -- 模板或必填检查失败 --> F
+    B -- 失败 --> F
+    E[返回或通知错误 保留已有有效快照]
     B --> C{已知消息包含 reserved 字段?}
     C -- 是 --> D[ErrRemovedField 只包含路径]
     D --> F{热更新?}
@@ -66,14 +71,16 @@ flowchart TD
     A[应用组装 Sources] --> B[NewManager]
     B --> C[internal/source.Open]
     C --> D[注册全部 Watcher 并加载完整初始状态]
-    D --> E[internal/snapshot.New 以 json.Number 保留 JSON 数值]
+    D --> E[internal/snapshot.New 先替换环境变量 再解析并保留 JSON 数值]
     E --> F[发布不可变有效快照]
     F --> G[internal/decoder 按目标类型合并 字段兼容别名 map 键精确匹配]
     G --> H[Load]
     G --> I[internal/subscription]
     I --> J[Subscribe 回放与更新]
     C --> K[各源 worker 并行等待变更通知]
-    K --> L[重新 Load 对应 Source 的完整状态]
+    K --> V{Watcher 显式声明 FullSnapshot 为 true?}
+    V -- 否 --> L[重新 Load 对应 Source 的完整状态]
+    V -- 是 --> M
     L --> M[经可取消 channel 发送独立源快照]
     M --> N[Manager 单一 watch 协程调用 Stream.Next]
     N --> O[顺序更新缓存并按源优先级组装快照]
@@ -89,6 +96,12 @@ flowchart TD
 `subscription` 管理每个订阅的顺序投递和取消。
 `source` 的缓存只由 `Stream.Next` 更新，源加载可以并行，汇总和发布顺序保持一致，避免完整快照倒退；缓存不需要共享锁。
 
+## Watcher 完整快照契约
+
+默认将第三方 Watcher.Next 的返回值视为变更通知，随后重新 Load 该 Source，兼容仅返回增量的实现。Watcher 可以额外实现 `FullSnapshot() bool`，在构造后固定返回 true，显式声明每次成功 Next 都返回本源完整、有序的状态；nil 或空切片表示该源全部删除，不能用作心跳或“没有变化”。实现必须保证首次通知不回退到初始 Load 之前的过期状态，并按源内顺序发布。
+
+内置 file 和 Consul watcher 已声明此能力，Stream 直接使用通知快照，每次更新省去一次文件/Consul 重读；初始 Load 保留。未实现或返回 false 的第三方 watcher 仍重新 Load，沿用错误报告、重试和删除回退路径。能力只在 worker 启动时读取，不支持热切换。Next 返回的 KeyValue、切片和字节至少保持到下一次 Next 调用前不变；Stream 在再次 Next 前复制数据，返回给上层的快照仍是独立副本。完整快照替换本源缓存后，仍按原 Sources 优先级合并，包括空快照恢复低优先级值。
+
 ## Load
 
 `Load` 的 target 必须是已经分配的非 nil 指针：
@@ -103,7 +116,7 @@ if err := manager.Load("server", effective, defaults); err != nil {
 
 默认值最多传一个，并且必须与 target 的具体指针类型完全一致。Manager 先复制默认值，再用配置字段覆盖；调用方可以安全复用包级默认值。每次加载前都会清空 target，配置删除字段后不会残留旧数据。
 
-JSON 配置源和默认值在合并时使用 `json.Number` 保留数值文本，`int64`、`uint64` 的完整范围以及嵌套数组中的整数不会经过 `float64` 舍入；订阅更新和默认值回退保持相同精度。数字占位符也保留原始文本。JSON 源必须是单个完整值，非法内容或尾随的第二个值都会报错。
+JSON 配置源和默认值在合并时使用 `json.Number` 保留数值文本，`int64`、`uint64` 的完整范围以及嵌套数组中的整数不会经过 `float64` 舍入；订阅更新和默认值回退保持相同精度。未加引号的数字环境模板在解析前替换，也保留整数精度。JSON 源必须是单个完整值，非法内容或尾随的第二个值都会报错。
 
 普通 Go 类型使用 JSON 语义解码；protobuf message 使用 `protojson`，支持 proto 字段名、JSON 字段名和 duration 等 protobuf 类型。
 
@@ -182,20 +195,55 @@ flowchart TD
 - `ErrWatcherStopped`：底层 watcher 永久终止；已有订阅收到终止错误，后续 Load 和 Subscribe 也返回该错误。
 - `ErrObserverOverloaded`：单个订阅队列写满，该订阅已经停止。
 
-更新时 Source 重载失败、JSON/YAML 解析失败、占位符解析失败或目标类型解码失败，会通过 observer 的 err 报告。可恢复错误不会终止订阅；Manager 保留最后一份有效快照，后续有效更新可以继续发布。
+更新时 Source 重载失败、JSON/YAML 解析失败或目标类型解码失败，会通过 observer 的 err 报告。可恢复错误不会终止订阅；Manager 保留最后一份有效快照，后续有效更新可以继续发布。
 
 ## 占位符
 
-字符串配置支持引用其他标量路径：
+### 环境变量模板
 
-```yaml
-host: localhost
-port: 8080
-address: ${host}:${port}
-optional: ${missing:fallback}
+Manager 在每次构建快照时，对每个 `KeyValue.Key` 和 `KeyValue.Value` 原始文本执行一次 `$VAR` / `${VAR}` 替换，再解析 JSON/YAML 并合并配置。因此正文中的配置键和值均可使用模板，整数、布尔值等可以在格式解析前注入。
+
+使用 `github.com/compose-spec/compose-go/v2/template`（固定版本 v2.15.0），以 `os.LookupEnv` 提供环境变量。替换发生在 Source 返回原始 KeyValue 之后、格式解析及目标 Go/protobuf 类型解码之前。配置自身引用已移除，普通变量未设置时替换为空字符串。
+
+例如先在启动进程的环境中设置 `RESOURCE=primary`、`PORT=8080`、`ENABLED=true`，JSON 配置可写为：
+
+```json
+{"${RESOURCE}": {"port": ${PORT}, "enabled": $ENABLED}}
 ```
 
-缺失且没有 fallback、引用 map/slice 或出现循环引用时，快照构建失败。配置源之间按原始键名合并；默认值与结构体字段合并时会兼容大小写、下划线、连字符和空白差异；业务 map（含 protobuf map）的键始终精确匹配，例如 `order_service` 与 `order-service` 是两个不同资源名。
+对应 YAML 模板：
+
+```yaml
+${RESOURCE}:
+  port: ${PORT}
+  enabled: $ENABLED
+```
+
+这是预处理模板，替换前不保证是合法 JSON/YAML，也不能直接交给 schema 校验器；替换后 `primary.port` 是整数，`primary.enabled` 是布尔值。字符串应按格式加引号，例如 `"host": "${HOST}"`；数字模板若加引号则仍是字符串，普通 Go 整数字段不会自动转换它。
+
+支持 Compose 的环境模板语法：
+
+| 模板 | 行为 |
+| --- | --- |
+| `$VAR` / `${VAR}` | 读取环境变量；未设置时为空 |
+| `${VAR:-default}` | 未设置或为空时使用 default |
+| `${VAR-default}` | 仅未设置时使用 default |
+| `${VAR:?描述}` | 未设置或为空时返回必填错误 |
+| `${VAR?描述}` | 仅未设置时返回必填错误 |
+| `${VAR:+value}` | 已设置且非空时使用 value，否则为空 |
+| `${VAR+value}` | 已设置时使用 value，否则为空 |
+| `$$` | 输出字面 `$`，例如 `$${VAR}` 输出 `${VAR}` |
+
+默认值可以嵌套，例如 `${PORT:-${DEFAULT_PORT:-8080}}`。必填描述也支持环境模板，应仅填写排障提示，避免引用凭据；它会进入上层错误报告。这里不执行 Shell 命令，不进行配置自身引用；从环境变量读出的值不会递归展开。`${VAR:default}` 不是默认值语法，会返回模板错误。
+
+- 未设置与空环境变量在 `:-` / `:?` 下等价，在 `-` / `?` 下不同；默认值和必填检查均在 JSON/YAML 解析前执行。
+- 原始文本替换不会自动转义或加引号。环境值中的引号、换行等须满足所在 JSON/YAML 位置的语法；注入值可以影响配置结构，只应使用受信任的环境变量。
+- 替换后的内容仍须是合法 JSON/YAML。未设置的 `"value": "${VAR}"` 会得到空字符串；`"value": ${VAR}` 会因 JSON 格式非法而失败。已设置为空的未加引号值也可能导致 JSON 失败或 YAML 解析成 null。原始文本替换避免的是模板被提前按数字等类型校验，并不取消最终类型约束。
+- 未指定 Format 的 KeyValue 在键替换后按点分路径展开，值仍是字符串；指定 Format 时 Key 是源标识，正文中的键决定配置路径。Format 自身不替换。
+- Source 原始键值不会被修改。初始加载与任意源更新构建快照时重新读取环境；单独改变环境不会触发通知，`Load` 只读取已发布快照。默认值对象不进行模板替换。
+- 模板非法、必填检查失败或替换后格式非法会使整个快照构建失败，即使对应值随后可能被高优先级源覆盖。首次失败释放源并返回错误；更新失败沿用 `manager.watch | config.rejected` 日志和订阅错误通知，保留旧快照，后续有效更新可恢复。模板语法错误不携带完整配置正文；必填错误保留变量名和描述。
+
+配置源之间按环境替换后的键名精确合并；默认值与结构体字段合并时会兼容大小写、下划线、连字符和空白差异；业务 map（含 protobuf map）的键始终精确匹配，例如 `order_service` 与 `order-service` 是两个不同资源名。旧配置引用应改为部署时生成的实际值或环境变量，见 [迁移说明](../../MIGRATION_V2.md#移除配置自身引用)。
 
 file 和 Consul 适配器通过 `NewSources` 返回各自的底层源，由应用/Wire 按优先级组合后交给 `NewManager`。配置监听、重载和合并统一由 Manager 驱动。
 

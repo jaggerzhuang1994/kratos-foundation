@@ -88,6 +88,9 @@ func TestSpecValidateRejectsBadWebSocketDefinitions(t *testing.T) {
 		{"nil handler", func(s *Spec) { s.HTTP().WebSocket("/ws", nil) }},
 		{"unsupported handler", func(s *Spec) { s.HTTP().WebSocket("/ws", struct{}{}) }},
 		{"duplicate path", func(s *Spec) { s.HTTP().WebSocket("/ws", testSocketHandler{}).WebSocket("/ws", testSocketHandler{}) }},
+		{"negative message limit", func(s *Spec) {
+			s.HTTP().WebSocketWithConfig("/ws", testSocketHandler{}, WebSocketConfig{MaxMessageBytes: -2})
+		}},
 		{"two upgraders", func(s *Spec) { s.HTTP().WebSocket("/ws", testSocketHandler{}, Upgrader{}, Upgrader{}) }},
 	}
 	for _, tc := range cases {

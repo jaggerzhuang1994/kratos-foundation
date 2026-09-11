@@ -13,11 +13,11 @@ type ConcurrentPolicy uint8
 const (
 	// AllowOverlap 允许同一任务的多次调用重叠执行。
 	AllowOverlap ConcurrentPolicy = iota
-	// DelayIfRunning 在当前进程内排队等待上一轮完成。
+	// DelayIfRunning 在当前进程内有界等待上一轮完成，容量由 WithMaxPendingRuns 决定。
 	DelayIfRunning
 	// SkipIfRunning 在当前进程已有同名任务运行时跳过本轮。
 	SkipIfRunning
-	// DelayIfDistributedRunning 跨进程等待取得独占执行权。
+	// DelayIfDistributedRunning 在进程内限制竞争者数量，跨进程等待独占执行权。
 	DelayIfDistributedRunning
 	// SkipIfDistributedRunning 在其他进程持有执行权时跳过本轮。
 	SkipIfDistributedRunning
@@ -39,19 +39,69 @@ func concurrentMiddleware(
 	policy ConcurrentPolicy,
 	coordinator ConcurrencyCoordinator,
 	key string,
+	maxPendingRuns int,
+	overflowHandler func(context.Context, DelayOverflow) error,
 ) Middleware {
 	switch policy {
 	case DelayIfRunning:
-		return delayIfStillRunning(log)
+		return limitPendingRuns(log, DelayOverflow{Name: key, Policy: policy, MaxPendingRuns: maxPendingRuns}, overflowHandler, delayIfStillRunning(log))
 	case SkipIfRunning:
 		return skipIfStillRunning(log)
 	case DelayIfDistributedRunning:
-		return distributedConcurrent(log, coordinator, key, true)
+		return limitPendingRuns(log, DelayOverflow{Name: key, Policy: policy, MaxPendingRuns: maxPendingRuns}, overflowHandler, distributedConcurrent(log, coordinator, key, true))
 	case SkipIfDistributedRunning:
 		return distributedConcurrent(log, coordinator, key, false)
 	default:
 		return nil
 	}
+}
+
+// limitPendingRuns 在等待执行权前限制本任务、本进程的进入数量，容量包含正在执行的一轮。
+// 非阻塞申请名额；结束、取消和 panic 均通过 defer 归还，不在 Handler 或外部 Acquire 期间持锁。
+func limitPendingRuns(
+	log moduleLog,
+	event DelayOverflow,
+	overflowHandler func(context.Context, DelayOverflow) error,
+	middleware Middleware,
+) Middleware {
+	maxPendingRuns := event.MaxPendingRuns
+	return func(next Handler) Handler {
+		execute := middleware(next)
+		if maxPendingRuns < 0 {
+			return execute
+		}
+		slots := make(chan struct{}, maxPendingRuns+1)
+		return func(ctx context.Context) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			select {
+			case slots <- struct{}{}:
+				defer func() { <-slots }()
+				return execute(ctx)
+			default:
+				warnConcurrent(log, ctx, "limitPendingRuns | job backlog full; trigger skipped", "max_pending_runs", maxPendingRuns)
+				if overflowHandler != nil {
+					return handleDelayOverflow(ctx, event, overflowHandler)
+				}
+				return nil
+			}
+		}
+	}
+}
+
+// handleDelayOverflow 位于任务 recovery 中间件之外，单独隔离业务通知 panic。
+// 此时未取得执行名额；错误交给 Cron 的最终错误入口，不在底层重复记录。
+func handleDelayOverflow(ctx context.Context, event DelayOverflow, handler func(context.Context, DelayOverflow) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("delay overflow handler for job %q panicked: %v", event.Name, recovered)
+		}
+	}()
+	if err := handler(ctx, event); err != nil {
+		return fmt.Errorf("delay overflow handler for job %q: %w", event.Name, err)
+	}
+	return nil
 }
 
 // delayIfStillRunning 使用进程内令牌串行执行同一任务，并响应等待上下文取消。

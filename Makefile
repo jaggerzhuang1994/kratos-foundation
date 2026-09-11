@@ -190,3 +190,8 @@ verify: test vet race
 
 .PHONY: all
 all: proto generate verify lint
+
+.PHONY: test-external
+# 启动隔离 Docker 服务，执行真实集成、批量基准和剖析；结束时清理本次容器及数据。
+test-external:
+	./scripts/test-external.sh

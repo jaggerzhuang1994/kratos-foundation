@@ -140,7 +140,10 @@ func runComponentsApp(t *testing.T, spec *app.Spec) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	ready := bootstrap.NewApplicationBootstrap(bootstrap.InfrastructureBootstrap{}, bootstrap.ComponentsBootstrap{})
-	application, err := bootstrap.NewKratosApp(ctx, spec, ready, config, policy, nil)
+	if err := spec.AddContext(func(context.Context) context.Context { return ctx }); err != nil {
+		t.Fatal(err)
+	}
+	application, err := bootstrap.NewKratosApp(spec, ready, config, policy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

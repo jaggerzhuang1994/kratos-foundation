@@ -41,7 +41,7 @@ func (m *Module) InitContext(c pgs.BuildContext) {
 	m.ModuleBase.InitContext(c)
 	m.pluginOptions = proto.GetPluginOptions(c.Parameters())
 
-	m.optimizer = NewOptimizerImpl(m.ModuleBase, m.pluginOptions)
+	m.optimizer = NewOptimizerImpl()
 	m.generator = NewMultiDraftGenerator(m.ModuleBase, m.pluginOptions)
 	prettyJSON, err := c.Parameters().BoolDefault("pretty_json_output", true)
 	m.CheckErr(err, "invalid pretty_json_output option")

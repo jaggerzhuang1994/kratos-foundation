@@ -77,7 +77,7 @@ flowchart TD
     K --> L([App 统一管理 Start及Stop])
 ```
 
-本包暂不提供 ProviderSet；由业务组装层选择构造函数、声明 Wire 绑定并维护 injector。
+Consul 模式可使用 `ConsulBaseProviderSet` 完成基础组装；其他模式仍可按需选择构造函数。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ flowchart TD
 
 ## 可选依赖由 Wire 构造注入
 
-`registry.Registrar` 直接注入 `NewKratosApp(ctx, spec, ready, config, stopPolicy, registrar)`；
+`registry.Registrar` 直接注入 `NewKratosApp(spec, ready, config, stopPolicy, registrar)`；
 `job.ConcurrencyCoordinator` 注入 `NewComponentsBootstrap(spec, manager, logger, metrics, tracing, boot, coordinator)`，
 再传给 `job.NewManager`。它们不属于 Spec 声明，不需要 Boot 登记。
 
@@ -167,8 +167,6 @@ func noCoordinator() job.ConcurrencyCoordinator { return nil }
 package assembly
 
 import (
-    "context"
-
     "github.com/go-kratos/kratos/v2"
     "github.com/google/wire"
     "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
@@ -179,7 +177,7 @@ import (
     "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-func initializeApp(ctx context.Context, spec *app.Spec, ready bootstrap.StartupReady,
+func initializeApp(spec *app.Spec, ready bootstrap.StartupReady,
     config app.Config, stopPolicy *app.StopPolicy) (*kratos.App, error) {
     wire.Build(noRegistrar, bootstrap.NewKratosApp)
     return nil, nil
@@ -194,7 +192,7 @@ func initializeJobs(logger log.Logger, spec *job.Spec, tracingProvider tracing.P
 
 nil provider 应返回真正的 nil interface，不能返回装入接口的 nil 具体指针。
 nil Registrar 禁用服务注册；nil Coordinator 允许普通 Cron、Once、Daemon，但带分布式并发策略的 Cron 会在 `NewManager` 构造时失败。
-注入协调器本身不会启用分布式策略，仍须显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。
+注入协调器本身不会启用分布式策略，仍须显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。Delay 默认限制每任务每进程的进入数量，可通过 `spec.Job().RegisterCron(..., job.WithDelayOverflowHandler(handler))` 接入满额通知；容量、回调与超额跳过语义见 [Job 文档](../job/README.md#delay-容量)。
 这些依赖在构造时确定，不支持通过事后修改 Spec 切换。
 
 启用服务注册时，将 `noRegistrar` 替换为 [`contrib/registry/consul.NewRegistry`](../../contrib/registry/consul/README.md)，并提供其配置与客户端依赖。
@@ -270,3 +268,64 @@ app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo�
 运行时使用 RegisterRuntime() 声明。ApplicationSpec 仅作为 Wire 组装桥接函数供 Foundation provider 使用，业务 Boot 不应调用它。
 
 日志 Wire provider 仅保留 log.NewLogger，配置加载与共享状态均由 log 包内部管理。
+
+## Consul 基础组装
+
+`ConsulBaseProviderSet` 提供完整基础组装：共享 Consul 客户端、配置 Manager、服务注册与发现、
+Logger、Metrics、Tracing、Spec、启动阶段、停机策略和最终 Kratos App，
+以及 Database、Redis、Client、Kafka、OSS 的默认 Manager/Factory 构造函数。
+业务只需提供以下内容：
+
+- `appinfo.AppInfo`：由 main 构造。
+- `contrib/config/file.PathList`：有序本地文件或 glob 模式列表；空列表禁用本地来源。
+- `contrib/config/consul.PathList`：有序 Consul KV 路径列表；空列表禁用远程来源。
+- 业务 `Bootstrap`：声明端点、任务、自定义 Runtime 和生命周期钩子。
+- 业务 `internal.ProviderSet`：构造 service、biz、repository 等业务实现，并选择具体驱动。
+
+```go
+func wireApp(info appinfo.AppInfo, files fileconfig.PathList) (*kratos.App, func(), error) {
+    panic(wire.Build(
+        bootstrap.ConsulBaseProviderSet,
+        internal.ProviderSet, // 包含业务的 consulconfig.PathList provider
+        Bootstrap,
+    ))
+}
+```
+
+默认资源 provider 仅在依赖图需要时才会出现在生成代码中；未使用的组件不会构造或建立连接。
+数据库、OSS 等具体驱动仍由业务显式导入。Queue 消费者、具名 Producer、锁协调器等需要业务参数的实例仍由业务构造。
+不要再次提供集合已有的 provider 或接口绑定。`ConsulBaseProviderSet` 内置 `job.DefaultCoordinator`，业务无需重复提供。
+需要跨进程协调时，将集合替换为 `ConsulBaseProviderSetWithCustomJobCoordinator`，
+并在业务 ProviderSet 中提供 `job.ConcurrencyCoordinator`；两个集合二选一，不要叠加使用。
+`job.DefaultCoordinator()` 返回真正的 nil，不是本地协调器；进程内并发策略仍由 Job 自身处理，
+选择分布式 Cron 策略而未提供实际 Coordinator 时，构造会失败。
+
+`NewKratosApp` 内部使用 `context.Background()` 作为根上下文，Context 不通过 Wire 注入。
+业务通过 `Spec.AddContext` 增加上下文信息；运行中的应用通过信号或 `App.Stop()` 停止，
+Job 完成或运行时失败仍遵循既有停机流程。直接使用底层 `app.NewApp` 的调用方仍可指定 Context。
+
+本地目录命名和文件选择规则属于业务。main 可将命令行参数包装为业务 `conf.ConfigPath`，
+由 `internal/conf` 的 provider 转换为 `file.PathList`；Foundation 只消费最终列表。
+业务既可以选择目录中的特定文件，也可以直接提供文件或 glob 列表。
+
+`NewConsulSources(files, remote)` 组合两类来源并返回 `config.Sources`。
+每组内后面的配置覆盖前面的配置；`local` 环境本地优先，其他环境 Consul 优先。
+Consul 连接从环境读取，先于 Manager 构造，避免依赖环；`DISABLE_CONSUL=true` 时注册和发现为 nil。
+资源仍通过 Wire cleanup 逆序释放，Manager 先停止监听，再释放共享 Consul 客户端。
+
+```mermaid
+flowchart TD
+    A([AppInfo / 两类 PathList / Coordinator / 业务 provider]) --> B[公共集合构造日志与共享 Consul 客户端]
+    B --> C[组合本地与远程源 加载 Manager]
+    C --> D{基础设施构造成功?}
+    D -- 否 --> X([返回错误并逆序释放资源])
+    D -- 是 --> E[完成日志 追踪 指标和配置观测贡献]
+    E --> F[业务 Bootstrap 声明组件和钩子]
+    F --> G[组件组装并登记 Runtime]
+    G --> H{组装成功?}
+    H -- 否 --> X
+    H -- 是 --> I[NewKratosApp 创建 Background 并冻结 Spec]
+    I --> J{应用构造成功?}
+    J -- 否 --> X
+    J -- 是 --> K([返回 App 和 cleanup])
+```

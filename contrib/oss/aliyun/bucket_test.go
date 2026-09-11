@@ -105,7 +105,7 @@ func TestNewValidatesAndNormalizesConfigurationWithoutNetwork(t *testing.T) {
 	if err != nil || bucket == nil || bucket.name != "bucket" {
 		t.Fatalf("New valid config = %#v, %v", bucket, err)
 	}
-	if _, err := bucket.validate(context.Background(), " /object "); err != nil {
+	if _, err := bucket.validateObjectKey(" /object "); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -124,7 +124,7 @@ func TestLocalHelpersValidateBoundariesAndDetachMetadata(t *testing.T) {
 	if metadata["key"] != "value" || optionalString("") != nil || valueOrUnknown(nil) != -1 {
 		t.Fatal("helper behavior is inconsistent")
 	}
-	if _, err := (*Bucket)(nil).validate(context.Background(), "key"); err == nil {
+	if _, err := (*Bucket)(nil).validateObjectKey("key"); err == nil {
 		t.Fatal("nil bucket accepted")
 	}
 }

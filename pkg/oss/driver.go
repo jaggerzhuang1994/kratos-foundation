@@ -18,6 +18,7 @@ type BucketConfig struct {
 }
 
 // DriverFactory 根据一个 bucket 配置创建驱动实例。
+// 不同逻辑 bucket 可并发调用 factory；实现应并发安全并自行限制外部调用时长。
 type DriverFactory func(BucketConfig) (Bucket, error)
 
 type driverRegistry struct {

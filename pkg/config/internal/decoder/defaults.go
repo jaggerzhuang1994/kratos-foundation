@@ -6,33 +6,35 @@ import (
 	"unicode"
 )
 
-func merge(baseValue, overrideValue any, target reflect.Type) any {
+// applyDefaults 为配置中缺失的键补入默认值，并按目标类型匹配结构体字段别名。
+// 配置中已有的零值、空数组和显式 null 优先；map 键精确匹配，双方输入均不修改。
+func applyDefaults(configValue, defaultValue any, target reflect.Type) any {
 	for target != nil && target.Kind() == reflect.Pointer {
 		target = target.Elem()
 	}
-	baseMap, baseOK := baseValue.(map[string]any)
-	overrideMap, overrideOK := overrideValue.(map[string]any)
-	if !baseOK || !overrideOK {
-		return clone(overrideValue)
+	defaultMap, defaultOK := defaultValue.(map[string]any)
+	configMap, configOK := configValue.(map[string]any)
+	if !defaultOK || !configOK {
+		return clone(configValue)
 	}
 
-	result := clone(baseMap).(map[string]any)
-	baseKeys := make(map[string]string, len(result))
+	result := clone(defaultMap).(map[string]any)
+	defaultKeys := make(map[string]string, len(result))
 	// 只有结构体字段支持命名别名；map 的键是业务数据，必须精确匹配。
 	if target != nil && target.Kind() == reflect.Struct {
 		for key := range result {
-			baseKeys[normalizedKey(key)] = key
+			defaultKeys[normalizedKey(key)] = key
 		}
 	}
-	for overrideKey, override := range overrideMap {
-		targetKey := overrideKey
-		if baseKey, ok := baseKeys[normalizedKey(overrideKey)]; ok {
-			targetKey = baseKey
+	for configKey, configured := range configMap {
+		targetKey := configKey
+		if defaultKey, ok := defaultKeys[normalizedKey(configKey)]; ok {
+			targetKey = defaultKey
 		}
 		if current, ok := result[targetKey]; ok {
-			result[targetKey] = merge(current, override, childType(target, targetKey))
+			result[targetKey] = applyDefaults(configured, current, childType(target, targetKey))
 		} else {
-			result[targetKey] = clone(override)
+			result[targetKey] = clone(configured)
 		}
 	}
 	return result

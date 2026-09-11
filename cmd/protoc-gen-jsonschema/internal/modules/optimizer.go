@@ -4,18 +4,14 @@ import (
 	"fmt"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/jsonschema"
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/proto"
 	pgs "github.com/lyft/protoc-gen-star/v2"
 )
 
-type OptimizerImpl struct {
-	module        *pgs.ModuleBase
-	schemaByRef   jsonschema.SchemaMap
-	pluginOptions *proto.PluginOptions
-}
+// OptimizerImpl 只遍历调用方提供的 Registry，不保存跨次生成状态。
+type OptimizerImpl struct{}
 
-func NewOptimizerImpl(module *pgs.ModuleBase, pluginOptions *proto.PluginOptions) *OptimizerImpl {
-	return &OptimizerImpl{module: module, schemaByRef: jsonschema.NewOrderedSchemaMap(), pluginOptions: pluginOptions}
+func NewOptimizerImpl() *OptimizerImpl {
+	return &OptimizerImpl{}
 }
 
 const linkedFromEntrypoint = "linkedFromEntrypoint"

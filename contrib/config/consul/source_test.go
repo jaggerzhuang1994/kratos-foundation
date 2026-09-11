@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
+	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -167,4 +170,87 @@ func TestLoadFiltersSiblingPrefixesAndKeepsExactFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExternalConsulSnapshotUpdateDeletionAndStop(t *testing.T) {
+	address := os.Getenv("FOUNDATION_TEST_CONSUL_ADDR")
+	if address == "" {
+		t.Skip("set FOUNDATION_TEST_CONSUL_ADDR for Docker integration tests")
+	}
+	client, err := consulapi.NewClient(&consulapi.Config{Address: address})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	prefix := fmt.Sprintf("foundation-test-%d", time.Now().UnixNano())
+	put := func(value string) {
+		t.Helper()
+		if _, err := client.KV().Put(&consulapi.KVPair{Key: prefix + "/value.json", Value: []byte(value)}, new(consulapi.WriteOptions).WithContext(ctx)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := client.KV().DeleteTree(prefix, new(consulapi.WriteOptions).WithContext(ctx)); err != nil {
+			t.Error(err)
+		}
+	})
+	put(`{"feature":{"value":1}}`)
+	logger, release, err := log.NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	sources, err := NewSources(client, logger, PathList{prefix})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := text.NewSource("base.json", "json", `{"feature":{"value":0}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, cleanup, err := foundationconfig.NewManager(append(foundationconfig.Sources{base}, sources...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	type feature struct {
+		Value int `json:"value"`
+	}
+	hot, stop, err := foundationconfig.NewHotReloadValue[feature](manager, "feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	wait := func(want int) {
+		t.Helper()
+		timer := time.NewTicker(5 * time.Millisecond)
+		defer timer.Stop()
+		for {
+			current, _ := hot.GetCurrent()
+			if current.Value == want {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatalf("config value=%d want=%d", current.Value, want)
+			case <-timer.C:
+			}
+		}
+	}
+	wait(1)
+	start := time.Now()
+	put(`{"feature":{"value":2}}`)
+	wait(2)
+	t.Logf("update visible=%s", time.Since(start))
+	if _, err := client.KV().DeleteTree(prefix, new(consulapi.WriteOptions).WithContext(ctx)); err != nil {
+		t.Fatal(err)
+	}
+	wait(0)
+	stop()
+	start = time.Now()
+	cleanup()
+	t.Logf("deleted override restored base; cleanup=%s", time.Since(start))
 }

@@ -23,3 +23,7 @@ type ExecutionGuard interface {
 	Context() context.Context
 	Release() error
 }
+
+// DefaultCoordinator 返回 nil，表示不启用分布式协调。
+// 进程内并发策略仍由 Job 自身处理；分布式策略必须注入实际协调器。
+func DefaultCoordinator() ConcurrencyCoordinator { return nil }

@@ -20,7 +20,7 @@ func (bucket *Bucket) PutObject(
 	body io.Reader,
 	options foundationoss.PutOptions,
 ) (foundationoss.ObjectInfo, error) {
-	key, err := bucket.validate(ctx, objectKey)
+	key, err := bucket.validateObjectKey(objectKey)
 	if err != nil {
 		return foundationoss.ObjectInfo{}, err
 	}
@@ -66,7 +66,7 @@ func (bucket *Bucket) GetObject(
 	objectKey string,
 	options foundationoss.GetOptions,
 ) (*foundationoss.Object, error) {
-	key, err := bucket.validate(ctx, objectKey)
+	key, err := bucket.validateObjectKey(objectKey)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (bucket *Bucket) GetObject(
 
 // DeleteObject 幂等删除指定对象。
 func (bucket *Bucket) DeleteObject(ctx context.Context, objectKey string) error {
-	key, err := bucket.validate(ctx, objectKey)
+	key, err := bucket.validateObjectKey(objectKey)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (bucket *Bucket) DeleteObject(ctx context.Context, objectKey string) error 
 
 // StatObject 返回对象元信息而不下载内容。
 func (bucket *Bucket) StatObject(ctx context.Context, objectKey string) (foundationoss.ObjectInfo, error) {
-	key, err := bucket.validate(ctx, objectKey)
+	key, err := bucket.validateObjectKey(objectKey)
 	if err != nil {
 		return foundationoss.ObjectInfo{}, err
 	}
@@ -156,7 +156,7 @@ func (bucket *Bucket) ObjectExists(ctx context.Context, objectKey string) (bool,
 
 // ListObjects 按前缀和游标分页枚举对象。
 func (bucket *Bucket) ListObjects(ctx context.Context, options foundationoss.ListOptions) (foundationoss.ListResult, error) {
-	if err := bucket.validateContext(ctx); err != nil {
+	if err := bucket.validateInitialized(); err != nil {
 		return foundationoss.ListResult{}, err
 	}
 	if options.MaxKeys < 0 {
@@ -203,11 +203,11 @@ func (bucket *Bucket) CopyObject(
 	destinationKey string,
 	options foundationoss.CopyOptions,
 ) (foundationoss.ObjectInfo, error) {
-	source, err := bucket.validate(ctx, sourceKey)
+	source, err := bucket.validateObjectKey(sourceKey)
 	if err != nil {
 		return foundationoss.ObjectInfo{}, err
 	}
-	destination, err := bucket.validate(ctx, destinationKey)
+	destination, err := bucket.validateObjectKey(destinationKey)
 	if err != nil {
 		return foundationoss.ObjectInfo{}, err
 	}
@@ -242,9 +242,9 @@ func (bucket *Bucket) CopyObject(
 	return info, nil
 }
 
-// validate 校验 bucket 状态、Context 和对象键。
-func (bucket *Bucket) validate(ctx context.Context, objectKey string) (string, error) {
-	if err := bucket.validateContext(ctx); err != nil {
+// validateObjectKey 校验 bucket 初始化状态并规范化对象键。
+func (bucket *Bucket) validateObjectKey(objectKey string) (string, error) {
+	if err := bucket.validateInitialized(); err != nil {
 		return "", err
 	}
 	key := strings.TrimLeft(strings.TrimSpace(objectKey), "/")
@@ -254,8 +254,8 @@ func (bucket *Bucket) validate(ctx context.Context, objectKey string) (string, e
 	return key, nil
 }
 
-// validateContext 校验 bucket 状态和 Context，供不需要对象键的列表操作复用。
-func (bucket *Bucket) validateContext(ctx context.Context) error {
+// validateInitialized 校验 bucket 初始化状态；Context 的取消由 SDK 请求处理。
+func (bucket *Bucket) validateInitialized() error {
 	if bucket == nil || bucket.client == nil || bucket.name == "" {
 		return errors.New("Aliyun OSS bucket is not initialized")
 	}

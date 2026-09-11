@@ -11,7 +11,7 @@ type Snapshot struct {
 	values map[string]any
 }
 
-// New 解析、合并并展开有序配置值中的引用。
+// New 在解析前替换环境变量，并按输入顺序合并配置值。
 func New(values []*kratosconfig.KeyValue) (*Snapshot, error) {
 	tree, err := build(values)
 	if err != nil {

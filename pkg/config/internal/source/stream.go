@@ -60,8 +60,12 @@ func (s *Stream) Next() Update {
 
 func (s *Stream) watch(index int, sourceWatcher kratosconfig.Watcher) {
 	defer s.workers.Done()
+	// 能力必须显式声明；不能从具体类型或某次通知的内容猜测是否完整。
+	snapshotWatcher, ok := sourceWatcher.(interface{ FullSnapshot() bool })
+	fullSnapshot := ok && snapshotWatcher.FullSnapshot()
 	for {
-		_, err := sourceWatcher.Next()
+		// 未声明完整快照的第三方 Watcher 仍重新 Load，以识别删除并恢复低优先级值。
+		values, err := sourceWatcher.Next()
 		if err != nil {
 			if s.ctx.Err() != nil {
 				return
@@ -70,8 +74,7 @@ func (s *Stream) watch(index int, sourceWatcher kratosconfig.Watcher) {
 			return
 		}
 
-		var values []*kratosconfig.KeyValue
-		for attempt := 0; ; attempt++ {
+		for attempt := 0; !fullSnapshot; attempt++ {
 			if s.ctx.Err() != nil {
 				return
 			}

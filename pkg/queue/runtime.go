@@ -258,7 +258,8 @@ type consumerCancellationSource struct {
 
 type consumerSourceContextKey struct{}
 
-// newConsumerContext 保留父 Context 的 Value 和 Deadline，但只允许协调 goroutine 实际关闭 Done。
+// newConsumerContext 保留父 Context 的 Value 和 Deadline，并把普通取消交给协调 goroutine。
+// 父 Deadline 由独立计时器保留，到期时也会关闭 Done，不需要等待取消协调。
 func newConsumerContext(
 	parent context.Context,
 	state *consumerRunState,

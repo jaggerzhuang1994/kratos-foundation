@@ -1,6 +1,9 @@
 package mysql
 
 import (
+	"fmt"
+	"os"
+
 	"context"
 	"database/sql/driver"
 	"errors"
@@ -181,4 +184,64 @@ func TestConnectorBudgetIncludesAllAttemptsAndWaits(t *testing.T) {
 			t.Fatalf("error=%v, attempts=%d, elapsed=%s", err, attempts, time.Since(start))
 		}
 	})
+}
+
+func TestExternalMySQLRollbackCancellationAndReconnect(t *testing.T) {
+	dsn := os.Getenv("FOUNDATION_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("set FOUNDATION_TEST_MYSQL_DSN for Docker integration tests")
+	}
+	connection, err := newConnection(database.DriverConfig{Name: "external", DSN: dsn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := connection.SQLDB
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	db.SetMaxOpenConns(2)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	table := fmt.Sprintf("foundation_test_%d", time.Now().UnixNano())
+	if _, err := db.ExecContext(ctx, "CREATE TABLE "+table+" (id BIGINT PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := db.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+			t.Error(err)
+		}
+	})
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO "+table+" (id) VALUES (?)", 1); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("rollback rows=%d err=%v", count, err)
+	}
+	short, stop := context.WithTimeout(ctx, 50*time.Millisecond)
+	start := time.Now()
+	_, err = db.ExecContext(short, "SELECT SLEEP(3)")
+	stop()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("cancel=%v", err)
+	}
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("query canceled in %s; pool recovered; stats=%+v", time.Since(start), db.Stats())
 }

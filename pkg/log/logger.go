@@ -219,22 +219,25 @@ func (l *logger) clone() *logger {
 	}
 }
 
+// levelEnabled 统一最低级别优先级：派生 Logger、进程共享设置、实例默认值。
+func (l *logger) levelEnabled(level kratoslog.Level, custom *customState) bool {
+	minimum := l.config.level
+	if l.level != nil {
+		minimum = *l.level
+	} else if custom.level != nil {
+		minimum = *custom.level
+	}
+	return level >= minimum
+}
+
 // log 按共享配置版本刷新包装；实例输出关闭后返回错误，不切换到其他实例。
 func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) error {
 	if l.disabled {
 		return nil
 	}
 	for {
-		config := l.config
 		custom := l.shared.custom.Load()
-
-		minimum := config.level
-		if l.level != nil {
-			minimum = *l.level
-		} else if custom.level != nil {
-			minimum = *custom.level
-		}
-		if level < minimum {
+		if !l.levelEnabled(level, custom) {
 			return nil
 		}
 
@@ -262,10 +265,17 @@ func (l *logger) Log(level kratoslog.Level, keyvals ...any) error {
 }
 
 func (l *logger) Debug(a ...any) {
+	// 格式化可能调用业务 Stringer；根策略拒绝时应直接结束，避免高频无效工作。
+	if l.disabled || !l.levelEnabled(kratoslog.LevelDebug, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelDebug, true, fmt.Sprint(a...))
 }
 
 func (l *logger) Debugf(format string, a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelDebug, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelDebug, true, fmt.Sprintf(format, a...))
 }
 
@@ -274,10 +284,16 @@ func (l *logger) Debugw(keyvals ...any) {
 }
 
 func (l *logger) Info(a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelInfo, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelInfo, true, fmt.Sprint(a...))
 }
 
 func (l *logger) Infof(format string, a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelInfo, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelInfo, true, fmt.Sprintf(format, a...))
 }
 
@@ -286,10 +302,16 @@ func (l *logger) Infow(keyvals ...any) {
 }
 
 func (l *logger) Warn(a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelWarn, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelWarn, true, fmt.Sprint(a...))
 }
 
 func (l *logger) Warnf(format string, a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelWarn, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelWarn, true, fmt.Sprintf(format, a...))
 }
 
@@ -298,10 +320,16 @@ func (l *logger) Warnw(keyvals ...any) {
 }
 
 func (l *logger) Error(a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelError, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelError, true, fmt.Sprint(a...))
 }
 
 func (l *logger) Errorf(format string, a ...any) {
+	if l.disabled || !l.levelEnabled(kratoslog.LevelError, l.shared.custom.Load()) {
+		return
+	}
 	_ = l.log(kratoslog.LevelError, true, fmt.Sprintf(format, a...))
 }
 
@@ -310,12 +338,16 @@ func (l *logger) Errorw(keyvals ...any) {
 }
 
 func (l *logger) Fatal(a ...any) {
-	_ = l.log(kratoslog.LevelFatal, true, fmt.Sprint(a...))
+	if !l.disabled && l.levelEnabled(kratoslog.LevelFatal, l.shared.custom.Load()) {
+		_ = l.log(kratoslog.LevelFatal, true, fmt.Sprint(a...))
+	}
 	os.Exit(1)
 }
 
 func (l *logger) Fatalf(format string, a ...any) {
-	_ = l.log(kratoslog.LevelFatal, true, fmt.Sprintf(format, a...))
+	if !l.disabled && l.levelEnabled(kratoslog.LevelFatal, l.shared.custom.Load()) {
+		_ = l.log(kratoslog.LevelFatal, true, fmt.Sprintf(format, a...))
+	}
 	os.Exit(1)
 }
 

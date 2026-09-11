@@ -86,9 +86,10 @@ func (d *Decoder) Apply(value any, found bool, target any) error {
 		return scan(value, target)
 	}
 
-	merged := clone(d.defaultTree)
+	// applyDefaults 自行复制合并结果；缺失配置时 scan 只读默认树并解码为独立 target。
+	merged := d.defaultTree
 	if found {
-		merged = merge(merged, value, d.targetType)
+		merged = applyDefaults(value, merged, d.targetType)
 	}
 	return scan(merged, target)
 }

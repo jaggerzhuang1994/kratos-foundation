@@ -25,17 +25,13 @@ func client(opts ...option) middleware.Middleware {
 			}
 
 			header := tr.RequestHeader()
-			//var grpcPairs []string
 			add := func(key, value string) {
 				// 保留的 metadata 不透传
 				if isReservedMetadataKey(key) {
 					return
 				}
 				value = url.QueryEscape(value)
-				//if tr.Kind() == transport.KindGRPC {
-				//	grpcPairs = append(grpcPairs, key, value)
-				//	return
-				//}
+				// HTTP 与 gRPC 均通过各自 Transport 的 Header 适配器写入。
 				header.Add(key, value)
 			}
 			// 常量先写入，调用方显式上下文随后追加，便于网关保留完整来源链。
@@ -63,11 +59,6 @@ func client(opts ...option) middleware.Middleware {
 				}
 			}
 
-			// todo 透传md的裁剪也纳入 opt 配置
-
-			//if len(grpcPairs) > 0 {
-			//	ctx = grpcmetadata.AppendToOutgoingContext(ctx, grpcPairs...)
-			//}
 			return handler(ctx, req)
 		}
 	}

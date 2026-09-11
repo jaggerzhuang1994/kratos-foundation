@@ -56,7 +56,7 @@ func newWebSocketServer(
 }
 
 // Handle 在 HTTP 路由上注册一条 WebSocket 端点。
-func (s *websocketServer) Handle(path string, handler any, optionalUpgrader ...Upgrader) {
+func (s *websocketServer) Handle(path string, handler any, maxMessageBytes int64, optionalUpgrader ...Upgrader) {
 	if s.router == nil {
 		s.log.Warn("failed to handle websocket path: HTTP server is not initialized")
 		return
@@ -80,7 +80,7 @@ func (s *websocketServer) Handle(path string, handler any, optionalUpgrader ...U
 				return nil, fmt.Errorf("websocket middleware request has type %T, want *http.Request", req)
 			}
 			// 握手需要保留中间件派生的身份、metadata 和请求截止时间。
-			client, err := upgrade(upgrader, clog, request.WithContext(ctx), w, handler)
+			client, err := upgrade(upgrader, clog, request.WithContext(ctx), w, handler, maxMessageBytes)
 			if err != nil {
 				clog.With("error", err).Warn("websocket upgrade failed")
 				return nil, err

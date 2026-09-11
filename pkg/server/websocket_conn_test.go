@@ -40,7 +40,7 @@ func TestWebSocketPreservesMiddlewareContextUntilConnectionCloses(t *testing.T) 
 				}
 			})
 			server := kratoshttp.NewServer(kratoshttp.Middleware(propagate))
-			newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler)
+			newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0)
 			httpServer := httptest.NewServer(server)
 			t.Cleanup(httpServer.Close)
 			peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(httpServer.URL, "http")+"/ws", nil)
@@ -132,7 +132,7 @@ func TestWebSocketRejectedHandshakePreservesMiddlewareContext(t *testing.T) {
 	}
 	hub := newWebSocketHub()
 	server := kratoshttp.NewServer(kratoshttp.Middleware(propagate))
-	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler)
+	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0)
 	server.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws", nil))
 	<-middlewareDone
 	ctx := <-handler.handshake
@@ -208,7 +208,7 @@ func TestWebSocketWriteFailureClosesConnectionAndReleasesReadLoop(t *testing.T) 
 	hub := newWebSocketHub()
 	handler := newRuntimeWebSocketHandler()
 	server := kratoshttp.NewServer()
-	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
+	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
 	var fail atomic.Bool
 	host := httptest.NewUnstartedServer(server)
 	host.Listener = &failedWriteListener{Listener: host.Listener, fail: &fail}
@@ -256,6 +256,7 @@ func TestWebSocketStopDeadlineInterruptsBlockedConnectionClose(t *testing.T) {
 	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle(
 		"/ws",
 		handler,
+		0,
 		Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	)
 	host := httptest.NewServer(server)
@@ -340,5 +341,121 @@ func TestWebsocketClientNilAndInvalidMessageBoundaries(t *testing.T) {
 	second := c.Close()
 	if first == nil || !errors.Is(second, first) {
 		t.Fatalf("close must return a stable nil-connection error: %v / %v", first, second)
+	}
+}
+
+type sizeLimitedWebSocketHandler struct {
+	messages chan int
+	failures chan error
+}
+
+func (h *sizeLimitedWebSocketHandler) OnMessage(c WebSocketConn, data []byte, _ MessageType) {
+	h.messages <- len(data)
+	_ = c.SendText("accepted")
+}
+func (h *sizeLimitedWebSocketHandler) OnError(_ WebSocketConn, err error) { h.failures <- err }
+
+func TestWebSocketMessageLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name                           string
+		limit                          int64
+		size                           int
+		compressed, fragmented, reject bool
+	}{
+		{name: "default exact", size: 1 << 20},
+		{name: "default over", size: 1<<20 + 1, reject: true},
+		{name: "configured exact", limit: 64, size: 64},
+		{name: "configured over", limit: 64, size: 65, reject: true},
+		{name: "compressed exact", limit: 64, size: 64, compressed: true},
+		{name: "compressed over", limit: 64, size: 4096, compressed: true, reject: true},
+		{name: "fragmented over", limit: 64, size: 65, fragmented: true, reject: true},
+		{name: "explicit unlimited", limit: -1, size: 1<<20 + 1},
+		{name: "empty", limit: 64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &sizeLimitedWebSocketHandler{messages: make(chan int, 1), failures: make(chan error, 1)}
+			spec := NewSpec()
+			if strings.HasPrefix(tc.name, "default") {
+				spec.HTTP().WebSocket("/ws", handler)
+			} else {
+				spec.HTTP().WebSocketWithConfig("/ws", handler, WebSocketConfig{MaxMessageBytes: tc.limit, Upgrader: Upgrader{EnableCompression: tc.compressed}})
+			}
+			if err := spec.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			hub := newWebSocketHub()
+			t.Cleanup(func() {
+				ctx, cancel := context.WithTimeout(context.Background(), runtimeTestTimeout)
+				defer cancel()
+				if err := hub.stop(ctx); err != nil {
+					t.Error(err)
+				}
+			})
+			server, err := newHTTPServer(nil, nil, spec, newRuntimeTestLogger(t), hub)
+			if err != nil {
+				t.Fatal(err)
+			}
+			host := httptest.NewServer(server)
+			t.Cleanup(host.Close)
+			dialer := websocket.Dialer{EnableCompression: tc.compressed, WriteBufferSize: 16, HandshakeTimeout: runtimeTestTimeout}
+			peer, _, err := dialer.Dial("ws"+strings.TrimPrefix(host.URL, "http")+"/ws", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = peer.Close() })
+			if err := peer.SetWriteDeadline(time.Now().Add(runtimeTestTimeout)); err != nil {
+				t.Fatal(err)
+			}
+			writer, err := peer.NextWriter(websocket.BinaryMessage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := strings.Repeat("x", tc.size)
+			if tc.fragmented {
+				for _, part := range []string{data[:32], data[32:64], data[64:]} {
+					if _, err = io.WriteString(writer, part); err != nil {
+						break
+					}
+				}
+			} else {
+				_, err = io.WriteString(writer, data)
+			}
+			closeErr := writer.Close()
+			if err == nil {
+				err = closeErr
+			}
+			if err != nil && !tc.reject {
+				t.Fatal(err)
+			}
+			if err := peer.SetReadDeadline(time.Now().Add(runtimeTestTimeout)); err != nil {
+				t.Fatal(err)
+			}
+			_, reply, err := peer.ReadMessage()
+			if tc.reject {
+				if !websocket.IsCloseError(err, websocket.CloseMessageTooBig) {
+					t.Fatalf("close=%v want 1009", err)
+				}
+				select {
+				case failure := <-handler.failures:
+					if !errors.Is(failure, websocket.ErrReadLimit) {
+						t.Fatal(failure)
+					}
+				case <-time.After(runtimeTestTimeout):
+					t.Fatal("missing limit error")
+				}
+				select {
+				case <-handler.messages:
+					t.Fatal("oversized message reached handler")
+				default:
+				}
+			} else {
+				if err != nil || string(reply) != "accepted" {
+					t.Fatalf("reply=%q error=%v", reply, err)
+				}
+				if size := <-handler.messages; size != tc.size {
+					t.Fatalf("size=%d", size)
+				}
+			}
+		})
 	}
 }

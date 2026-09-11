@@ -72,8 +72,10 @@ func WithErrorHandler(handler func(ctx context.Context, name string, err error))
 type CronOption func(*cronOptions)
 
 type cronOptions struct {
-	runImmediately   bool
-	concurrentPolicy ConcurrentPolicy
+	runImmediately       bool
+	concurrentPolicy     ConcurrentPolicy
+	maxPendingRuns       int
+	delayOverflowHandler func(context.Context, DelayOverflow) error
 }
 
 // RunImmediately 要求调度器启动后立即执行一次。
@@ -88,6 +90,29 @@ func WithConcurrentPolicy(policy ConcurrentPolicy) CronOption {
 	return func(options *cronOptions) {
 		options.concurrentPolicy = policy
 	}
+}
+
+// WithMaxPendingRuns 设置 Delay 策略的等待容量，默认 1；0 不保留本地等待名额。
+// -1 显式恢复无界等待。分布式 Delay 限制每进程进入竞争的调用数为 limit+1，非全局队列。
+// AllowOverlap 和 Skip 策略不使用此值。队列满时跳过新触发并记录告警。
+func WithMaxPendingRuns(limit int) CronOption {
+	return func(options *cronOptions) { options.maxPendingRuns = limit }
+}
+
+// DelayOverflow 描述被本进程 Delay 容量限制拒绝的一次 Cron 触发。
+// MaxPendingRuns 是配置的等待容量，不是全局队列长度。
+type DelayOverflow struct {
+	Name           string
+	Policy         ConcurrentPolicy
+	MaxPendingRuns int
+}
+
+// WithDelayOverflowHandler 设置单个 Cron 满额时的通知回调；nil 保留默认告警和跳过行为。
+// 回调同步执行且可能并发调用，应并发安全、响应 Context 并为外部请求设置超时。
+// 返回错误或 panic 会作为本轮错误交给 WithErrorHandler；成功仍跳过本轮。
+// 仅有界 Delay 生效；回调不占执行名额，框架不重试、不创建额外 goroutine。
+func WithDelayOverflowHandler(handler func(context.Context, DelayOverflow) error) CronOption {
+	return func(options *cronOptions) { options.delayOverflowHandler = handler }
 }
 
 // Builder 在 Bootstrap 阶段收集任务定义和运行策略。它会修改同一个 Spec，不支持
@@ -148,7 +173,7 @@ func (s *Spec) Option(options ...ManagerOption) Builder {
 
 // RegisterCron 向 Spec 注册周期任务。
 func (s *Spec) RegisterCron(name, schedule string, job Task, options ...CronOption) Builder {
-	cron := cronOptions{concurrentPolicy: AllowOverlap}
+	cron := cronOptions{concurrentPolicy: AllowOverlap, maxPendingRuns: 1}
 	for _, option := range options {
 		if option != nil {
 			option(&cron)
@@ -203,6 +228,9 @@ func (s *Spec) Validate() error {
 		}
 		if definition.kind == kindCron && definition.schedule == "" {
 			return fmt.Errorf("cron job %q requires a schedule", definition.name)
+		}
+		if definition.kind == kindCron && (definition.cron.maxPendingRuns < -1 || definition.cron.maxPendingRuns == int(^uint(0)>>1)) {
+			return fmt.Errorf("job %q max pending runs must be -1 or a non-negative value below max int", definition.name)
 		}
 		if definition.kind == kindCron && !definition.cron.concurrentPolicy.valid() {
 			return fmt.Errorf(

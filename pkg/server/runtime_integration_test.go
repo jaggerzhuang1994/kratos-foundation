@@ -88,6 +88,7 @@ func TestWebSocketServerHandlesConnectionMessagesAndReplies(t *testing.T) {
 	newWebSocketServer(logger, server, hub).Handle(
 		"/ws",
 		handler,
+		0,
 		Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	)
 	httpServer := httptest.NewServer(server)
@@ -147,6 +148,7 @@ func TestWebSocketHandshakeCanRejectBeforeUpgrade(t *testing.T) {
 		request,
 		response,
 		runtimeHandshakeHandler{err: wantErr},
+		0,
 	)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("upgrade() error = %v, want %v", err, wantErr)
@@ -154,6 +156,7 @@ func TestWebSocketHandshakeCanRejectBeforeUpgrade(t *testing.T) {
 	newWebSocketServer(logger, nil, newWebSocketHub()).Handle(
 		"/unavailable",
 		runtimeHandshakeHandler{},
+		0,
 	)
 }
 

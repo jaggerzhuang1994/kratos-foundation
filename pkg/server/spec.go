@@ -33,8 +33,10 @@ type HTTPBuilder interface {
 	Health(HealthConfig) HTTPBuilder
 	// HealthChecks 追加关键依赖检查，不覆盖配置文件中的监听地址、路径或开关。
 	HealthChecks(...ReadinessCheck) HTTPBuilder
-	// WebSocket 注册一条 WebSocket 路径及其事件处理器。
+	// WebSocket 注册一条 WebSocket 路径及事件处理器，默认消息上限 1 MiB。
 	WebSocket(path string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder
+	// WebSocketWithConfig 注册带消息上限和握手设置的 WebSocket 端点。
+	WebSocketWithConfig(path string, handler any, config WebSocketConfig) HTTPBuilder
 }
 
 // GRPCBuilder 在启动配置阶段记录 gRPC 运行选项；所有方法修改同一个 Spec，不能并发调用。
@@ -76,10 +78,19 @@ type grpcSpec struct {
 	services    []GRPCService
 }
 
+// WebSocketConfig 控制单个端点的握手与接收限制，构造时读取，不热更新。
+type WebSocketConfig struct {
+	// Upgrader 配置协议握手，零值使用 Gorilla 默认行为。
+	Upgrader Upgrader
+	// MaxMessageBytes 同时限制接收消息的传输载荷与解压后字节；0 使用默认 1 MiB，-1 显式取消上限。
+	MaxMessageBytes int64
+}
+
 type websocketEndpoint struct {
-	path     string
-	handler  any
-	upgrader []Upgrader
+	maxMessageBytes int64
+	path            string
+	handler         any
+	upgrader        []Upgrader
 }
 
 // NewSpec 返回一个空服务定义；零值 Spec 也可以安全使用。
@@ -112,6 +123,9 @@ func (s *Spec) Validate() error {
 				"websocket handler for %q implements no supported handler interface",
 				endpoint.path,
 			)
+		}
+		if endpoint.maxMessageBytes < -1 {
+			return fmt.Errorf("websocket path %q max message bytes must be -1 or non-negative", endpoint.path)
 		}
 		if len(endpoint.upgrader) > 1 {
 			return fmt.Errorf(
@@ -199,13 +213,21 @@ func (s *httpSpec) Register(endpoints ...HTTPEndpoint) HTTPBuilder {
 	return s
 }
 
-// WebSocket 保存端点定义的独立副本，避免调用方随后改写 upgrader 切片。
+// WebSocket 保存端点定义的独立副本，默认消息上限 1 MiB。
+// upgrader 切片独立复制；自定义上限使用 WebSocketWithConfig。
 func (s *httpSpec) WebSocket(path string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder {
 	s.websockets = append(s.websockets, websocketEndpoint{
 		path:     path,
 		handler:  handler,
 		upgrader: append([]Upgrader(nil), optionalUpgrader...),
 	})
+	return s
+}
+
+// WebSocketWithConfig 复用端点登记校验，并保存本端点的接收上限。
+func (s *httpSpec) WebSocketWithConfig(path string, handler any, config WebSocketConfig) HTTPBuilder {
+	s.WebSocket(path, handler, config.Upgrader)
+	s.websockets[len(s.websockets)-1].maxMessageBytes = config.MaxMessageBytes
 	return s
 }
 

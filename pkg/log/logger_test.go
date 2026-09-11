@@ -24,6 +24,79 @@ type capturedLogRecord struct {
 	keyvals []any
 }
 
+type formattingProbe struct{ calls int }
+
+func (p *formattingProbe) String() string {
+	p.calls++
+	return "payload"
+}
+
+func TestFilteredLogHelpersDoNotFormatMessages(t *testing.T) {
+	methods := []struct {
+		name string
+		log  func(Logger, any)
+	}{
+		{"Debug", func(l Logger, value any) { l.Debug(value) }},
+		{"Debugf", func(l Logger, value any) { l.Debugf("%s", value) }},
+		{"Info", func(l Logger, value any) { l.Info(value) }},
+		{"Infof", func(l Logger, value any) { l.Infof("%s", value) }},
+		{"Warn", func(l Logger, value any) { l.Warn(value) }},
+		{"Warnf", func(l Logger, value any) { l.Warnf("%s", value) }},
+		{"Error", func(l Logger, value any) { l.Error(value) }},
+		{"Errorf", func(l Logger, value any) { l.Errorf("%s", value) }},
+	}
+	for _, policy := range []string{"root", "shared", "module", "disabled"} {
+		t.Run(policy, func(t *testing.T) {
+			shared := &sharedState{}
+			shared.custom.Store(&customState{})
+			base := &logger{shared: shared, config: &configState{level: kratoslog.LevelDebug}}
+			var l Logger = base
+			switch policy {
+			case "root":
+				base.config.level = kratoslog.LevelFatal
+			case "shared":
+				shared.WithLevel(kratoslog.LevelFatal)
+			case "module", "disabled":
+				var err error
+				level := "fatal"
+				if policy == "disabled" {
+					level = "debug"
+				}
+				l, err = base.WithModuleConfig("test", testModuleConfig{level: level, disable: policy == "disabled"})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, method := range methods {
+				t.Run(method.name, func(t *testing.T) {
+					probe := &formattingProbe{}
+					method.log(l, probe)
+					if probe.calls != 0 {
+						t.Fatalf("filtered message formatted %d times", probe.calls)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkLoggerFilteredMessages(b *testing.B) {
+	shared := &sharedState{}
+	shared.custom.Store(&customState{})
+	l := &logger{shared: shared, config: &configState{level: kratoslog.LevelInfo}}
+	payload := map[string]any{"id": 42, "status": "ready", "items": []int{1, 2, 3, 4, 5}}
+	b.Run("Debugf", func(b *testing.B) {
+		for b.Loop() {
+			l.Debugf("payload=%+v", payload)
+		}
+	})
+	b.Run("Debugw", func(b *testing.B) {
+		for b.Loop() {
+			l.Debugw("payload", payload)
+		}
+	})
+}
+
 func TestLoggerHelperMethodsEmitExpectedLevelsAndPayloads(t *testing.T) {
 	var records []capturedLogRecord
 	shared := &sharedState{}
@@ -133,6 +206,14 @@ func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 			t.Errorf("derived log retained filtered value %#v: %#v", hidden, got)
 		}
 	}
+	// 派生级别优先于共享级别，提前过滤不能误丢允许输出的消息。
+	shared.WithLevel(kratoslog.LevelFatal)
+	probe := &formattingProbe{}
+	derived.Debugf("%s", probe)
+	if probe.calls != 1 || !containsLogValue(written, "payload") {
+		t.Fatalf("module debug override was filtered: calls=%d, output=%v", probe.calls, written)
+	}
+
 }
 
 func containsLogValue(keyvals []any, want any) bool {
@@ -288,9 +369,12 @@ const fatalHelperEnvironment = "KRATOS_FOUNDATION_FATAL_HELPER"
 
 func TestLoggerFatalMethodsLogAndExit(t *testing.T) {
 	tests := map[string]string{
-		"fatal":  "fatal-value",
-		"fatalf": "fatalf-42",
-		"fatalw": "fatalw-value",
+		"fatal":           "fatal-value",
+		"fatalf":          "fatalf-42",
+		"fatalw":          "fatalw-value",
+		"disabled-fatal":  "",
+		"disabled-fatalf": "",
+		"disabled-fatalw": "",
 	}
 	for mode, want := range tests {
 		mode, want := mode, want
@@ -301,6 +385,12 @@ func TestLoggerFatalMethodsLogAndExit(t *testing.T) {
 			var exitErr *exec.ExitError
 			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 				t.Fatalf("helper error = %v, output = %q, want exit code 1", err, output)
+			}
+			if want == "" {
+				if len(output) != 0 {
+					t.Fatalf("disabled fatal output = %q", output)
+				}
+				return
 			}
 			if !strings.Contains(string(output), want) || !strings.Contains(string(output), "level=FATAL") {
 				t.Fatalf("helper output = %q, want fatal level and %q", output, want)
@@ -327,6 +417,10 @@ func TestLoggerFatalHelperProcess(t *testing.T) {
 	shared.custom.Store(&customState{})
 	logger := &logger{shared: shared, config: base}
 
+	if strings.HasPrefix(mode, "disabled-") {
+		logger.disabled = true
+		mode = strings.TrimPrefix(mode, "disabled-")
+	}
 	switch mode {
 	case "fatal":
 		logger.Fatal("fatal-value")
@@ -340,25 +434,7 @@ func TestLoggerFatalHelperProcess(t *testing.T) {
 	t.Fatal("fatal logger returned without exiting")
 }
 
-func contributionLogConfig(path string) envConfig {
-	return envConfig{
-		Level:       kratoslog.LevelInfo,
-		FilterEmpty: false,
-		TimeFormat:  time.RFC3339,
-		Std: outputConfig{
-			Disable: true,
-			Level:   kratoslog.LevelInfo,
-		},
-		File: fileConfig{
-			outputConfig: outputConfig{Level: kratoslog.LevelInfo},
-			Path:         path,
-			Rotating:     rotatingConfig{Disable: true},
-		},
-	}
-}
-
 // setSharedLogEnvironment 通过正式 env 初始化入口准备全局日志测试，不绕过资源生命周期。
-
 func setSharedLogEnvironment(t *testing.T, path string) {
 	t.Helper()
 	clearEnvironment(t, logEnvironmentKeys...)

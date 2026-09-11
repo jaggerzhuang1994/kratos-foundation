@@ -80,17 +80,25 @@ func (c *consumer) Consume(ctx context.Context, handler queue.DeliveryHandler) e
 func (c *consumer) consume(ctx context.Context, instance string, handler queue.DeliveryHandler) error {
 	var backoff reconnect.Backoff
 	attempt := 0
+	firstReadRetries := 0
 	var recoveryOptions []kgo.Opt
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		progressed, err := c.consumeClient(ctx, instance, handler, recoveryOptions...)
-		if !recoverableConsumerOperation(err) {
-			return err
-		}
 		if progressed {
 			attempt = 0
+			firstReadRetries = 0
+		}
+		// 首读 EOF 既可能是 Broker 重启，也可能是协议配置错误，最多额外重建三次。
+		// 只有实际提交成功才重置预算；不放宽明确的认证、授权或 TLS 证书错误。
+		if !recoverableConsumerOperation(err, firstReadRetries < 3) {
+			return err
+		}
+		var firstRead *kgo.ErrFirstReadEOF
+		if errors.As(err, &firstRead) {
+			firstReadRetries++
 		}
 		if c.logger != nil {
 			c.logger.Warnw("msg", "Kafka consumer reconnecting", "queue.consumer", instance, "attempt", attempt+1, "error", err)

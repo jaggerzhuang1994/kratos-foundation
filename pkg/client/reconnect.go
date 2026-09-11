@@ -29,6 +29,11 @@ func newHTTPClientTransport(ctx context.Context, secure bool) (http.RoundTripper
 		return http.DefaultTransport, tlsConfig, nil
 	}
 	transport = transport.Clone()
+	// 零值原本只保留每主机 2 条空闲连接，32 并发波次会反复建连。
+	// 仅调整未显式设置的每主机空闲容量；全局空闲预算及活动连接限制沿用调用方设置。
+	if transport.MaxIdleConnsPerHost == 0 {
+		transport.MaxIdleConnsPerHost = 32
+	}
 	if secure {
 		if transport.TLSClientConfig != nil {
 			tlsConfig = transport.TLSClientConfig.Clone()

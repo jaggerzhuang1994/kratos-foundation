@@ -2,7 +2,6 @@ package deadline
 
 import (
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -15,11 +14,11 @@ type Config = *config_pb.Middleware_Deadline
 
 type compiledPolicy struct {
 	defaults policy
-	routes   []routePolicy
+	paths    map[string]policy
+	prefixes *prefixIndex
 }
 
 type routePolicy struct {
-	path   string
 	prefix string
 	policy policy
 }
@@ -53,18 +52,18 @@ func (s *Store) Update(config Config) error {
 
 func (s *Store) resolve(operation string) policy {
 	compiled := s.current.Load()
-	selected := compiled.defaults
-	longestPrefix := 0
-	for _, route := range compiled.routes {
-		if route.path == operation {
-			return route.policy
-		}
-		if len(route.prefix) > longestPrefix && strings.HasPrefix(operation, route.prefix) {
-			selected = route.policy
-			longestPrefix = len(route.prefix)
+	// 精确路径优先，前缀树选择最长匹配；两者来自同一份不可变快照。
+	if len(compiled.paths) != 0 {
+		if matched, ok := compiled.paths[operation]; ok {
+			return matched
 		}
 	}
-	return selected
+	if compiled.prefixes != nil {
+		if selected, ok := compiled.prefixes.lookup(operation); ok {
+			return selected
+		}
+	}
+	return compiled.defaults
 }
 
 func compilePolicy(config Config) (*compiledPolicy, error) {
@@ -98,10 +97,8 @@ func compilePolicy(config Config) (*compiledPolicy, error) {
 		return nil, err
 	}
 
-	compiled := &compiledPolicy{
-		defaults: defaults,
-		routes:   make([]routePolicy, 0, len(config.GetRoutes())),
-	}
+	compiled := &compiledPolicy{defaults: defaults}
+	var prefixes []routePolicy
 	seen := make(map[string]struct{}, len(config.GetRoutes()))
 	for index, rule := range config.GetRoutes() {
 		if rule == nil {
@@ -126,12 +123,16 @@ func compilePolicy(config Config) (*compiledPolicy, error) {
 			return nil, fmt.Errorf("deadline.routes[%d] duplicates %s", index, key)
 		}
 		seen[key] = struct{}{}
-		compiled.routes = append(compiled.routes, routePolicy{
-			path:   path,
-			prefix: prefix,
-			policy: next,
-		})
+		if path != "" {
+			if compiled.paths == nil {
+				compiled.paths = make(map[string]policy)
+			}
+			compiled.paths[path] = next
+		} else {
+			prefixes = append(prefixes, routePolicy{prefix: prefix, policy: next})
+		}
 	}
+	compiled.prefixes = newPrefixIndex(prefixes)
 	return compiled, nil
 }
 

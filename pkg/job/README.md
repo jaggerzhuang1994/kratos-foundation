@@ -4,6 +4,75 @@
 
 并发策略只作用于 Cron：默认 `AllowOverlap` 允许重叠，`SkipIfRunning` / `DelayIfRunning` 只约束当前进程；跨进程控制必须同时注入 `ConcurrencyCoordinator` 并为任务选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。仅注入协调器不会改变任务策略。`NewManager(logger, spec, tracing, metrics, coordinator)` 的最后一个参数允许 nil，此时仅可使用进程内策略；分布式策略缺少协调器会在构造时返回错误，不会静默退化为无锁执行。所有声明必须在 `NewManager` 之前完成，之后修改 Spec 不会重配已创建的 Manager。
 
+## Delay 容量
+
+`DelayIfRunning` 默认最多一轮执行、一轮等待；满额的新触发直接跳过，默认返回 nil 并记录 `WARN limitPendingRuns | job backlog full; trigger skipped`，不调用 ErrorHandler。`DelayIfDistributedRunning` 在外部 Acquire 前限制每个任务、每个进程最多两个进入竞争的调用；其他节点持有执行权时，这两个调用可能都在等待。该限制不是分布式全局队列，也不保证严格 FIFO。
+
+使用 `job.WithMaxPendingRuns(n)` 覆盖，`n=0` 不保留额外等待名额，`n=-1` 显式恢复旧的无界等待。分布式 Delay 的总进入名额为 `n+1`，因此 n=0 时仍可能有一个调用等待远端执行权。负数仅允许 -1；最大 int 不支持，因为还需预留一个执行名额。所有配置在 Manager 构造时固化，不能运行期修改。默认 `AllowOverlap` 和两种 Skip 策略不受此选项限制。
+
+```go
+spec.RegisterCron("refresh", "@every 10s", task,
+    job.WithConcurrentPolicy(job.DelayIfRunning),
+    job.WithMaxPendingRuns(1))
+```
+
+片段中的 `spec` 是 `job.NewSpec()`，`task` 实现 `job.Task`。必须逐轮可靠执行的工作应使用持久队列；有界 Delay 会丢弃超额触发，显式无界 Delay 则仍有积压耗尽资源的风险。
+
+通过 `job.WithDelayOverflowHandler` 为单个 Cron 注入业务告警：
+
+```go
+// 前置条件：spec 为 bootstrap.NewSpec()；task 为业务 job.Task。
+// notify 由业务注入，签名为 func(context.Context, job.DelayOverflow) error。
+spec.Job().RegisterCron("refresh", "@every 10s", task,
+    job.WithConcurrentPolicy(job.DelayIfRunning),
+    job.WithMaxPendingRuns(1),
+    job.WithDelayOverflowHandler(func(ctx context.Context, event job.DelayOverflow) error {
+        notifyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+        defer cancel()
+        return notify(notifyCtx, event)
+    }))
+```
+
+使用独立 `job.Spec` 时直接调用 `spec.RegisterCron`，选项相同。示例需导入 `context`、`time`、`job` 和 `bootstrap`。回调事件是独立值，含任务名 `Name`、策略 `Policy` 和配置容量 `MaxPendingRuns`；不代表全局或实时队列长度。仅有界 Delay 满额时调用，未配置、无界 Delay、Skip 和 AllowOverlap 不调用。
+
+回调在默认 WARN 之后同步执行，不持锁、不占任务执行名额；可能被同一任务的多个触发并发调用。业务负责并发安全、请求超时及告警去重/限频，框架不创建通知 goroutine、不重试。慢回调仍会占用调度 goroutine 并延迟停止，应响应传入 Context，避免无限阻塞。回调成功仍跳过本轮；错误保留错误链，panic 转为错误，沿用 Cron 最终错误入口（自定义 `WithErrorHandler` 或默认 `ERROR cron job failed`）。与普通任务一致，随调度 Context 正常取消的错误不再上报。回调依赖由业务构造并在任务停止后释放；构造 Manager 后修改 Spec 不会替换已捕获的回调。
+
+名额通过每任务独立的 buffered channel 非阻塞申请，不增加包级锁；执行、外部 Acquire 和日志不在互斥临界区中。正常返回、取消和 panic 均归还名额；进程内执行令牌与分布式 guard 的取得/释放沿用原策略。第三方 Acquire 仍须响应 Context；容量限制不能强制终止不合作的实现。
+
+```mermaid
+flowchart TD
+    A([Cron 并发触发]) --> B{Delay 且启用容量限制?}
+    B -- 否 --> S([沿用原策略及其返回路径])
+    B -- 是 --> D{Context 已取消?}
+    D -- 是 --> E([返回取消错误])
+    D -- 否 --> F{非阻塞申请本任务进程内名额成功?}
+    F -- 否 --> G[WARN limitPendingRuns job backlog full trigger skipped]
+    G --> U{配置回调?}
+    U -- 否 --> H([返回 nil 跳过本轮])
+    U -- 是 --> V[无锁同步回调 可调用外部告警服务 使用 Context 超时]
+    V -- 成功 --> H
+    V -- 错误或 panic 转错误 --> W{调度 Context 正常取消?}
+    W -- 是 --> X([结束 不上报正常取消])
+    W -- 否 --> Y[WithErrorHandler 或默认 ERROR cron job failed]
+    Y --> Z([结束 本轮仍跳过])
+    F -- 是 --> I[登记 defer 归还名额]
+    I --> J{进程内 Delay 或分布式 Delay?}
+    J -- 进程内 --> K[等待执行令牌 或 Context 取消]
+    J -- 分布式 --> L[外部 Acquire 等待 guard 或 Context 取消]
+    K -- 取消 --> M[归还名额]
+    L -- 失败 --> N[ERROR job coordination failed]
+    N --> M
+    K -- 取得 --> O[执行 Handler 结束或 panic 时归还令牌]
+    L -- 取得 --> P[在 guard Context 下执行 Handler 释放 guard]
+    P -- 失去执行权或释放失败 --> Q[ERROR job coordination lost]
+    Q --> M
+    O --> M
+    P -- 成功 --> M
+    M --> R([返回结果或由现有路径处理 panic])
+```
+
+## 构造示例
+
 以下 Wire provider 分别构造 Redis 协调器和 Job 运行时。`redisManager` 已按 [Redis 配置](../redis/README.md) 声明 `locks` 连接；其他依赖由业务 Wire 提供。`appSpec` 必须是最终创建应用使用的同一个 Spec；返回的 `JobBootstrap` 要加入 [Bootstrap 聚合](../bootstrap/README.md)，确保应用构造前完成登记。`cleanupTask` 是实现 `job.Task` 的业务任务。
 
 ```go
@@ -119,3 +188,7 @@ Release 先取消旧执行和续租，再最多等待 `OperationTimeout` 让在�
 
 任务实现和中间件可通过 `job.JobNameFromContext(ctx)` 读取任务的注册名称。
 名称由执行器注入，派生 Context 会继承；非任务 Context 返回空字符串。
+
+默认不启用分布式协调时，Wire 可选择 `job.DefaultCoordinator`，其返回真正的 nil interface。
+它不提供本地锁实现；进程内并发策略仍由 Job 自身处理。需要分布式协调时，替换该 provider，
+不要同时登记默认和自定义 provider。

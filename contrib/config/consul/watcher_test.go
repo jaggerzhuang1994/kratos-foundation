@@ -77,6 +77,9 @@ func TestWatcherIncludesPureDeletionAndEmptySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if full, ok := watcher.(interface{ FullSnapshot() bool }); !ok || !full.FullSnapshot() {
+		t.Fatal("built-in watcher must declare full snapshots")
+	}
 	t.Cleanup(func() { _ = watcher.Stop() })
 	for _, count := range []int{2, 1, 0} {
 		values, err := nextConsulValues(t, watcher)

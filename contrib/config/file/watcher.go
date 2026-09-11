@@ -65,6 +65,10 @@ type fileWatcher struct {
 	stopErr       error
 }
 
+// FullSnapshot 声明每次成功的 Next 返回本源完整状态；空结果表示全部删除。
+// 返回值至少在下一次 Next 前保持稳定，Stream 会复制后发布，不再重复 Load。
+func (w *fileWatcher) FullSnapshot() bool { return true }
+
 func (w *fileWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 	for {
 		if err := w.ctx.Err(); err != nil {

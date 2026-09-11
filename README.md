@@ -13,7 +13,7 @@
 
 - [`config.example.yaml`](config.example.yaml)：当前 Foundation YAML 配置参考，包含可选字段的注释示例。
 - [`config.schema.json`](config.schema.json)：编辑器补全与结构校验；由 [`proto/config.proto`](proto/config.proto) 及其导入协议生成，不能手工修改。
-- [`pkg/config`](pkg/config/README.md)：配置源合并、类型解码、占位符、订阅及错误语义。
+- [`pkg/config`](pkg/config/README.md)：配置源合并、环境变量替换、类型解码、订阅及错误语义。
 
 示例覆盖未弃用的协议字段；连接级 `database.connections.*.gorm` 与全局 `database.gorm` 共用字段，示例只列出部分覆盖值，完整字段看全局块。弃用的 `database.tracing.exclude_metrics` 仅保留说明，数据库指标统一使用 `database.metrics`。
 
@@ -38,7 +38,7 @@
 
 框架不会自动寻找 `config.example.yaml`。应用将需要的配置复制到部署文件，替换地址、连接名和凭据，并通过 [`contrib/config/file`](contrib/config/file/README.md) 的 `NewSources(logger, PathList{...})` 或 [`contrib/config/consul`](contrib/config/consul/README.md) 创建源，再交给 `config.NewManager`。只有应用显式构造的组件才会消费对应配置块；删除数据库或 Redis 配置时，也应调整相应组件的组装。
 
-Sources 按传入顺序合并，后面的源优先级更高；map 递归合并，slice、标量和显式 `null` 整体覆盖。`${host}`、`${host:fallback}` 引用的是合并后的配置路径，不会自动读取同名环境变量。凭据应由实际部署配置源提供，示例中的占位值不能用于连接真实服务。
+Sources 按传入顺序合并，后面的源优先级更高；map 递归合并，slice、标量和显式 `null` 整体覆盖。`$VAR` / `${VAR}` 在原始 KeyValue 的 JSON/YAML 解析前通过 Compose 模板替换环境变量，支持默认值和必填检查；普通变量未设置时为空。配置自身引用及其 fallback 已移除；具体边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。凭据应由实际部署配置源或受信任的进程环境提供，示例中的占位值不能用于连接真实服务。
 
 ```mermaid
 flowchart TD
@@ -162,7 +162,7 @@ if err != nil {
 
 `pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择并通过 `job.NewManager` 的最后一个构造参数注入。统一 Spec 模式由 `bootstrap.NewComponentsBootstrap` 接收并转交协调器，Spec 仅声明任务与策略。
 
-不需要跨进程协调时，业务 provider 返回 nil `job.ConcurrencyCoordinator`；启用时提供 Redis contrib 实现，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。分布式策略缺少协调器会在 Manager 构造时返回错误；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。
+不需要跨进程协调时，业务 provider 返回 nil `job.ConcurrencyCoordinator`；启用时提供 Redis contrib 实现，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。分布式策略缺少协调器会在 Manager 构造时返回错误；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。Delay 默认有界等待，超额触发会跳过；详见 [Job 容量说明](pkg/job/README.md#delay-容量)。
 
 `registry.Registrar` 同样由 Wire 注入 `bootstrap.NewKratosApp`，返回 nil 即禁用服务注册。完整的 nil provider 与 Wire 示例见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)，Redis provider 与租约边界见 [Job 文档](pkg/job/README.md)。
 
@@ -205,3 +205,5 @@ make verify
 ```
 
 修改 Protocol Buffers 或 Wire 等生成源后，使用仓库对应的 `make proto` 或 `make generate` 目标，不要手工修改生成文件。
+
+本地 Docker 真实服务验证：在仓库根目录运行 `make test-external`，自动创建并清理隔离的 MySQL/Kafka/Redis/Consul，执行集成、恢复和批量基准。服务版本、端口、产物及适用边界见 [外部测试说明](testdata/external/README.md)。

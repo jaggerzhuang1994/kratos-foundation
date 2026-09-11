@@ -49,6 +49,19 @@ flowchart TD
     K --> L([执行对应请求策略])
 ```
 
+WebSocket 默认对**传输载荷和解压后消息**分别施加 **1 MiB** 上限；旧的 `HTTP().WebSocket(...)` 注册入口也采用此默认值。上限针对整条消息，分片不能绕过；开启消息压缩时，两种大小都须满足上限，所以接近边界的不可压缩数据需要为压缩格式开销留余量。它不是连接数或进程总内存上限，也不是读取超时。
+
+通过 Spec 的端点配置覆盖（`spec` 为已创建的 `*server.Spec`，`handler` 实现至少一种 WebSocket 事件接口）：
+
+```go
+spec.HTTP().WebSocketWithConfig("/ws", handler, server.WebSocketConfig{
+    MaxMessageBytes: 4 << 20,
+    Upgrader: server.Upgrader{EnableCompression: true},
+})
+```
+
+`MaxMessageBytes=0` 使用默认值，`-1` 显式恢复不限制消息大小的旧行为，小于 `-1` 在 Spec 校验时拒绝。这是端点构造期配置，不来自 YAML，也不热更新。超限数据不会交给 `OnMessage`；框架尝试发送 1009 关闭帧，记录 `WARN readMessage | websocket message too large`，将包含 `websocket.ErrReadLimit` 的错误交给已提供的 `OnError`，随后按原有关闭路径执行 `OnClose`。网络已失效时不保证对端收到关闭帧。大文件建议通过上传接口或应用层分片传输。
+
 WebSocket 的 `OnHandshake` 接收中间件派生的上下文，包含身份、metadata 和握手截止时间。升级成功后，`WebSocketConn.Request().Context()` 保留这些上下文值，同时脱离 HTTP 握手请求的取消和截止时间；连接关闭时取消。`OnConnect`、`OnMessage`、`OnError` 和 `OnClose` 均可通过 `Request()` 读取这些值。正常关闭及停机强制中断会先取消连接上下文，读循环退出时的 `OnClose` 看到已取消状态。应用如需连接最大存活时间，应自行按业务策略调用 `Close()`。
 
 ```mermaid
@@ -58,17 +71,22 @@ flowchart TD
     C --> D{握手与 Gorilla 升级成功?}
     D -- 否 --> E[WARN websocket upgrade failed]
     E --> F([返回请求错误 释放握手上下文])
-    D -- 是 --> G[保留上下文值 创建独立连接取消函数]
+    D -- 是 --> Z[设置接收上限 保留上下文值 创建独立连接取消函数]
+    Z --> G[准备连接与事件处理器]
     G --> V{hub 锁内检查 是否已停机?}
     V -- 是 --> W[释放 hub 锁 Close 取消上下文并关闭连接]
     W --> X[关闭失败时 WARN websocket connection close failed]
     X --> Y[WARN websocket server is stopping]
     Y --> S
     V -- 否 --> H[hub 锁内登记连接 释放锁后启动读循环]
-    H --> I[OnConnect 与 OnMessage 使用连接上下文]
-    I --> J{读失败或对端断开?}
-    J -- 是 --> K[OnError]
-    J -- 否 --> I
+    H --> I[OnConnect 使用连接上下文]
+    I --> AA[按传输及解压后上限读取一条消息]
+    AA --> J{读取结果?}
+    J -- 超限 --> AB[尝试发送 1009 并记录 WARN readMessage message too large]
+    AB --> K[OnError]
+    J -- 其他读失败 --> K
+    J -- 成功 --> AC[OnMessage 使用连接上下文]
+    AC --> AA
     K --> L[closeOnce 内取消连接上下文]
     M[并发 Close 或停机关闭] --> L
     L --> N[写锁内发送可选关闭帧并关闭 socket 释放写锁]
@@ -105,7 +123,9 @@ flowchart TD
 
 `middleware.deadline.fallback_timeout` 缺失时默认 **10s**，未配置 `middleware` 或 `deadline` 也采用该默认值。只有父 Context 没有截止时间时才使用 fallback；显式 `fallback_timeout: 0s` 关闭回退超时。`max_timeout` 大于零时始终参与计算，并取更早的截止时间，因此关闭 fallback 后仍可能被父 Context 或 `max_timeout` 限制。`max_timeout` 与 `min_budget` 默认 0s，不启用对应限制。
 
-路由按精确 `path`、最长 `prefix`、全局配置的顺序匹配；路由缺失的字段继承全局值，显式 `0s` 关闭对应限制。热更新删除全局 fallback 显式值后恢复默认 10s。`min_budget` 不能超过任何已启用的 fallback 或 max 超时，因此未指定 fallback 时也会按默认 10s 校验。
+精确 `path` 在配置更新时建立 map，`prefix` 建立按字节匹配的压缩前缀树；查询树的成本取决于 operation 长度，不再逐条扫描全部前缀。两种索引与默认值作为同一个只读快照原子发布，更新校验失败不替换旧快照，读侧不增加锁。空 operation 保留历史行为：存在前缀规则时选择配置顺序中的首条，否则使用全局策略。
+
+非空 operation 按精确 `path`、最长 `prefix`、全局配置的顺序匹配；路由缺失的字段继承全局值，显式 `0s` 关闭对应限制。热更新删除全局 fallback 显式值后恢复默认 10s。`min_budget` 不能超过任何已启用的 fallback 或 max 超时，因此未指定 fallback 时也会按默认 10s 校验。
 
 下图同时适用于服务端处理与客户端调用。HTTP 服务端会先将有效的 `x-request-timeout-ms` 请求头转换为上游截止时间，客户端则将最终剩余预算传播到请求头；gRPC 使用 Context 传播预算。
 
@@ -113,7 +133,7 @@ flowchart TD
 flowchart TD
     A([开始请求或调用]) --> B{父 Context 已取消或超时?}
     B -- 是 --> E([返回 Context 错误])
-    B -- 否 --> C[读取策略并匹配路由 缺失全局 fallback 默认 10s]
+    B -- 否 --> C[原子读取完整快照 查精确索引再沿前缀树选择最长匹配或全局策略]
     C --> D{父 Context 有截止时间?}
     D -- 是 --> F[沿用父截止时间]
     D -- 否 --> G{fallback 大于 0?}

@@ -132,6 +132,11 @@ func TestStoreDeriveSelectsRouteAndUpdatesAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// 保留旧实现的空 operation 边界：选择首个前缀规则。
+	if got := deriveInfo(t, store, "").FallbackTimeout; got != 400*time.Millisecond {
+		t.Fatalf("empty operation fallback=%v", got)
+	}
+
 	exact := deriveInfo(t, store, "/example.Service/Exact")
 	if exact.FallbackTimeout != 80*time.Millisecond {
 		t.Fatalf("exact fallback = %s, want 80ms", exact.FallbackTimeout)

@@ -33,11 +33,11 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 	info := appinfo.New("bootstrap-test")
 	for _, tt := range []struct {
 		name    string
-		ctx     context.Context
+		invalid bool
 		wantErr bool
 	}{
-		{"success", context.Background(), false},
-		{"invalid context", nil, true},
+		{"success", false, false},
+		{"invalid context decorator", true, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := app.NewSpec()
@@ -52,7 +52,12 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 				t.Fatal(err)
 			}
 			completed := bootstrap.NewBootstrap(infrastructure, bootstrap.Bootstrap{})
-			application, err := bootstrap.NewKratosApp(tt.ctx, spec, completed, config, policy, nil)
+			if tt.invalid {
+				if err := spec.AddContext(func(context.Context) context.Context { return nil }); err != nil {
+					t.Fatal(err)
+				}
+			}
+			application, err := bootstrap.NewKratosApp(spec, completed, config, policy, nil)
 			if tt.wantErr {
 				if err == nil || application != nil {
 					t.Fatalf("construction = (%v, %v), want error", application, err)

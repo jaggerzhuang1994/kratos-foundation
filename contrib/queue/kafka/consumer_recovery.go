@@ -15,14 +15,14 @@ type consumerOperationError struct{ err error }
 func (e *consumerOperationError) Error() string { return e.err.Error() }
 func (e *consumerOperationError) Unwrap() error { return e.err }
 
-func recoverableConsumerOperation(err error) bool {
+func recoverableConsumerOperation(err error, allowFirstRead bool) bool {
 	var operation *consumerOperationError
-	return errors.As(err, &operation) && transientKafkaError(operation.err)
+	return errors.As(err, &operation) && transientKafkaError(operation.err, allowFirstRead)
 }
 
 // transientKafkaError 保留 SDK 的错误分类；失去组代次后通过新客户端重新入组。
 // 聚合错误中只要有一个永久失败，就不能用重连掩盖它。
-func transientKafkaError(err error) bool {
+func transientKafkaError(err error, allowFirstRead bool) bool {
 	if err == nil {
 		return false
 	}
@@ -34,7 +34,7 @@ func transientKafkaError(err error) bool {
 					continue
 				}
 				hasError = true
-				if !transientKafkaError(child) {
+				if !transientKafkaError(child, allowFirstRead) {
 					return false
 				}
 			}
@@ -42,8 +42,11 @@ func transientKafkaError(err error) bool {
 		}
 	}
 	var firstRead *kgo.ErrFirstReadEOF
-	if errors.Is(err, context.Canceled) || errors.Is(err, kgo.ErrClientClosed) || errors.As(err, &firstRead) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, kgo.ErrClientClosed) {
 		return false
+	}
+	if errors.As(err, &firstRead) {
+		return allowFirstRead
 	}
 	return kgo.IsRetryableBrokerErr(err) || kerr.IsRetriable(err) || reconnect.Transient(err) ||
 		errors.Is(err, kerr.IllegalGeneration) || errors.Is(err, kerr.UnknownMemberID) ||

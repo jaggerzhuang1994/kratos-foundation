@@ -3,16 +3,21 @@ package kafka
 import (
 	"context"
 	"errors"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
+	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	foundationkafka "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
@@ -426,4 +431,389 @@ func TestConsumerInstanceUsesExactSingleNameAndNumberedConcurrentNames(t *testin
 	if got := consumerInstance(ConsumerConfig{Instance: "billing", Concurrency: 2}, 1); got != "billing-2" {
 		t.Fatalf("concurrent instance = %q", got)
 	}
+}
+
+// externalKafkaFactory 只在显式设置测试地址时连接隔离的真实 Broker。
+func externalKafkaFactory(t testing.TB) (*foundationkafka.ClientFactory, foundationlog.Logger, string) {
+	t.Helper()
+	address := os.Getenv("FOUNDATION_TEST_KAFKA_ADDR")
+	if address == "" {
+		t.Skip("set FOUNDATION_TEST_KAFKA_ADDR for Docker integration tests")
+	}
+	logger, cleanup, err := foundationlog.NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	allow := true
+	level := "error"
+	factory, err := foundationkafka.NewClientFactory(logger, testconfig.New(t, "kafka", &config_pb.Kafka{
+		Log:         &config_pb.ModuleLog{Level: &level},
+		Connections: map[string]*config_pb.KafkaConnection{"external": {Brokers: []string{address}, AllowAutoTopicCreation: &allow}},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return factory, logger, fmt.Sprintf("foundation_test_%d", time.Now().UnixNano())
+}
+
+func TestExternalKafkaFailureReplaysUncommittedBatch(t *testing.T) {
+	factory, logger, topic := externalKafkaFactory(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	producer, cleanup, err := NewProducer(factory, ProducerConfig{Connection: "external", Topic: topic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	messages := make([]*queue.Message, 32)
+	for i := range messages {
+		messages[i] = &queue.Message{Body: []byte(fmt.Sprint(i))}
+	}
+	if err := producer.PublishBatch(ctx, messages); err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := NewConsumer(factory, logger, ConsumerConfig{Connection: "external", Topic: topic, Group: topic, Instance: topic, MaxPollRecords: 32})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("injected handler failure")
+	var first string
+	if err := consumer.Consume(ctx, func(_ context.Context, d queue.Delivery) error { first = string(d.Message.Body); return failure }); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	var replay string
+	if err := consumer.Consume(ctx, func(_ context.Context, d queue.Delivery) error { replay = string(d.Message.Body); return failure }); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if first != "0" || replay != first {
+		t.Fatalf("first=%q replay=%q", first, replay)
+	}
+	// 新会话保持可取消，即使当前没有新消息；已失败的批次未被错误确认。
+	stopped, stop := context.WithCancel(ctx)
+	stop()
+	start := time.Now()
+	if err := consumer.Consume(stopped, func(context.Context, queue.Delivery) error { t.Error("canceled consumer executed handler"); return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	t.Logf("uncommitted replay preserved; canceled stop=%s", time.Since(start))
+}
+
+func TestExternalKafkaBrokerRestart(t *testing.T) {
+	project := os.Getenv("FOUNDATION_TEST_DOCKER_PROJECT")
+	if !strings.HasPrefix(project, "foundation-validation-") {
+		t.Skip("requires a runner-owned Docker project")
+	}
+	factory, logger, topic := externalKafkaFactory(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	producer, cleanup, err := NewProducer(factory, ProducerConfig{Connection: "external", Topic: topic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := producer.Publish(ctx, &queue.Message{Body: []byte("before")}); err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := NewConsumer(factory, logger, ConsumerConfig{Connection: "external", Topic: topic, Group: topic, Instance: topic, MaxPollRecords: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan string, 2)
+	done := make(chan error, 1)
+	go func() {
+		seen := map[string]bool{}
+		done <- consumer.Consume(ctx, func(_ context.Context, d queue.Delivery) error {
+			value := string(d.Message.Body)
+			if !seen[value] {
+				seen[value] = true
+				events <- value
+			}
+			return nil
+		})
+	}()
+	// 先确认真实消费已建立，再只重启 runner 创建的 Kafka 服务。
+	select {
+	case value := <-events:
+		if value != "before" {
+			t.Fatal(value)
+		}
+	case err := <-done:
+		t.Fatal(err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	compose, err := filepath.Abs("../../../testdata/external/compose.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	command := exec.CommandContext(ctx, "docker", "compose", "-p", project, "-f", compose, "restart", "kafka")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("restart Kafka: %v %s", err, output)
+	}
+	if err := producer.Publish(ctx, &queue.Message{Body: []byte("after")}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case value := <-events:
+		if value != "after" {
+			t.Fatal(value)
+		}
+	case err := <-done:
+		t.Fatalf("consumer stopped during recovery: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	t.Logf("existing producer/consumer recovered after broker restart in %s", time.Since(start))
+	cancel()
+	start = time.Now()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("consumer did not stop")
+	}
+	t.Logf("active consumer stop=%s", time.Since(start))
+}
+
+func TestExternalKafkaClientLifecycleSamples(t *testing.T) {
+	factory, _, _ := externalKafkaFactory(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	var before, after runtime.MemStats
+	for i := 0; i < 21; i++ {
+		client, err := factory.NewProducerClient("external")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Ping(ctx); err != nil {
+			client.Close()
+			t.Fatal(err)
+		}
+		client.Close()
+		if i == 0 {
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			t.Logf("warm goroutines=%d heap=%d", runtime.NumGoroutine(), before.HeapAlloc)
+		}
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	t.Logf("after 20 create/ping/close cycles: goroutines=%d heap=%d heap_delta=%d", runtime.NumGoroutine(), after.HeapAlloc, int64(after.HeapAlloc)-int64(before.HeapAlloc))
+}
+
+func TestPublicConsumerFactoryBindsSDKContextAndRecoveryOptions(t *testing.T) {
+	manager := newQueueKafkaManager(t, map[string]*config_pb.KafkaConnection{"main": {Brokers: []string{"127.0.0.1:1"}}})
+	value, err := NewConsumer(manager, nil, ConsumerConfig{Connection: "main", Topic: "orders", Group: "billing", Instance: "billing-1", StartPosition: queue.StartLatest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := value.(*consumer).createClient(ctx, "main", "billing-1", kgo.ConsumeStartOffset(kgo.NewOffset().AtStart()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.CloseAllowingRebalance()
+	sdk := client.(*kgo.Client)
+	if sdk.OptValue(kgo.WithContext) != ctx {
+		t.Fatal("production factory did not bind SDK to worker context")
+	}
+	if sdk.OptValue(kgo.ConsumeStartOffset).(kgo.Offset).String() != kgo.NewOffset().AtStart().String() {
+		t.Fatal("production factory discarded recovery offset option")
+	}
+	cancel()
+}
+
+func testRecord(topic string, partition int32, offset int64) *kgo.Record {
+	return &kgo.Record{
+		Topic:     topic,
+		Partition: partition,
+		Offset:    offset,
+		Key:       []byte("key"),
+		Value:     []byte("value"),
+		Headers: []kgo.RecordHeader{
+			{Key: "trace", Value: []byte("header")},
+		},
+		Timestamp: time.Unix(offset, 0),
+	}
+}
+
+func testFetches(records ...*kgo.Record) kgo.Fetches {
+	return kgo.Fetches{{
+		Topics: []kgo.FetchTopic{{
+			Topic: "orders",
+			Partitions: []kgo.FetchPartition{{
+				Partition: 0,
+				Records:   records,
+			}},
+		}},
+	}}
+}
+
+type recordingCommitter struct {
+	mu      sync.Mutex
+	records []*kgo.Record
+	err     error
+	count   int
+}
+
+type consumerLifecycleFactory struct {
+	mu            sync.Mutex
+	want          int
+	fatalInstance string
+	fatalErr      error
+	allCreated    chan struct{}
+	createdOnce   sync.Once
+	instances     []string
+	clients       []*consumerClientStub
+}
+
+func newConsumerLifecycleFactory(
+	want int,
+	fatalInstance string,
+	fatalErr error,
+) *consumerLifecycleFactory {
+	return &consumerLifecycleFactory{
+		want:          want,
+		fatalInstance: fatalInstance,
+		fatalErr:      fatalErr,
+		allCreated:    make(chan struct{}),
+		clients:       make([]*consumerClientStub, 0, want),
+	}
+}
+
+func (f *consumerLifecycleFactory) create(
+	_ context.Context,
+	connection string,
+	instance string,
+	_ ...kgo.Opt,
+) (consumerClient, error) {
+	if connection != "main" {
+		return nil, errors.New("unexpected connection")
+	}
+	client := &consumerClientStub{}
+	client.poll = func(ctx context.Context, _ int) kgo.Fetches {
+		select {
+		case <-f.allCreated:
+		case <-ctx.Done():
+			return kgo.NewErrFetch(ctx.Err())
+		}
+		if instance == f.fatalInstance {
+			return kgo.NewErrFetch(f.fatalErr)
+		}
+		<-ctx.Done()
+		return kgo.NewErrFetch(ctx.Err())
+	}
+	f.mu.Lock()
+	f.instances = append(f.instances, instance)
+	f.clients = append(f.clients, client)
+	if len(f.clients) == f.want {
+		f.createdOnce.Do(func() { close(f.allCreated) })
+	}
+	f.mu.Unlock()
+	return client, nil
+}
+
+func (f *consumerLifecycleFactory) snapshot() ([]string, []*consumerClientStub) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	instances := append([]string(nil), f.instances...)
+	clients := append([]*consumerClientStub(nil), f.clients...)
+	return instances, clients
+}
+
+type consumerClientStub struct {
+	mu             sync.Mutex
+	poll           func(context.Context, int) kgo.Fetches
+	closed         int
+	allowRebalance int
+}
+
+func (c *consumerClientStub) PollRecords(ctx context.Context, maxRecords int) kgo.Fetches {
+	return c.poll(ctx, maxRecords)
+}
+
+func (*consumerClientStub) CommitRecords(context.Context, ...*kgo.Record) error { return nil }
+
+func (*consumerClientStub) LeaveGroupContext(context.Context) error { return nil }
+
+func (c *consumerClientStub) AllowRebalance() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.allowRebalance++
+}
+
+func (c *consumerClientStub) CloseAllowingRebalance() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed++
+}
+
+func (c *consumerClientStub) closeCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
+func (c *consumerClientStub) allowRebalanceCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.allowRebalance
+}
+
+func newRecordingCommitter(err error) *recordingCommitter {
+	return &recordingCommitter{err: err}
+}
+
+func (c *recordingCommitter) CommitRecords(_ context.Context, records ...*kgo.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.count++
+	c.records = append([]*kgo.Record(nil), records...)
+	return c.err
+}
+
+func (c *recordingCommitter) commitCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.count
+}
+
+func (c *recordingCommitter) committedRecords() []*kgo.Record {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]*kgo.Record(nil), c.records...)
+}
+
+type producerClientStub struct {
+	mu     sync.Mutex
+	closed int
+}
+
+func newProducerClientStub() *producerClientStub {
+	return &producerClientStub{}
+}
+
+func (*producerClientStub) ProduceSync(_ context.Context, records ...*kgo.Record) kgo.ProduceResults {
+	results := make(kgo.ProduceResults, len(records))
+	for index, record := range records {
+		results[index] = kgo.ProduceResult{Record: record}
+	}
+	return results
+}
+
+func (c *producerClientStub) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed++
+}
+
+func (c *producerClientStub) closeCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
 }

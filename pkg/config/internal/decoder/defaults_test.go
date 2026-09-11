@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-func TestMergeAppliesNormalizedDefaultsAndReplacesSlices(t *testing.T) {
+func TestApplyDefaultsAppliesNormalizedDefaultsAndReplacesSlices(t *testing.T) {
 	t.Parallel()
 
 	defaults := &config_pb.Registry{
@@ -41,7 +41,7 @@ func TestMergeAppliesNormalizedDefaultsAndReplacesSlices(t *testing.T) {
 	}
 }
 
-func TestMergePreservesBusinessMapKeys(t *testing.T) {
+func TestApplyDefaultsPreservesBusinessMapKeys(t *testing.T) {
 	defaults := map[string]int{"foo_bar": 1, "FooBar": 3}
 	target := new(map[string]int)
 	decoder, err := New(target, []any{&defaults})
@@ -56,7 +56,7 @@ func TestMergePreservesBusinessMapKeys(t *testing.T) {
 	}
 }
 
-func TestMergePreservesProtoMapKeysAndNestedFieldAliases(t *testing.T) {
+func TestApplyDefaultsPreservesProtoMapKeysAndNestedFieldAliases(t *testing.T) {
 	defaults := &config_pb.Client{Clients: map[string]*config_pb.ClientOption{"order_service": {Target: "old"}}}
 	target := new(config_pb.Client)
 	decoder, err := New(target, []any{defaults})

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime/debug"
 	"sync"
@@ -32,12 +33,16 @@ type WebSocketConn interface {
 
 const writeWait = time.Second
 
+// 默认限制整条接收消息；缓冲区大小不等于消息大小上限。
+const defaultWebSocketMaxMessageBytes int64 = 1 << 20
+
 type websocketClient struct {
 	log.Logger
 
-	request *http.Request
-	conn    *websocket.Conn
-	cancel  context.CancelFunc
+	request         *http.Request
+	conn            *websocket.Conn
+	maxMessageBytes int64
+	cancel          context.CancelFunc
 
 	onConnectHandler OnConnectHandler
 	onMessageHandler OnMessageHandler
@@ -56,6 +61,7 @@ func upgrade(
 	request *http.Request,
 	w http.ResponseWriter,
 	handler any,
+	maxMessageBytes int64,
 ) (client *websocketClient, err error) {
 	onHandshakeHandler, _ := handler.(OnHandshakeHandler)
 	onConnectHandler, _ := handler.(OnConnectHandler)
@@ -75,6 +81,11 @@ func upgrade(
 		return nil, fmt.Errorf("upgrade websocket connection: %w", err)
 	}
 
+	if maxMessageBytes == 0 {
+		maxMessageBytes = defaultWebSocketMaxMessageBytes
+	}
+	// Gorilla 限制线上载荷；readMessage 另限制解压后字节，防止协商压缩绕过上限。
+	conn.SetReadLimit(maxMessageBytes)
 	// HTTP 请求及握手中间件返回时会取消原上下文。连接保留其值，并独立拥有
 	// 取消生命周期；仅在升级成功后创建，失败路径没有待释放的连接上下文。
 	ctx, cancel := context.WithCancel(context.WithoutCancel(request.Context()))
@@ -82,6 +93,7 @@ func upgrade(
 		Logger:           log,
 		request:          request.WithContext(ctx),
 		conn:             conn,
+		maxMessageBytes:  maxMessageBytes,
 		cancel:           cancel,
 		onConnectHandler: onConnectHandler,
 		onMessageHandler: onMessageHandler,
@@ -90,6 +102,35 @@ func upgrade(
 	}
 
 	return client, nil
+}
+
+// readMessage 对压缩后的传输载荷与解压结果分别限流，超限数据不进入业务回调。
+func (c *websocketClient) readMessage() (int, []byte, error) {
+	if c.maxMessageBytes <= 0 {
+		return c.conn.ReadMessage()
+	}
+	messageType, reader, err := c.conn.NextReader()
+	if err != nil {
+		return messageType, nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(reader, c.maxMessageBytes))
+	if err != nil {
+		return messageType, nil, err
+	}
+	if int64(len(data)) < c.maxMessageBytes {
+		return messageType, data, nil
+	}
+	// 额外探测一字节区分恰好到达上限与超限，不计算 max+1，避免整数溢出。
+	var extra [1]byte
+	n, err := io.ReadFull(reader, extra[:])
+	if n > 0 {
+		closeErr := c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseMessageTooBig, "message too large"), time.Now().Add(writeWait))
+		return messageType, nil, errors.Join(websocket.ErrReadLimit, closeErr)
+	}
+	if err != io.EOF {
+		return messageType, nil, err
+	}
+	return messageType, data, nil
 }
 
 // resolve 持续读取完整消息，并把连接事件隔离到对应处理器。
@@ -115,8 +156,11 @@ func (c *websocketClient) resolve() {
 		c.onConnectHandler.OnConnect(c)
 	}
 	for {
-		mt, m, err := c.conn.ReadMessage()
+		mt, m, err := c.readMessage()
 		if err != nil {
+			if errors.Is(err, websocket.ErrReadLimit) && c.Logger != nil {
+				c.With("error", err, "max_message_bytes", c.maxMessageBytes).Warn("readMessage | websocket message too large")
+			}
 			if c.onErrorHandler != nil {
 				c.onErrorHandler.OnError(c, err)
 			}

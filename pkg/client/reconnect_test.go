@@ -3,9 +3,12 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"testing/synctest"
@@ -111,4 +114,100 @@ func TestGRPCReconnectBackoffStaysBounded(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestHTTPTransportReusesConcurrentWaves(t *testing.T) {
+	for _, width := range []int{1, 8, 32} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			arrived := make(chan struct{}, width)
+			gates := []chan struct{}{make(chan struct{}), make(chan struct{})}
+			var connections atomic.Int64
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				arrived <- struct{}{}
+				wave := 0
+				if r.URL.Path == "/1" {
+					wave = 1
+				}
+				select {
+				case <-gates[wave]:
+				case <-ctx.Done():
+				}
+				_, _ = io.WriteString(w, "ok")
+			}))
+			server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+				if state == http.StateNew {
+					connections.Add(1)
+				}
+			}
+			server.Start()
+			defer server.Close()
+			transport, _, cleanup := newHTTPClientTransport(ctx, false)
+			defer cleanup()
+			client := &http.Client{Transport: transport}
+			first := int64(0)
+			for wave := 0; wave < 2; wave++ {
+				done := make(chan error, width)
+				for range width {
+					go func() {
+						req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%d", server.URL, wave), nil)
+						if err != nil {
+							done <- err
+							return
+						}
+						res, err := client.Do(req)
+						if err == nil {
+							_, err = io.Copy(io.Discard, res.Body)
+							closeErr := res.Body.Close()
+							if err == nil {
+								err = closeErr
+							}
+						}
+						done <- err
+					}()
+				}
+				for range width {
+					select {
+					case <-arrived:
+					case <-ctx.Done():
+						t.Fatal(ctx.Err())
+					}
+				}
+				close(gates[wave])
+				for range width {
+					if err := <-done; err != nil {
+						t.Fatal(err)
+					}
+				}
+				if wave == 0 {
+					first = connections.Load()
+				}
+			}
+			extra := connections.Load() - first
+			t.Logf("width=%d first=%d second_new=%d", width, first, extra)
+			if extra != 0 {
+				t.Fatalf("second wave created %d unnecessary connections", extra)
+			}
+		})
+	}
+}
+
+func TestHTTPTransportPreservesExplicitIdleLimits(t *testing.T) {
+	previous := http.DefaultTransport
+	defer func() { http.DefaultTransport = previous }()
+	base := previous.(*http.Transport).Clone()
+	base.MaxIdleConnsPerHost = 7
+	base.MaxIdleConns = 11
+	base.MaxConnsPerHost = 13
+	http.DefaultTransport = base
+	rt, _, cleanup := newHTTPClientTransport(context.Background(), false)
+	defer cleanup()
+	got := rt.(*http.Transport)
+	if got.MaxIdleConnsPerHost != 7 || got.MaxIdleConns != 11 || got.MaxConnsPerHost != 13 {
+		t.Fatal("explicit limits changed")
+	}
+	if base.MaxIdleConnsPerHost != 7 {
+		t.Fatal("source transport modified")
+	}
 }

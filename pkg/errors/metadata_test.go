@@ -7,6 +7,23 @@ import (
 	"testing"
 )
 
+func TestHTTPDataWithoutPayloadDoesNotAllocate(t *testing.T) {
+	err := New(400, "INVALID", "invalid")
+	if got := err.HTTPData(); got != nil {
+		t.Fatalf("HTTPData() = %#v, want nil", got)
+	}
+	if allocations := testing.AllocsPerRun(100, func() { _ = err.HTTPData() }); allocations != 0 {
+		t.Fatalf("empty HTTPData allocated %g times, want zero", allocations)
+	}
+}
+
+func BenchmarkHTTPDataEmpty(b *testing.B) {
+	err := New(400, "INVALID", "invalid")
+	for b.Loop() {
+		_ = err.HTTPData()
+	}
+}
+
 func TestErrorCopiesMetadataDataHeadersAndValidationDetails(t *testing.T) {
 	original := New(422, "INVALID", "invalid").WithMetadata(map[string]string{
 		"public":             "value",

@@ -2,6 +2,7 @@ package deadline
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -113,5 +114,64 @@ func TestStoreUpdateMissingFallbackRestoresDefault(t *testing.T) {
 	info := deriveInfo(t, store, "/call")
 	if info.RemainingAtApply != 10*time.Second || info.Source != SourceFallback {
 		t.Fatalf("restored deadline info = %+v", info)
+	}
+}
+
+func BenchmarkRouteLookup(b *testing.B) {
+	for _, count := range []int{0, 8, 128, 1024} {
+		cfg := &config_pb.Middleware_Deadline{}
+		for i := 0; i < count; i++ {
+			cfg.Routes = append(cfg.Routes, &config_pb.Middleware_Deadline_RouteRule{Rule: &config_pb.Middleware_Deadline_RouteRule_Path{Path: fmt.Sprintf("/route/%d", i)}})
+		}
+		if count > 0 {
+			cfg.Routes = append(cfg.Routes, &config_pb.Middleware_Deadline_RouteRule{Rule: &config_pb.Middleware_Deadline_RouteRule_Prefix{Prefix: "/prefix/"}})
+		}
+		store, err := NewStore(cfg)
+		if err != nil {
+			b.Fatal(err)
+		}
+		for name, path := range map[string]string{"miss": "/missing", "exact": fmt.Sprintf("/route/%d", count-1), "prefix": "/prefix/value"} {
+			b.Run(fmt.Sprintf("%d/%s", count, name), func(b *testing.B) {
+				for b.Loop() {
+					_ = store.resolve(path)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkPrefixRouteLookup(b *testing.B) {
+	for _, count := range []int{1, 8, 128, 1024} {
+		cfg := &config_pb.Middleware_Deadline{}
+		for i := 0; i < count; i++ {
+			cfg.Routes = append(cfg.Routes, &config_pb.Middleware_Deadline_RouteRule{Rule: &config_pb.Middleware_Deadline_RouteRule_Prefix{Prefix: fmt.Sprintf("/service/%04d/", i)}})
+		}
+		store, err := NewStore(cfg)
+		if err != nil {
+			b.Fatal(err)
+		}
+		for name, path := range map[string]string{"hit": fmt.Sprintf("/service/%04d/method", count-1), "miss": "/service/none/method", "differentRoot": "/other/method"} {
+			b.Run(fmt.Sprintf("%d/%s", count, name), func(b *testing.B) {
+				for b.Loop() {
+					_ = store.resolve(path)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkPrefixPolicyBuild(b *testing.B) {
+	for _, count := range []int{8, 128, 1024} {
+		cfg := &config_pb.Middleware_Deadline{}
+		for i := 0; i < count; i++ {
+			cfg.Routes = append(cfg.Routes, &config_pb.Middleware_Deadline_RouteRule{Rule: &config_pb.Middleware_Deadline_RouteRule_Prefix{Prefix: fmt.Sprintf("/service/%04d/", i)}})
+		}
+		b.Run(fmt.Sprint(count), func(b *testing.B) {
+			for b.Loop() {
+				if _, err := NewStore(cfg); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

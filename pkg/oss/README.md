@@ -50,22 +50,38 @@ bucket, err := manager.Bucket("assets")
 
 Manager 持有其创建的 Bucket，cleanup 幂等关闭其中实现 `io.Closer` 的实例。关闭失败通过注入的 logger 记录 `oss` 模块日志，业务不单独关闭借用的 Bucket。
 
+缓存查询只短暂持有 Manager 互斥锁；未命中时在锁内登记创建名额，驱动 factory 在锁外执行。同名调用等待该名称的完成 channel，成功后共享同一实例；失败不缓存，后续调用仍可重试。不同名称可并发创建，慢 factory 不再阻塞其他缓存命中，因此驱动 factory 必须并发安全，不得依赖跨名称串行调用。
+
+cleanup 先在锁内标记关闭，阻止新请求，再在锁外等待已受理创建完成后关闭实例；factory panic 也释放创建屏障并继续向调用方传播。返回 Bucket 是借用，不是操作租约，业务必须先停止使用再 cleanup。Bucket API 不带 Context，框架不会强制取消 factory 或同名等待；外部调用需由驱动自行设置超时，避免停机永久等待。factory 不应递归获取正在创建的同名 bucket 或调用本 Manager cleanup。
+
 ```mermaid
 flowchart TD
-    A([NewManager]) --> B[读取配置并冻结驱动快照]
-    B -- 校验失败 --> C[返回错误]
-    B -- 成功 --> D[业务调用 Bucket]
-    D --> E{已缓存?}
-    E -- 否 --> F[调用驱动工厂并接管实例]
-    F -- 失败 --> C
-    E -- 是 --> G[返回借用的 Bucket]
-    F -- 成功 --> G
-    G --> H[Wire cleanup 关闭已创建实例]
-    H -- 关闭失败 --> I[实例 logger ERROR cleanup.failed]
-    H -- 成功 --> J([结束])
-    I --> J
-    C --> J
+    A([Bucket 并发入口]) --> B[获取 Manager 互斥锁]
+    B --> C{已关闭或名称无效?}
+    C -- 是 --> D[释放锁 返回错误]
+    C -- 否 --> E{缓存命中?}
+    E -- 是 --> F[释放锁 返回借用实例]
+    E -- 否 --> G{同名正在创建?}
+    G -- 是 --> H[释放锁 等待该名称完成 channel]
+    H --> B
+    G -- 否 --> I[登记 channel 和创建计数 释放锁]
+    I --> J[锁外调用 factory 外部请求由驱动设置超时]
+    J -- 成功 --> K[获取锁 发布缓存]
+    J -- 错误 超时或 panic --> L[获取锁 不缓存失败]
+    K --> M[删除创建登记 关闭 channel 释放锁 减少创建计数]
+    L --> M
+    M --> N([返回实例或错误 panic 继续传播])
+    O([cleanup 并发入口]) --> P[获取锁 标记 closed 释放锁]
+    P --> Q[锁外等待全部已受理创建完成]
+    Q --> R[获取锁 接管缓存 释放锁]
+    R --> S[锁外关闭实例]
+    S -- 失败 --> T[ERROR NewManager cleanup.failed]
+    S -- 成功 --> U([结束])
+    T --> U
+    D --> U
+    F --> U
 ```
+
 
 ## 对象键与公开 URL
 

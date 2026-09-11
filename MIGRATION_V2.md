@@ -4,6 +4,18 @@
 迁移完成意味着应用完成配置和 Wire 改造、重新生成协议代码，并通过本文的业务验收。
 仅改 import 前缀不构成迁移完成。
 
+## 资源容量默认值
+
+- WebSocket 旧注册入口现在默认限制传输载荷及解压后消息为 1 MiB。需要其他大小时使用 `WebSocketWithConfig`；`MaxMessageBytes: -1` 显式恢复旧的无限制行为，`0` 使用默认值。见 [Server 文档](pkg/server/README.md)。
+- 两种 Cron Delay 策略现在默认每任务每进程允许最多两个调用进入执行权竞争（本地为一轮执行、一轮等待）；超额触发跳过并告警。通过 `WithMaxPendingRuns` 调整，`-1` 恢复无界等待。AllowOverlap 和 Skip 不变。见 [Job 文档](pkg/job/README.md#delay-容量)。
+- Deadline 前缀改用只读索引，匹配与更新失败回退语义不变，无需迁移路由配置。
+
+## 驱动与配置源优化兼容性
+
+OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必须并发安全并为外部调用设置超时。同名创建仍合并，cleanup 等待已受理创建完成后关闭实例，业务先停止使用再释放。并发及释放流程见 [OSS 文档](pkg/oss/README.md#构造与释放)。
+
+内置 file、Consul watcher 显式声明完整快照，更新时不再重复 Load。第三方 watcher 无需修改，默认继续重新 Load；仅在满足完整、有序、空结果表示全部删除及缓冲所有权要求时声明 `FullSnapshot() bool`。契约及发布流程见 [配置文档](pkg/config/README.md#watcher-完整快照契约)。Kafka 批量和并发默认值、同步提交语义不变。Broker 重启可能产生的首读 EOF 现在最多额外重建三次，成功提交后重置预算；明确认证/授权失败仍终止，见 [Kafka 恢复说明](contrib/queue/kafka/README.md#断线与消费恢复)。
+
 ## 迁移清单
 
 | 检查 | main 用法 | v2 操作与验收 |
@@ -200,3 +212,156 @@ flowchart LR
 默认 HTTP 现在保留 `/healthz`、`/readyz`，不受业务前缀和鉴权影响；已有同名路由需迁移或显式关闭健康端点。详见 [server README](pkg/server/README.md#默认健康检查)。配置状态及指标接入见 [config README](pkg/config/README.md#运行状态观测与过载处置)。
 
 监控端点地址可通过 `server.http.metrics.addr` 和 `server.http.health.addr` 指定；为空时复用业务 HTTP，相同时共享监听。路径相对于所选监听根路径，不再受业务 PathPrefix/Filter 影响，已有前缀抓取地址需同步调整。独立端口需同步更新部署端口与抓取/探针地址；手工组装需额外登记 `Runtime.ManagementServers()`，ServerBootstrap 自动登记。
+
+## 移除配置自身引用
+
+配置只保留环境变量模板 `$VAR` / `${VAR}`，在 Source 返回原始 KeyValue 后、JSON/YAML 格式解析前执行一次替换；不再解析配置字段之间的引用。旧 `${path}` 不再读取同名配置字段；若名称合法但环境变量未设置，则替换为空。包含点分路径等非法变量语法会报模板错误。`${path:fallback}` 不再合法，需要默认值时改用环境变量 `${VAR:-fallback}`，必填检查使用 `${VAR:?描述}`。配置引用的循环检查同步移除。
+
+迁移时将配置引用改为实际值、部署时生成的配置或环境变量。数字、布尔值环境模板不加引号，字符串按 JSON/YAML 规则加引号和转义。采用 compose-go/template v2.15.0：普通未设置变量和空变量都替换为空；字面 `$` 使用 `$$` 转义；替换后的内容仍须满足格式及目标类型约束。详细边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。
+
+```mermaid
+flowchart TD
+    A([配置源返回原始 KeyValue]) --> B[Compose 环境替换 默认值与必填检查]
+    B -- 模板或必填检查失败 --> I
+    B --> E{解析 JSON/YAML 成功?}
+    E -- 是 --> F[按优先级合并 不展开配置自身引用]
+    F --> G{保留字段校验通过?}
+    G -- 是 --> H([发布快照 供 Load 和订阅解码])
+    E -- 否 --> I{热更新?}
+    G -- 否 --> I
+    I -- 是 --> J[ERROR manager.watch config.rejected 通知订阅 保留旧快照]
+    I -- 否 --> K[释放源 返回构造错误]
+    J --> L([等待下一次源更新])
+    K --> M([结束])
+```
+
+## 消费项目迁移经验：auth_service
+
+以下经验来自 2026-09-11 对 auth_service 工作区的审阅（业务基线 `7930c17`，
+Foundation 基线 `7de373d`，两者均含未提交改动）。这是开发期案例，不是发布验收记录；
+`require v2.0.0` 配合本地 `replace` 只能说明声明版本，不能证明正在运行已发布的 v2.0.0。
+
+### 先确认实际依赖，再整理迁移改动
+
+需要分别记录四种来源：Foundation 运行库、生成器、配置 Schema、公共构建脚本。
+本例运行库由 `go.mod replace` 选择；Schema 由解析出的模块目录提供；三个生成器是独立模块，
+已安装二进制不会随运行库更新；公共 Makefile 又来自 `CYBERKITE_DIR` 指定的另一份工作区。
+只固定业务仓库提交，仍可能无法在 CI 重现生成结果。
+
+在消费项目根目录检查运行库和工具，工具路径按项目实际位置调整：
+
+```sh
+go list -m -f '{{.Path}} {{.Version}} {{.Dir}}' github.com/jaggerzhuang1994/kratos-foundation/v2
+go version -m ./tools/protoc-gen-kratos-foundation-client-v2
+go version -m ./tools/protoc-gen-kratos-foundation-errors-v2
+go version -m ./tools/protoc-gen-jsonschema
+```
+
+本例的 `FOUNDATION_PLUGIN_DIR`、`FOUNDATION_PLUGIN_VERSION`、`FOUNDATION_CONFIG_SCHEMA`
+属于消费项目公共 Makefile 的变量，不是 Foundation 的统一配置 API。核对项目默认赋值后再选择来源：
+若项目已写入 `FOUNDATION_PLUGIN_DIR ?= /本地路径`，仅 `unset FOUNDATION_PLUGIN_DIR` 不会切回远端；
+应删除该默认值或在命令行显式传 `FOUNDATION_PLUGIN_DIR=`。Make 变量值不要自带 shell 引号，
+由使用变量的 recipe 负责引用路径。
+
+本地 Foundation 增加依赖后，消费项目也要重新整理依赖。本次原工作区定向测试在编译前报告
+`compose-go/v2/template` 缺少 `go.sum` 条目；应在消费项目执行 `go mod tidy` 并审阅差异，
+不要按报错提示直接依赖 Foundation 的 `internal` 包，也不要手改 `go.sum`。
+发布前移除绝对路径 replace，固定运行库、各生成器和公共脚本的实际版本，再在干净 checkout 验证。
+
+### Wire 成功不代表业务服务已登记
+
+本例已采用 `ConsulBaseProviderSet`、单一 `bootstrap.Spec` 和统一组件构造，
+但审阅时 `cmd/auth_service/bootstrap.go` 的 Auth HTTP、Auth gRPC、RBAC gRPC 注册调用均被注释，
+对应服务参数也被移除。`wire_gen.go` 因此没有构造 AuthService、RbacService 及其业务依赖。
+ProviderSet 列出了构造函数，并不表示 Wire 一定执行它们。
+
+迁移检查应同时覆盖以下三个层次：
+
+- 编译图：业务 Bootstrap 显式接收实际服务，生成的 Wire 包含所需业务和资源构造及 cleanup。
+- 注册图：HTTP/gRPC 注册回调实际调用生成的 `RegisterXxx`；空回调只能证明组件被选择。
+- 运行契约：用真实业务 HTTP 路由和 gRPC 方法请求验证成功与失败响应，不能只检查监听端口或健康探针。
+
+恢复业务登记应修改 Bootstrap/Wire 源并重新生成，不直接修改 `wire_gen.go`。
+演示 Job、调试生命周期输出和日志全局设置应单独核对是否属于应用需求，不能作为迁移模板照搬。
+Registrar 与 Job Coordinator 由 Wire 构造注入，细节见 [Bootstrap 文档](pkg/bootstrap/README.md)。
+
+### 协议搬迁要统一映射，并控制类型来源
+
+本例把 Auth/RBAC 和调用方所需的 Base API 移到业务 `api/`，使用模块内生成包；
+共享 `cyberkite` 类型仍引用原依赖包，`third_party/cyberkite` 仅作 include。
+不要把“API 已搬迁”理解为“全部共享协议也要在每个服务重新生成”。
+搬迁前后核对 protobuf package、消息/枚举全名、字段编号、RPC 名称及 HTTP 绑定；
+Go import 改变不应顺带改变线上协议。若同一进程仍经间接依赖导入旧 API 包，要检查是否重复注册同名描述符。
+
+统一 `M文件=Go包路径` 映射应传给所有启用的插件，而不仅是 Go 插件：
+Go、gRPC、HTTP、Foundation client/errors、校验和文档产物必须指向一致的类型。
+本例 PGV 的生成目标不能仅靠 M 参数重定位，公共脚本使用适配器在内存
+`CodeGeneratorRequest` 中设置相同的 `go_package`，再调用原 PGV；不修改源 proto 或手改生成文件。
+这是该工具链的处理方式，不能假定所有插件都遵守同一参数语义。
+
+还应拒绝不同 include 根下的同名 proto import 路径，保留第三方协议自身的 `go_package`，
+并使 include 副本与实际 Go 依赖版本同步。生成后检查输出目录、package/import、预期文件是否存在，
+在稳定输入和固定工具上再次生成应无差异。仅检查 protoc 退出码会漏掉错误目录或缺少产物的问题。
+
+### 配置验收覆盖来源、合并结果和外部配置
+
+目录转 `file.PathList` 的规则由业务定义。本例是根目录 `*.yaml` 后加载 `{APP_ENV}/*.yaml`，
+每组按 glob 字典序展开；不递归，也不包含 `.yml`。单文件、空路径、缺失路径和空目录都有独立语义。
+示例放在独立子目录可避免被默认 glob 当成实际配置加载。
+
+`ConsulBaseProviderSet` 的 `NewConsulSources` 在 local 环境让文件优先，其他环境让 Consul 优先；
+同组内后面的源覆盖前面的源。Consul KV 前缀和环境路径仍由业务提供，
+并且 local 文件优先不等于禁用 Consul 或远端故障回退。
+
+本例 `internal/conf/source_test.go` 用临时文件验证顺序和最终覆盖值，并通过 v2 Manager
+读取业务 Duration 与 `server.middleware.deadline.fallback_timeout`。这类测试比单独检查 YAML 语法更有效，
+但仍不等于构造全部组件或验证 Consul 中的实际配置。发布前还应逐份清理远端旧字段，
+检查环境模板替换后的值，并用隔离环境验证组件构造。业务 Schema 应合并所选运行库的
+`config.schema.json`，避免编辑器接受运行时已经拒绝的字段。
+
+### 错误迁移必须经过实际传输边界
+
+WebAuthn 撤销凭证错误携带 `rpId` 和 `credentialId`，调用方依赖这些字段执行后续动作。
+只验证业务函数返回的 `WithHTTPData`，无法证明 HTTP 网关经过 gRPC 后仍能读取它。
+本例 `TestNewWebAuthnCredentialRevokedError` 验证：
+
+```text
+业务错误 → FromError → GRPCStatus().Err() → FromError → HTTPData()
+```
+
+断言包括 HTTP code、reason_code、生成的 `IsXxx`、JSON 字段名和 base64url 凭证 ID。
+当前 Foundation 的 [gRPC 错误实现](pkg/errors/grpc.go) 已携带并恢复可 JSON 编码的 HTTPData，
+相关契约位于 [gRPC 错误测试](pkg/errors/grpc_test.go)；发布版本需要包含该行为。
+此单测覆盖 status 编解码，不代表真实网络和网关链路已经通过；还需实际 gRPC→HTTP 互通验收。
+不要要求内部错误栈、cause 或响应头同样跨网络保留。
+
+Redis 迁移除 `Manager.Default()` / `Connection(name)` 外，还应将缺失键判断迁到
+`github.com/redis/go-redis/v9` 的 `Nil`，继续使用 `errors.Is`。
+本例缺失会话映射“已过期”，基础设施失败映射内部错误，两者不能在替换接口时合并。
+
+### 建议的验收顺序
+
+```mermaid
+flowchart TD
+    A([开始]) --> B[记录运行库 工具 Schema 公共脚本来源]
+    B --> C[整理消费项目依赖 生成协议与 Wire]
+    C --> D{依赖 编译 产物检查通过?}
+    D -- 否 --> E[记录命令错误 修正来源或生成配置]
+    E --> B
+    D -- 是 --> F{Wire 包含业务构造且回调登记实际服务?}
+    F -- 否 --> G[恢复业务依赖和登记 重新生成]
+    G --> C
+    F -- 是 --> H[验证文件覆盖 错误传输和业务单测]
+    H --> I[隔离环境连接 Consul MySQL Redis]
+    I --> J[请求实际 HTTP 与 gRPC 业务接口 验证超时和停机]
+    J --> K{业务契约和 cleanup 通过?}
+    K -- 否 --> L[记录测试失败及实际应用日志 定位迁移缺口]
+    L --> C
+    K -- 是 --> M[固定发布版本 在干净 checkout 复验]
+    M --> N([记录已验证项和剩余限制])
+```
+
+图中记录节点是验收动作，不表示框架新增日志或自动回退。
+本例暴露的未完成项包括业务注册被注释、消费项目依赖清单落后于本地 Foundation、
+运行库和工具来源含本机路径，以及 README 对当前协议目录、插件来源和服务登记的描述漂移。
+应以当前源码和生成图为准，把这些项关闭后再宣告迁移完成。

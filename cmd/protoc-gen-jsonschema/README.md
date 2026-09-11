@@ -192,6 +192,7 @@ example:
 设为 true 时，非真实 oneof 成员且 HasPresence 的字段加入 required。
 默认 false 时，非真实 oneof、无 optional keyword、非 repeated/map 的字段加入 required。
 因此默认策略也会要求普通 proto3 标量字段；真实 oneof 成员不会单独加入 required。
+当前生成器不生成真实 oneof 成员之间的互斥约束；字段可为 null 不等于约束整个 oneof 只能出现一个成员。
 
 default: false
 example:

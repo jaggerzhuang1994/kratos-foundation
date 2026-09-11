@@ -10,15 +10,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 )
 
 // ErrOutputTooLarge is returned when decompression exceeds the configured
 // maximum output size.
 var ErrOutputTooLarge = errors.New("decompressed output exceeds limit")
 
+// 各格式独立缓存工作区；Get 到 Put 之间由一次调用独占，不缓存返回给调用方的字节。
+var gzipWriters, deflateWriters, zlibWriters sync.Pool
+
+type resetWriter interface {
+	io.WriteCloser
+	Reset(io.Writer)
+}
+
 // CompressGzip 使用默认级别压缩为 gzip 数据。
 func CompressGzip(data []byte) ([]byte, error) {
-	return compress(data, func(writer io.Writer) (io.WriteCloser, error) {
+	return compress(data, &gzipWriters, func(writer io.Writer) (resetWriter, error) {
 		return gzip.NewWriter(writer), nil
 	})
 }
@@ -39,7 +48,7 @@ func DecompressGzipLimit(data []byte, maxBytes int64) ([]byte, error) {
 
 // CompressDeflate 将数据压缩为原始 DEFLATE 流。
 func CompressDeflate(data []byte) ([]byte, error) {
-	return compress(data, func(writer io.Writer) (io.WriteCloser, error) {
+	return compress(data, &deflateWriters, func(writer io.Writer) (resetWriter, error) {
 		return flate.NewWriter(writer, flate.DefaultCompression)
 	})
 }
@@ -56,7 +65,7 @@ func DecompressDeflateLimit(data []byte, maxBytes int64) ([]byte, error) {
 
 // CompressZlib 将数据压缩为 zlib 流。
 func CompressZlib(data []byte) ([]byte, error) {
-	return compress(data, func(writer io.Writer) (io.WriteCloser, error) {
+	return compress(data, &zlibWriters, func(writer io.Writer) (resetWriter, error) {
 		return zlib.NewWriter(writer), nil
 	})
 }
@@ -75,12 +84,19 @@ func DecompressZlibLimit(data []byte, maxBytes int64) ([]byte, error) {
 	return readCompressed(reader, maxBytes)
 }
 
-// compress 复用压缩器的写入和关闭错误处理。
-func compress(data []byte, newWriter func(io.Writer) (io.WriteCloser, error)) ([]byte, error) {
+// compress 独占复用 Writer；失败实例丢弃，成功后解除输出引用再归还。
+func compress(data []byte, pool *sync.Pool, newWriter func(io.Writer) (resetWriter, error)) ([]byte, error) {
 	var buffer bytes.Buffer
-	writer, err := newWriter(&buffer)
-	if err != nil {
-		return nil, err
+	var writer resetWriter
+	var err error
+	if cached := pool.Get(); cached != nil {
+		writer = cached.(resetWriter)
+		writer.Reset(&buffer)
+	} else {
+		writer, err = newWriter(&buffer)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if _, err = writer.Write(data); err != nil {
 		_ = writer.Close()
@@ -89,6 +105,9 @@ func compress(data []byte, newWriter func(io.Writer) (io.WriteCloser, error)) ([
 	if err = writer.Close(); err != nil {
 		return nil, fmt.Errorf("finish compressed data: %w", err)
 	}
+	// 不让池持有本次输出；buffer.Bytes 的所有权留给调用方。
+	writer.Reset(io.Discard)
+	pool.Put(writer)
 	return buffer.Bytes(), nil
 }
 

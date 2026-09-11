@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -350,4 +352,48 @@ func TestWrapRedisCloseErrorPreservesCauseAndName(t *testing.T) {
 	if !errors.Is(got, want) || !strings.Contains(got.Error(), "cache") {
 		t.Fatalf("wrapped close error = %v", got)
 	}
+}
+
+func TestExternalRedisPoolReconnectAndCleanup(t *testing.T) {
+	address := os.Getenv("FOUNDATION_TEST_REDIS_ADDR")
+	if address == "" {
+		t.Skip("set FOUNDATION_TEST_REDIS_ADDR for Docker integration tests")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for range 10 {
+		m := newLocalTestManager(map[string]connectionOption{"cache": {Addr: proto.String(address), PoolSize: proto.Int32(2), DialTimeout: durationpb.New(time.Second), ContextTimeoutEnabled: proto.Bool(true)}})
+		client, err := m.Connection("cache")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Ping(ctx).Err(); err != nil {
+			_ = m.Close()
+			t.Fatal(err)
+		}
+		// 只关闭此测试连接；用另一连接发命令后，原连接池必须能建立新连接。
+		id, err := client.ClientID(ctx).Result()
+		if err != nil {
+			_ = m.Close()
+			t.Fatal(err)
+		}
+		admin := goredis.NewClient(&goredis.Options{Addr: address})
+		killErr := admin.ClientKillByFilter(ctx, "ID", strconv.FormatInt(id, 10)).Err()
+		closeErr := admin.Close()
+		if killErr != nil || closeErr != nil {
+			_ = m.Close()
+			t.Fatalf("kill=%v close=%v", killErr, closeErr)
+		}
+		if err := client.Ping(ctx).Err(); err != nil {
+			_ = m.Close()
+			t.Fatal(err)
+		}
+		if err := m.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if client.PoolStats().TotalConns != 0 {
+			t.Fatalf("pool leaked: %+v", client.PoolStats())
+		}
+	}
+	t.Log("10 client kill/reconnect/cleanup cycles; final pools empty")
 }

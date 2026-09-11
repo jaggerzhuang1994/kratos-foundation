@@ -3,13 +3,14 @@
 package wireassembly
 
 import (
-	"context"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/google/wire"
+	consulconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/consul"
+	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -22,7 +23,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-func initialize(ctx context.Context, sources config.Sources, version string, stopDelay time.Duration) (*assembly, func(), error) {
+func initialize(sources config.Sources, version string, stopDelay time.Duration, decorate app.ContextDecorator) (*assembly, func(), error) {
 	wire.Build(
 		newRegistrar,
 		config.NewManager,
@@ -54,9 +55,9 @@ func initialize(ctx context.Context, sources config.Sources, version string, sto
 	return nil, nil, nil
 }
 
-func initializeComponents(ctx context.Context, sources config.Sources, version string) (*kratos.App, func(), error) {
+func initializeComponents(sources config.Sources, version string) (*kratos.App, func(), error) {
 	wire.Build(
-		newRegistrar, newCoordinator, config.NewManager, bootstrap.ApplicationSpec, app.NewConfig, bootstrap.NewStopPolicy,
+		newRegistrar, job.DefaultCoordinator, config.NewManager, bootstrap.ApplicationSpec, app.NewConfig, bootstrap.NewStopPolicy,
 		appinfo.New, log.NewLogger,
 		wire.Bind(new(kratoslog.Logger), new(log.Logger)),
 		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,
@@ -69,5 +70,20 @@ func initializeComponents(ctx context.Context, sources config.Sources, version s
 	return nil, nil, nil
 }
 
-func newRegistrar() registry.Registrar           { return nil }
-func newCoordinator() job.ConcurrencyCoordinator { return nil }
+func newRegistrar() registry.Registrar { return nil }
+
+// 消费完整公共集合，同时验证默认 Coordinator 可替换。
+func initializeConsulBase(info appinfo.AppInfo, files fileconfig.PathList, paths consulconfig.PathList) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.ConsulBaseProviderSet, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+	return nil, nil, nil
+}
+
+func initializeDefaultResources(info appinfo.AppInfo, files fileconfig.PathList, paths consulconfig.PathList) (*defaultResources, func(), error) {
+	wire.Build(bootstrap.ConsulBaseProviderSet, wire.Struct(new(defaultResources), "*"))
+	return nil, nil, nil
+}
+
+func initializeConsulCustomCoordinator(info appinfo.AppInfo, files fileconfig.PathList, paths consulconfig.PathList, coordinator job.ConcurrencyCoordinator) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.ConsulBaseProviderSetWithCustomJobCoordinator, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+	return nil, nil, nil
+}

@@ -3,13 +3,16 @@ package oss
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
@@ -296,5 +299,182 @@ func TestPublicNewManagerReturnsNoResourcesForInvalidConfiguration(t *testing.T)
 	}
 	if manager != nil || cleanup != nil {
 		t.Fatalf("NewManager returned resources for invalid config: manager=%t cleanup=%t", manager != nil, cleanup != nil)
+	}
+}
+
+// BenchmarkManagerCachedDuringCreation 注入 1ms factory 延迟，测量其对另一缓存命中的阻塞。
+// 时间只包含缓存命中；每轮等待创建结束，避免跨轮后台工作干扰结果。
+func BenchmarkManagerCachedDuringCreation(b *testing.B) {
+	for b.Loop() {
+		b.StopTimer()
+		entered := make(chan struct{})
+		release := make(chan struct{})
+		finished := make(chan struct{})
+		bucket := &fakeBucket{}
+		m, err := newManager(&config_pb.OSS{Buckets: map[string]*config_pb.OSSBucket{
+			"cached": {Driver: "fake", Bucket: "cached"}, "slow": {Driver: "fake", Bucket: "slow"},
+		}}, map[string]DriverFactory{"fake": func(c BucketConfig) (Bucket, error) {
+			if c.Name == "slow" {
+				close(entered)
+				<-release
+			}
+			return bucket, nil
+		}})
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := m.Bucket("cached"); err != nil {
+			b.Fatal(err)
+		}
+		go func() {
+			_, err := m.Bucket("slow")
+			if err != nil {
+				b.Error(err)
+			}
+			close(finished)
+		}()
+		<-entered
+		timer := time.AfterFunc(time.Millisecond, func() { close(release) })
+		b.StartTimer()
+		if _, err := m.Bucket("cached"); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		<-finished
+		timer.Stop()
+		if err := m.close(); err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+	}
+}
+
+func TestManagerCreationDoesNotBlockOtherBucketsAndCloseWaits(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered, release := make(chan struct{}), make(chan struct{})
+		buckets := map[string]*fakeBucket{"cached": {}, "slow": {}, "other": {}}
+		m, err := newManager(&config_pb.OSS{Buckets: map[string]*config_pb.OSSBucket{
+			"cached": {Driver: "fake", Bucket: "cached"}, "slow": {Driver: "fake", Bucket: "slow"}, "other": {Driver: "fake", Bucket: "other"},
+		}}, map[string]DriverFactory{"fake": func(c BucketConfig) (Bucket, error) {
+			if c.Name == "slow" {
+				close(entered)
+				<-release
+			}
+			return buckets[c.Name], nil
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := m.Bucket("cached"); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 3)
+		go func() { _, err := m.Bucket("slow"); done <- err }()
+		<-entered
+		for _, name := range []string{"cached", "other"} {
+			go func() { _, err := m.Bucket(name); done <- err }()
+		}
+		synctest.Wait()
+		if len(done) != 2 {
+			close(release)
+			t.Fatal("slow factory blocked unrelated buckets")
+		}
+		for range 2 {
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		}
+		closed := make(chan error, 1)
+		go func() { closed <- m.close() }()
+		synctest.Wait()
+		if len(closed) != 0 {
+			t.Fatal("cleanup returned before creation completed")
+		}
+		if _, err := m.Bucket("cached"); !errors.Is(err, ErrManagerClosed) {
+			t.Fatal(err)
+		}
+		close(release)
+		synctest.Wait()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if err := <-closed; err != nil {
+			t.Fatal(err)
+		}
+		for name, bucket := range buckets {
+			if bucket.closes != 1 {
+				t.Errorf("%s closes=%d", name, bucket.closes)
+			}
+		}
+	})
+}
+
+func TestManagerSameBucketCreationAndPanicRecovery(t *testing.T) {
+	for _, panics := range []bool{false, true} {
+		t.Run(fmt.Sprint(panics), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var calls atomic.Int32
+				entered, release := make(chan struct{}), make(chan struct{})
+				bucket := &fakeBucket{}
+				m, err := newManager(&config_pb.OSS{Buckets: map[string]*config_pb.OSSBucket{"same": {Driver: "fake", Bucket: "same"}}}, map[string]DriverFactory{"fake": func(BucketConfig) (Bucket, error) {
+					if calls.Add(1) == 1 {
+						close(entered)
+						<-release
+						if panics {
+							panic("factory panic")
+						}
+					}
+					return bucket, nil
+				}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				done := make(chan struct{}, 9)
+				go func() {
+					defer func() {
+						got := recover()
+						if (got != nil) != panics {
+							t.Errorf("panic=%v", got)
+						}
+						done <- struct{}{}
+					}()
+					if _, err := m.Bucket("same"); err != nil {
+						t.Error(err)
+					}
+				}()
+				<-entered
+				for range 8 {
+					go func() {
+						got, err := m.Bucket("same")
+						if err != nil || got != bucket {
+							t.Errorf("bucket=%v err=%v", got, err)
+						}
+						done <- struct{}{}
+					}()
+				}
+				synctest.Wait()
+				if calls.Load() != 1 {
+					t.Fatal("duplicate concurrent factory calls")
+				}
+				close(release)
+				synctest.Wait()
+				for range 9 {
+					<-done
+				}
+				want := int32(1)
+				if panics {
+					want = 2
+				}
+				if calls.Load() != want {
+					t.Fatalf("calls=%d want=%d", calls.Load(), want)
+				}
+				if err := m.close(); err != nil {
+					t.Fatal(err)
+				}
+				if bucket.closes != 1 {
+					t.Fatal(bucket.closes)
+				}
+			})
+		})
 	}
 }

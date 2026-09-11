@@ -37,9 +37,11 @@ type manager struct {
 	definitions map[string]bucketDefinition
 	drivers     map[string]DriverFactory
 
-	mu      sync.Mutex
-	buckets map[string]Bucket
-	closed  bool
+	mu       sync.Mutex
+	buckets  map[string]Bucket
+	closed   bool
+	pending  map[string]chan struct{}
+	creating sync.WaitGroup
 }
 
 // newManagerWithDrivers 使用固定驱动快照读取配置并组装 Manager。
@@ -78,6 +80,7 @@ func newManager(component *config_pb.OSS, registered map[string]DriverFactory) (
 		definitions: make(map[string]bucketDefinition, len(component.GetBuckets())),
 		drivers:     registered,
 		buckets:     make(map[string]Bucket),
+		pending:     make(map[string]chan struct{}),
 	}
 	for name, option := range component.GetBuckets() {
 		if strings.TrimSpace(name) == "" || name != strings.TrimSpace(name) {
@@ -122,32 +125,64 @@ func (m *manager) Bucket(name string) (Bucket, error) {
 		return nil, errors.New("OSS manager is nil")
 	}
 	name = strings.TrimSpace(name)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return nil, ErrManagerClosed
+	for {
+		m.mu.Lock()
+		if m.closed {
+			m.mu.Unlock()
+			return nil, ErrManagerClosed
+		}
+		if bucket := m.buckets[name]; bucket != nil {
+			m.mu.Unlock()
+			return bucket, nil
+		}
+		if done := m.pending[name]; done != nil {
+			m.mu.Unlock()
+			// 同名调用等待创建完成；失败后允许下一位重试，保持原有错误恢复语义。
+			<-done
+			continue
+		}
+		definition, exists := m.definitions[name]
+		if !exists {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("OSS bucket %q: %w", name, ErrBucketUnknown)
+		}
+		factory := m.drivers[definition.driver]
+		if factory == nil {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("OSS bucket %q driver %q is unavailable", name, definition.driver)
+		}
+		done := make(chan struct{})
+		m.pending[name] = done
+		// Add 与 closed 检查在同一临界区，保证 cleanup 开始 Wait 后不再加入创建。
+		m.creating.Add(1)
+		m.mu.Unlock()
+		return m.openBucket(name, definition, factory, done)
 	}
-	if bucket := m.buckets[name]; bucket != nil {
-		return bucket, nil
-	}
-	definition, exists := m.definitions[name]
-	if !exists {
-		return nil, fmt.Errorf("OSS bucket %q: %w", name, ErrBucketUnknown)
-	}
-	factory := m.drivers[definition.driver]
-	if factory == nil {
-		return nil, fmt.Errorf("OSS bucket %q driver %q is unavailable", name, definition.driver)
-	}
+}
+
+// openBucket 在锁外调用驱动；只有发布缓存及唤醒同名等待者时短暂持锁。
+func (m *manager) openBucket(name string, definition bucketDefinition, factory DriverFactory, done chan struct{}) (bucket Bucket, err error) {
+	defer func() {
+		m.mu.Lock()
+		if err == nil && bucket != nil {
+			// cleanup 会等创建结束后接管全部缓存，包括关闭开始前已受理的创建。
+			m.buckets[name] = bucket
+		}
+		delete(m.pending, name)
+		close(done)
+		m.mu.Unlock()
+		// factory panic 也会释放等待者和 cleanup 屏障；panic 仍交给调用方处理。
+		m.creating.Done()
+	}()
 	configSnapshot := definition.config
 	configSnapshot.Options = cloneStrings(definition.config.Options)
-	bucket, err := factory(configSnapshot)
+	bucket, err = factory(configSnapshot)
 	if err != nil {
 		return nil, fmt.Errorf("open OSS bucket %q with driver %q: %w", name, definition.driver, err)
 	}
 	if bucket == nil {
 		return nil, fmt.Errorf("open OSS bucket %q with driver %q: bucket is nil", name, definition.driver)
 	}
-	m.buckets[name] = bucket
 	return bucket, nil
 }
 
@@ -175,6 +210,10 @@ func (m *manager) close() error {
 		return nil
 	}
 	m.closed = true
+	m.mu.Unlock()
+	// 不持锁等待外部 factory，已有缓存查询和关闭状态检查不会被慢创建占住。
+	m.creating.Wait()
+	m.mu.Lock()
 	buckets := m.buckets
 	m.buckets = nil
 	m.mu.Unlock()

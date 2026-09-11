@@ -17,7 +17,7 @@ func NewStack(loggers ...log.Logger) log.Logger {
 	return &stackLogger{loggers: append([]log.Logger(nil), loggers...)}
 }
 
-// Log 聚合写入错误；遇到已关闭输出时停止，由上层切换 Config 版本后重试。
+// Log 聚合写入错误；遇到已关闭输出时停止并返回错误，原 Logger 实例不会切换输出或重试。
 func (s *stackLogger) Log(level log.Level, keyvals ...any) error {
 	var errs []error
 	for index, logger := range s.loggers {

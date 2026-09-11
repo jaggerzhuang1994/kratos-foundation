@@ -45,7 +45,7 @@ func businessSources(t *testing.T) config.Sources {
 func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	built, cleanup, err := initialize(ctx, businessSources(t), "business-test", 0)
+	built, cleanup, err := initialize(businessSources(t), "business-test", 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// App.Run 拥有运行协程；取消父 Context 后等待它退出，再允许 Wire cleanup 释放数据库。
+	// App.Run 拥有运行协程；显式停止后等待退出，再允许 Wire cleanup 释放数据库。
 	done := make(chan error, 1)
 	go func() { done <- built.App.Run() }()
 	stopped := false
@@ -68,7 +68,9 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 		if stopped {
 			return
 		}
-		cancel()
+		if err := built.App.Stop(); err != nil {
+			t.Error(err)
+		}
 		select {
 		case err := <-done:
 			stopped = true
@@ -76,7 +78,7 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 				t.Errorf("App.Run: %v", err)
 			}
 		case <-time.After(10 * time.Second):
-			t.Fatal("application did not stop after parent cancellation")
+			t.Fatal("application did not stop after Stop")
 		}
 	}
 	t.Cleanup(stop)
@@ -167,7 +169,7 @@ func TestBusinessRejectsRemovedConfig(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, cleanup, err := initialize(context.Background(), config.NewSources(source), "legacy-test", 0)
+			_, cleanup, err := initialize(config.NewSources(source), "legacy-test", 0, nil)
 			if cleanup != nil {
 				t.Cleanup(cleanup)
 			}
@@ -193,9 +195,7 @@ func TestMonitoringBindFailureStopsApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	sources := append(businessSources(t), source)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	built, cleanup, err := initialize(ctx, sources, "monitoring-test", 0)
+	built, cleanup, err := initialize(sources, "monitoring-test", 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

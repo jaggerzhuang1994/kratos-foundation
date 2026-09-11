@@ -54,6 +54,29 @@ log.WithKV("region", "hk", "deployment", "blue")
 
 根过滤及其他共享单值的优先级为：派生 Logger > 进程级设置 > 环境配置/包内默认值。filter keys 按 Config、Override、派生 Logger 三层取并集，高层不能取消低层的敏感字段过滤规则。
 
+实例 `Logger` 的 `Debug/Info/Warn/Error` 及对应 `f` 方法，会先检查禁用状态和根级别，再执行消息格式化；被根过滤拒绝的消息不会调用参数的 `String()`。调用表达式本身仍由 Go 在进入方法前求值；输出端独立过滤也仍在格式化之后发生。此保证不涵盖 Kratos 包级辅助函数内部的预格式化。`Fatal/Fatalf` 被禁用时跳过格式化，但仍以状态码 1 退出。
+
+```mermaid
+flowchart TD
+    A([实例 Debug/Info/Warn/Error/Fatal 及 f 方法：并发入口]) --> C{禁用?}
+    C -- 是 --> Z{Fatal 方法?}
+    C -- 否 --> B[原子读取共享级别快照]
+    B --> Q{根级别允许?}
+    Q -- 否 --> Z
+    Q -- 是 --> D[格式化消息]
+    D --> E[log 重新检查根级别并按版本刷新缓存]
+    E --> F{仍允许输出?}
+    F -- 否 --> Z
+    F -- 是 --> G[持 Logger 缓存读锁与实例输出读锁执行输出链]
+    G --> H[输出端级别与字段过滤 决定是否写入日志]
+    H --> I[释放读锁；消息方法忽略输出错误]
+    I --> Z
+    Z -- 是 --> X([os.Exit 1])
+    Z -- 否 --> Y([返回])
+```
+
+图中缓存与实例输出锁沿用现有实现，提前过滤不增加锁。cleanup 与输出通过实例锁协调；输出已关闭时返回错误，消息方法不重试。缓存构建遇到共享版本变化会重试，不在读锁内格式化消息。
+
 输出端级别在 `NewLogger` 时固定，仍会独立过滤。例如默认 `LOG_LEVEL=info` 时，之后调用 `log.WithLevel(kratoslog.LevelDebug)` 只放宽根过滤，stdout/file 仍过滤 debug；需要运行期打开 debug 时，应在构造前将相应 `LOG_STD_LEVEL` / `LOG_FILE_LEVEL` 设置为 `debug`。
 
 ## 组件日志字段

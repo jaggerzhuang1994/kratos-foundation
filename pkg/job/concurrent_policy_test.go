@@ -3,10 +3,13 @@ package job
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 )
 
 // This kills mutations that reverse declared middleware order or invoke nil middleware.
@@ -96,16 +99,16 @@ func TestDistributedConcurrentJoinsRunCoordinationAndReleaseErrors(t *testing.T)
 
 func TestConcurrentMiddlewareSelectsDeclaredPolicy(t *testing.T) {
 	log := testModuleLog(t)
-	if middleware := concurrentMiddleware(log, AllowOverlap, nil, "job"); middleware != nil {
+	if middleware := concurrentMiddleware(log, AllowOverlap, nil, "job", 1, nil); middleware != nil {
 		t.Fatal("AllowOverlap unexpectedly installed middleware")
 	}
-	if middleware := concurrentMiddleware(log, ConcurrentPolicy(99), nil, "job"); middleware != nil {
+	if middleware := concurrentMiddleware(log, ConcurrentPolicy(99), nil, "job", 1, nil); middleware != nil {
 		t.Fatal("invalid policy unexpectedly installed middleware")
 	}
 
 	for _, policy := range []ConcurrentPolicy{DelayIfRunning, SkipIfRunning} {
 		runs := 0
-		middleware := concurrentMiddleware(log, policy, nil, "job")
+		middleware := concurrentMiddleware(log, policy, nil, "job", 1, nil)
 		if middleware == nil {
 			t.Fatalf("policy %d returned nil middleware", policy)
 		}
@@ -127,7 +130,7 @@ func TestConcurrentMiddlewareSelectsDeclaredPolicy(t *testing.T) {
 	} {
 		guard := &testGuard{ctx: context.Background()}
 		coordinator := &testCoordinator{guard: guard}
-		middleware := concurrentMiddleware(log, test.policy, coordinator, "billing")
+		middleware := concurrentMiddleware(log, test.policy, coordinator, "billing", 1, nil)
 		if err := middleware(func(context.Context) error { return nil })(context.Background()); err != nil {
 			t.Fatalf("policy %d error = %v", test.policy, err)
 		}
@@ -207,5 +210,239 @@ func TestDistributedConcurrentIgnoresOrdinaryGuardCancellationCause(t *testing.T
 	)(func(context.Context) error { return nil })(context.Background())
 	if err != nil {
 		t.Fatalf("ordinary guard cancellation error = %v", err)
+	}
+}
+
+func TestDelayPendingCapacityThroughManager(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		limit  int
+		custom bool
+	}{
+		{"default", 1, false}, {"no waiting", 0, true}, {"three waiting", 3, true}, {"explicit unlimited", -1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var runs atomic.Int32
+			options := []CronOption{WithConcurrentPolicy(DelayIfRunning)}
+			if tc.custom {
+				options = append(options, WithMaxPendingRuns(tc.limit))
+			}
+			spec := NewSpec()
+			spec.Option(WithLogging(false), WithMetrics(false), WithTracing(false))
+			spec.RegisterCron("bounded", "@hourly", TaskFunc(func(ctx context.Context) error { runs.Add(1); <-ctx.Done(); return ctx.Err() }), options...)
+			logger, tracingProvider, metricsProvider := newTestObservability(t)
+			synctest.Test(t, func(t *testing.T) {
+				manager, err := NewManager(logger, spec, tracingProvider, metricsProvider, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				run := manager.cronJobs[0].managedJob.job.Run
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				admitted := tc.limit + 1
+				if tc.limit < 0 {
+					admitted = 4
+				}
+				done := make(chan error, admitted)
+				for range admitted {
+					go func() { done <- run(ctx) }()
+				}
+				synctest.Wait()
+				if runs.Load() != 1 {
+					t.Fatalf("concurrent handlers=%d", runs.Load())
+				}
+				if tc.limit >= 0 {
+					for range 20 {
+						if err := run(ctx); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				if runs.Load() != 1 {
+					t.Fatal("full queue executed extra handler")
+				}
+				cancel()
+				synctest.Wait()
+				for range admitted {
+					if err := <-done; !errors.Is(err, context.Canceled) {
+						t.Fatalf("cancel error=%v", err)
+					}
+				}
+				before := runs.Load()
+				nextCtx, nextCancel := context.WithCancel(context.Background())
+				go func() { done <- run(nextCtx) }()
+				synctest.Wait()
+				if runs.Load() != before+1 {
+					t.Fatal("cancellation leaked admission slot")
+				}
+				nextCancel()
+				synctest.Wait()
+				<-done
+			})
+		})
+	}
+}
+
+func TestPendingCapacityReleasedAfterPanic(t *testing.T) {
+	calls := 0
+	run := limitPendingRuns(testModuleLog(t), DelayOverflow{MaxPendingRuns: 0}, nil, func(next Handler) Handler { return next })(func(context.Context) error {
+		calls++
+		if calls == 1 {
+			panic("failure")
+		}
+		return nil
+	})
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("missing panic")
+			}
+		}()
+		_ = run(context.Background())
+	}()
+	if err := run(context.Background()); err != nil || calls != 2 {
+		t.Fatalf("slot leaked: calls=%d err=%v", calls, err)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := run(canceled); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+// waitingCoordinator 模拟跨进程执行权一直被其他节点持有，Acquire 只在取消后结束。
+type waitingCoordinator struct{ entered chan struct{} }
+
+func (c *waitingCoordinator) Acquire(ctx context.Context, _ string) (ExecutionGuard, error) {
+	c.entered <- struct{}{}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (c *waitingCoordinator) TryAcquire(ctx context.Context, key string) (ExecutionGuard, error) {
+	return c.Acquire(ctx, key)
+}
+
+func TestDistributedDelayBoundsAcquisitionWaiters(t *testing.T) {
+	log := testModuleLog(t)
+	synctest.Test(t, func(t *testing.T) {
+		coordinator := &waitingCoordinator{entered: make(chan struct{}, 2)}
+		run := concurrentMiddleware(log, DelayIfDistributedRunning, coordinator, "distributed", 1, nil)(func(context.Context) error { t.Error("unexpected execution"); return nil })
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		done := make(chan error, 2)
+		for range 2 {
+			go func() { done <- run(ctx) }()
+		}
+		synctest.Wait()
+		if len(coordinator.entered) != 2 {
+			t.Fatal("expected two acquisition waiters")
+		}
+		for range 20 {
+			if err := run(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if len(coordinator.entered) != 2 {
+			t.Fatal("overflow reached coordinator")
+		}
+		cancel()
+		synctest.Wait()
+		for range 2 {
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatal(err)
+			}
+			<-coordinator.entered
+		}
+		nextCtx, nextCancel := context.WithCancel(context.Background())
+		go func() { done <- run(nextCtx) }()
+		synctest.Wait()
+		if len(coordinator.entered) != 1 {
+			t.Fatal("canceled acquisition leaked slot")
+		}
+		nextCancel()
+		synctest.Wait()
+		<-done
+	})
+}
+
+func TestDelayOverflowHandlerThroughManager(t *testing.T) {
+	failure := errors.New("notification failed")
+	for _, policy := range []ConcurrentPolicy{DelayIfRunning, DelayIfDistributedRunning} {
+		for _, outcome := range []string{"success", "error", "panic"} {
+			t.Run(fmt.Sprintf("%d/%s", policy, outcome), func(t *testing.T) {
+				logger, tracingProvider, metricsProvider := newTestObservability(t)
+				synctest.Test(t, func(t *testing.T) {
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+					var calls atomic.Int32
+					spec := NewSpec()
+					spec.Option(WithLogging(false), WithMetrics(false), WithTracing(false))
+					spec.RegisterCron("notify", "@hourly", TaskFunc(func(ctx context.Context) error {
+						<-ctx.Done()
+						return ctx.Err()
+					}), WithConcurrentPolicy(policy), WithMaxPendingRuns(0), WithDelayOverflowHandler(func(got context.Context, event DelayOverflow) error {
+						calls.Add(1)
+						if got != ctx || event != (DelayOverflow{Name: "notify", Policy: policy, MaxPendingRuns: 0}) {
+							t.Errorf("unexpected event/context: %+v", event)
+						}
+						switch outcome {
+						case "error":
+							return failure
+						case "panic":
+							panic("notification panic")
+						}
+						return nil
+					}))
+					coordinator := &waitingCoordinator{entered: make(chan struct{}, 1)}
+					manager, err := NewManager(logger, spec, tracingProvider, metricsProvider, coordinator)
+					if err != nil {
+						t.Fatal(err)
+					}
+					task := manager.cronJobs[0].managedJob.job
+					done := make(chan error, 1)
+					go func() { done <- task.Run(ctx) }()
+					synctest.Wait()
+					if calls.Load() != 0 {
+						t.Fatal("notified without overflow")
+					}
+					var reported error
+					trigger := cronJob{ctx: ctx, name: "notify", job: task, errorHandler: func(_ context.Context, name string, err error) {
+						if name != "notify" {
+							t.Error(name)
+						}
+						reported = err
+					}}
+					trigger.Run()
+					if calls.Load() != 1 {
+						t.Fatal("missing overflow notification")
+					}
+					switch outcome {
+					case "success":
+						if reported != nil {
+							t.Fatal(reported)
+						}
+					case "error":
+						if !errors.Is(reported, failure) {
+							t.Fatal(reported)
+						}
+					case "panic":
+						if reported == nil || !strings.Contains(reported.Error(), "notification panic") {
+							t.Fatal(reported)
+						}
+					}
+					cancel()
+					synctest.Wait()
+					if err := <-done; !errors.Is(err, context.Canceled) {
+						t.Fatal(err)
+					}
+					if err := task.Run(ctx); !errors.Is(err, context.Canceled) {
+						t.Fatal(err)
+					}
+					if calls.Load() != 1 {
+						t.Fatal("cancellation notified overflow")
+					}
+				})
+			})
+		}
 	}
 }

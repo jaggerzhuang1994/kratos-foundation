@@ -18,11 +18,6 @@ func buildFromMessage(pluginOptions *proto.PluginOptions, message pgs.Message, m
 	fillSchemaByObjectKeywords(pluginOptions, schema, mo.GetObject())
 
 	for _, field := range message.Fields() {
-		// Skip OneOf Block field
-		//if field.OneOf() != nil {
-		//	continue
-		//}
-
 		propName := toPropertyName(field, pluginOptions.GetPreserveProtoFieldNames())
 		fieldSchema := &jsonschema.Schema{Ref: toRefId(field)}
 		if !pluginOptions.GetMandatoryNullable() && (field.InRealOneOf() || field.HasOptionalKeyword()) || proto.GetFieldOptions(field).GetNullable() {
@@ -40,21 +35,7 @@ func buildFromMessage(pluginOptions *proto.PluginOptions, message pgs.Message, m
 		schema.Properties.Set(propName, fieldSchema)
 	}
 
-	// Convert Protobuf OneOfs to JSONSchema keywords
-	//for _, oneOf := range message.OneOfs() {
-	//	propertyNames := lo.Map[pgs.Field, string](oneOf.Fields(), func(item pgs.Field, _ int) string {
-	//		return toPropertyName(item, pluginOptions.GetPreserveProtoFieldNames())
-	//	})
-	//	oneOfSchemas := lo.Map[string, *jsonschema.Schema](propertyNames, func(item string, _ int) *jsonschema.Schema {
-	//		return &jsonschema.Schema{Required: []string{item}}
-	//	})
-	//
-	//	negativeSchema := &jsonschema.Schema{Not: &jsonschema.Schema{AnyOf: make([]*jsonschema.Schema, len(oneOfSchemas))}}
-	//	copy(negativeSchema.Not.AnyOf, oneOfSchemas)
-	//
-	//	combinedSchemas := append(oneOfSchemas, negativeSchema)
-	//	schema.AllOf = append(schema.AllOf, &jsonschema.Schema{OneOf: combinedSchemas})
-	//}
+	// 当前仅表达字段的 nullable/required，不生成 oneof 成员之间的互斥约束。
 	return schema
 }
 

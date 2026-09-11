@@ -57,3 +57,5 @@ flowchart TD
     D --> L
     G --> L
 ```
+
+Watcher 显式声明 `FullSnapshot() bool` 为 true，配置管理器复制通知结果后直接更新本源缓存，不再重复读取文件；初始 Load 保留。空结果表示完整删除，缓冲所有权与第三方兼容规则见 [配置契约](../../../pkg/config/README.md#watcher-完整快照契约)。

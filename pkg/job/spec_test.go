@@ -83,3 +83,13 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSpecRejectsInvalidPendingCapacity(t *testing.T) {
+	for _, limit := range []int{-2, int(^uint(0) >> 1)} {
+		spec := NewSpec()
+		spec.RegisterCron("invalid", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithMaxPendingRuns(limit))
+		if err := spec.Validate(); err == nil {
+			t.Fatalf("accepted limit=%d", limit)
+		}
+	}
+}

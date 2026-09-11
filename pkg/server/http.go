@@ -37,7 +37,7 @@ func newHTTPServer(
 		}
 		websocket := newWebSocketServer(logger, srv, websockets)
 		for _, endpoint := range spec.http.websockets {
-			websocket.Handle(endpoint.path, endpoint.handler, endpoint.upgrader...)
+			websocket.Handle(endpoint.path, endpoint.handler, endpoint.maxMessageBytes, endpoint.upgrader...)
 		}
 	}
 	return srv, nil

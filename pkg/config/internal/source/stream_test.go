@@ -253,3 +253,81 @@ func TestStreamDoesNotReloadWhenNextCompletesAfterCancellation(t *testing.T) {
 		t.Fatalf("Load calls after cancellation = %d, want 0", got)
 	}
 }
+
+// snapshotTestSource 显式声明完整快照，与未声明的第三方增量源区分。
+type snapshotTestSource struct {
+	*testSource
+	full bool
+}
+type snapshotTestWatcher struct {
+	*testWatcher
+	full bool
+}
+
+func (w *snapshotTestWatcher) FullSnapshot() bool { return w.full }
+func (s *snapshotTestSource) Watch() (kratosconfig.Watcher, error) {
+	return &snapshotTestWatcher{testWatcher: s.watcher, full: s.full}, nil
+}
+
+func BenchmarkStreamFullSnapshot(b *testing.B) {
+	values := []*kratosconfig.KeyValue{{Key: "settings", Value: make([]byte, 64<<10)}}
+	input := &snapshotTestSource{testSource: newTestSource(values...), full: true}
+	var loads atomic.Int64
+	input.loadHook = func() { loads.Add(1) }
+	_, stream, err := Open([]kratosconfig.Source{input})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		if err := stream.Close(); err != nil {
+			b.Error(err)
+		}
+	}()
+	b.ReportAllocs()
+	for b.Loop() {
+		input.watcher.results <- testResult{values: values}
+		if update := stream.Next(); update.Err != nil {
+			b.Fatal(update.Err)
+		}
+	}
+	b.ReportMetric(float64(loads.Load()-1)/float64(b.N), "reloads/op")
+}
+
+func TestStreamExplicitFullSnapshotAvoidsReloadAndPreservesDeletion(t *testing.T) {
+	for _, full := range []bool{false, true} {
+		t.Run(strconv.FormatBool(full), func(t *testing.T) {
+			base := newTestSource(&kratosconfig.KeyValue{Key: "base", Value: []byte("base")})
+			input := &snapshotTestSource{testSource: newTestSource(&kratosconfig.KeyValue{Key: "override", Value: []byte("old")}), full: full}
+			var loads atomic.Int32
+			input.loadHook = func() { loads.Add(1) }
+			_, stream, err := Open([]kratosconfig.Source{base, input})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := stream.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			for _, values := range [][]*kratosconfig.KeyValue{{{Key: "override", Value: []byte("new")}}, nil} {
+				input.set(values...)
+				input.watcher.results <- testResult{values: values}
+				update := receiveUpdate(t, stream)
+				if update.Err != nil || len(update.Values) != 1+len(values) || string(update.Values[0].Value) != "base" {
+					t.Fatalf("update=%+v", update)
+				}
+				if len(values) != 0 && string(update.Values[1].Value) != "new" {
+					t.Fatal("snapshot update lost")
+				}
+				update.Values[0].Value[0] = 'X'
+			}
+			want := int32(3)
+			if full {
+				want = 1
+			}
+			if loads.Load() != want {
+				t.Fatalf("loads=%d want=%d", loads.Load(), want)
+			}
+		})
+	}
+}

@@ -115,6 +115,10 @@ func (e *Error) HTTPData() any {
 
 // cloneHTTPData 通过 JSON 边界复制可传输数据；不可编码值保留给编码器统一报错。
 func cloneHTTPData(data any) any {
+	// 普通错误通常没有附加数据，无需为 nil 构建 JSON 编解码器。
+	if data == nil {
+		return nil
+	}
 	encoded, marshalErr := json.Marshal(data)
 	if marshalErr != nil {
 		return data

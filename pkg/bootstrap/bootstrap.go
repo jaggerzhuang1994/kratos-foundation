@@ -38,9 +38,10 @@ func NewBootstrap(
 }
 
 // NewKratosApp 在最终组装屏障之后构造 Kratos 应用。
+// 内部创建根 Context，不通过 Wire 注入；业务上下文贡献使用 Spec.AddContext。
 // 不接收提前构造的 App，确保 Spec 冻结发生在全部贡献登记之后。
-func NewKratosApp(ctx context.Context, spec *app.Spec, _ StartupReady, config app.Config, stopPolicy *app.StopPolicy, registrar registry.Registrar) (*kratos.App, error) {
-	application, err := app.NewApp(ctx, spec, config, stopPolicy, registrar)
+func NewKratosApp(spec *app.Spec, _ StartupReady, config app.Config, stopPolicy *app.StopPolicy, registrar registry.Registrar) (*kratos.App, error) {
+	application, err := app.NewApp(context.Background(), spec, config, stopPolicy, registrar)
 	if err != nil {
 		return nil, err
 	}

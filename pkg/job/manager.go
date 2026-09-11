@@ -131,6 +131,8 @@ func newManager(
 					definition.cron.concurrentPolicy,
 					coordinator,
 					definition.name,
+					definition.cron.maxPendingRuns,
+					definition.cron.delayOverflowHandler,
 				),
 			}, baseMiddlewares...)
 			manager.cronJobs = append(manager.cronJobs, scheduledJob{

@@ -2,8 +2,15 @@ package compress
 
 import (
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
+	"compress/zlib"
 	"errors"
+	"fmt"
+	"io"
 	"math"
+	"math/rand/v2"
+	"sync"
 	"testing"
 )
 
@@ -170,6 +177,114 @@ func TestDecompressLimitRejectsTruncatedDataAtExactLimit(t *testing.T) {
 
 			if _, err := format.decompressLimit(truncated, int64(len(want))); err == nil {
 				t.Fatal("decompressLimit() error = nil, want malformed stream error")
+			}
+		})
+	}
+}
+
+func TestCompressionMatchesFreshWriterAndOwnsOutput(t *testing.T) {
+	factories := []func(io.Writer) io.WriteCloser{
+		func(w io.Writer) io.WriteCloser { return gzip.NewWriter(w) },
+		func(w io.Writer) io.WriteCloser {
+			v, err := flate.NewWriter(w, flate.DefaultCompression)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return v
+		},
+		func(w io.Writer) io.WriteCloser { return zlib.NewWriter(w) },
+	}
+	for i, format := range compressionFormats() {
+		t.Run(format.name, func(t *testing.T) {
+			t.Parallel()
+			var retained [][]byte
+			var copies [][]byte
+			for _, size := range []int{0, 1024, 1 << 20, 13, 1024} {
+				input := bytes.Repeat([]byte{byte(size % 251)}, size)
+				var expected bytes.Buffer
+				w := factories[i](&expected)
+				if _, err := w.Write(input); err != nil {
+					t.Fatal(err)
+				}
+				if err := w.Close(); err != nil {
+					t.Fatal(err)
+				}
+				got, err := format.compress(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(got, expected.Bytes()) {
+					t.Fatalf("size %d differs from fresh writer", size)
+				}
+				retained = append(retained, got)
+				copies = append(copies, bytes.Clone(got))
+			}
+			for i := range retained {
+				if !bytes.Equal(retained[i], copies[i]) {
+					t.Fatal("later call changed previous output")
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkCompressionReuse(b *testing.B) {
+	for _, format := range compressionFormats() {
+		for _, size := range []int{1024, 65536} {
+			data := make([]byte, size)
+			r := rand.New(rand.NewPCG(1, 2))
+			for i := range data {
+				data[i] = byte(r.Uint32())
+			}
+			b.Run(fmt.Sprintf("%s/random%d", format.name, size), func(b *testing.B) {
+				for b.Loop() {
+					if _, err := format.compress(data); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+		data := bytes.Repeat([]byte("a"), 1024)
+		b.Run(format.name+"/parallel1K", func(b *testing.B) {
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					if _, err := format.compress(data); err != nil {
+						b.Error(err)
+					}
+				}
+			})
+		})
+	}
+}
+
+type failedCompressionWriter struct{ writeErr, closeErr error }
+
+func (w *failedCompressionWriter) Write(p []byte) (int, error) { return len(p), w.writeErr }
+func (w *failedCompressionWriter) Close() error                { return w.closeErr }
+func (w *failedCompressionWriter) Reset(io.Writer) {
+	panic("failed writer must not be reset and pooled")
+}
+
+func TestCompressionDiscardsFailedWriters(t *testing.T) {
+	failure := errors.New("compression failure")
+	for _, stage := range []string{"create", "write", "close"} {
+		t.Run(stage, func(t *testing.T) {
+			var pool sync.Pool
+			create := func(io.Writer) (resetWriter, error) {
+				switch stage {
+				case "create":
+					return nil, failure
+				case "write":
+					return &failedCompressionWriter{writeErr: failure}, nil
+				default:
+					return &failedCompressionWriter{closeErr: failure}, nil
+				}
+			}
+			if _, err := compress([]byte("input"), &pool, create); !errors.Is(err, failure) {
+				t.Fatalf("error=%v", err)
+			}
+			if pool.Get() != nil {
+				t.Fatal("failed writer retained in pool")
 			}
 		})
 	}

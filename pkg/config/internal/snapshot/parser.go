@@ -15,6 +15,7 @@ import (
 )
 
 func build(values []*kratosconfig.KeyValue) (map[string]any, error) {
+	// merged 只属于本次构建；成功返回后才作为只读快照发布，失败时整棵临时树丢弃。
 	merged := make(map[string]any)
 	for _, value := range values {
 		if value == nil {
@@ -24,16 +25,24 @@ func build(values []*kratosconfig.KeyValue) (map[string]any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decode config %q: %w", value.Key, err)
 		}
-		merged = merge(merged, normalize(next)).(map[string]any)
+		merged = overlaySource(merged, normalize(next)).(map[string]any)
 	}
-	resolved, err := resolve(merged)
-	if err != nil {
-		return nil, err
-	}
-	return resolved, nil
+	return merged, nil
 }
 
 func decode(source *kratosconfig.KeyValue) (map[string]any, error) {
+	// 使用局部副本，保留 Source 缓存的模板，后续快照构建时重新读取环境变量。
+	expanded := *source
+	key, err := expandEnvironment(source.Key)
+	if err != nil {
+		return nil, fmt.Errorf("expand config key: %w", err)
+	}
+	value, err := expandEnvironment(string(source.Value))
+	if err != nil {
+		return nil, fmt.Errorf("expand config value: %w", err)
+	}
+	expanded.Key, expanded.Value = key, []byte(value)
+	source = &expanded
 	target := make(map[string]any)
 	if source.Format == "" {
 		next := target
