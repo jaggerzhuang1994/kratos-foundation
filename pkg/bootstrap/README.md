@@ -21,14 +21,14 @@ func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *se
 worker 的 provider 则可以选择任务和消费者：
 
 ```go
-func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *jobimpl.Reconcile, consumer *queue.ConsumerRuntime) (bootstrap.Bootstrap, error) {
+func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *jobimpl.Reconcile, worker *queue.Worker) (bootstrap.Bootstrap, error) {
     spec.Job().RegisterCron("reconcile", "@every 1m", task)
-    spec.RegisterRuntime(consumer)
+    spec.RegisterRuntime(worker)
     return bootstrap.Bootstrap{}, nil
 }
 ```
 
-以上业务类型由消费项目定义。Queue ConsumerRuntime 由 Wire 调用 queue.NewConsumerRuntime 构造，
+以上业务类型由消费项目定义。Queue Worker 由 Wire 调用 queue.NewWorker 构造，Kafka 消息消费则使用 kafka.NewConsumerRuntime，
 与自定义 worker 一样通过 spec.RegisterRuntime(runtime) 登记；Spec 不再提供专用 Consumer 方法。
 未调用 Http() 或 Grpc() 时不会创建服务器。
 `Http()`、`Grpc()` 仅选择协议，默认仍遵循配置的 disable；显式 `.Enable()` 可以覆盖配置。

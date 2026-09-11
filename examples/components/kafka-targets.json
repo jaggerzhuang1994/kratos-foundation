@@ -1,0 +1,13 @@
+[
+  {
+    "targets": [
+      "kafka-exporter:9308"
+    ],
+    "labels": {
+      "env": "local",
+      "cluster": "local",
+      "kafka_cluster": "components-kafka",
+      "foundation_kafka": "true"
+    }
+  }
+]

@@ -113,6 +113,16 @@ lint:
 		done; \
 		echo 'lint ok'
 
+.PHONY: test-components
+# 自包含组件集成用例；真实 Kafka/Redis 另见 test-components-external。
+test-components:
+	go test -race -count=1 -timeout=2m ./pkg/config ./pkg/database ./pkg/client ./pkg/job ./pkg/log ./pkg/server ./contrib/queue/database/gorm -run '^TestIntegration' -v
+
+.PHONY: test-components-external
+# 复用隔离服务生命周期，只运行功能与竞态用例，省略批量基准和剖析。
+test-components-external:
+	./scripts/test-external.sh --functional-only
+
 .PHONY: test-business
 # 真实 Wire 组装、HTTP/SQLite 业务闭环及生成客户端契约；强制重新执行。
 test-business:

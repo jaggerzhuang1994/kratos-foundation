@@ -210,3 +210,9 @@ flowchart TD
     J --> K
     K --> L([返回结果])
 ```
+
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+
+## 可运行的组合用例
+
+参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。

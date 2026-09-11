@@ -13,6 +13,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -230,6 +231,8 @@ func (m *manager) newConnection(name string) (*redis.Client, error) {
 	if !m.conf.GetMetrics().GetDisable() {
 		err := redisotel.InstrumentMetrics(cc,
 			redisotel.WithMeterProvider(m.metrics.MeterProvider()),
+			// 同一地址可配置多个独立连接池，必须保留具名连接身份，避免观测样本冲突。
+			redisotel.WithAttributes(attribute.String("redis_connection", name)),
 		)
 		if err != nil {
 			return cc, fmt.Errorf(

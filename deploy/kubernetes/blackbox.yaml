@@ -1,0 +1,67 @@
+# 复用已有 blackbox-exporter 时无需部署本文件，修改探测配置中的服务地址即可。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-blackbox
+  namespace: monitoring
+data:
+  blackbox.yaml: |
+    modules:
+      foundation_health:
+        prober: http
+        timeout: 2s
+        http:
+          method: GET
+          valid_status_codes: [200]
+          follow_redirects: false
+          preferred_ip_protocol: ip4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-blackbox
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: foundation-blackbox
+  template:
+    metadata:
+      labels:
+        app: foundation-blackbox
+    spec:
+      containers:
+        - name: blackbox
+          image: prom/blackbox-exporter:v0.28.0
+          args: ["--config.file=/etc/blackbox/blackbox.yaml"]
+          ports:
+            - name: http
+              containerPort: 9115
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blackbox
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: foundation-blackbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-blackbox
+  namespace: monitoring
+spec:
+  selector:
+    app: foundation-blackbox
+  ports:
+    - name: http
+      port: 9115
+      targetPort: http

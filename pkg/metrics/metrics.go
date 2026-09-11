@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -56,7 +57,10 @@ func NewProvider(
 	}
 	registry := clientprometheus.NewRegistry()
 	registry.MustRegister(
-		collectors.NewGoCollector(),
+		// 仅额外启用 GC CPU 开销及调度延迟，避免默认导出全部 runtime 指标扩大序列量。
+		collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(
+			collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile(`^(/cpu/classes/gc/total:cpu-seconds|/sched/latencies:seconds)$`)},
+		)),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
 	exporter, err := otelprometheus.New(
@@ -68,6 +72,14 @@ func NewProvider(
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(exporter),
 		sdkmetric.WithResource(res),
+		// 秒单位不能沿用 SDK 面向通用数值的首个 5 单位桶，否则微秒操作的
+		// P95 会被插值成数秒。View 统一覆盖 instrument 的建议桶，不影响毫秒或原生 collector。
+		sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Kind: sdkmetric.InstrumentKindHistogram, Unit: "s"},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: []float64{.0001, .00025, .0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 300, 600, 1800, 3600, 7200, 21600, 43200, 86400},
+			}},
+		)),
 	)
 	p := &provider{mp: mp, prom: registry}
 	var cleanupOnce sync.Once

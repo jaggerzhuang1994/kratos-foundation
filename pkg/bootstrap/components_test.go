@@ -13,6 +13,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
@@ -74,28 +75,51 @@ func TestComponentsRejectInvalidSelections(t *testing.T) {
 
 type deliveryConsumer struct{}
 
-func (deliveryConsumer) Consume(ctx context.Context, handler queue.DeliveryHandler) error {
-	return handler(ctx, queue.Delivery{Message: &queue.Message{ID: "one"}})
+// taskStore 让应用完成一次真实 Worker 调用后用存储故障结束，验证登记及退出传播。
+type taskStore struct {
+	queue.Store
+	acknowledged bool
+	failure      error
+}
+
+func (s *taskStore) Reserve(context.Context, time.Time, time.Duration) (*queue.Reservation, error) {
+	if s.acknowledged {
+		return nil, s.failure
+	}
+	return &queue.Reservation{Task: &queue.Task{ID: "one", Type: "test"}, Token: "lease", Attempts: 1}, nil
+}
+
+func (s *taskStore) Ack(context.Context, *queue.Reservation) error { s.acknowledged = true; return nil }
+
+func (deliveryConsumer) Consume(ctx context.Context, handler kafka.DeliveryHandler) error {
+	return handler(ctx, kafka.Delivery{Message: &kafka.Message{ID: "one"}})
 }
 
 func TestComponentsWorkerLifecycle(t *testing.T) {
 	failure := errors.New("worker failed")
-	for _, mode := range []string{"once", "consumer"} {
+	for _, mode := range []string{"once", "consumer", "queue"} {
 		t.Run(mode, func(t *testing.T) {
 			components := bootstrap.NewSpec()
 			logger, tracing, metrics := newTestObservability(t)
 			called := false
-			if mode == "once" {
+			switch mode {
+			case "once":
 				components.Job().RegisterOnce("once", job.TaskFunc(func(context.Context) error { called = true; return nil })).ExitWhenDone()
-			} else {
-				runtime, err := queue.NewConsumerRuntime(queue.RuntimeConfig{Name: "consumer", Destination: "events"}, deliveryConsumer{}, func(context.Context, *queue.Message) error {
+			case "consumer":
+				runtime, err := kafka.NewConsumerRuntime(kafka.RuntimeConfig{Name: "consumer", Destination: "events"}, deliveryConsumer{}, func(context.Context, *kafka.Message) error {
 					called = true
 					return failure
-				}, queue.Observability{Logger: logger, Tracing: tracing, Metrics: metrics})
+				}, kafka.Observability{Logger: logger, Tracing: tracing, Metrics: metrics})
 				if err != nil {
 					t.Fatal(err)
 				}
 				components.RegisterRuntime(runtime)
+			case "queue":
+				worker, err := queue.NewWorker(queue.WorkerConfig{Name: "tasks", Queue: "test"}, &taskStore{failure: failure}, map[string]queue.Handler{"test": func(context.Context, *queue.Task) error { called = true; return nil }}, queue.Observability{Logger: logger, Tracing: tracing, Metrics: metrics})
+				if err != nil {
+					t.Fatal(err)
+				}
+				components.RegisterRuntime(worker)
 			}
 			spec := bootstrap.ApplicationSpec(components)
 			// nil config manager 证明 worker 没有尝试构造 HTTP/gRPC Runtime。
@@ -108,7 +132,7 @@ func TestComponentsWorkerLifecycle(t *testing.T) {
 			if mode == "once" && err != nil {
 				t.Fatal(err)
 			}
-			if mode == "consumer" && !errors.Is(err, failure) {
+			if mode != "once" && !errors.Is(err, failure) {
 				t.Fatalf("consumer error = %v", err)
 			}
 			if !called {

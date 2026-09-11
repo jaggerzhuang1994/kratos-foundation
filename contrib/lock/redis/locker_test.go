@@ -2,8 +2,10 @@ package redis
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -502,4 +504,182 @@ func TestLeaseWrapsRedisErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExternalLockLeaseUsage 通过真实 Redis 脚本验证公共租约契约；不使用脚本返回值替身。
+func TestExternalLockLeaseUsage(t *testing.T) {
+	address := os.Getenv("FOUNDATION_TEST_REDIS_ADDR")
+	if address == "" {
+		t.Skip("set FOUNDATION_TEST_REDIS_ADDR to run real Redis lease integration tests")
+	}
+	client := goredis.NewClient(&goredis.Options{
+		Addr: address, DialTimeout: time.Second, ReadTimeout: time.Second,
+		WriteTimeout: time.Second, ContextTimeoutEnabled: true,
+	})
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	// 每个场景拥有独立前缀，只清理明确属于该场景的键，不影响其他测试或业务数据。
+	newLocker := func(t *testing.T) (foundationlock.Locker, string) {
+		t.Helper()
+		prefix := "foundation:test:lock:" + rand.Text() + ":"
+		created, err := New(defaultLockerManager{client: client},
+			WithKeyPrefix(prefix), WithRetryInterval(time.Millisecond))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanupCtx, stop := context.WithTimeout(context.Background(), time.Second)
+			defer stop()
+			if err := client.Del(cleanupCtx, prefix+"order", prefix+"other").Err(); err != nil {
+				t.Errorf("cleanup lease keys: %v", err)
+			}
+		})
+		return created, prefix
+	}
+	acquire := func(t *testing.T, locker foundationlock.Locker, key string) foundationlock.Lease {
+		t.Helper()
+		lease, err := locker.TryLock(ctx, key, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return lease
+	}
+	assertHeld := func(t *testing.T, lease foundationlock.Lease, maximum time.Duration) {
+		t.Helper()
+		ttl, err := lease.TTL(ctx)
+		if err != nil || ttl <= 0 || ttl > maximum {
+			t.Fatalf("TTL = %v, %v; want positive TTL <= %v", ttl, err, maximum)
+		}
+	}
+	assertLost := func(t *testing.T, lease foundationlock.Lease) {
+		t.Helper()
+		if ttl, err := lease.TTL(ctx); ttl != 0 || !errors.Is(err, foundationlock.ErrNotHeld) {
+			t.Fatalf("lost TTL = %v, %v", ttl, err)
+		}
+		if err := lease.Refresh(ctx, time.Minute); !errors.Is(err, foundationlock.ErrNotHeld) {
+			t.Fatalf("lost Refresh = %v", err)
+		}
+		if err := lease.Unlock(ctx); !errors.Is(err, foundationlock.ErrNotHeld) {
+			t.Fatalf("lost Unlock = %v", err)
+		}
+	}
+
+	t.Run("acquire_refresh_release", func(t *testing.T) {
+		locker, prefix := newLocker(t)
+		lease := acquire(t, locker, "order")
+		if lease.Key() != "order" {
+			t.Fatalf("logical key = %q", lease.Key())
+		}
+		assertHeld(t, lease, time.Minute)
+		if err := lease.Refresh(ctx, 2*time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if ttl, err := lease.TTL(ctx); err != nil || ttl <= time.Minute || ttl > 2*time.Minute {
+			t.Fatalf("refreshed TTL = %v, %v", ttl, err)
+		}
+		if err := lease.Unlock(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if count, err := client.Exists(ctx, prefix+"order").Result(); err != nil || count != 0 {
+			t.Fatalf("released key count = %d, %v", count, err)
+		}
+		assertLost(t, lease)
+	})
+
+	t.Run("contention_release_and_reacquire", func(t *testing.T) {
+		locker, _ := newLocker(t)
+		first := acquire(t, locker, "order")
+		if got, err := locker.TryLock(ctx, "order", time.Minute); got != nil || !errors.Is(err, foundationlock.ErrNotAcquired) {
+			t.Fatalf("contended TryLock = %v, %v", got, err)
+		}
+		if err := first.Unlock(ctx); err != nil {
+			t.Fatal(err)
+		}
+		second, err := locker.Lock(ctx, "order", time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 旧租约不能查询、续租或删除新持有者的锁。
+		assertLost(t, first)
+		assertHeld(t, second, time.Minute)
+	})
+
+	t.Run("distinct_keys_are_independent", func(t *testing.T) {
+		locker, _ := newLocker(t)
+		order := acquire(t, locker, "order")
+		other := acquire(t, locker, "other")
+		if err := order.Unlock(ctx); err != nil {
+			t.Fatal(err)
+		}
+		assertHeld(t, other, time.Minute)
+	})
+
+	t.Run("same_key_different_namespaces", func(t *testing.T) {
+		first, _ := newLocker(t)
+		second, _ := newLocker(t)
+		lease := acquire(t, first, "order")
+		other := acquire(t, second, "order")
+		if err := lease.Unlock(ctx); err != nil {
+			t.Fatal(err)
+		}
+		assertHeld(t, other, time.Minute)
+	})
+
+	t.Run("expired_owner_cannot_release_replacement", func(t *testing.T) {
+		locker, prefix := newLocker(t)
+		old := acquire(t, locker, "order")
+		// 主动令 Redis 键立即过期，确定性模拟租约到期，不依赖 sleep 或真实时间推进。
+		if expired, err := client.PExpire(ctx, prefix+"order", 0).Result(); err != nil || !expired {
+			t.Fatalf("expire lease = %v, %v", expired, err)
+		}
+		assertLost(t, old)
+		replacement := acquire(t, locker, "order")
+		assertLost(t, old)
+		assertHeld(t, replacement, time.Minute)
+	})
+
+	t.Run("wait_deadline_preserves_current_owner", func(t *testing.T) {
+		locker, _ := newLocker(t)
+		owner := acquire(t, locker, "order")
+		waitCtx, stop := context.WithTimeout(ctx, 30*time.Millisecond)
+		defer stop()
+		if got, err := locker.Lock(waitCtx, "order", time.Minute); got != nil || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("waiting Lock = %v, %v", got, err)
+		}
+		assertHeld(t, owner, time.Minute)
+	})
+
+	t.Run("invalid_refresh_preserves_lease", func(t *testing.T) {
+		locker, _ := newLocker(t)
+		lease := acquire(t, locker, "order")
+		for _, ttl := range []time.Duration{0, -time.Second, time.Millisecond - time.Nanosecond} {
+			if err := lease.Refresh(ctx, ttl); err == nil {
+				t.Fatalf("Refresh(%s) unexpectedly succeeded", ttl)
+			}
+		}
+		assertHeld(t, lease, time.Minute)
+	})
+
+	t.Run("canceled_acquisition_does_not_create_key", func(t *testing.T) {
+		locker, prefix := newLocker(t)
+		canceled, stop := context.WithCancel(ctx)
+		stop()
+		for _, obtain := range []func(context.Context, string, time.Duration) (foundationlock.Lease, error){locker.Lock, locker.TryLock} {
+			if lease, err := obtain(canceled, "order", time.Minute); lease != nil || !errors.Is(err, context.Canceled) {
+				t.Fatalf("canceled acquisition = %v, %v", lease, err)
+			}
+		}
+		if count, err := client.Exists(ctx, prefix+"order").Result(); err != nil || count != 0 {
+			t.Fatalf("canceled acquisition key count = %d, %v", count, err)
+		}
+	})
 }

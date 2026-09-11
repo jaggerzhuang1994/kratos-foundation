@@ -351,3 +351,177 @@ func TestNewManagerInjectsConcurrencyCoordinator(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegrationJobCronOptionsAndMiddleware(t *testing.T) {
+	observability := newRuntimeObservability(t)
+	location := time.FixedZone("UTC+9", 9*60*60)
+	var events []string
+	middleware := func(next Handler) Handler {
+		return func(ctx context.Context) error {
+			events = append(events, "middleware:before")
+			err := next(ctx)
+			events = append(events, "middleware:after")
+			return err
+		}
+	}
+	run := make(chan struct{}, 1)
+	spec := NewSpec().
+		Middleware(nil, middleware).
+		Option(
+			nil,
+			WithLocation(nil),
+			WithLocation(location),
+			WithTracing(false),
+			WithMetrics(false),
+			WithLogging(false),
+		).
+		RegisterCron("refresh", "@hourly", TaskFunc(func(context.Context) error {
+			events = append(events, "task")
+			run <- struct{}{}
+			return nil
+		}), RunImmediately(), WithConcurrentPolicy(DelayIfRunning)).(*Spec)
+	manager, err := NewManager(
+		observability.logger,
+		spec,
+		observability.tracingProvider,
+		observability.metricsProvider,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manager.options.Location != location || manager.options.TracingEnabled || manager.options.MetricsEnabled || manager.options.LoggingEnabled {
+		t.Fatalf("manager options = %#v", manager.options)
+	}
+	startDone := make(chan error, 1)
+	go func() { startDone <- manager.Start(context.Background()) }()
+	waitFor(t, run)
+	if err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitForValue(t, startDone); err != nil {
+		t.Fatalf("Start error = %v", err)
+	}
+	want := []string{"middleware:before", "task", "middleware:after"}
+	if len(events) != len(want) {
+		t.Fatalf("events = %#v, want %#v", events, want)
+	}
+	for index := range want {
+		if events[index] != want[index] {
+			t.Fatalf("events = %#v, want %#v", events, want)
+		}
+	}
+}
+
+// TestIntegrationJobBatchErrors 验证真实构造链会运行全部单次任务，并保留多个失败原因。
+func TestIntegrationJobBatchErrors(t *testing.T) {
+	first, second := errors.New("invoice unavailable"), errors.New("report unavailable")
+	completed := make(chan string, 3)
+	spec := NewSpec()
+	for _, item := range []struct {
+		name string
+		err  error
+	}{{"invoice", first}, {"report", second}, {"healthy", nil}} {
+		spec.RegisterOnce(item.name, TaskFunc(func(ctx context.Context) error {
+			completed <- JobNameFromContext(ctx)
+			return item.err
+		}))
+	}
+	spec.ExitWhenDone()
+	manager := newTestManager(t, spec)
+	if !manager.HasJobs() || !manager.IsOneShot() {
+		t.Fatal("batch lifecycle flags were lost")
+	}
+	err := manager.Start(context.Background())
+	if !errors.Is(err, first) || !errors.Is(err, second) {
+		t.Fatalf("batch error lost causes: %v", err)
+	}
+	if err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool)
+	for range 3 {
+		seen[waitForValue(t, completed)] = true
+	}
+	if len(seen) != 3 || !seen["healthy"] || !seen["invoice"] || !seen["report"] {
+		t.Fatalf("completed tasks = %v", seen)
+	}
+}
+
+func TestIntegrationJobMixedLifecycle(t *testing.T) {
+	for _, stopParent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("parent_cancel=%t", stopParent), func(t *testing.T) {
+			started := make(chan string, 3)
+			exited := make(chan string, 2)
+			spec := NewSpec()
+			spec.RegisterOnce("warmup", TaskFunc(func(context.Context) error { started <- "warmup"; return nil }))
+			wait := TaskFunc(func(ctx context.Context) error {
+				name := JobNameFromContext(ctx)
+				started <- name
+				<-ctx.Done()
+				exited <- name
+				return ctx.Err()
+			})
+			spec.RegisterDaemon("worker", wait)
+			spec.RegisterCron("refresh", "@hourly", wait, RunImmediately())
+			manager := newTestManager(t, spec)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			defer func() {
+				if err := manager.Stop(context.Background()); err != nil {
+					t.Error(err)
+				}
+			}()
+			done := make(chan error, 1)
+			go func() { done <- manager.Start(ctx) }()
+			seen := make(map[string]bool)
+			for range 3 {
+				seen[waitForValue(t, started)] = true
+			}
+			if !seen["warmup"] || !seen["worker"] || !seen["refresh"] {
+				t.Fatalf("mixed tasks = %v", seen)
+			}
+			// 使用任务入口信号确认全部启动，避免依赖调度时序或真实时间等待。
+			if stopParent {
+				cancel()
+				if err := waitForValue(t, done); !errors.Is(err, context.Canceled) {
+					t.Fatalf("parent cancellation = %v", err)
+				}
+			}
+			if err := manager.Stop(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if !stopParent {
+				if err := waitForValue(t, done); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if a, b := waitForValue(t, exited), waitForValue(t, exited); a == b {
+				t.Fatalf("shutdown did not wait for both task types: %q %q", a, b)
+			}
+		})
+	}
+}
+
+func TestIntegrationJobMiddlewareRejectsExecution(t *testing.T) {
+	denied := errors.New("task is disabled by application policy")
+	var name string
+	spec := NewSpec()
+	spec.Middleware(func(Handler) Handler {
+		return func(ctx context.Context) error { name = JobNameFromContext(ctx); return denied }
+	})
+	spec.RegisterOnce("guarded", TaskFunc(func(context.Context) error {
+		t.Error("middleware rejection still executed task")
+		return nil
+	})).ExitWhenDone()
+	manager := newTestManager(t, spec)
+	if err := manager.Start(context.Background()); !errors.Is(err, denied) {
+		t.Fatalf("middleware rejection = %v", err)
+	}
+	if err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if name != "guarded" {
+		t.Fatalf("middleware task context = %q", name)
+	}
+}

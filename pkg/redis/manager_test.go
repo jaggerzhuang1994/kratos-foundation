@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"os"
 	"reflect"
@@ -13,8 +14,11 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/google/uuid"
+	textconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
+	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	goredis "github.com/redis/go-redis/v9"
@@ -396,4 +400,200 @@ func TestExternalRedisPoolReconnectAndCleanup(t *testing.T) {
 		}
 	}
 	t.Log("10 client kill/reconnect/cleanup cycles; final pools empty")
+}
+
+func TestManagerMetricsSeparateConnectionsAtSameAddress(t *testing.T) {
+	provider, cleanup, err := metrics.NewProvider(appinfo.New("redis-metrics-test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	m := newLocalTestManager(map[string]connectionOption{
+		"cache": localConnectionOption("127.0.0.1:1"),
+		"locks": localConnectionOption("127.0.0.1:1"),
+	})
+	m.conf.Metrics = &config_pb.RedisMetrics{}
+	m.metrics = provider
+	defer func() {
+		if err := m.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	for _, name := range []string{"cache", "locks"} {
+		if _, err := m.Connection(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	families, err := provider.PrometheusGatherer().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, family := range families {
+		if family.GetName() != "db_client_connections_max" {
+			continue
+		}
+		for _, sample := range family.Metric {
+			for _, label := range sample.Label {
+				if label.GetName() == "redis_connection" {
+					names[label.GetValue()] = true
+				}
+			}
+		}
+	}
+	if !names["cache"] || !names["locks"] || len(names) != 2 {
+		t.Fatalf("connection metrics collapsed: %v", names)
+	}
+}
+
+// externalIntegrationManager 只连接显式测试地址，不借用开发者已有 Redis 配置。
+func externalIntegrationManager(t *testing.T) Manager {
+	t.Helper()
+	address := os.Getenv("FOUNDATION_TEST_REDIS_ADDR")
+	if address == "" {
+		t.Skip("set FOUNDATION_TEST_REDIS_ADDR using the isolated external runner")
+	}
+	provider, closeMetrics, err := metrics.NewProvider(appinfo.New("redis-integration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeMetrics)
+	source, err := textconfig.NewSource("redis.json", foundationconfig.JSONFormat, fmt.Sprintf(`{"redis":{"default":"cache","connections":{"cache":{"addr":%q,"db":11,"context_timeout_enabled":true},"isolated":{"addr":%q,"db":12,"context_timeout_enabled":true}},"metrics":{"disable":true},"tracing":{"disable":true}}}`, address, address))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration, closeConfig, err := foundationconfig.NewManager(foundationconfig.NewSources(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeConfig)
+	manager, cleanup, err := NewManager(newRedisTestLogger(t), configuration, disabledTracingProvider{provider: noop.NewTracerProvider()}, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	return manager
+}
+
+func TestExternalIntegrationRedisCommands(t *testing.T) {
+	for _, name := range []string{"strings and missing key", "named database isolation", "pipeline results", "transaction command failure is not rollback", "watch conflict", "setnx and expiry", "canceled write"} {
+		t.Run(name, func(t *testing.T) {
+			manager := externalIntegrationManager(t)
+			client := manager.Default()
+			other, err := manager.Connection("isolated")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			key := "foundation:integration:" + uuid.NewString()
+			// cleanup 使用独立短上下文，测试取消后仍清理本次创建的键。
+			t.Cleanup(func() {
+				cleanupCtx, done := context.WithTimeout(context.Background(), 3*time.Second)
+				defer done()
+				for _, connection := range []*goredis.Client{client, other} {
+					if err := connection.Del(cleanupCtx, key, key+":result").Err(); err != nil {
+						t.Error(err)
+					}
+				}
+			})
+			switch name {
+			case "strings and missing key":
+				if _, err := client.Get(ctx, key).Result(); !errors.Is(err, goredis.Nil) {
+					t.Fatalf("missing: %v", err)
+				}
+				for _, value := range []string{"订单 + 100%", ""} {
+					if err := client.Set(ctx, key, value, 0).Err(); err != nil {
+						t.Fatal(err)
+					}
+					if got, err := client.Get(ctx, key).Result(); err != nil || got != value {
+						t.Fatalf("value=%q err=%v", got, err)
+					}
+				}
+			case "named database isolation":
+				if err := client.Set(ctx, key, "primary", 0).Err(); err != nil {
+					t.Fatal(err)
+				}
+				if err := other.Set(ctx, key, "isolated", 0).Err(); err != nil {
+					t.Fatal(err)
+				}
+				for connection, want := range map[*goredis.Client]string{client: "primary", other: "isolated"} {
+					if got, err := connection.Get(ctx, key).Result(); err != nil || got != want {
+						t.Fatalf("got=%q want=%q err=%v", got, want, err)
+					}
+				}
+			case "pipeline results":
+				var count *goredis.IntCmd
+				var value *goredis.StringCmd
+				_, err := client.Pipelined(ctx, func(pipe goredis.Pipeliner) error {
+					pipe.HSet(ctx, key, "status", "ready", "attempts", 0)
+					count = pipe.HIncrBy(ctx, key, "attempts", 1)
+					value = pipe.HGet(ctx, key, "status")
+					return nil
+				})
+				if err != nil || count.Val() != 1 || value.Val() != "ready" {
+					t.Fatalf("pipeline err=%v count=%v value=%v", err, count, value)
+				}
+			case "transaction command failure is not rollback":
+				var invalid *goredis.IntCmd
+				_, err := client.TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
+					pipe.Set(ctx, key, "string", 0)
+					invalid = pipe.HSet(ctx, key, "field", "value")
+					pipe.Set(ctx, key+":result", "committed", 0)
+					return nil
+				})
+				if err == nil || invalid.Err() == nil {
+					t.Fatal("wrong-type command did not fail")
+				}
+				if got, err := client.Get(ctx, key+":result").Result(); err != nil || got != "committed" {
+					t.Fatalf("successful command rolled back: %q %v", got, err)
+				}
+			case "watch conflict":
+				if err := client.Set(ctx, key, "before", 0).Err(); err != nil {
+					t.Fatal(err)
+				}
+				err := client.Watch(ctx, func(tx *goredis.Tx) error {
+					if _, err := tx.Get(ctx, key).Result(); err != nil {
+						return err
+					}
+					// WATCH 占用一个连接，普通 Client 通过另一连接修改同一键。
+					if err := client.Set(ctx, key, "competing", 0).Err(); err != nil {
+						return err
+					}
+					_, err := tx.TxPipelined(ctx, func(pipe goredis.Pipeliner) error { pipe.Set(ctx, key, "lost-update", 0); return nil })
+					return err
+				}, key)
+				if !errors.Is(err, goredis.TxFailedErr) {
+					t.Fatalf("watch conflict: %v", err)
+				}
+				if got, err := client.Get(ctx, key).Result(); err != nil || got != "competing" {
+					t.Fatalf("overwrote competing write: %q %v", got, err)
+				}
+			case "setnx and expiry":
+				for i, want := range []bool{true, false} {
+					if got, err := client.SetNX(ctx, key, strconv.Itoa(i), time.Minute).Result(); err != nil || got != want {
+						t.Fatalf("setnx=%t want=%t err=%v", got, want, err)
+					}
+				}
+				if ttl, err := client.PTTL(ctx, key).Result(); err != nil || ttl <= 0 || ttl > time.Minute {
+					t.Fatalf("ttl=%s err=%v", ttl, err)
+				}
+				if err := client.PExpire(ctx, key, 0).Err(); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := client.Get(ctx, key).Result(); !errors.Is(err, goredis.Nil) {
+					t.Fatalf("expired key: %v", err)
+				}
+			case "canceled write":
+				canceled, stop := context.WithCancel(ctx)
+				stop()
+				if err := client.Set(canceled, key, "must-not-write", 0).Err(); !errors.Is(err, context.Canceled) {
+					t.Fatalf("canceled write: %v", err)
+				}
+				if _, err := client.Get(ctx, key).Result(); !errors.Is(err, goredis.Nil) {
+					t.Fatalf("canceled write persisted: %v", err)
+				}
+			}
+		})
+	}
 }

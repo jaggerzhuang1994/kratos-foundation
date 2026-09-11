@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	textconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
@@ -250,4 +251,77 @@ func TestManagerRejectsRemovedFoundationFields(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestIntegrationConfigSources 使用真实文本适配器演示部署覆盖和调用方默认值的组合。
+func TestIntegrationConfigSources(t *testing.T) {
+	type feature struct {
+		Enabled bool              `json:"enabled"`
+		Limit   int               `json:"limit"`
+		Labels  map[string]string `json:"labels"`
+		Routes  []string          `json:"routes"`
+	}
+	for _, tt := range []struct {
+		name, overlay string
+		want          feature
+	}{
+		{"recursive merge", `{"feature":{"labels":{"region":"hk"}}}`, feature{true, 10, map[string]string{"env": "base", "region": "hk"}, []string{"a", "b"}}},
+		{"explicit zero", `{"feature":{"enabled":false,"limit":0}}`, feature{false, 0, map[string]string{"env": "base"}, []string{"a", "b"}}},
+		{"replace slice", `{"feature":{"routes":["c"]}}`, feature{true, 10, map[string]string{"env": "base"}, []string{"c"}}},
+		{"empty slice", `{"feature":{"routes":[]}}`, feature{true, 10, map[string]string{"env": "base"}, []string{}}},
+		{"retain omitted fields", `{}`, feature{true, 10, map[string]string{"env": "base"}, []string{"a", "b"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base, err := textconfig.NewSource("base.yaml", config.YAMLFormat, "feature:\n  enabled: true\n  limit: 10\n  labels:\n    env: base\n  routes: [a, b]\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			overlay, err := textconfig.NewSource("deployment.json", config.JSONFormat, tt.overlay)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manager, cleanup, err := config.NewManager(config.NewSources(base, overlay))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanup)
+			defaults := &feature{Limit: 99}
+			var got feature
+			if err := manager.Load("feature", &got, defaults); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("merged = %#v, want %#v", got, tt.want)
+			}
+			// 返回值允许调用方修改；下一次读取不能受到上次 map/slice 修改影响。
+			got.Labels["env"] = "changed"
+			if len(got.Routes) > 0 {
+				got.Routes[0] = "changed"
+			}
+			if err := manager.Load("feature", &got, defaults); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tt.want) || defaults.Limit != 99 {
+				t.Fatalf("snapshot or defaults mutated: %#v, %#v", got, defaults)
+			}
+		})
+	}
+	t.Run("decode failure leaves manager usable", func(t *testing.T) {
+		source, err := textconfig.NewSource("invalid-type.json", config.JSONFormat, `{"feature":{"limit":"not-a-number"},"healthy":7}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manager, cleanup, err := config.NewManager(config.NewSources(source))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(cleanup)
+		if err := manager.Load("feature", new(feature)); err == nil {
+			t.Fatal("invalid integer accepted")
+		}
+		var healthy int
+		if err := manager.Load("healthy", &healthy); err != nil || healthy != 7 {
+			t.Fatalf("healthy=%d err=%v", healthy, err)
+		}
+	})
 }

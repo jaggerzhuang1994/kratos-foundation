@@ -1,0 +1,38 @@
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/go-kratos/kratos/v2/registry"
+	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
+)
+
+type configPath string
+
+func newSources(logger log.Logger, path configPath) (config.Sources, error) {
+	// 模板要求一个存在的文件，避免文件源未匹配时仅告警并使用默认配置启动。
+	info, err := os.Stat(string(path))
+	if err != nil {
+		return nil, fmt.Errorf("stat configuration: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("configuration must be a regular file")
+	}
+	sources, err := fileconfig.NewSources(logger, fileconfig.PathList{string(path)})
+	return config.Sources(sources), err
+}
+
+func newRegistrar() registry.Registrar { return nil }
+
+func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *greetingService) (bootstrap.Bootstrap, error) {
+	spec.Http().Register(func(srv server.HTTPServer) error {
+		service.register(srv)
+		return nil
+	})
+	return bootstrap.Bootstrap{}, nil
+}

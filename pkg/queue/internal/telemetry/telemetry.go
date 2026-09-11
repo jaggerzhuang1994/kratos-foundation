@@ -21,7 +21,7 @@ type Telemetry struct {
 	attempts                metric.Int64Counter
 	attemptDuration         metric.Float64Histogram
 	retries                 metric.Int64Counter
-	deadLetters             metric.Int64Counter
+	failedTasks             metric.Int64Counter
 	consumerRuntimeFailures metric.Int64Counter
 	producerMessages        metric.Int64Counter
 	producerDuration        metric.Float64Histogram
@@ -70,8 +70,8 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	result.deadLetters, err = meter.Int64Counter(
-		"queue_consumer_dead_letters_total",
+	result.failedTasks, err = meter.Int64Counter(
+		"queue_consumer_failed_tasks_total",
 		metric.WithUnit("{message}"),
 	)
 	if err != nil {
@@ -179,17 +179,17 @@ func (t *Telemetry) RecordFinalClassification(
 	)
 }
 
-func (t *Telemetry) RecordDeadLetter(
+func (t *Telemetry) RecordFailure(
 	ctx context.Context,
 	span trace.Span,
 	destination string,
 	consumer string,
 	result string,
 ) {
-	t.deadLetters.Add(ctx, 1, consumerMetricAttributes(destination, consumer, result))
-	event := "queue.consume.dead_lettered"
+	t.failedTasks.Add(ctx, 1, consumerMetricAttributes(destination, consumer, result))
+	event := "queue.task.failed"
 	if result != "success" {
-		event = "queue.dead_letter.failed"
+		event = "queue.failure.persist_failed"
 	}
 	span.AddEvent(event)
 }

@@ -2,18 +2,23 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	textconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 )
@@ -341,5 +346,144 @@ func TestNewFactoryRejectsInvalidSREBeforeFirstRequest(t *testing.T) {
 	}
 	if err == nil || factory != nil {
 		t.Fatalf("NewFactory = (%v, %v), want configuration error", factory, err)
+	}
+}
+
+// TestIntegrationConfiguredHTTPFactory 从真实文本配置构造工厂，经本地 HTTP 验证调用结果。
+func TestIntegrationConfiguredHTTPFactory(t *testing.T) {
+	for _, tt := range []struct {
+		name, clientName, method, path string
+		status                         int
+		canceled                       bool
+	}{
+		{"get primary", "orders", http.MethodGet, "/echo", 200, false},
+		{"named backend", "audit", http.MethodGet, "/echo", 200, false},
+		{"query escaping", "orders", http.MethodGet, "/echo?q=a%2Bb%20c", 200, false},
+		{"json post", "orders", http.MethodPost, "/echo", 200, false},
+		{"business rejection", "orders", http.MethodPost, "/reject", 422, false},
+		{"missing route", "audit", http.MethodGet, "/missing", 404, false},
+		{"canceled request", "orders", http.MethodGet, "/echo", 0, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			type echo struct {
+				Backend string `json:"backend"`
+				Method  string `json:"method"`
+				Query   string `json:"query"`
+				Value   string `json:"value"`
+			}
+			var requests atomic.Int32
+			options := map[string]any{}
+			for _, backend := range []string{"orders", "audit"} {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requests.Add(1)
+					w.Header().Set("Content-Type", "application/json")
+					if r.URL.Path == "/reject" || r.URL.Path == "/missing" {
+						code := 422
+						if r.URL.Path == "/missing" {
+							code = 404
+						}
+						w.WriteHeader(code)
+						if err := json.NewEncoder(w).Encode(map[string]any{"code": code, "reason": "BUSINESS_ERROR", "message": "request rejected"}); err != nil {
+							t.Error(err)
+						}
+						return
+					}
+					result := echo{Backend: backend, Method: r.Method, Query: r.URL.Query().Get("q")}
+					if r.Method == http.MethodPost {
+						var body map[string]string
+						if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil {
+							t.Error(err)
+							w.WriteHeader(400)
+							return
+						}
+						result.Value = body["value"]
+					}
+					if err := json.NewEncoder(w).Encode(result); err != nil {
+						t.Error(err)
+					}
+				}))
+				t.Cleanup(server.Close)
+				options[backend] = map[string]any{"protocol": "HTTP", "target": server.URL}
+			}
+			content, err := json.Marshal(map[string]any{"client": map[string]any{"clients": options}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			source, err := textconfig.NewSource("clients.json", config.JSONFormat, string(content))
+			if err != nil {
+				t.Fatal(err)
+			}
+			manager, closeConfig, err := config.NewManager(config.NewSources(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(closeConfig)
+			factory, cleanup, err := NewFactory(manager, newTestLogger(discardLogger{}), appinfo.New("integration"), newTestTracingProvider(t), newTestMetricsProvider(t), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanup)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+			httpClient, grpcClient, release, err := factory.AcquireClient(ctx, tt.clientName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if release == nil {
+				t.Fatal("missing release")
+			}
+			t.Cleanup(release)
+			if httpClient == nil || grpcClient != nil {
+				t.Fatal("unexpected protocol client")
+			}
+			if tt.canceled {
+				cancel()
+			}
+			var got echo
+			var input any
+			if tt.method == http.MethodPost {
+				input = map[string]string{"value": "订单 + 100%"}
+			}
+			err = httpClient.Invoke(ctx, tt.method, tt.path, input, &got)
+			switch {
+			case tt.canceled:
+				if !errors.Is(err, context.Canceled) || requests.Load() != 0 {
+					t.Fatalf("canceled request: err=%v requests=%d", err, requests.Load())
+				}
+			case tt.status != 200:
+				if foundationerrors.Code(err) != tt.status || foundationerrors.Reason(err) != "BUSINESS_ERROR" {
+					t.Fatalf("business error = %v", err)
+				}
+			default:
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := echo{Backend: tt.clientName, Method: tt.method}
+				if strings.Contains(tt.path, "?") {
+					want.Query = "a+b c"
+				}
+				if tt.method == http.MethodPost {
+					want.Value = "订单 + 100%"
+				}
+				if got != want {
+					t.Fatalf("response = %+v, want %+v", got, want)
+				}
+			}
+			if !tt.canceled && requests.Load() != 1 {
+				t.Fatalf("requests = %d, want 1", requests.Load())
+			}
+			// 操作租约先归还，再关闭工厂；重复释放不应破坏资源计数。
+			release()
+			release()
+			cleanup()
+			_, _, lateRelease, err := factory.AcquireClient(t.Context(), tt.clientName)
+			if lateRelease != nil {
+				lateRelease()
+				t.Error("closed factory returned lease")
+			}
+			if !errors.Is(err, ErrFactoryClosed) {
+				t.Fatalf("acquire after cleanup = %v", err)
+			}
+		})
 	}
 }

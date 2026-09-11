@@ -1,0 +1,12 @@
+.git
+.codex
+.agents
+.env
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
+**/*.log
+**/coverage*.out
+**/.runtime
+**/__pycache__

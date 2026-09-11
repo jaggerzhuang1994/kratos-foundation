@@ -9,6 +9,16 @@
 - Go 1.25+
 - 使用 Protocol Buffers 或 Wire 生成功能时，需先安装对应工具链
 
+## 业务模板与监控部署
+
+[最小业务模板](examples/minimal/README.md) 提供可复制的 HTTP/Wire 应用、配置、健康检查与业务指标示例。
+[监控部署入口](deploy/observability/README.md) 提供本地 Docker Compose、普通 Prometheus 采集配置及可导入的 Grafana Dashboard；
+[Kubernetes 示例](deploy/kubernetes/README.md) 接入已有 kube-prometheus-stack，通过 ServiceMonitor 和 PrometheusRule 复用同一面板与规则。
+
+面板支持环境、集群、命名空间、App、机器/Node、Pod、实例和接口筛选；应用图可按 App/Pod/实例/Node 聚合。
+整机指标需额外的 node-exporter，和应用进程指标分开解释。详见 [维度说明](deploy/observability/docs/dashboard.md)、
+[告警接入](deploy/observability/docs/alerts.md) 和 [排障手册](deploy/observability/docs/troubleshooting.md)。
+
 ## 配置参考
 
 - [`config.example.yaml`](config.example.yaml)：当前 Foundation YAML 配置参考，包含可选字段的注释示例。
@@ -135,28 +145,23 @@ import _ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/oss/aliyun"
 
 注册完成后，组装层只调用公共的 `database.NewManager(...)` 和 `oss.NewManager(...)`。驱动注册表在首次构造 Manager 时冻结；需要新增 PostgreSQL、七牛云等实现时，应增加对应 `contrib/<domain>/<driver>` 包，而不是把具体 SDK 放进领域包。
 
-## 队列运行时
+## 任务队列与 Kafka 消息
 
-`pkg/queue` 提供驱动无关的消息契约、生产者观测装饰和单消费者运行时；Kafka 与 Redis 的强类型构造器位于 `contrib/queue`。业务在组装层显式通过组件或业务自定义 Bootstrap 向 [`app.Spec`](pkg/app/README.md) 登记消费者运行时，不使用基于字符串查找的隐式拓扑。
+`pkg/queue` 提供持久化任务契约、Dispatcher 与 Worker，Redis 后端由 `contrib/queue/redis` 构造，Database 后端由 `contrib/queue/database` 适配业务提供的 Repo（使用 TaskRecord 交换任务及执行状态，可选 GORM 泛型 Repo，支持与业务数据在同一本地事务中写入任务）。支持即时/延迟投递、租约恢复、持久化重试、失败查询与人工重试；业务 Handler 仍须幂等。业务将 Worker 登记到同一个 `app.Spec`，由应用统一启停，随后释放存储连接。完整配置、运行示例和失败边界见 [Queue 文档](pkg/queue/README.md)。
 
-```go
-rawProducer, releaseProducer, err := kafkaqueue.NewProducer(
-	kafkaManager,
-	kafkaqueue.ProducerConfig{Connection: "events", Topic: "orders.created"},
-)
-if err != nil {
-	return err
-}
-defer releaseProducer() // 手工组装示例；Wire 中由 provider 返回 cleanup。
-producer, err := queue.NewProducer("orders.created", rawProducer, observability)
-if err != nil {
-	return err
-}
+`pkg/kafka` 独立提供客户端工厂、消息生产者、消费者及消费运行时，适合事件传播与消费组处理；不作为任务队列后端。构造、批量发送、offset 提交、重试/死信和资源所有权见 [Kafka 文档](pkg/kafka/README.md)。两者使用显式注入，不进入全局 Driver Registry。
+
+```mermaid
+flowchart LR
+    A([业务组装]) --> B{运行能力}
+    B -->|持久化任务| C[queue Worker + Redis或Database Store]
+    B -->|Kafka消息| D[kafka ConsumerRuntime]
+    C --> E[显式登记到app.Spec]
+    D --> E
+    E -- 登记失败 --> F([返回错误并释放已构造资源])
+    E -- 成功 --> G[应用启动和停止运行时]
+    G --> H([运行时退出后释放存储或Kafka客户端])
 ```
-
-这里的 Kafka/Redis adapter 使用显式构造和注入，不进入全局 Driver Registry。
-
-完整的 Runtime/Bootstrap 契约和自定义运行时登记见 [`pkg/app/README.md`](pkg/app/README.md)；生产、消费、重试、死信、资源所有权和观测边界见 [`pkg/queue/README.md`](pkg/queue/README.md)。
 
 ## Job 并发协调
 
@@ -207,3 +212,5 @@ make verify
 修改 Protocol Buffers 或 Wire 等生成源后，使用仓库对应的 `make proto` 或 `make generate` 目标，不要手工修改生成文件。
 
 本地 Docker 真实服务验证：在仓库根目录运行 `make test-external`，自动创建并清理隔离的 MySQL/Kafka/Redis/Consul，执行集成、恢复和批量基准。服务版本、端口、产物及适用边界见 [外部测试说明](testdata/external/README.md)。
+
+完整组件与真实指标演示见 [components 示例](examples/components/README.md)，保留最小模板的轻量接入方式。

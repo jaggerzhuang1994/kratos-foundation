@@ -1,0 +1,40 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: minimal-api
+  namespace: foundation-demo
+  labels:
+    # 必须匹配已有 Prometheus 的 serviceMonitorSelector；这里只是示例 release 名。
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [foundation-demo]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minimal-api
+  endpoints:
+    - port: management
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: false
+      relabelings:
+        - targetLabel: foundation
+          replacement: "true"
+        - sourceLabels: [__meta_kubernetes_service_label_environment]
+          targetLabel: env
+        - targetLabel: cluster
+          replacement: example-cluster
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [app, node, pod, __address__]
+          separator: ";"
+          regex: "(.*);(.*);(.*);(.*)"
+          targetLabel: target
+          replacement: "$1 / $2 / $3 / $4"

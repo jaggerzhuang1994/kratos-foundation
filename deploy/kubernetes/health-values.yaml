@@ -1,0 +1,93 @@
+# 合并到既有 kube-prometheus-stack values；保留现有 additionalScrapeConfigs 列表。
+# 本例限定 foundation-demo；生产按实际服务标签、端口、namespace、集群和探测器地址修改。
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigs:
+      - job_name: foundation-healthz
+        metrics_path: /probe
+        scrape_timeout: 5s
+        params:
+          module: [foundation_health]
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [foundation-demo]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            regex: minimal-api
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: management
+            action: keep
+          - source_labels: [__address__]
+            target_label: instance
+          - source_labels: [__address__]
+            target_label: __param_target
+            replacement: http://$1/healthz
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: app
+          - source_labels: [__meta_kubernetes_service_label_environment]
+            target_label: env
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - target_label: cluster
+            replacement: example-cluster
+          - target_label: foundation_probe
+            replacement: "true"
+          - target_label: probe
+            replacement: healthz
+          - source_labels: [app, node, pod, instance]
+            separator: ";"
+            regex: "(.*);(.*);(.*);(.*)"
+            target_label: target
+            replacement: "$1 / $2 / $3 / $4"
+          - target_label: __address__
+            replacement: foundation-blackbox.monitoring.svc:9115
+      - job_name: foundation-readyz
+        metrics_path: /probe
+        scrape_timeout: 5s
+        params:
+          module: [foundation_health]
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [foundation-demo]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            regex: minimal-api
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: management
+            action: keep
+          - source_labels: [__address__]
+            target_label: instance
+          - source_labels: [__address__]
+            target_label: __param_target
+            replacement: http://$1/readyz
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: app
+          - source_labels: [__meta_kubernetes_service_label_environment]
+            target_label: env
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - target_label: cluster
+            replacement: example-cluster
+          - target_label: foundation_probe
+            replacement: "true"
+          - target_label: probe
+            replacement: readyz
+          - source_labels: [app, node, pod, instance]
+            separator: ";"
+            regex: "(.*);(.*);(.*);(.*)"
+            target_label: target
+            replacement: "$1 / $2 / $3 / $4"
+          - target_label: __address__
+            replacement: foundation-blackbox.monitoring.svc:9115

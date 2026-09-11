@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
@@ -207,4 +208,119 @@ func TestNewCreatesIsolatedProviderAndIdempotentCleanup(t *testing.T) {
 
 	cleanupFirst()
 	cleanupFirst()
+}
+
+func TestRuntimeCostMetricsExported(t *testing.T) {
+	provider, cleanup, err := NewProvider(appinfo.New("runtime-cost"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	families, err := provider.PrometheusGatherer().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, family := range families {
+		names[family.GetName()] = true
+	}
+	for _, name := range []string{"go_cpu_classes_gc_total_cpu_seconds_total", "go_sched_latencies_seconds", "go_goroutines", "go_gc_duration_seconds", "go_memstats_heap_alloc_bytes"} {
+		if !names[name] {
+			t.Errorf("runtime metric %s not exported", name)
+		}
+	}
+}
+
+func TestProviderSecondsHistogramBuckets(t *testing.T) {
+	provider, cleanup, err := NewProvider(testAppInfo{name: "histogram-buckets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	seconds := []float64{.0001, .00025, .0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 300, 600, 1800, 3600, 7200, 21600, 43200, 86400}
+	type histogramCase struct {
+		name   string
+		unit   string
+		advice []float64
+		want   []float64
+	}
+	cases := []histogramCase{
+		{"view_default_seconds", "s", nil, seconds},
+		// 模拟 Job 的秒单位建议桶，保证统一 View 优先于 instrument 配置。
+		{"view_job_seconds", "s", []float64{1, 2, 5, 10, 30, 60, 300, 86400}, seconds},
+		{"view_default_milliseconds", "ms", nil, []float64{0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}},
+		{"view_advised_milliseconds", "ms", []float64{1, 2, 5}, []float64{1, 2, 5}},
+	}
+	for _, tc := range cases {
+		options := []metric.Float64HistogramOption{metric.WithUnit(tc.unit)}
+		if tc.advice != nil {
+			options = append(options, metric.WithExplicitBucketBoundaries(tc.advice...))
+		}
+		h, err := provider.Meter("bucket-regression").Float64Histogram(tc.name, options...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.Record(context.Background(), .0002)
+		if tc.unit == "s" {
+			// 小时级 Job 仍需落入有限桶，不能全部丢进 +Inf。
+			h.Record(context.Background(), 3601)
+		}
+	}
+	// 注册原生秒单位 collector，确保它仍使用自己的桶定义。
+	native := clientprometheus.NewHistogram(clientprometheus.HistogramOpts{Name: "native_seconds", Buckets: []float64{.001, .01, 1}})
+	if err := provider.PrometheusRegisterer().Register(native); err != nil {
+		t.Fatal(err)
+	}
+	native.Observe(.0002)
+	cases = append(cases, histogramCase{name: "native_seconds", want: []float64{.001, .01, 1}})
+	families, err := provider.PrometheusGatherer().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, family := range families {
+				if family.GetName() != tc.name {
+					continue
+				}
+				if len(family.Metric) != 1 {
+					t.Fatalf("samples = %d, want 1", len(family.Metric))
+				}
+				h := family.Metric[0].GetHistogram()
+				wantSamples, wantSum := uint64(1), .0002
+				if tc.unit == "s" {
+					wantSamples, wantSum = 2, 3601.0002
+				}
+				if h.GetSampleCount() != wantSamples || h.GetSampleSum() != wantSum {
+					t.Fatalf("count/sum = %d/%g", h.GetSampleCount(), h.GetSampleSum())
+				}
+				finite := 0
+				for _, bucket := range h.Bucket {
+					upper := bucket.GetUpperBound()
+					if math.IsInf(upper, 1) {
+						continue
+					}
+					if finite >= len(tc.want) || upper != tc.want[finite] {
+						t.Fatalf("bucket %d = %g, want %v", finite, upper, tc.want)
+					}
+					wantCount := uint64(0)
+					if upper >= .0002 {
+						wantCount = 1
+					}
+					if tc.unit == "s" && upper >= 3601 {
+						wantCount++
+					}
+					if bucket.GetCumulativeCount() != wantCount {
+						t.Errorf("bucket %g count = %d, want %d", upper, bucket.GetCumulativeCount(), wantCount)
+					}
+					finite++
+				}
+				if finite != len(tc.want) {
+					t.Fatalf("finite buckets = %d, want %d", finite, len(tc.want))
+				}
+				return
+			}
+			t.Fatalf("histogram %s missing", tc.name)
+		})
+	}
 }

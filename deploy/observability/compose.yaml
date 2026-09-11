@@ -1,0 +1,42 @@
+name: foundation-observability
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: examples/minimal/Dockerfile
+    environment:
+      APP_ENV: local
+      LOG_FILE_DISABLE: "true"
+    ports:
+      - "127.0.0.1:18000:8000"
+      - "127.0.0.1:19001:9001"
+    stop_grace_period: 40s
+  blackbox:
+    image: prom/blackbox-exporter:v0.28.0
+    command: ["--config.file=/etc/blackbox/blackbox.yaml"]
+    volumes: ["./prometheus/blackbox.yaml:/etc/blackbox/blackbox.yaml:ro"]
+    # 仅供内部采集，探测端点不暴露到宿主机。
+  prometheus:
+    image: prom/prometheus:v3.5.5
+    command: ["--config.file=/etc/prometheus/prometheus.yaml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:19090:9090"]
+    depends_on: [app, blackbox]
+  grafana:
+    image: grafana/grafana:12.3.11
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:13000:3000"]
+    depends_on: [prometheus]
+volumes:
+  prometheus-data:
+  grafana-data:

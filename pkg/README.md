@@ -2,6 +2,8 @@
 
 本索引按当前工作树的公共 API 和资源所有权分类，不调整现有 import 路径。新增能力时，先查本页，再使用[包开发模式指南](DEVELOPMENT.md)。
 
+组件组合使用与可运行测试见[核心组件集成用例](INTEGRATION_TESTS.md)。根目录 `make test-components` 验证配置、事务、客户端、Job、Queue、Log 和 Server；`make test-components-external` 验证隔离 Docker 中的真实 Kafka、Redis 和锁等功能。
+
 ## 分类方法
 
 使用两个维度描述一个包：**职责是什么，生命周期由谁管理**。
@@ -13,7 +15,7 @@
 - **技术领域组件**：客户端、存储、消息、调度、传输等可复用能力。
 - **具体业务包**：订单、支付、库存等业务规则；当前 `pkg` 没有这一类，通常放在使用 Foundation 的业务项目中。
 
-这些职责并非完全互斥。例如 `config` 是基础能力，同时包含 Source 抽象和有资源的 Manager；`queue` 同时包含契约、调用装饰器和消费者 Runtime。不能只看包名、是否有接口或是否有 goroutine 来归类。
+这些职责并非完全互斥。例如 `config` 是基础能力，同时包含 Source 抽象和有资源的 Manager；`queue` 同时包含任务契约、投递入口和 Worker Runtime。不能只看包名、是否有接口或是否有 goroutine 来归类。
 
 ## 全量分类
 
@@ -34,14 +36,14 @@
 | [`crypto`](crypto/README.md) | 密码学工具集合 | M1 工具 | `aes`、`ecc`、`password`、`rsa`、`schnorr` 分包；具体算法边界见各实现 |
 | [`totp`](totp/README.md) | 一次性验证码工具 | M1 工具 | Authenticator 是配置对象，`Current` 等依赖时间；不需要 Manager/Runtime |
 | [`gormscope`](gormscope/README.md) | GORM 查询辅助 | M1 工具 | 依赖 GORM，但不拥有数据库连接或事务 |
-| [`lock`](lock/lock.go) | 分布式锁/租约公共抽象 | M2 契约 | 仅定义 `Locker`、`Lease` 和稳定错误；实现由 contrib 提供 |
+| [`lock`](lock/lock.go) | 分布式锁/租约公共抽象 | M2 契约 | 定义 `Locker`、`Lease` 和稳定错误，提供可选 `WithMetrics` 包装；底层实现由 contrib 提供 |
 | [`redis`](redis/README.md) | Redis 连接资源 | M3 Manager | Manager 拥有共享 client，调用方借用；Subscribe 的操作生命周期另行释放 |
 | [`consul`](consul/README.md) | Consul 基础客户端 | M3 Provider | 创建客户端并返回 cleanup；发现、注册、配置适配分别在 contrib |
 | [`database`](database/README.md) | 数据库连接与事务能力 | M3 Manager + M2 驱动契约 | Manager 管理具名连接；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`oss`](oss/README.md) | 对象存储资源与操作契约 | M3 Manager + M2 契约 | Manager 延迟创建并缓存 bucket；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`client`](client/README.md) | HTTP/gRPC 客户端工厂与共享租用 | M3 Factory + M4 调用租约 | Factory cleanup 管理整体资源；每次 `AcquireClient` 还要调用自己的 release |
-| [`kafka`](kafka/README.md) | Kafka 客户端构造 | M3 Factory | 当前入口是 `NewClientFactory`；生成的 client 由调用方持有并关闭，工厂不共享管理这些 client |
-| [`queue`](queue/README.md) | 消息契约、生产装饰、消费执行 | M2 契约 + M4 组件 + M5 Runtime | Producer 按调用执行；`ConsumerRuntime` 实现 `Start/Stop`；调用方显式登记，没有统一 `queue.NewBootstrap` |
+| [`kafka`](kafka/README.md) | Kafka 客户端、消息生产和消费 | M3 Factory + M4 组件 + M5 Runtime | `NewClientFactory` 创建客户端工厂；`NewProducer`、`NewConsumer` 显式构造，`ConsumerRuntime` 管理消费生命周期 |
+| [`queue`](queue/README.md) | 持久化任务、延迟和重试 | M2 契约 + M4 组件 + M5 Runtime | `Dispatcher` 投递任务；`Worker` 实现 `Start/Stop`；Redis Store 或业务 Database Repo 显式注入，资源由组装层释放 |
 | [`job`](job/README.md) | 任务声明、调度和并发协调 | M5 Runtime + M4 Guard | `job.Manager` 是 Runtime；每次任务的 ExecutionGuard 是操作级组件，已有自动续租 |
 | [`server`](server/README.md) | HTTP/gRPC 服务装配 | M5 Runtime | `server.Runtime` 是聚合对象；组装层登记 `Servers()` 返回的 HTTP/gRPC 运行时，并非登记聚合对象本身 |
 
@@ -100,7 +102,8 @@ flowchart TD
 | client | Factory、连接构造、配置、版本租约池 | circuitbreaker 中间件 |
 | log | Logger、共享状态、配置、派生缓存、Override | output 输出端 |
 | metrics / tracing | Provider、配置、Exporter/Sampler、上下文 | 无 |
-| queue | 消息契约、生产装饰、消费生命周期、投递与取消 | telemetry |
+| queue | 任务契约、持久化投递、Worker生命周期和执行 | telemetry |
+| kafka | 连接工厂、消息生产、消费运行时、offset提交和恢复 | telemetry |
 | job | Spec、调度、Manager 生命周期、并发策略、锁租约 | 无 |
 | server | HTTP/gRPC、WebSocket、配置与中间件策略、Runtime | validator / ratelimit 中间件 |
 | config | Manager 与公开配置契约 | decoder / snapshot / source / subscription |

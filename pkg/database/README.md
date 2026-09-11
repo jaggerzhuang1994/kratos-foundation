@@ -157,13 +157,51 @@ flowchart TD
 
 GORM tracing 插件只记录 trace，不向全局 OpenTelemetry MeterProvider 注册指标。数据库指标统一使用构造函数注入的 `metrics.Provider`，由 `database.metrics.disable` 控制。旧配置 `database.tracing.exclude_metrics` 仅为兼容保留，不再改变行为。
 
+启用数据库指标时（`database.metrics.disable` 省略或为 `false`），所有具名连接自动安装 GORM SQL 操作回调：
+
+| 指标 | 类型 | 含义 |
+| --- | --- | --- |
+| `database_sql_operations_total` | Counter | GORM SQL 操作回调完成次数 |
+| `database_sql_operation_duration_seconds` | Histogram | 回调链耗时（秒），提供 `_bucket`、`_sum`、`_count` |
+| `database_sql_slow_operations_total` | Counter | 回调链耗时严格超过有效慢操作阈值的次数 |
+| `database_sql_slow_threshold_seconds` | Gauge | 每个连接构造时采用的 GORM 慢操作阈值（秒）；0 表示关闭慢操作判断 |
+
+操作次数、耗时和慢操作次数使用固定标签 `db_name`、`operation`（`create/update/delete/query/row/raw`）和 `result`（`success/error/not_found`）；阈值仅使用 `db_name`。全部指标复用应用身份与 `database.metrics.labels` 常量标签。自定义标签不得使用 `db_name`、`operation` 或 `result`；指标不包含 SQL、参数、表名或错误文本。计数与耗时仅在观察到相应事件后输出时间序列；从未发生慢操作时，慢计数序列尚不存在。
+
+慢操作沿用 `database.gorm.logger.slow_threshold`，省略时默认为 **200ms**；`database.connections.<name>.gorm.logger.slow_threshold` 显式设置时完整替换全局阈值，包括 `0s`（关闭该连接的慢操作判断）。负值在构造期校验失败。只有有效阈值大于零、且回调耗时严格大于该阈值时才增加慢计数，等于阈值不计入。阈值在构造期读取，不热更新。慢计数仍按 `success/error/not_found` 分类，不受 GORM 日志级别影响，默认 `SILENT` 也会统计；它不是慢日志输出条数，GORM 日志的错误优先分支和计时边界可能与回调指标不同。
+
+耗时从 GORM 回调链开始到结束，包含回调处理和默认事务开销，并非数据库服务端的纯 SQL 时间。`ErrRecordNotFound` 独立记为 `not_found`；其他回调返回错误（包括超时）记为 `error`。DryRun 和未构建 SQL 的前置失败不计数；已构建 SQL 后的校验失败可能计入 `error`，因此次数代表 GORM 操作尝试，并不保证每次都向数据库发出 SQL。批量、关联和预加载可能产生多个操作；不单独统计 `BEGIN/COMMIT/ROLLBACK`，不覆盖直接使用原生 `sql.DB` 的调用。`Row/Rows` 只测量返回游标之前的回调，调用方之后的扫描或遍历失败不计入结果。
+
+回调在构造期完成安装，运行期不更换回调或新增同步策略；每个操作的计时值保存在自己的 GORM Statement，计数器和直方图使用 Prometheus 已有的并发安全更新。cleanup 注销全部四项指标后，尚持有旧会话的操作不会重新注册指标。注册失败只回滚本次成功注册的指标，保留其他组件的冲突指标。开关和标签只在构造期读取；高频 SQL 不额外逐条输出日志，业务错误继续由已有 GORM logger 配置及调用方处理。
+
+```mermaid
+flowchart TD
+    A([并发请求进入独立 GORM Statement]) --> B{指标已启用且非 DryRun?}
+    B -- 是 --> C[保存当前 Statement 起始时间]
+    B -- 否 --> D[执行原有 GORM 回调及外部数据库调用]
+    C --> D
+    D --> E{有计时值且已构建 SQL?}
+    E -- 否 --> Z([返回原有结果])
+    E -- 是 --> F{回调返回错误?}
+    F -- 无 --> G[result success]
+    F -- RecordNotFound --> H[result not_found]
+    F -- 其他或超时 --> I[result error]
+    G --> J[Prometheus 内置并发安全更新共享 Counter 与 Histogram]
+    H --> J
+    I --> J
+    J --> K{有效阈值大于零且耗时严格超过阈值?}
+    K -- 是 --> L[Prometheus 内置并发安全增加慢操作 Counter]
+    K -- 否 --> Z
+    L --> Z
+```
+
 `NewManager` 返回的 Wire cleanup 先停止连接池配置订阅，再停止指标采集、注销指标，最后按构造的逆序关闭连接池；业务不单独关闭 Manager 返回的连接。
 
 ```mermaid
 flowchart TD
     A([构造 Manager]) --> B[按名称排序创建独立连接与 tracing 插件]
     B --> C{database.metrics.disable?}
-    C -- 否 --> D[向注入的 Provider 注册指标]
+    C -- 否 --> D[向注入的 Provider 注册指标并安装 SQL 回调]
     C -- 是 --> E[连接就绪]
     D --> E
     B -- 失败 --> F[回收已创建资源并返回错误]
@@ -204,3 +242,9 @@ flowchart TD
     O -- 否 --> Q([不输出该变量])
     P --> R([完成 scrape])
 ```
+
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+
+## 可运行的组合用例
+
+参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。

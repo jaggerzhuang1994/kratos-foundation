@@ -297,3 +297,7 @@ flowchart TD
 
 中间件配置订阅的首次快照回放及内容相同的重复通知不会打印 `server middleware config updated`；
 只有配置实际变化且成功应用后才记录更新日志，非法更新仍记录 rejected 并保留旧配置。
+
+## 集成测试与边界用法
+
+参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。

@@ -2,7 +2,6 @@ package database
 
 import (
 	"errors"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +9,10 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func TestGORMLoggerWriterClassifiesMessagesAndFlattensFormats(t *testing.T) {
@@ -71,4 +73,35 @@ func newDatabaseFileLogger(t testing.TB) (foundationlog.Logger, string) {
 	}
 	t.Cleanup(cleanup)
 	return shared, path
+}
+
+func TestMergeGORMConfigSlowThresholdReplacesDuration(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		base     time.Duration
+		override *durationpb.Duration
+		want     time.Duration
+	}{
+		{"inherit", time.Second, nil, time.Second},
+		{"replace_seconds", 1500 * time.Millisecond, durationpb.New(2 * time.Second), 2 * time.Second},
+		{"replace_nanos", time.Second, durationpb.New(50 * time.Millisecond), 50 * time.Millisecond},
+		{"disable", time.Second, durationpb.New(0), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := &config_pb.Gorm{Logger: &config_pb.GormLogger{SlowThreshold: durationpb.New(tc.base)}}
+			override := &config_pb.Gorm{Logger: &config_pb.GormLogger{SlowThreshold: tc.override}}
+			got := mergeGORMConfig(base, override)
+			if got.GetLogger().GetSlowThreshold().AsDuration() != tc.want {
+				t.Fatalf("threshold=%v, want %v", got.GetLogger().GetSlowThreshold(), tc.want)
+			}
+			// 合并产物须独立拥有 Duration，不能修改传入配置快照。
+			got.Logger.SlowThreshold.Seconds = 99
+			if base.Logger.SlowThreshold.AsDuration() != tc.base {
+				t.Fatal("base was mutated")
+			}
+			if tc.override != nil && tc.override.AsDuration() != tc.want {
+				t.Fatal("override was mutated")
+			}
+		})
+	}
 }

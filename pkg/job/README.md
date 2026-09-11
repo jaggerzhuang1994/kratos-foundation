@@ -192,3 +192,9 @@ Release 先取消旧执行和续租，再最多等待 `OperationTimeout` 让在�
 默认不启用分布式协调时，Wire 可选择 `job.DefaultCoordinator`，其返回真正的 nil interface。
 它不提供本地锁实现；进程内并发策略仍由 Job 自身处理。需要分布式协调时，替换该 provider，
 不要同时登记默认和自定义 provider。
+
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+
+## 集成测试与边界用法
+
+参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。

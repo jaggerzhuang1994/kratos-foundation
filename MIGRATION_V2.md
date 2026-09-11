@@ -14,7 +14,7 @@
 
 OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必须并发安全并为外部调用设置超时。同名创建仍合并，cleanup 等待已受理创建完成后关闭实例，业务先停止使用再释放。并发及释放流程见 [OSS 文档](pkg/oss/README.md#构造与释放)。
 
-内置 file、Consul watcher 显式声明完整快照，更新时不再重复 Load。第三方 watcher 无需修改，默认继续重新 Load；仅在满足完整、有序、空结果表示全部删除及缓冲所有权要求时声明 `FullSnapshot() bool`。契约及发布流程见 [配置文档](pkg/config/README.md#watcher-完整快照契约)。Kafka 批量和并发默认值、同步提交语义不变。Broker 重启可能产生的首读 EOF 现在最多额外重建三次，成功提交后重置预算；明确认证/授权失败仍终止，见 [Kafka 恢复说明](contrib/queue/kafka/README.md#断线与消费恢复)。
+内置 file、Consul watcher 显式声明完整快照，更新时不再重复 Load。第三方 watcher 无需修改，默认继续重新 Load；仅在满足完整、有序、空结果表示全部删除及缓冲所有权要求时声明 `FullSnapshot() bool`。契约及发布流程见 [配置文档](pkg/config/README.md#watcher-完整快照契约)。Kafka 批量和并发默认值、同步提交语义不变。Broker 重启可能产生的首读 EOF 现在最多额外重建三次，成功提交后重置预算；明确认证/授权失败仍终止，见 [Kafka 恢复说明](pkg/kafka/README.md)。
 
 ## 迁移清单
 
@@ -40,7 +40,7 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 | [ ] 任务 | job 配置与旧注册/Bootstrap | 使用 job.Spec、Manager 和 `bootstrap.NewJobBootstrap`；区分 Once/Daemon/Cron，业务任务响应 Context 取消 |
 | [ ] 错误生成器 | IsXxx 同时检查 HTTP code | v2 使用 reason + reason_code；确认依赖 HTTP 状态区分错误的逻辑已迁移 |
 | [ ] 错误消息 | 可变参数依赖旧格式化行为 | 单字符串原样保留；多个参数且首参数为 string 时格式化。建议先 Sprintf/Sprint 再传一个字符串 |
-| [ ] 可选新能力 | 无统一 Queue/Kafka/OSS 接入 | 仅按业务需要接入；Queue 重试与死信不提供业务 exactly-once，仍需业务幂等 |
+| [ ] 可选新能力 | 无统一 Queue/Kafka/OSS 接入 | 仅按业务需要接入；Queue 持久化重试、失败管理和 Kafka 消费均不提供业务 exactly-once，仍需业务幂等 |
 
 ### 删除或改名的配置
 
@@ -365,3 +365,38 @@ flowchart TD
 本例暴露的未完成项包括业务注册被注释、消费项目依赖清单落后于本地 Foundation、
 运行库和工具来源含本机路径，以及 README 对当前协议目录、插件来源和服务登记的描述漂移。
 应以当前源码和生成图为准，把这些项关闭后再宣告迁移完成。
+
+
+## 持久化任务队列与 Kafka 分离
+
+本次接口迁移保留独立 `pkg/queue`，`pkg/job` 继续管理 Cron/Once/Daemon，不改名。旧 Kafka 消息 API 迁入 `pkg/kafka`：`contrib/queue/kafka.NewProducer/NewConsumer` 改为 `kafka.NewProducer/NewConsumer`，旧 `queue.NewProducer` 观测装饰器改为 `kafka.NewManagedProducer`；Message、ConsumerRuntime、RetryPolicy 等改用 kafka 包。Kafka offset、批量顺序、恢复和死信语义保留；观测事件/标签改为 kafka.*，指标改为 kafka_*，告警及看板需同步。既有 x-queue-* 消息头保留兼容。
+
+旧 Redis Streams 实现不再提供。新 Redis Store 由业务通过 `Config.KeyPrefix` 指定前缀，内部追加 `:tasks`、`:ready`、`:delayed`、`:reserved`、`:failed` 五种键后缀，无法直接消费旧 Stream/PEL；切换前用旧版本排空旧流，或由业务编写一次性转换任务，确认已处理记录及业务幂等后再切换。不要把原 Stream 名直接当成已迁移的数据。使用过中间版本 `Config.Queue` 的调用方改为提供 `KeyPrefix`；如需继续使用该版本已有数据，应把原 `foundation:queue:{hash}`（不含最后的冒号）作为前缀传入，驱动不自动迁移或重命名键。
+
+新 queue API 为 `Task`、`Store`、`Dispatcher` 和 `Worker`。延迟用 `Task.AvailableAt`，RetryPolicy 表示跨进程持久化领取次数及退避；失败任务通过 `Store.Failed` 查询、`Store.Retry` 人工重投。原 PublishBatch/Consumer/Delivery 和死信 Producer 配置只适用于迁移后的 Kafka 消息 API，不是新任务队列契约。Database 改为 `NewStore(repo)`，业务实现 `database.Repo`；Repo 实例绑定单个队列，业务可为不同队列使用不同表；框架提供包含 queue.Task、租约和失败状态的 `database.TaskRecord`，它没有 Queue 字段、TableName、GORM 标签或数据库行字段；持久化实体及编码由业务 Repo 定义，不导入 ORM/SQL 驱动，不再提供 Store.Migrate；可选 `contrib/queue/database/gorm` 提供 SQLite/MySQL 泛型 Repo 和可嵌入的存储 Model，模型工厂填充自定义字段，表名和迁移由业务负责；Insert 可复用业务显式事务，成功仅表示写入事务，最终以外层提交结果为准；消费操作须独立完成提交，只读取已提交任务。示例、默认值及重投边界见 [Queue 文档](pkg/queue/README.md)。
+
+```mermaid
+flowchart TD
+    A([迁移旧queue调用]) --> B{原后端}
+    B -->|Kafka| C[迁移import与构造器 更新观测看板]
+    B -->|Redis Streams| D[旧版本排空或业务转换数据]
+    D --> E{数据与幂等验证通过?}
+    E -- 否 --> F([保留旧版本并修正迁移])
+    E -- 是 --> G[构造Redis或Database Store与Worker]
+    C --> H[编译示例 运行消费与资源释放回归]
+    G --> H
+    H -- 失败 --> F
+    H -- 通过 --> I([切换应用组装])
+```
+
+## 组件指标接入补充
+
+Database 指标默认新增 GORM SQL 操作计数和耗时，仍由 database.metrics.disable 控制；database.metrics.labels 除 db_name 外新增 operation、result 为保留标签，已有同名自定义标签需改名。Redis 指标新增 redis_connection 标签，历史序列与升级后序列不同。
+
+Grafana 实例明细使用新 target 抓取标签，需同步更新应用与健康探测 relabel；旧历史数据仍可按 instance 查看。Queue Stats、OSS、业务缓存与 Lock 指标需显式接入，不会自动观察绕过封装的调用。接口、所有权及边界见 [组件指标指南](deploy/observability/docs/components.md) 与 [业务接入指南](deploy/observability/docs/business-metrics.md)。
+
+## 秒单位直方图分桶
+
+Foundation Metrics Provider 现在为 OTel `Histogram` 且 `Unit="s"` 的指标统一设置从 0.0001 秒到 86400 秒的显式桶，覆盖 instrument 的建议分桶。修复 Kafka、Queue、OSS 等低延迟操作因 SDK 首桶过大而显示约 4.75 秒 P95 的问题，并保留 Job 的长任务范围。毫秒单位的 Redis SDK 指标和原生 Prometheus collector 不受影响。
+
+指标名称、sum 和 count 不变，bucket 序列会变化。滚动升级期间不要把新旧分桶直接混合解释为稳定的分位数；等待查询窗口全部覆盖新版本，或按版本隔离。详细边界见 [Metrics](pkg/metrics/README.md)，实际验证见 [组件演示](examples/components/README.md)。

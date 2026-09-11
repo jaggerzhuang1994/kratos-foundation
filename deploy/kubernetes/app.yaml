@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: foundation-demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minimal-api-config
+  namespace: foundation-demo
+data:
+  config.yaml: |
+    app:
+      stop_timeout: 30s
+    tracing:
+      disable: true
+    server:
+      stop_delay: 3s
+      http:
+        addr: 0.0.0.0:8000
+        metrics:
+          addr: 0.0.0.0:9001
+        health:
+          addr: 0.0.0.0:9001
+      grpc:
+        disable: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minimal-api
+  namespace: foundation-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minimal-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minimal-api
+        environment: dev
+    spec:
+      terminationGracePeriodSeconds: 40
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          # 发布前替换为业务仓库中的固定版本或 digest，并确保节点能拉取。
+          image: foundation-minimal-api:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-config", "/app/configs/config.yaml"]
+          env:
+            - name: APP_ENV
+              value: dev
+            - name: LOG_FILE_DISABLE
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: management
+              containerPort: 9001
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          startupProbe:
+            httpGet: {path: /healthz, port: management}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: management}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: management}
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: minimal-api-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minimal-api
+  namespace: foundation-demo
+  labels:
+    app.kubernetes.io/name: minimal-api
+    environment: dev
+spec:
+  selector:
+    app.kubernetes.io/name: minimal-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+    - name: management
+      port: 9001
+      targetPort: management

@@ -1,0 +1,15 @@
+# 与 compose.yaml 合并。仅连接已有 Kafka，不创建或修改 Topic。
+services:
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    command:
+      - --kafka.server=${KAFKA_BROKER:?请设置容器可访问的 Kafka broker 地址}
+      - --topic.filter=${KAFKA_TOPIC_FILTER:-.*}
+      - --group.filter=${KAFKA_GROUP_FILTER:-.*}
+      - --kafka.version=${KAFKA_VERSION:-4.1.2}
+      - --group.metrics.timeout=8s
+      - --offset.show-all
+    # TLS/SASL 集群需按 exporter 文档补参数及 Secret 挂载，不提交凭据。
+  prometheus:
+    volumes:
+      - ./prometheus/kafka-targets.example.json:/etc/prometheus/kafka-targets.json:ro

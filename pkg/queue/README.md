@@ -1,268 +1,175 @@
-# queue
+# Queue
 
-`pkg/queue` 是业务与 Wire 组装层使用的稳定入口，定义驱动无关的消息、生产者、消费者和单消费者运行时。业务显式选择 `contrib/queue/kafka` 或 `contrib/queue/redis` 的强类型构造器，再把原始驱动实例与业务 Handler 组合为 `app.Runtime`；不应导入 `pkg/queue/internal/*`。
+`pkg/queue` 是持久化后台任务队列，提供 `Task`、`Store`、`Dispatcher` 和 `Worker`。业务显式选择 [Redis Store](../../contrib/queue/redis/README.md) 或 [Database Repo 适配器](../../contrib/queue/database/README.md)，通过构造参数注入业务 Handler 和观测依赖。Kafka 消息生产、消费组、重试/死信位于独立的 [pkg/kafka](../kafka/README.md)，不作为任务 Store。`pkg/job` 保留 Cron、Once、Daemon；`job.DelayIfRunning` 不是持久化延迟队列。
 
-消息、驱动契约、生产装饰器与消费者运行时直接定义在 `pkg/queue`。`runtime.go` 管理构造、启停和取消顺序，`consumer.go` 处理投递、重试、死信和消费事件日志；独立的遥测能力保留在 `internal/telemetry`。
+## 契约与所有权
 
-队列提供 **at-least-once** 语义，不提供 exactly-once：业务 Handler 必须可幂等，例如以业务键或消息 ID 去重。驱动只会在 `DeliveryHandler` 返回 `nil` 后 ACK 或 Commit 原消息；因此仅 Handler 成功、或死信消息已经发布成功时，原消息才会被确认。
+- Task 只存任务类型、可序列化 Payload、Header、ID 与时间；业务依赖通过 Handler 闭包或方法注入，不序列化服务对象。Type 必须非空，对应 Worker 构造时的 Handler 表。
+- Dispatcher 深复制输入，补齐 ID、CreatedAt、AvailableAt 并传播 W3C trace context/baggage；不修改调用者对象。Handler 收到独立副本，修改它不会更改待重试记录。返回的 Reservation/FailedTask 也为独立快照；Reservation 的 Task ID、Token、Attempts 应只读。
+- Redis Store 用业务提供的 `KeyPrefix` 隔离，前缀原样保留且不得为空或全为空白；Database Store 由业务绑定单个队列的 Repo 隔离，可为每个队列使用不同表。任务 ID 为 1–128 字节且不能全为空白。相同 ID 的待执行、已领取、失败记录不能重复入队，返回 `ErrDuplicate`；完成删除后允许复用 ID。这不是永久业务去重。
+- Dispatch 返回实际 ID；存储提交后响应丢失时可能同时返回 ID 和错误。需要跨重试识别同一任务时，业务应在投递前设置稳定 ID。调用成功表示后端已接受，耐久性仍依赖 Redis AOF/RDB/复制或数据库刷盘配置。
+- Store 借用 Redis Manager 或业务 Repo，无独立 cleanup。先停止 Worker 并等待 Handler 退出，再由原拥有者释放连接。Dispatcher、Worker 均不关闭 Store 连接；没有全局 Registry、隐式启动或顶层 queue 配置。
 
-## 生产消息
+## 构造与投递
 
-生产者先由后端直接构造，再由 `queue.NewProducer` 装饰。装饰器深复制单条或批量输入，调用方继续拥有原始 `Message`、`Key`、`Body`、Header Value 及其批次切片；批量中任一输入无效时，整个批次都不会发送。
-
-批量输入校验全部通过，只保证可以开始发送，不保证发送原子性。驱动可能已成功发送部分消息，再返回 `*queue.BatchError`；其中 `Failures` 的 `Index` 对应原输入下标。不要因一个错误直接重发整个批次。以下函数只提取失败项，由调用方决定是否重试；网络错误仍可能表示结果不确定，重试失败项也需要业务幂等。需要跨重试保持消息身份时，发布前由业务设置稳定的 `Message.ID`。
+以下是可编译的业务组装函数。前置条件：业务已经实现绑定 mail 队列的 `databasequeue.Repo` 并完成自己选择的表迁移，观测依赖已初始化，`appSpec` 是应用唯一的 `app.Spec`，Handler 可并发调用并响应 Context。业务也可使用 [GORM 泛型 Repo](../../contrib/queue/database/gorm/README.md) 复用默认实现。Repo 的原子领取与错误语义必须满足 [持久化契约](../../contrib/queue/database/README.md)。
 
 ```go
 package assembly
 
 import (
-	"context"
-	"errors"
+    "context"
+    "time"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
+    databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
+    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 )
 
-func publishBatch(ctx context.Context, producer queue.Producer, messages []*queue.Message) ([]*queue.Message, error) {
-	err := producer.PublishBatch(ctx, messages)
-	if err == nil {
-		return nil, nil
-	}
-	var batchErr *queue.BatchError
-	if !errors.As(err, &batchErr) {
-		return nil, err // 输入校验等错误没有逐条发送结果。
-	}
-	failed := make([]*queue.Message, 0, len(batchErr.Failures))
-	for _, failure := range batchErr.Failures {
-		failed = append(failed, messages[failure.Index])
-	}
-	return failed, err // 保留原错误供调用层分类、记录和决定重试。
+func NewMailQueue(
+    repo databasequeue.Repo,
+    appSpec *app.Spec,
+    observability queue.Observability,
+    sendEmail queue.Handler,
+) (*queue.Dispatcher, error) {
+    store := databasequeue.NewStore(repo)
+    dispatcher, err := queue.NewDispatcher("mail", store, observability)
+    if err != nil {
+        return nil, err
+    }
+    worker, err := queue.NewWorker(queue.WorkerConfig{
+        Name: "mail-worker", Queue: "mail", Concurrency: 4,
+    }, store, map[string]queue.Handler{"send-email": sendEmail}, observability)
+    if err != nil {
+        return nil, err
+    }
+    if err := appSpec.RegisterRuntime(worker); err != nil {
+        return nil, err
+    }
+    return dispatcher, nil
+}
+
+func SendLater(ctx context.Context, dispatcher *queue.Dispatcher) (string, error) {
+    return dispatcher.Dispatch(ctx, &queue.Task{
+        ID: "welcome-user-42",
+        Type: "send-email",
+        Payload: []byte(`{"user_id":42}`),
+        AvailableAt: time.Now().Add(10 * time.Minute),
+    })
 }
 ```
+
+Wire 层须将上述登记过程纳入最终 Bootstrap 构造屏障，确保在 app.Spec 冻结前完成。Store 不新增资源，函数无 cleanup；业务 Repo 及数据库依赖的 cleanup 由应用组装层保留。完整生命周期组装见 [Bootstrap 文档](../bootstrap/README.md)。
+
+Redis 使用 `redisqueue.NewStore(redisManager, redisqueue.Config{Connection: "main", KeyPrefix: "app:queue:mail"})` 替换 Store 构造，其余 Dispatcher/Worker 不变。Redis 连接必须已在 Manager 中声明；示例与键结构见 [Redis Store](../../contrib/queue/redis/README.md)。
+
+## 执行、延迟与失败
+
+`AvailableAt` 为零表示立即可领取，非零表示最早可领取时间；Redis 的调度索引和租约截止按毫秒向上取整，领取时当前时间向下取整，避免提前执行。Database Repo 接收 time.Time，并自行按存储精度向上取整截止时间，不能提前执行或回收。运行节点必须保持时钟同步。到期不保证准点：轮询、队列积压、存储延迟和 Handler 并发容量都会增加等待；不提供严格 FIFO、任务优先级或精确计时器保证。
+
+Worker 每次从 Store 原子领取一个任务并持久增加 Attempts，再在存储原子操作之外执行 Handler。失败后把下次可执行时间写回 Store 并释放当前 Worker，不在 Handler 循环内等待退避。不同实例重启后继续使用持久化次数；Worker 配置应在同一队列各实例保持一致。
+
+| 配置 | 零值/省略默认 | 约束 |
+| --- | --- | --- |
+| Name / Queue | 无默认 | 必填，Queue 是观测逻辑名，不用于选择 Redis KeyPrefix、Repo 或数据库表 |
+| Concurrency | 1 | 1–1024；Handler 可能被并发调用 |
+| PollInterval | 200ms | 必须为正；空队列等待可取消 |
+| Timeout | 30s | 从领取请求开始计算，包含领取耗时，采用协作取消 |
+| StorageTimeout | 5s | 每次 Reserve/Ack/Release/Fail 操作的最长等待 |
+| Lease | 60s | 至少 1ms，且严格大于 Timeout + StorageTimeout |
+| Retry=nil | 3 次领取，500ms 初始退避，30s 最大退避 | 次数包含首次领取及执行前崩溃的领取 |
+| Retry 非 nil | 使用显式字段 | MaxAttempts 为 1–1000；退避不可负；两个 Backoff 均为零表示不等待 |
+
+Retry 的第一次等待使用 MinBackoff，后续按两倍增长并受 MaxBackoff 限制；沿用已有 RetryPolicy 的显式零语义：MinBackoff 为零始终不等待，MinBackoff 非零而 MaxBackoff 为零时仅第一次使用 MinBackoff，后续不等待。重试配置在构造时固化，不热更新。
+
+成功后按当前 Token 确认删除。普通错误、panic 和执行超时进入重试；`queue.Permanent(err)` 或未注册的任务类型进入永久失败，次数耗尽进入 `retry_exhausted`。失败持久化成功后 Worker 继续处理其他任务。`Store.Failed(ctx, limit)` 查询最多 1–1000 条独立失败快照；`Store.Retry(ctx, id, at)` 人工重新投递失败任务并清零次数；找不到返回 `ErrNotFound`。失败记录不会自动过期，无分页、删除或管理界面。
+
+多 Worker 通过 Redis Lua 或业务 Repo 的原子操作竞争领取；Token 防止旧 Worker 确认、释放或失败归档已被重新分配的任务，冲突返回 `ErrLeaseLost`，Worker 记录 WARN 并继续。Token 到期但尚未重新分配时仍可确认。Handler 执行不在 Redis Lua、领取事务或 Go 互斥锁内；Repo 的具体同步机制由业务实现；竞争可能有饥饿，不保证领取公平。
+
+采用**允许重投、有限重试**的执行模型。存储可靠且领取正常完成时，未确认任务可重投；领取后、执行前反复崩溃也可能耗尽次数进入失败状态，不保证 Handler 至少实际执行一次或最终成功。业务成功后、确认前崩溃仍会重投，必须依靠业务幂等。超时 Context 无法强杀忽略取消的 Go Handler；它可能超过租约并与重投任务同时执行。Worker 不启动额外 Handler goroutine，不自动续租；较长任务应配置相应执行窗口与租约，或在业务中拆成可恢复的小任务。
+
+Start 阻塞运行且实例只能启动一次。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。存储故障或损坏记录返回错误，由 Worker 记录 `ERROR storage.failed` 后退出，应用 supervisor 决定后续动作；不自动把存储失败当作成功确认。损坏记录的隔离与修复方式见对应 Store 文档。
 
 ```mermaid
 flowchart TD
-    A([PublishBatch]) --> B[复制并校验整个批次]
-    B -- 无效输入 --> C[WARN queue.publish.rejected]
-    C --> D([返回校验错误，不发送])
-    B -- 全部有效 --> E[外部驱动批量发送]
-    E -- 全部成功 --> F([返回 nil])
-    E -- 部分失败或结果不确定 --> G[ERROR queue.publish.failed]
-    G --> H[返回 BatchError，按原下标提取失败项]
-    H --> I([调用方判断重试，保持业务幂等])
+    A([Dispatch]) --> B[复制校验并注入trace]
+    B -- 无效 --> C([返回校验错误])
+    B -- 有效 --> D[外部Store写入任务 / Database可参与业务事务]
+    D -- 失败 --> E[ERROR Dispatch enqueue.failed]
+    E --> C
+    D -- 成功 --> F([返回任务ID / 外层事务仍需提交])
+    G([多个Worker并发入口]) --> H[外部Store原子领取或恢复过期租约]
+    H -- 空队列 --> I{Context取消?}
+    I -- 否 --> J[可取消轮询等待]
+    J --> H
+    I -- 是 --> Z([停止并等待循环退出])
+    H -- 成功 --> K[原子边界结束 新token与attempts已保存]
+    K --> L{类型已注册且未超次数?}
+    L -- 是 --> M[原子边界外执行Handler 带超时Context]
+    L -- 否 --> R[按token持久化失败]
+    M -- 成功 --> N[按token确认删除]
+    M -- 可重试错误或超时 --> O[按token释放 写下次可执行时间]
+    M -- 永久失败或次数耗尽 --> R
+    M -- 应用取消 --> Z
+    N -- 成功 --> P[DEBUG Worker task.completed]
+    O -- 成功 --> Q[WARN Worker retry.scheduled]
+    R -- 成功 --> S[ERROR Worker task.failed]
+    P & Q & S --> H
+    N & O & R -- 纯租约冲突 --> T[WARN Worker lease.lost]
+    T --> H
+    H & N & O & R -- 存储故障 --> U[ERROR Worker storage.failed]
+    U --> V([取消同实例循环 等待退出 返回错误])
 ```
 
-它会校验 Header Key，在缺少时生成消息 ID；仅当 `Timestamp` 为零值时才生成 UTC 时间，业务提供的非零时间戳会保留。它还会将 W3C TraceContext 和 Baggage 写入消息 Header。
+日志记录函数名、队列、任务 ID、次数或受控失败分类，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
 
-### Kafka
+Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Dispatch 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
 
-Kafka Producer 独占它创建的客户端。`releaseProducer` 由调用方在停止使用 Producer 后调用，且可安全地重复调用；`queue.NewProducer` 失败时也必须释放它。
+## 验证与迁移
 
-```go
-package assembly
+在仓库根目录执行 `make verify`（所有模块的 test/vet/race）与 `make lint`。Redis Lua 需要真实服务测试，隔离入口是 `make test-external`；数据库队列完整 Repo 的真实服务测试由业务提供，框架在 `pkg/database` 的 SQLite 测试中验证同事务投递的提交、回滚和可见性；队列包普通测试使用确定性存储/Repo 替身，不会自行启动服务。详细范围见 [外部服务验证](../../testdata/external/README.md)。旧 Redis Streams 无自动数据转换，旧消息 API 与调用迁移见 [迁移说明](../../MIGRATION_V2.md#持久化任务队列与-kafka-分离)。
 
-import (
-	"context"
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
 
-	kafkaqueue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/kafka"
-	foundationkafka "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
-)
+## 持久化积压统计
 
-func newKafkaProducer(
-	kafkaFactory *foundationkafka.ClientFactory,
-	observability queue.Observability,
-) (queue.Producer, func(), error) {
-	rawProducer, releaseProducer, err := kafkaqueue.NewProducer(kafkaFactory, kafkaqueue.ProducerConfig{
-		Connection: "main",
-		Topic:      "orders.created",
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	producer, err := queue.NewProducer("orders.created", rawProducer, observability)
-	if err != nil {
-		releaseProducer()
-		return nil, nil, err
-	}
-	return producer, releaseProducer, nil
-}
+`StatsProvider` 是可选只读接口，`Store` 的必需方法不变。`Stats(ctx, now)` 返回单个队列的独立快照：
+ready 包括已到期任务和过期租约，scheduled 为尚未到期的未领取任务，running 为有效租约，failed 为等待人工 Retry 的任务。
+四种状态互斥；ready + scheduled 是待执行积压。running 表示持有有效租约，不保证 Handler 此刻仍存活。
+最老 ready 年龄按 `now - min(AvailableAt)` 计算，不是创建年龄；Release/Retry 会重置排期时间，过期租约保留原排期时间。
 
-func publishOrder(ctx context.Context, producer queue.Producer, body []byte) error {
-	return producer.Publish(ctx, &queue.Message{Key: []byte("order-42"), Body: body})
-}
-```
+应用完成 Store 与 Metrics Provider 构造后，显式调用
+`queue.RegisterStats("email", statsProvider, metricsProvider, time.Second)`，处理返回错误，并由组装层在关闭借用连接和 Provider 前调用返回的 `func() error` cleanup，处理注销错误。
+自定义 Store/Repo 只有实现 `StatsProvider` 才能提供真实统计；数据库 Store 对不支持统计的 Repo 返回错误。
+同一 Provider 与业务队列名只注册一次；队列名必须固定，不能使用任务 ID。
 
-### Redis Streams
+采样发生在 Metrics 采集回调中，不启动后台 goroutine；每次使用传入的正数 timeout 和采集 Context 中较早的截止时间，后端必须遵守 Context 取消。
+低层返回错误，由 OTel 错误处理边界处理；本功能不额外写日志。
 
-Redis Producer borrows the named client from `pkg/redis.Manager`. The Manager owns that shared client, so this constructor returns no cleanup function and callers must not close the client through the Producer.
+| 指标 | 标签 | 含义 |
+| --- | --- | --- |
+| `queue_tasks` | `queue_destination`, `state` | 四种状态的真实数量 |
+| `queue_oldest_ready_age_seconds` | `queue_destination` | 最老 ready 当前排期等待秒数；已知为空时为 0 |
+| `queue_stats_collection_success` | `queue_destination` | 本次采集成功为 1，失败为 0 |
+| `queue_stats_oldest_ready_known` | `queue_destination` | 年龄可精确提供为 1，否则为 0 |
 
-```go
-package assembly
-
-import (
-	redisqueue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/redis"
-	foundationredis "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/redis"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
-)
-
-func newRedisProducer(
-	redisManager foundationredis.Manager,
-	observability queue.Observability,
-) (queue.Producer, error) {
-	rawProducer, err := redisqueue.NewProducer(redisManager, redisqueue.ProducerConfig{
-		Connection: "main",
-		Stream:     "orders.created",
-	})
-	if err != nil {
-		return nil, err
-	}
-	producer, err := queue.NewProducer("orders.created", rawProducer, observability)
-	if err != nil {
-		return nil, err
-	}
-	return producer, nil
-}
-```
-
-Redis Consumer uses the same borrowing rule. Kafka Consumer creates clients for each `Consume` run and closes them when that run exits.
-
-Producer logs only rejected inputs and failed publishes—there is no per-message success log. Rejections use WARN with the caller Context; driver failures use ERROR with the active producer-span Context. Producer spans and metrics use the logical destination, not a connection address.
+失败时省略任务数量及年龄，不输出伪零，也不沿用上次成功值。Redis ready 候选超过 1000 时仍返回精确数量，但年龄不可用，known 为 0 并省略 age；该限制不是队列年龄为零。多个应用实例采集同一持久队列会产生重复快照，监控应按队列使用 `max` 去重，不能将实例数量直接相加。
 
 ```mermaid
 flowchart TD
-    A([业务调用 Publish]) --> B[复制并校验 Message]
-    B --> C{消息是否有效?}
-    C -- 否 --> D[WARN queue.publish.rejected]
-    D --> E([返回校验错误])
-    C -- 是 --> F[补齐 ID 与 Timestamp]
-    F --> G[开始 producer span]
-    G --> H[向 Header 注入 producer span trace context]
-    H --> I[外部调用: contrib Producer]
-    I --> J{发布是否成功?}
-    J -- 是 --> K[记录 success 指标]
-    K --> L([返回 nil])
-    J -- 否 --> M[记录 error 指标]
-    M --> N[ERROR queue.publish.failed]
-    N --> O([返回驱动错误])
+ A([开始采集]) --> B[创建有超时的 Context]
+ B --> C[只读查询数据库聚合或 Redis Lua 快照]
+ C --> D{错误或超时?}
+ D -- 是 --> E[success=0 known=0; 错误返回 OTel; 省略数量及年龄]
+ D -- 否 --> F[success=1; 输出四种状态数量]
+ F --> G{年龄已知?}
+ G -- 否 --> H[known=0; 省略年龄]
+ G -- 是 --> I[known=1; 输出年龄或空队列零值]
+ E --> J([结束])
+ H --> J
+ I --> J
 ```
 
-## 消费消息
+## 集成测试与边界用法
 
-`Consumer` 只有一个入口：`Consume(context.Context, queue.DeliveryHandler)`。驱动通过 `Delivery` 把消息或解码错误交给运行时；业务只编写 `queue.Handler`。不存在 queue 的 `Plan`、`Manager`、`Driver`、`Binding` 或 `Worker` API，也不应通过隐式发现注册消费者。
-
-Kafka 的完整组装示例如下。将 `logger`、`appInfo`、`service` 和 `observability` 替换为应用已有依赖；`appSpec` 是同一个 `app.Spec`，可与默认 server/job Runtime 共用。业务应将返回的 `billingOrderCreatedBootstrap` 加入最终 `bootstrap.Bootstrap` 聚合器，确保运行时已在 `app.NewApp` 冻结 Spec 前登记。
-
-```go
-package assembly
-
-import (
-	kafkaqueue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/kafka"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
-	foundationkafka "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
-)
-
-type billingOrderCreatedBootstrap struct{}
-
-func NewBillingOrderCreated(
-	kafkaFactory *foundationkafka.ClientFactory,
-	logger log.Logger,
-	appInfo appinfo.AppInfo,
-	service *BillingService,
-	observability queue.Observability,
-	appSpec *app.Spec,
-) (queue.Producer, billingOrderCreatedBootstrap, func(), error) {
-	rawProducer, releaseProducer, err := kafkaqueue.NewProducer(kafkaFactory, kafkaqueue.ProducerConfig{
-		Connection: "main",
-		Topic:      "orders.created",
-	})
-	if err != nil {
-		return nil, billingOrderCreatedBootstrap{}, nil, err
-	}
-	producer, err := queue.NewProducer("orders.created", rawProducer, observability)
-	if err != nil {
-		releaseProducer()
-		return nil, billingOrderCreatedBootstrap{}, nil, err
-	}
-
-	rawConsumer, err := kafkaqueue.NewConsumer(kafkaFactory, logger, kafkaqueue.ConsumerConfig{
-		Connection:  "main",
-		Topic:       "orders.created",
-		Group:       "billing",
-		Instance:    appInfo.ID(),
-		Concurrency: 4,
-	})
-	if err != nil {
-		releaseProducer()
-		return nil, billingOrderCreatedBootstrap{}, nil, err
-	}
-	runtime, err := queue.NewConsumerRuntime(
-		queue.RuntimeConfig{
-			Name:        "billing-order-created",
-			Destination: "orders.created",
-		},
-		rawConsumer,
-		service.HandleOrderCreated,
-		observability,
-	)
-	if err != nil {
-		releaseProducer()
-		return nil, billingOrderCreatedBootstrap{}, nil, err
-	}
-	if err := appSpec.RegisterRuntime(runtime); err != nil {
-		releaseProducer()
-		return nil, billingOrderCreatedBootstrap{}, nil, err
-	}
-	return producer, billingOrderCreatedBootstrap{}, releaseProducer, nil
-}
-```
-
-For Redis, create the typed adapter with `redisqueue.NewConsumer(redisManager, logger, redisqueue.ConsumerConfig{Connection: "main", Stream: "orders.created", Group: "billing", Instance: appInfo.ID(), Concurrency: 4})`, then pass it to the same `queue.NewConsumerRuntime` call and use the same named Bootstrap pattern to register it explicitly.
-
-`Retry: nil` uses three total Handler attempts, with a 500 ms initial backoff and a 30 s maximum backoff. Supplying a non-nil `RetryPolicy` controls all three fields; zero `MinBackoff` and `MaxBackoff` explicitly means no wait. Return `queue.Permanent(err)` from the Handler to skip remaining retries and enter final-failure processing. Handler panics are converted into retryable failures.
-
-If a final failure has no configured dead-letter Producer and destination, `ConsumerRuntime.Start` returns an error, the application supervisor stops the application, and the source message is not ACKed. If dead-letter publishing fails, it likewise returns an error and leaves the source unacknowledged. When dead-letter publishing succeeds, the runtime returns `nil` for that delivery and the driver ACKs/commits it. Cancelling the delivery or runtime Context stops processing without publishing to dead letter.
-
-Dead-letter records preserve the original key, body and legal headers, use a new ID and timestamp, and add only controlled `x-queue-*` failure metadata. The original Handler error text is not copied into the dead-letter headers.
-
-```mermaid
-flowchart TD
-    A([ConsumerRuntime.Start]) --> B[DEBUG queue.consumer.started]
-    B --> C[外部调用: contrib Consumer.Consume]
-    C --> D[收到 Delivery 并提取 trace context]
-    D --> E{Delivery 是否可解码且有效?}
-    E -- 否 --> F[标记 permanent]
-    E -- 是 --> G[调用业务 Handler 的消息副本]
-    G --> H{Handler 结果}
-    H -- 成功 --> I[记录 success 指标并结束 span]
-    I --> J[返回 nil 给驱动]
-    J --> K[外部调用: ACK/Commit]
-    K --> C
-    H -- Permanent --> L[进入最终失败处理]
-    H -- 普通错误 --> M{达到 MaxAttempts?}
-    M -- 否 --> N[WARN queue.consume.retry]
-    N --> O[可取消指数退避]
-    O --> P{Context 已取消?}
-    P -- 是 --> Q([正常停止，不死信])
-    P -- 否 --> G
-    M -- 是 --> L
-    F --> L
-    L --> R{配置 DeadLetter?}
-    R -- 否 --> S[ERROR queue.consume.failed]
-    S --> T([返回错误；不 ACK；应用停机])
-    R -- 是 --> U[构造脱敏死信副本]
-    U --> V[外部调用: DeadLetter Producer]
-    V --> W{发布成功?}
-    W -- 是 --> X[WARN queue.consume.dead_lettered]
-    X --> J
-    W -- 否 --> Y[ERROR queue.dead_letter.failed]
-    Y --> T
-```
-
-## 可观测性与数据边界
-
-每次发布创建一个 producer span。每次投递创建一个 consumer span；该投递的所有 retry attempt 和 retry event 都属于同一个 span，不会创建新的根 span。consumer span 开始前会从消息 Header 提取 trace context。最终失败分类使用受控的 `queue.consume.permanent` 或 `queue.consume.retry_exhausted` span event，并且不把原始错误文本写入分类事件。
-
-指标仅使用稳定、低基数标签 `queue.destination`、`queue.consumer`、`queue.operation` 和 `queue.result`。不要将消息 Body、Header Value、消息 ID、trace ID、死信原始错误文本、连接地址或随机 consumer 实例 ID 放入指标标签。日志通过 context 关联，可包含逻辑 Destination、Consumer Name、消息 ID、attempt、受限错误分类和本文事件名；不得包含消息 Body、Header Value、trace ID 或死信原始错误文本。
+参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。

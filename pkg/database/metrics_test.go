@@ -44,6 +44,8 @@ func TestMergeMetricLabelsValidatesNamesReservationsAndIdentityConflicts(t *test
 		want   string
 	}{
 		{name: "invalid name", labels: map[string]string{"bad-name": "value"}, want: "invalid"},
+		{name: "reserved operation", labels: map[string]string{"operation": "manual"}, want: "reserved"},
+		{name: "reserved result", labels: map[string]string{"result": "manual"}, want: "reserved"},
 		{name: "reserved db name", labels: map[string]string{"db_name": "manual"}, want: "reserved"},
 		{
 			name:   "identity conflict",

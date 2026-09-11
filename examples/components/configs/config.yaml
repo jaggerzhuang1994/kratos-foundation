@@ -1,0 +1,57 @@
+# 仅用于隔离的本地演示；凭据是无权限的模拟值。
+app:
+  stop_timeout: 30s
+tracing:
+  disable: true
+server:
+  stop_delay: 3s
+  http:
+    addr: 0.0.0.0:8000
+    metrics:
+      addr: 0.0.0.0:9001
+    health:
+      addr: 0.0.0.0:9001
+  grpc:
+    disable: true
+client:
+  clients:
+    greeting:
+      protocol: HTTP
+      target: http://app:8000
+    components:
+      protocol: HTTP
+      target: http://components:8000
+redis:
+  default: main
+  connections:
+    main:
+      addr: redis:6379
+      context_timeout_enabled: true
+database:
+  gorm:
+    logger:
+      level: WARN
+      slow_threshold: 0.010s
+      parameterized_queries: true
+  default: primary
+  connections:
+    primary:
+      driver: sqlite3
+      max_open_conns: 8
+      max_idle_conns: 2
+      dsn: /tmp/components.db?_busy_timeout=5000&_journal_mode=WAL
+kafka:
+  connections:
+    main:
+      brokers: [kafka:19092]
+      dial_timeout: 5s
+oss:
+  buckets:
+    assets:
+      driver: aliyun
+      bucket: assets-emulated
+      options:
+        endpoint: http://oss-emulator:9000
+        region: cn-hangzhou
+        access_key_id: local-demo-only
+        access_key_secret: local-demo-only

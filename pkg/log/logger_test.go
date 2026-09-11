@@ -662,3 +662,151 @@ func TestBuildCacheDoesNotPublishStaleSharedSettings(t *testing.T) {
 		t.Fatalf("cache version = %d", l.cache.customVersion)
 	}
 }
+
+// TestIntegrationLoggerModulePolicies 经环境构造与真实文件输出，验证两层级别及模块隔离。
+func TestIntegrationLoggerModulePolicies(t *testing.T) {
+	previous := processState.custom.Load()
+	t.Cleanup(func() { processState.custom.Store(previous) })
+	processState.custom.Store(&customState{})
+	for _, test := range []struct {
+		name, fileLevel, moduleLevel string
+		disabled                     bool
+		wantDebug, wantInfo          bool
+	}{
+		{"module inherits root", "debug", "", false, false, true},
+		{"module lowers root threshold", "debug", "debug", false, true, true},
+		{"file threshold remains final", "error", "debug", false, false, false},
+		{"module raises root threshold", "debug", "error", false, false, false},
+		{"disabled module stays silent", "debug", "debug", true, false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "module.log")
+			setSharedLogEnvironment(t, path)
+			t.Setenv(EnvFileLevel, test.fileLevel)
+			root, cleanup, err := NewLogger()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanup)
+			module, err := root.WithModuleConfig("orders", testModuleConfig{level: test.moduleLevel, disable: test.disabled})
+			if err != nil {
+				t.Fatal(err)
+			}
+			module.Debug("debug-event")
+			module.Info("info-event")
+			module.Error("error-event")
+			root.Error("root-still-enabled")
+			cleanup()
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for event, want := range map[string]bool{
+				"debug-event": test.wantDebug, "info-event": test.wantInfo,
+				"error-event": !test.disabled, "root-still-enabled": true,
+			} {
+				if got := strings.Contains(string(data), "msg="+event); got != want {
+					t.Fatalf("event %q present=%t want=%t: %s", event, got, want, data)
+				}
+			}
+			for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+				if strings.Contains(line, "root-still-enabled") == strings.Contains(line, "module=orders") {
+					t.Fatalf("module policy contaminated root or lost module: %s", line)
+				}
+			}
+		})
+	}
+}
+
+// TestIntegrationLoggerRequestFields 将固定字段、请求上下文、Valuer 和输出过滤组合到真实文件。
+func TestIntegrationLoggerRequestFields(t *testing.T) {
+	previous := processState.custom.Load()
+	t.Cleanup(func() { processState.custom.Store(previous) })
+	processState.custom.Store(&customState{})
+	path := filepath.Join(t.TempDir(), "requests.log")
+	setSharedLogEnvironment(t, path)
+	t.Setenv(EnvFilterKeys, "root_secret")
+	t.Setenv(EnvFileFilterKeys, "sink_secret")
+	root, cleanup, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	type requestKey struct{}
+	WithKV("request_id", "global")
+	module, err := root.WithModuleConfig("orders", testModuleConfig{filterKeys: []string{"module_secret"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	module = module.With("request_id", "fixed").WithFilterKeys("local_secret")
+	for _, id := range []string{"request-a", "request-b"} {
+		ctx := context.WithValue(t.Context(), requestKey{}, id)
+		ctx = WithKv(ctx, "request_id", "context", "request_name", id)
+		requestLogger := module.WithContext(ctx).With("evaluated", kratoslog.Valuer(func(ctx context.Context) any {
+			return ctx.Value(requestKey{})
+		}))
+		if err := requestLogger.Log(kratoslog.LevelInfo, "request_id", id,
+			"root_secret", "root-private", "sink_secret", "sink-private",
+			"module_secret", "module-private", "local_secret", "local-private", "empty", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cleanup()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("log lines=%d want=2: %s", len(lines), data)
+	}
+	for i, id := range []string{"request-a", "request-b"} {
+		for _, field := range []string{"request_id=" + id, "request_name=" + id, "evaluated=" + id, "module=orders"} {
+			if !strings.Contains(lines[i], field) {
+				t.Fatalf("missing %q: %s", field, lines[i])
+			}
+		}
+		if strings.Count(lines[i], "request_id=") != 1 {
+			t.Fatalf("request override not deduplicated: %s", lines[i])
+		}
+	}
+	if strings.Contains(string(data), "private") || strings.Contains(string(data), "empty=") {
+		t.Fatalf("filter chain leaked values: %s", data)
+	}
+}
+
+// TestIntegrationLoggerEnvironmentSnapshot 验证环境只在构造期读取，以及释放后同路径重建的追加语义。
+func TestIntegrationLoggerEnvironmentSnapshot(t *testing.T) {
+	previous := processState.custom.Load()
+	t.Cleanup(func() { processState.custom.Store(previous) })
+	processState.custom.Store(&customState{})
+	path := filepath.Join(t.TempDir(), "append.log")
+	setSharedLogEnvironment(t, path)
+	first, closeFirst, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeFirst)
+	t.Setenv(EnvLevel, "error")
+	first.Info("original-environment")
+	closeFirst()
+	second, closeSecond, err := NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeSecond)
+	second.Info("new-environment-filtered")
+	second.Error("appended-after-reopen")
+	if err := first.WithModule("closed").Log(kratoslog.LevelError, "msg", "old-owner"); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("closed logger err=%v want=os.ErrClosed", err)
+	}
+	closeSecond()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "original-environment") || !strings.Contains(string(data), "appended-after-reopen") ||
+		strings.Contains(string(data), "new-environment-filtered") || strings.Contains(string(data), "old-owner") {
+		t.Fatalf("environment snapshot or append semantics broken: %s", data)
+	}
+}

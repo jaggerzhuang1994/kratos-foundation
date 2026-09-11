@@ -10,12 +10,12 @@ const (
 	defaultMaxAttempts = 3
 	defaultMinBackoff  = 500 * time.Millisecond
 	defaultMaxBackoff  = 30 * time.Second
-	// maxRetryAttempts 保留足够的长时重试窗口，同时拒绝误配为事实上永不进入死信的循环。
+	// maxRetryAttempts 保留足够的长时重试窗口，同时拒绝误配为事实上永不进入失败归档的循环。
 	maxRetryAttempts = 1000
 )
 
-// RetryPolicy 控制消息失败或进入死信队列前的进程内重试。
-// MaxAttempts 包含第一次 Handler 调用；传 nil 时使用组件默认策略，传非 nil 时零 Backoff 明确表示不等待。
+// RetryPolicy 控制任务失败后的持久化重试。
+// MaxAttempts 包含首次领取，执行前崩溃也消耗次数；传 nil 时使用组件默认策略，传非 nil 时零 Backoff 明确表示不等待。
 type RetryPolicy struct {
 	MaxAttempts int
 	MinBackoff  time.Duration

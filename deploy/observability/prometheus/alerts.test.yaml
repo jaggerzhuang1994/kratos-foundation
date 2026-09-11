@@ -1,0 +1,537 @@
+rule_files:
+  - alerts.yaml
+evaluation_interval: 1m
+tests:
+  - name: 持续高错误率只影响 prod orders，不混合 env
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="500"}
+        values: 0+20x20
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="200"}
+        values: 0+80x20
+      - series: server_requests_code_total{foundation="true",env="dev",cluster="c1",namespace="apps",app="orders",code="200"}
+        values: 0+10000x20
+    alert_rule_test:
+      - alertname: FoundationHighServerErrorRate
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: 应用 5xx 比例超过 5%，且最近 5 分钟请求至少 100 次
+              runbook: deploy/observability/docs/troubleshooting.md#foundationhighservererrorrate
+        eval_time: 12m
+  - name: 低流量即使全部 500 也不触发阈值告警
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="500"}
+        values: 0+1x20
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHighServerErrorRate
+        exp_alerts: []
+  - name: 采集失败满足 for 才触发
+    interval: 1m
+    input_series:
+      - series: up{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",node="n1",pod="p1",instance="10.0.0.1:9001",job="foundation-app"}
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: FoundationTargetDown
+        exp_alerts: []
+      - alertname: FoundationTargetDown
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+              foundation: "true"
+              node: n1
+              pod: p1
+              instance: 10.0.0.1:9001
+              job: foundation-app
+            exp_annotations:
+              summary: 应用指标采集失败
+              runbook: deploy/observability/docs/troubleshooting.md#foundationtargetdown
+        eval_time: 3m
+  - name: 健康请求不触发错误率
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="200"}
+        values: 0+100x20
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHighServerErrorRate
+        exp_alerts: []
+  - name: 配置拒绝立即可见
+    interval: 1m
+    input_series:
+      - series: foundation_config_updates_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",result="rejected"}
+        values: 0 0 0 1 1 1
+    alert_rule_test:
+      - alertname: FoundationConfigRejected
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+              foundation: "true"
+              result: rejected
+            exp_annotations:
+              summary: 配置快照被拒绝
+              runbook: deploy/observability/docs/troubleshooting.md#foundationconfigrejected
+        eval_time: 4m
+  - name: 持续长尾延迟在请求门槛后触发
+    interval: 1m
+    input_series:
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",le="0.5"}
+        values: 0+50x30
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",le="1"}
+        values: 0+100x30
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",le="+Inf"}
+        values: 0+100x30
+      - series: server_requests_seconds_count{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders"}
+        values: 0+100x30
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FoundationHighLatency
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: 应用 P95 超过 500ms，且最近 5 分钟请求至少 100 次
+              runbook: deploy/observability/docs/troubleshooting.md#foundationhighlatency
+  - name: 订阅过载计数增加
+    interval: 1m
+    input_series:
+      - series: foundation_config_subscription_overloads_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders"}
+        values: 0 0 0 1 1 1
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: FoundationConfigSubscriptionOverloaded
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+              foundation: "true"
+            exp_annotations:
+              summary: 配置订阅因过载终止
+              runbook: deploy/observability/docs/troubleshooting.md#foundationconfigsubscriptionoverloaded
+  - name: 机器告警只关联承载所选应用的节点
+    interval: 1m
+    input_series:
+      - series: up{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",node="n1"}
+        values: 1x30
+      - series: node_cpu_seconds_total{env="prod",cluster="c1",node="n1",mode="idle",cpu="0"}
+        values: 0+1x30
+      - series: node_memory_MemAvailable_bytes{env="prod",cluster="c1",node="n1"}
+        values: 5x30
+      - series: node_memory_MemTotal_bytes{env="prod",cluster="c1",node="n1"}
+        values: 100x30
+      - series: node_filesystem_avail_bytes{env="prod",cluster="c1",node="n1",mountpoint="/",fstype="ext4"}
+        values: 5x30
+      - series: node_filesystem_size_bytes{env="prod",cluster="c1",node="n1",mountpoint="/",fstype="ext4"}
+        values: 100x30
+      - series: node_cpu_seconds_total{env="prod",cluster="c1",node="n2",mode="idle",cpu="0"}
+        values: 0+1x30
+      - series: node_memory_MemAvailable_bytes{env="prod",cluster="c1",node="n2"}
+        values: 5x30
+      - series: node_memory_MemTotal_bytes{env="prod",cluster="c1",node="n2"}
+        values: 100x30
+      - series: node_filesystem_avail_bytes{env="prod",cluster="c1",node="n2",mountpoint="/",fstype="ext4"}
+        values: 5x30
+      - series: node_filesystem_size_bytes{env="prod",cluster="c1",node="n2",mountpoint="/",fstype="ext4"}
+        values: 100x30
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FoundationNodeCPUHigh
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              node: n1
+              severity: warning
+            exp_annotations:
+              summary: 承载应用的机器 CPU 使用率超过 90%
+              runbook: deploy/observability/docs/troubleshooting.md#机器资源告警
+      - eval_time: 20m
+        alertname: FoundationNodeMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              node: n1
+              severity: warning
+            exp_annotations:
+              summary: 承载应用的机器内存使用率超过 90%
+              runbook: deploy/observability/docs/troubleshooting.md#机器资源告警
+      - eval_time: 20m
+        alertname: FoundationNodeDiskLow
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              node: n1
+              severity: warning
+            exp_annotations:
+              summary: 承载应用的机器根分区可用空间不足 10%
+              runbook: deploy/observability/docs/troubleshooting.md#机器资源告警
+  - name: 无样本不产生虚假告警
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FoundationTargetDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationHighServerErrorRate
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationHighLatency
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationConfigRejected
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationConfigSubscriptionOverloaded
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationNodeCPUHigh
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationNodeMemoryHigh
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationNodeDiskLow
+        exp_alerts: []
+  - name: FoundationKafkaRuntimeFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "kafka_consumer_runtime_failures_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",kafka_destination=\"orders\",kafka_consumer=\"worker\"}"
+        values: "0+1x10"
+      - series: "kafka_consumer_runtime_failures_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",kafka_destination=\"orders\",kafka_consumer=\"worker\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationKafkaRuntimeFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              kafka_destination: "orders"
+              kafka_consumer: "worker"
+              severity: "warning"
+            exp_annotations:
+              summary: "Kafka 消费运行时出现故障"
+              runbook: deploy/observability/docs/troubleshooting.md#组件告警
+  - name: FoundationQueueRuntimeFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "queue_consumer_runtime_failures_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\",queue_consumer=\"worker\"}"
+        values: "0+1x10"
+      - series: "queue_consumer_runtime_failures_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\",queue_consumer=\"worker\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationQueueRuntimeFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              queue_destination: "orders"
+              queue_consumer: "worker"
+              severity: "warning"
+            exp_annotations:
+              summary: "Queue 消费运行时出现故障"
+              runbook: deploy/observability/docs/troubleshooting.md#组件告警
+  - name: FoundationJobFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "job_runs_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",exported_job=\"cleanup\",status=\"failure\"}"
+        values: "0+1x10"
+      - series: "job_runs_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",exported_job=\"cleanup\",status=\"failure\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationJobFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              exported_job: "cleanup"
+              severity: "warning"
+            exp_annotations:
+              summary: "Job 执行失败"
+              runbook: deploy/observability/docs/troubleshooting.md#组件告警
+  - name: FoundationLockRenewalFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "lock_operations_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",lock_name=\"orders\",result=\"not_held\",operation=\"refresh\"}"
+        values: "0+1x10"
+      - series: "lock_operations_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",lock_name=\"orders\",result=\"not_held\",operation=\"refresh\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationLockRenewalFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              lock_name: "orders"
+              result: "not_held"
+              severity: "warning"
+            exp_annotations:
+              summary: "Lock 续租失败，需确认任务是否停止受保护操作"
+              runbook: deploy/observability/docs/troubleshooting.md#组件告警
+  - name: FoundationRedisPoolTimeout 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "db_client_connections_timeouts{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",redis_connection=\"cache\",pool_name=\"redis:6379\",db_system=\"redis\"}"
+        values: "0+1x10"
+      - series: "db_client_connections_timeouts{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",redis_connection=\"cache\",pool_name=\"redis:6379\",db_system=\"redis\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationRedisPoolTimeout
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              redis_connection: "cache"
+              pool_name: "redis:6379"
+              severity: "warning"
+            exp_annotations:
+              summary: "Redis 客户端连接池等待超时"
+              runbook: deploy/observability/docs/troubleshooting.md#组件告警
+  - name: 无组件样本不触发组件告警
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: FoundationKafkaRuntimeFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationQueueRuntimeFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationJobFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationLockRenewalFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationRedisPoolTimeout
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationDatabasePoolSaturated
+        exp_alerts: []
+  - name: 数据库池按实例报警且排除无限上限
+    interval: 1m
+    input_series:
+      - series: "go_sql_in_use_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"busy\",db_name=\"default\"}"
+        values: "10x20"
+      - series: "go_sql_max_open_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"busy\",db_name=\"default\"}"
+        values: "10x20"
+      - series: "go_sql_in_use_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"unlimited\",db_name=\"default\"}"
+        values: "10x20"
+      - series: "go_sql_max_open_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"unlimited\",db_name=\"default\"}"
+        values: "0x20"
+      - series: "go_sql_in_use_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"idle\",db_name=\"default\"}"
+        values: "1x20"
+      - series: "go_sql_max_open_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"idle\",db_name=\"default\"}"
+        values: "10x20"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationDatabasePoolSaturated
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationDatabasePoolSaturated
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation: "true"
+              instance: "busy"
+              db_name: "default"
+              severity: "warning"
+            exp_annotations:
+              summary: 数据库实例连接池利用率持续超过 90%
+              runbook: deploy/observability/docs/troubleshooting.md#组件告警
+  - name: FoundationHealthProbeFailed 正常触发
+    interval: 1m
+    input_series:
+      - series: "probe_success{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation_probe=\"true\",probe=\"readyz\",instance=\"a:9001\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHealthProbeFailed
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation_probe: "true"
+              probe: "readyz"
+              instance: "a:9001"
+              severity: "warning"
+            exp_annotations:
+              summary: "应用 readyz 或 healthz 实际 HTTP 探测失败"
+              runbook: deploy/observability/docs/troubleshooting.md#健康探测与配置状态
+  - name: FoundationHealthProbeUnavailable 正常触发
+    interval: 1m
+    input_series:
+      - series: "up{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation_probe=\"true\",probe=\"healthz\",instance=\"a:9001\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHealthProbeUnavailable
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation_probe: "true"
+              probe: "healthz"
+              instance: "a:9001"
+              severity: "warning"
+            exp_annotations:
+              summary: "健康探测结果采集失败，不能判断应用健康"
+              runbook: deploy/observability/docs/troubleshooting.md#健康探测与配置状态
+  - name: FoundationQueueStatsFailed 正常触发
+    interval: 1m
+    input_series:
+      - series: "queue_stats_collection_success{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationQueueStatsFailed
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation: "true"
+              queue_destination: "orders"
+              severity: "warning"
+            exp_annotations:
+              summary: "Queue 状态采集失败，积压数量与年龄不可用"
+              runbook: deploy/observability/docs/troubleshooting.md#积压与传输指标
+  - name: FoundationConfigWatcherStopped 正常触发
+    interval: 1m
+    input_series:
+      - series: "foundation_config_watcher_up{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationConfigWatcherStopped
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation: "true"
+              severity: "warning"
+            exp_annotations:
+              summary: "已接入配置观测的 watcher 停止运行"
+              runbook: deploy/observability/docs/troubleshooting.md#健康探测与配置状态
+  - name: FoundationQueueReadyTooOld 正常触发
+    interval: 1m
+    input_series:
+      - series: "queue_oldest_ready_age_seconds{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\"}"
+        values: "400x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationQueueReadyTooOld
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              queue_destination: "orders"
+              severity: "warning"
+            exp_annotations:
+              summary: "Queue 最老就绪任务等待超过 5 分钟"
+              runbook: deploy/observability/docs/troubleshooting.md#积压与传输指标
+  - name: FoundationKafkaLagHigh 正常触发
+    interval: 1m
+    input_series:
+      - series: "kafka_consumergroup_lag{env=\"prod\",cluster=\"c1\",foundation_kafka=\"true\",kafka_cluster=\"business\",consumergroup=\"orders\",topic=\"orders\",partition=\"0\"}"
+        values: "1500x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationKafkaLagHigh
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              kafka_cluster: "business"
+              consumergroup: "orders"
+              topic: "orders"
+              severity: "warning"
+            exp_annotations:
+              summary: "Kafka 消费组 Topic Lag 持续超过 1000"
+              runbook: deploy/observability/docs/troubleshooting.md#积压与传输指标
+  - name: 无状态样本不制造健康或积压告警
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHealthProbeFailed
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationHealthProbeUnavailable
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationQueueStatsFailed
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationConfigWatcherStopped
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationQueueReadyTooOld
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationKafkaLagHigh
+        exp_alerts: []
+  - name: 重复 Kafka exporter 不累加且未知负 lag 不报警
+    interval: 1m
+    input_series:
+      - series: kafka_consumergroup_lag{foundation_kafka="true",env="prod",cluster="c1",kafka_cluster="shared",consumergroup="orders",topic="orders",partition="0",instance="exporter1"}
+        values: "600x20"
+      - series: kafka_consumergroup_lag{foundation_kafka="true",env="prod",cluster="c1",kafka_cluster="shared",consumergroup="orders",topic="orders",partition="0",instance="exporter2"}
+        values: "600x20"
+      - series: kafka_consumergroup_lag{foundation_kafka="true",env="prod",cluster="c1",kafka_cluster="shared",consumergroup="unknown",topic="orders",partition="0"}
+        values: "-1x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationKafkaLagHigh
+        exp_alerts: []

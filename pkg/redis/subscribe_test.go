@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"net"
 	"strings"
@@ -395,4 +397,73 @@ func TestSubscribeCancellationInterruptsConfirmation(t *testing.T) {
 		t.Fatalf("Subscribe = %v, want context.Canceled", err)
 	}
 	receiveWithin(t, serverDone, "subscription socket closure")
+}
+
+func TestExternalIntegrationRedisSubscriptionRecovery(t *testing.T) {
+	for _, buffer := range []int{0, 2} {
+		t.Run(fmt.Sprintf("buffer=%d", buffer), func(t *testing.T) {
+			manager := externalIntegrationManager(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			channel := "foundation:subscription:" + uuid.NewString()
+			invalid := errors.New("invalid business event")
+			events, err := Subscribe(ctx, manager.Default(), channel, func(message *goredis.Message) (string, error) {
+				switch message.Payload {
+				case "invalid":
+					return "", invalid
+				case "panic":
+					panic("parser panic")
+				default:
+					return message.Payload, nil
+				}
+			}, WithSubscribeBufferSize(buffer))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Subscribe 已确认后才发布；不靠 sleep 猜测订阅是否就绪。
+			for _, payload := range []string{"订单", "invalid", "panic", "recovered"} {
+				if receivers, err := manager.Default().Publish(ctx, channel, payload).Result(); err != nil || receivers != 1 {
+					t.Fatalf("publish receivers=%d err=%v", receivers, err)
+				}
+				select {
+				case event, ok := <-events:
+					if !ok {
+						t.Fatal("stream closed before cancellation")
+					}
+					switch payload {
+					case "invalid":
+						if !errors.Is(event.Err, invalid) {
+							t.Fatalf("parser error: %v", event.Err)
+						}
+					case "panic":
+						if event.Err == nil {
+							t.Fatal("parser panic not reported")
+						}
+					default:
+						if event.Err != nil || event.Message != payload {
+							t.Fatalf("event=%+v", event)
+						}
+					}
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				}
+			}
+			cancel()
+			timer := time.NewTimer(3 * time.Second)
+			defer timer.Stop()
+			for {
+				select {
+				case event, ok := <-events:
+					if !ok {
+						return
+					}
+					if event.Err != nil {
+						t.Fatalf("subscription cleanup: %v", event.Err)
+					}
+				case <-timer.C:
+					t.Fatal("subscription did not close")
+				}
+			}
+		})
+	}
 }

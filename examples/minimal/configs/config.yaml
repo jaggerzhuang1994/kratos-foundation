@@ -1,0 +1,15 @@
+# 最小示例无数据库、消息队列或外部追踪后端依赖。
+app:
+  stop_timeout: 30s
+tracing:
+  disable: true
+server:
+  stop_delay: 3s
+  http:
+    addr: 0.0.0.0:8000
+    metrics:
+      addr: 0.0.0.0:9001
+    health:
+      addr: 0.0.0.0:9001
+  grpc:
+    disable: true

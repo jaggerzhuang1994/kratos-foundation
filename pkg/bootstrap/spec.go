@@ -51,7 +51,7 @@ func (s *Spec) Job() job.Builder {
 	return s.jobs
 }
 
-// RegisterRuntime 登记 Wire 构造的通用运行时，包括 queue.ConsumerRuntime 和自定义 worker。
+// RegisterRuntime 登记 Wire 构造的通用运行时，包括 queue.Worker、kafka.ConsumerRuntime 和自定义 worker。
 // App 管理 Start/Stop，资源 cleanup 仍归构造该运行时的 provider 所有。
 func (s *Spec) RegisterRuntime(runtime app.Runtime) *Spec {
 	s.runtimes = append(s.runtimes, runtime)

@@ -7,6 +7,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -64,6 +65,11 @@ func mergeGORMConfig(base, override *config_pb.Gorm) *config_pb.Gorm {
 	}
 	if override != nil {
 		proto.Merge(result, override)
+		// Duration 表示一个完整阈值，不能把覆盖值的秒/纳秒分别与全局值合并。
+		// 显式 0s 也必须替换全局值，使当前连接可以关闭慢操作判断。
+		if threshold := override.GetLogger().GetSlowThreshold(); threshold != nil {
+			result.Logger.SlowThreshold = proto.Clone(threshold).(*durationpb.Duration)
+		}
 	}
 	return result
 }

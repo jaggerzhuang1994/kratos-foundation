@@ -24,6 +24,7 @@ type metricsCollector struct {
 	registerer prometheus.Registerer
 	dbStats    []prometheus.Collector
 	mysql      *mysqlMetricsCollector
+	sql        *sqlMetrics
 	closeOnce  sync.Once
 }
 
@@ -95,6 +96,7 @@ func (c *metricsCollector) close() {
 	}
 	c.closeOnce.Do(func() {
 		c.mysql.close()
+		c.sql.unregister(c.registerer)
 		c.unregisterDBStats()
 	})
 }
@@ -117,8 +119,8 @@ func mergeMetricLabels(
 		if !prometheusLabelNamePattern.MatchString(key) {
 			return nil, fmt.Errorf("database metrics label name %q is invalid", key)
 		}
-		if key == "db_name" {
-			return nil, errors.New("database metrics label name \"db_name\" is reserved")
+		if key == "db_name" || key == "operation" || key == "result" {
+			return nil, fmt.Errorf("database metrics label name %q is reserved", key)
 		}
 		labels[key] = value
 	}

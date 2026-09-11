@@ -15,8 +15,8 @@
 | M1 工具/值对象 | 输入转输出，或保存少量局部配置 | `Do(input) (output, error)` / `New(config)` | compress、gormscope、totp |
 | M2 公共契约 | 多个实现需要共享语义 | 小接口、值类型、稳定错误 | lock |
 | M3 资源服务 | 创建、管理或借出连接/输出/provider | `New(deps) (value, func(), error)`；无资源则省略 cleanup | config、redis、client、kafka |
-| M4 操作级组件 | 给一次请求/任务附加行为，或包裹另一能力 | `New(dep, config)`，必要时 `Acquire(ctx) (handle, release, error)` | queue producer、job guard |
-| M5 应用 Runtime | 需要由应用统一启动和停止执行循环 | `New(deps)` + `Start(ctx)` / `Stop(ctx)` | queue consumer、job manager |
+| M4 操作级组件 | 给一次请求/任务附加行为，或包裹另一能力 | `New(dep, config)`，必要时 `Acquire(ctx) (handle, release, error)` | queue Dispatcher、job guard |
+| M5 应用 Runtime | 需要由应用统一启动和停止执行循环 | `New(deps)` + `Start(ctx)` / `Stop(ctx)` | queue Worker、job manager |
 | M6 Bootstrap | 把已有对象贡献给应用装配 | `NewXXXBootstrap(spec, component) (XXXBootstrap, error)` | bootstrap |
 | M7 应用核心 | 多种 Runtime 共同需要的生命周期规则 | Spec、冻结、监督、停机协调 | app |
 | M8 第三方适配 | 用具体技术实现公共契约 | `contrib/<domain>/<driver>.New(deps)` | contrib/lock/redis |
@@ -73,7 +73,7 @@
 
 **使用条件**：为一次操作添加重试、观测、协调、续租等行为；或者装饰一个已有能力。可以有局部状态或 goroutine，但生命周期归请求、任务或所属对象。
 
-- **目录**：留在所属领域，如 `pkg/queue/producer.go`、`pkg/job/coordinator.go`；需要公共复用且具有清晰子能力时可新增公共子包，如建议的 `pkg/lock/watchdog`。
+- **目录**：留在所属领域，如 `pkg/queue/dispatcher.go`、`pkg/job/coordinator.go`；需要公共复用且具有清晰子能力时可新增公共子包，如建议的 `pkg/lock/watchdog`。
 - **API**：构造显式接收被装饰能力和配置；普通调用 `Do(ctx, ...)`。需要持有句柄时，获取方法返回句柄与 release，明确一对一所有权。
 - **依赖**：依赖行为接口，不依赖业务的 Wire、全局 Manager 或具体驱动；具体后端在组装层选择。
 - **生命周期**：构造通常不启动任务；实际 Acquire/调用成功后才启动局部循环。操作结束停止循环并释放资源；不要给每个句柄注册一个应用 Runtime。
@@ -106,7 +106,7 @@
 - **Wire**：ProviderSet 与 injector 由业务组装层维护，领域包不导入 Wire。组装层按 `bootstrap.InfrastructureBootstrap → bootstrap.Bootstrap（用户 provider）→ bootstrap.StartupReady → bootstrap.NewKratosApp` 分阶段；用户 provider 显式接收基础设施阶段标记。`app.NewApp` 只消费依赖，不参与阶段组织；只把 Provider 放进 set，并不能保证 Wire 执行它。
 - **验收**：贡献确实存在、无启动副作用、重复登记、冻结后登记、禁用分支和注册错误；有 cleanup 时验证副作用恢复。
 
-**现有示例**：MetricsBootstrap 只注入上下文；ServerBootstrap 登记运行时；LogBootstrap 还返回全局 Logger 恢复函数。queue 没有统一 Bootstrap，按消费者实例由业务显式登记。
+**现有示例**：MetricsBootstrap 只注入上下文；ServerBootstrap 登记运行时；LogBootstrap 还返回全局 Logger 恢复函数。queue 没有统一 Bootstrap，按 Worker 实例由业务显式登记。
 
 ## M7：应用核心编排
 
@@ -163,7 +163,7 @@ flowchart TD
 
 - **目录**：采用业务项目已有的领域/用例/数据访问布局；不在 Foundation 的 `pkg` 新建 order/payment 以承载某个项目的业务。
 - **API/依赖**：用例暴露业务行为，依赖所需的小型 Repository、Locker、Producer 等接口；在业务 Wire 层注入实现。
-- **生命周期**：业务服务通常不是 Runtime；请求由 server 驱动，消费者 Handler 由 queue 驱动，Task 由 job 驱动。只有独立执行循环才采用 M5。
+- **生命周期**：业务服务通常不是 Runtime；请求由 server 驱动，持久化任务 Handler 由 queue Worker 驱动，Kafka 消息 Handler 由 kafka ConsumerRuntime 驱动，Task 由 job 驱动。只有独立执行循环才采用 M5。
 - **事务/错误**：用例决定事务、幂等和失败补偿边界；日志在能够决定重试、回退或响应的边界记录。
 - **验收**：业务不变量、重复请求、部分失败、取消和事务回滚；不通过复制一份调度器/消息循环来编排业务。
 

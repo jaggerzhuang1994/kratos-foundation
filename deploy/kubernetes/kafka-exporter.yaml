@@ -1,0 +1,76 @@
+# 可选：已有 Kafka exporter 时只需对齐抓取标签，不重复部署。
+# 替换 broker、Topic/Group 白名单及 TLS/SASL 配置；本例不含真实凭据。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-kafka-exporter
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: foundation-kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: foundation-kafka-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: danielqsj/kafka-exporter:v1.10.0
+          args:
+            - --kafka.server=kafka.kafka.svc:9092
+            - --topic.filter=.*
+            - --group.filter=.*
+            - --kafka.version=4.1.2
+            - --group.metrics.timeout=8s
+            - --offset.show-all
+          ports:
+            - name: metrics
+              containerPort: 9308
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-kafka-exporter
+  namespace: monitoring
+  labels:
+    app: foundation-kafka-exporter
+spec:
+  selector:
+    app: foundation-kafka-exporter
+  ports:
+    - name: metrics
+      port: 9308
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: foundation-kafka-exporter
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: foundation-kafka-exporter
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - targetLabel: foundation_kafka
+          replacement: "true"
+        - targetLabel: env
+          replacement: dev
+        - targetLabel: cluster
+          replacement: example-cluster
+        - targetLabel: kafka_cluster
+          replacement: business-kafka

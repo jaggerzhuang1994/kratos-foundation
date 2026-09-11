@@ -105,6 +105,21 @@ func newManagerWithDrivers(
 		return fail(err)
 	}
 
+	if metricsCollector != nil {
+		metricsCollector.sql, err = newSQLMetrics(metricsCollector.registerer)
+		if err != nil {
+			metricsCollector.close()
+			return fail(err)
+		}
+		for name, db := range connections {
+			effective := mergeGORMConfig(config.GetGorm(), config.GetConnections()[name].GetGorm())
+			if err := metricsCollector.sql.install(db, name, effective.GetLogger().GetSlowThreshold().AsDuration()); err != nil {
+				metricsCollector.close()
+				return fail(fmt.Errorf("install database SQL metrics for %q: %w", name, err))
+			}
+		}
+	}
+
 	// 连接池参数在连接建立后才能写回，因此订阅放在全部连接就绪之后。
 	cancelPoolUpdates, err := subscribeConnectionPools(
 		configManager,

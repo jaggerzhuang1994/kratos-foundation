@@ -1,0 +1,16 @@
+[
+  {
+    "targets": [
+      "components:9001"
+    ],
+    "labels": {
+      "env": "local",
+      "cluster": "local",
+      "namespace": "standalone",
+      "app": "components-api",
+      "node": "local-docker",
+      "pod": "none",
+      "foundation": "true"
+    }
+  }
+]

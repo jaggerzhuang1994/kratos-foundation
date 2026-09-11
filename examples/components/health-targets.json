@@ -1,0 +1,32 @@
+[
+  {
+    "targets": [
+      "http://components:9001/healthz"
+    ],
+    "labels": {
+      "env": "local",
+      "cluster": "local",
+      "namespace": "standalone",
+      "app": "components-api",
+      "node": "local-docker",
+      "pod": "none",
+      "foundation_probe": "true",
+      "probe": "healthz"
+    }
+  },
+  {
+    "targets": [
+      "http://components:9001/readyz"
+    ],
+    "labels": {
+      "env": "local",
+      "cluster": "local",
+      "namespace": "standalone",
+      "app": "components-api",
+      "node": "local-docker",
+      "pod": "none",
+      "foundation_probe": "true",
+      "probe": "readyz"
+    }
+  }
+]

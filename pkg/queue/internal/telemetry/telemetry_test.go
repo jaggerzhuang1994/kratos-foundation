@@ -127,19 +127,19 @@ func TestTelemetryRecordsAttemptOutcomesAndFinalClassifications(t *testing.T) {
 	}
 }
 
-func TestTelemetryRecordsMessageRetryDeadLetterRuntimeAndProducer(t *testing.T) {
+func TestTelemetryRecordsTaskRetryFailureRuntimeAndDispatcher(t *testing.T) {
 	telemetry, exporter, metricProvider := newTelemetryForTest(t)
 	ctx, span := telemetry.Tracer().Start(context.Background(), "consume")
 	telemetry.RecordMessage(ctx, "orders", "worker", "success", time.Millisecond)
 	telemetry.RecordRetry(ctx, span, "orders", "worker", 3)
-	telemetry.RecordDeadLetter(ctx, span, "orders", "worker", "success")
-	telemetry.RecordDeadLetter(ctx, span, "orders", "worker", "error")
+	telemetry.RecordFailure(ctx, span, "orders", "worker", "success")
+	telemetry.RecordFailure(ctx, span, "orders", "worker", "error")
 	telemetry.RecordRuntimeFailure(ctx, "orders", "worker")
 	telemetry.RecordProducer(ctx, "orders", "publish", "success", 2, time.Second)
 	span.End()
 
 	events := exporter.GetSpans()[0].Events
-	if len(events) != 3 || events[0].Name != "queue.consume.retry" || events[1].Name != "queue.consume.dead_lettered" || events[2].Name != "queue.dead_letter.failed" {
+	if len(events) != 3 || events[0].Name != "queue.consume.retry" || events[1].Name != "queue.task.failed" || events[2].Name != "queue.failure.persist_failed" {
 		t.Fatalf("unexpected telemetry events: %#v", events)
 	}
 	consumerLabels := map[string]string{
@@ -162,10 +162,10 @@ func TestTelemetryRecordsMessageRetryDeadLetterRuntimeAndProducer(t *testing.T) 
 		t.Fatalf("retry counter = %v, want 1", sample.counter)
 	}
 	for _, result := range []string{"success", "error"} {
-		if sample := findTelemetryMetricSample(t, metricProvider, "queue_consumer_dead_letters_total", map[string]string{
+		if sample := findTelemetryMetricSample(t, metricProvider, "queue_consumer_failed_tasks_total", map[string]string{
 			"queue_destination": "orders", "queue_consumer": "worker", "queue_result": result,
 		}); sample.counter != 1 {
-			t.Fatalf("%s dead-letter counter = %v, want 1", result, sample.counter)
+			t.Fatalf("%s failed-task counter = %v, want 1", result, sample.counter)
 		}
 	}
 	if sample := findTelemetryMetricSample(t, metricProvider, "queue_consumer_runtime_failures_total", map[string]string{

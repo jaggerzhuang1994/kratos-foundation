@@ -302,3 +302,7 @@ flowchart TD
     Q --> R[释放 Manager 锁 逐个获取并释放订阅锁]
     R --> S([返回独立副本 不执行业务回调])
 ```
+
+## 可运行的组合用例
+
+参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。

@@ -1,0 +1,176 @@
+groups:
+  - name: foundation-app
+    rules:
+      - alert: FoundationTargetDown
+        expr: up{foundation="true"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用指标采集失败"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationtargetdown"
+      - alert: FoundationHighServerErrorRate
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[5m]))
+            / sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[5m]))
+          ) > 0.05
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_code_total{foundation="true"}[5m])) >= 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用 5xx 比例超过 5%，且最近 5 分钟请求至少 100 次"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationhighservererrorrate"
+      - alert: FoundationHighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le, env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true"}[5m]))) > 0.5
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_seconds_count{foundation="true"}[5m])) >= 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用 P95 超过 500ms，且最近 5 分钟请求至少 100 次"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationhighlatency"
+      - alert: FoundationConfigRejected
+        expr: increase(foundation_config_updates_total{foundation="true",result="rejected"}[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "配置快照被拒绝"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationconfigrejected"
+      - alert: FoundationConfigSubscriptionOverloaded
+        expr: increase(foundation_config_subscription_overloads_total{foundation="true"}[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "配置订阅因过载终止"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationconfigsubscriptionoverloaded"
+      - alert: FoundationNodeCPUHigh
+        expr: |
+          (1 - avg by (env, cluster, node) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.90
+          and on (env, cluster, node) max by (env, cluster, node) (up{foundation="true"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "承载应用的机器 CPU 使用率超过 90%"
+          runbook: "deploy/observability/docs/troubleshooting.md#机器资源告警"
+      - alert: FoundationNodeMemoryHigh
+        expr: |
+          (1 - max by (env, cluster, node) (node_memory_MemAvailable_bytes) / max by (env, cluster, node) (node_memory_MemTotal_bytes)) > 0.90
+          and on (env, cluster, node) max by (env, cluster, node) (up{foundation="true"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "承载应用的机器内存使用率超过 90%"
+          runbook: "deploy/observability/docs/troubleshooting.md#机器资源告警"
+      - alert: FoundationNodeDiskLow
+        expr: |
+          (max by (env, cluster, node) (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay|squashfs"}) / max by (env, cluster, node) (node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay|squashfs"})) < 0.10
+          and on (env, cluster, node) max by (env, cluster, node) (up{foundation="true"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "承载应用的机器根分区可用空间不足 10%"
+          runbook: "deploy/observability/docs/troubleshooting.md#机器资源告警"
+  - name: foundation-components
+    rules:
+      - alert: FoundationKafkaRuntimeFailure
+        expr: sum by (env,cluster,namespace,app,kafka_destination,kafka_consumer) (increase(kafka_consumer_runtime_failures_total{foundation="true"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 消费运行时出现故障"
+          runbook: "deploy/observability/docs/troubleshooting.md#组件告警"
+      - alert: FoundationQueueRuntimeFailure
+        expr: sum by (env,cluster,namespace,app,queue_destination,queue_consumer) (increase(queue_consumer_runtime_failures_total{foundation="true"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue 消费运行时出现故障"
+          runbook: "deploy/observability/docs/troubleshooting.md#组件告警"
+      - alert: FoundationJobFailure
+        expr: sum by (env,cluster,namespace,app,exported_job) (increase(job_runs_total{foundation="true",status="failure"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Job 执行失败"
+          runbook: "deploy/observability/docs/troubleshooting.md#组件告警"
+      - alert: FoundationLockRenewalFailure
+        expr: sum by (env,cluster,namespace,app,lock_name,result) (increase(lock_operations_total{foundation="true",operation="refresh",result=~"not_held|error|timeout"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lock 续租失败，需确认任务是否停止受保护操作"
+          runbook: "deploy/observability/docs/troubleshooting.md#组件告警"
+      - alert: FoundationRedisPoolTimeout
+        # SDK 以 Gauge 暴露单调累计的 PoolStats.Timeouts；重建 client 时会归零。
+        expr: sum by (env,cluster,namespace,app,redis_connection,pool_name) (increase(db_client_connections_timeouts{foundation="true",db_system="redis"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis 客户端连接池等待超时"
+          runbook: "deploy/observability/docs/troubleshooting.md#组件告警"
+      - alert: FoundationDatabasePoolSaturated
+        expr: (go_sql_in_use_connections{foundation="true"} / (go_sql_max_open_connections{foundation="true"} > 0)) > 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库实例连接池利用率持续超过 90%"
+          runbook: "deploy/observability/docs/troubleshooting.md#组件告警"
+  - name: foundation-state
+    rules:
+      - alert: FoundationHealthProbeFailed
+        expr: probe_success{foundation_probe="true"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用 readyz 或 healthz 实际 HTTP 探测失败"
+          runbook: "deploy/observability/docs/troubleshooting.md#健康探测与配置状态"
+      - alert: FoundationHealthProbeUnavailable
+        expr: up{foundation_probe="true"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "健康探测结果采集失败，不能判断应用健康"
+          runbook: "deploy/observability/docs/troubleshooting.md#健康探测与配置状态"
+      - alert: FoundationQueueStatsFailed
+        expr: queue_stats_collection_success{foundation="true"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue 状态采集失败，积压数量与年龄不可用"
+          runbook: "deploy/observability/docs/troubleshooting.md#积压与传输指标"
+      - alert: FoundationConfigWatcherStopped
+        expr: foundation_config_watcher_up{foundation="true"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "已接入配置观测的 watcher 停止运行"
+          runbook: "deploy/observability/docs/troubleshooting.md#健康探测与配置状态"
+      - alert: FoundationQueueReadyTooOld
+        expr: max by (env,cluster,namespace,app,queue_destination) (queue_oldest_ready_age_seconds{foundation="true"}) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue 最老就绪任务等待超过 5 分钟"
+          runbook: "deploy/observability/docs/troubleshooting.md#积压与传输指标"
+      - alert: FoundationKafkaLagHigh
+        expr: sum by (env,cluster,kafka_cluster,consumergroup,topic) (max by (env,cluster,kafka_cluster,consumergroup,topic,partition) (kafka_consumergroup_lag{foundation_kafka="true"} >= 0)) > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 消费组 Topic Lag 持续超过 1000"
+          runbook: "deploy/observability/docs/troubleshooting.md#积压与传输指标"

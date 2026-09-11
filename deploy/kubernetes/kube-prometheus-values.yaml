@@ -1,0 +1,19 @@
+# 合并到现有 kube-prometheus-stack 的 values，不能覆盖整个现有配置。
+# env/cluster 必须和应用 ServiceMonitor 一致；Chart 版本由部署项目固定。
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      relabelings:
+        - targetLabel: env
+          replacement: dev
+        - targetLabel: cluster
+          replacement: example-cluster
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+# Grafana dashboard ConfigMap 的 label 与此项一致；按已有 release 调整。
+grafana:
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
