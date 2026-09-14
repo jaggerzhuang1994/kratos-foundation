@@ -238,7 +238,8 @@ flowchart TD
 ## 消费项目迁移经验：auth_service
 
 以下经验来自 2026-09-11 对 auth_service 工作区的审阅（业务基线 `7930c17`，
-Foundation 基线 `7de373d`，两者均含未提交改动）。这是开发期案例，不是发布验收记录；
+初次 Foundation 基线 `7de373d`，后续重新接入 `3286f7783051`）。业务仍含未提交改动，
+且业务服务注册由维护者有意注释以进行框架联调；这不是迁移缺陷。这是开发期案例，不是发布验收记录；
 `require v2.0.0` 配合本地 `replace` 只能说明声明版本，不能证明正在运行已发布的 v2.0.0。
 
 ### 先确认实际依赖，再整理迁移改动
@@ -264,24 +265,25 @@ go version -m ./tools/protoc-gen-jsonschema
 由使用变量的 recipe 负责引用路径。
 
 本地 Foundation 增加依赖后，消费项目也要重新整理依赖。本次原工作区定向测试在编译前报告
-`compose-go/v2/template` 缺少 `go.sum` 条目；应在消费项目执行 `go mod tidy` 并审阅差异，
+`compose-go/v2/template` 缺少 `go.sum` 条目；后续接入已在消费项目执行 `go mod tidy` 补齐。
+遇到同类问题应执行 tidy 并审阅差异，
 不要按报错提示直接依赖 Foundation 的 `internal` 包，也不要手改 `go.sum`。
 发布前移除绝对路径 replace，固定运行库、各生成器和公共脚本的实际版本，再在干净 checkout 验证。
 
 ### Wire 成功不代表业务服务已登记
 
 本例已采用 `ConsulBaseProviderSet`、单一 `bootstrap.Spec` 和统一组件构造，
-但审阅时 `cmd/auth_service/bootstrap.go` 的 Auth HTTP、Auth gRPC、RBAC gRPC 注册调用均被注释，
+维护者有意将 `cmd/auth_service/bootstrap.go` 的 Auth HTTP、Auth gRPC、RBAC gRPC 注册调用注释用于框架联调，
 对应服务参数也被移除。`wire_gen.go` 因此没有构造 AuthService、RbacService 及其业务依赖。
 ProviderSet 列出了构造函数，并不表示 Wire 一定执行它们。
 
-迁移检查应同时覆盖以下三个层次：
+业务服务被有意关闭时，以下检查属于将来启用服务的验收，不要求恢复当前注释。启用时同时覆盖三个层次：
 
 - 编译图：业务 Bootstrap 显式接收实际服务，生成的 Wire 包含所需业务和资源构造及 cleanup。
 - 注册图：HTTP/gRPC 注册回调实际调用生成的 `RegisterXxx`；空回调只能证明组件被选择。
 - 运行契约：用真实业务 HTTP 路由和 gRPC 方法请求验证成功与失败响应，不能只检查监听端口或健康探针。
 
-恢复业务登记应修改 Bootstrap/Wire 源并重新生成，不直接修改 `wire_gen.go`。
+将来恢复业务登记时应修改 Bootstrap/Wire 源并重新生成，不直接修改 `wire_gen.go`。
 演示 Job、调试生命周期输出和日志全局设置应单独核对是否属于应用需求，不能作为迁移模板照搬。
 Registrar 与 Job Coordinator 由 Wire 构造注入，细节见 [Bootstrap 文档](pkg/bootstrap/README.md)。
 
@@ -349,7 +351,9 @@ flowchart TD
     D -- 否 --> E[记录命令错误 修正来源或生成配置]
     E --> B
     D -- 是 --> F{Wire 包含业务构造且回调登记实际服务?}
-    F -- 否 --> G[恢复业务依赖和登记 重新生成]
+    F -- 否 --> O{本次是否计划启用业务服务?}
+    O -- 否 --> P([记录框架联调结果 保留业务关闭状态])
+    O -- 是 --> G[恢复业务依赖和登记 重新生成]
     G --> C
     F -- 是 --> H[验证文件覆盖 错误传输和业务单测]
     H --> I[隔离环境连接 Consul MySQL Redis]
@@ -362,9 +366,9 @@ flowchart TD
 ```
 
 图中记录节点是验收动作，不表示框架新增日志或自动回退。
-本例暴露的未完成项包括业务注册被注释、消费项目依赖清单落后于本地 Foundation、
-运行库和工具来源含本机路径，以及 README 对当前协议目录、插件来源和服务登记的描述漂移。
-应以当前源码和生成图为准，把这些项关闭后再宣告迁移完成。
+后续接入已整理消费项目依赖，将运行库和插件路径改为一致的相对目录，并同步 README 的协议目录、
+插件来源和服务登记说明。业务注册被注释是维护者的明确选择，保留该状态。
+当前仍是本地源码接入；发布版本固定、外部配置与真实业务互通验收应在对应发布阶段完成。
 
 
 ## 持久化任务队列与 Kafka 分离

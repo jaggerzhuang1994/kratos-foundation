@@ -70,6 +70,42 @@ func TestAESFieldValueTypesResetNilAndRejectWrongInputs(t *testing.T) {
 	}
 }
 
+func TestAESFieldValueTypesSkipEmptyDecryption(t *testing.T) {
+	field := &schema.Field{Name: "Secret"}
+	contexts := []struct {
+		name string
+		ctx  context.Context
+	}{
+		{name: "without cipher", ctx: context.Background()},
+		{name: "with cipher", ctx: context.WithValue(context.Background(), aesFieldContextKey{}, aesFieldState{
+			connection: "primary", cipher: mustAESFieldCipher(t),
+		})},
+	}
+	for _, state := range contexts {
+		t.Run(state.name, func(t *testing.T) {
+			for _, input := range []struct {
+				name  string
+				value any
+			}{
+				{name: "empty string", value: ""},
+				{name: "empty bytes", value: []byte{}},
+				{name: "nil bytes", value: []byte(nil)},
+			} {
+				t.Run(input.name, func(t *testing.T) {
+					text := AESDecryptString("previous")
+					if err := text.Scan(state.ctx, field, reflect.Value{}, input.value); err != nil || text != "" {
+						t.Fatalf("string Scan = %q, %v", text, err)
+					}
+					binary := AESDecryptBytes("previous")
+					if err := binary.Scan(state.ctx, field, reflect.Value{}, input.value); err != nil || len(binary) != 0 {
+						t.Fatalf("bytes Scan = %v, %v", binary, err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func mustAESFieldCipher(t testing.TB) *aesFieldCipher {
 	t.Helper()
 	key := "MDEyMzQ1Njc4OWFiY2RlZg=="

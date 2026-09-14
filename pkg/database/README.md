@@ -95,6 +95,25 @@ flowchart TD
 
 Model 使用 `AESDecryptString` / `AESDecryptBytes` 声明加密字段。普通结构体写入由 serializer 加密；`Model(...).Create` 或 `Updates` 使用 map 时，插件按 Model 字段信息包装原生 serializer，在 SQL 绑定时加密，包括 `[]map[string]any` 及指针包装。插件复制 map 与批量切片，不向调用方原值写回密文或自增 ID。批量副本使用 GORM RETURNING 支持的切片指针形态，兼容自增主键及显式 Returning。Updates 保留 Model 的主键反射和明文回写，Returning 按 AES 字段类型解密。读取使用当前连接的 key 解密；缺少 key 的 AES 字段写入返回 `ErrAESConfigMissing`，不会把该批数据写入数据库。
 
+读取时，数据库值为 `NULL`、空字符串或长度为 0 的字节切片（含 `[]byte(nil)`）会跳过密钥读取和解密，并将 `AESDecryptString` 清为 `""`、`AESDecryptBytes` 清为 `nil`。非空值仍须使用当前连接的 key 解密；空值写入仍走原有加密流程。
+
+```mermaid
+flowchart TD
+    A([Scan 开始]) --> B{数据库值为 NULL?}
+    B -- 是 --> C[清空接收字段]
+    B -- 否 --> D{值为 string 或字节切片?}
+    D -- 否 --> E([返回类型错误])
+    D -- 是 --> F{长度为 0?}
+    F -- 是 --> C
+    C --> G([成功返回])
+    F -- 否 --> H[读取当前连接的 AES 配置]
+    H -- 缺失 --> I([返回配置错误])
+    H -- 成功 --> J[解密]
+    J -- 失败 --> K([返回解密错误])
+    J -- 成功 --> L[以明文更新接收字段]
+    L --> G
+```
+
 map 操作须提供含 AES 字段定义的 `Model`。`Table`、原始 SQL 和 SQL 表达式不能替代 Model 的字段加密契约；对 AES 字段使用表达式会被拒绝，原始 SQL 的参数由调用方负责加密。
 
 ```mermaid

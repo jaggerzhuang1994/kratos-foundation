@@ -59,6 +59,11 @@ func (value *AESDecryptString) Scan(
 	default:
 		return fmt.Errorf("decrypt database field %s: unexpected database type %T", field.Name, dbValue)
 	}
+	// 空字段无需密钥或解密，同时清除接收对象可能残留的旧值。
+	if len(encrypted) == 0 {
+		*value = ""
+		return nil
+	}
 	fieldCipher, err := aesFieldCipherFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("decrypt database field %s: %w", field.Name, err)
@@ -120,6 +125,11 @@ func (value *AESDecryptBytes) Scan(
 		encrypted = []byte(dbValue)
 	default:
 		return fmt.Errorf("decrypt database field %s: unexpected database type %T", field.Name, dbValue)
+	}
+	// 空字段无需密钥或解密，同时清除接收对象可能残留的旧值。
+	if len(encrypted) == 0 {
+		*value = nil
+		return nil
 	}
 	fieldCipher, err := aesFieldCipherFromContext(ctx)
 	if err != nil {
