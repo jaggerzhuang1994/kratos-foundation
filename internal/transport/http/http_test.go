@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	kratoserrors "github.com/go-kratos/kratos/v2/errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -135,3 +137,31 @@ func (b *countingErrorBody) Read(p []byte) (int, error) {
 }
 
 func (b *countingErrorBody) Close() error { b.closed = true; return nil }
+
+func TestEncoderPreservesLegacyExplicitStatuses(t *testing.T) {
+	for _, code := range []int{422, 503} {
+		t.Run(strconv.Itoa(code), func(t *testing.T) {
+			// Kratos 状态访问器与旧 cyberkite 错误具有相同契约。
+			legacy := kratoserrors.New(code, "LEGACY", "safe message").WithMetadata(map[string]string{"reason_code": "1234", "http_data": `{"id":9007199254740993}`, "http_header": `{"Retry-After":"7"}`, "err_stack": "private-stack"})
+			recorder := httptest.NewRecorder()
+			Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), fmt.Errorf("wrapped: %w", legacy))
+			body := recorder.Body.String()
+			if recorder.Code != code || recorder.Header().Get("Retry-After") != "7" || !strings.Contains(body, `"code":1234`) || !strings.Contains(body, `9007199254740993`) || !strings.Contains(body, `"reason":"LEGACY"`) || strings.Contains(body, "private") {
+				t.Fatalf("code=%d header=%v body=%s", recorder.Code, recorder.Header(), body)
+			}
+		})
+	}
+}
+
+func TestGatewayFiltersDiagnosticsReceivedOverGRPC(t *testing.T) {
+	origin := foundationerrors.New(500, "INTERNAL", "internal error").WithMetadata(map[string]string{"err_stack": "private-origin-frame"}).WithCause(errors.New("private-database-cause"))
+	remote := origin.GRPCStatus().Err()
+	if !strings.Contains(foundationerrors.ErrStack(remote), "private-origin-frame") || !strings.Contains(foundationerrors.ErrStack(remote), "private-database-cause") {
+		t.Fatal("gateway did not receive complete diagnostics")
+	}
+	recorder := httptest.NewRecorder()
+	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), remote)
+	if recorder.Code != 500 || strings.Contains(recorder.Body.String(), "private-") || strings.Contains(recorder.Body.String(), "err_stack") {
+		t.Fatalf("gateway exposed diagnostics: %s", recorder.Body.String())
+	}
+}

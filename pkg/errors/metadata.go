@@ -9,6 +9,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/status"
 )
 
 // PublicMetadata 返回可对外暴露的元数据副本，并过滤框架私有字段。
@@ -30,6 +33,7 @@ func (e *Error) PublicMetadata() map[string]string {
 func isPrivateMetadata(key string) bool {
 	switch key {
 	case mdErrStackKey,
+		mdLegacyHTTPHeaderKey,
 		mdReasonCodeKey,
 		mdHTTPCodeKey,
 		mdHTTPDataKey,
@@ -70,7 +74,7 @@ func (e *Error) ErrStack() string {
 		_, _ = fmt.Fprintf(&b, "%s\n", e.Metadata[mdErrStackKey])
 	}
 	if e.cause != nil {
-		_, _ = fmt.Fprintf(&b, "Cause by: %+v", e.cause)
+		_, _ = fmt.Fprintf(&b, "Cause by: %s", causeDiagnostics(e.cause, b.String()))
 	}
 	return b.String()
 }
@@ -209,4 +213,41 @@ func HTTPHeaders(err error) http.Header {
 		return http.Header{}
 	}
 	return FromError(err).HTTPHeaders()
+}
+
+// causeDiagnostics 展开包装链中的远端诊断，避免普通 %w 包装丢失 gRPC details。
+// 已出现在上层诊断中的内容不再追加，防止透明转发时重复堆叠远端栈。
+func causeDiagnostics(err error, known string) string {
+	text := fmt.Sprintf("%+v", err)
+	appendDiagnostic := func(value string) {
+		if value != "" && !strings.Contains(known, value) && !strings.Contains(text, value) {
+			text += "\n" + value
+		}
+	}
+	if local, ok := err.(statusError); ok {
+		appendDiagnostic(local.GetMetadata()[mdErrStackKey])
+	} else if remote, ok := err.(interface{ GRPCStatus() *status.Status }); ok {
+		if state := remote.GRPCStatus(); state != nil {
+			for _, detail := range state.Details() {
+				if info, ok := detail.(*errdetails.ErrorInfo); ok {
+					appendDiagnostic(info.Metadata[mdErrStackKey])
+				}
+			}
+		}
+	}
+	// Foundation 自身的格式器已递归展开 cause，不重复遍历。
+	if _, ok := err.(*Error); ok {
+		return text
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok && wrapped.Unwrap() != nil {
+		appendDiagnostic(causeDiagnostics(wrapped.Unwrap(), known+text))
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range joined.Unwrap() {
+			if child != nil {
+				appendDiagnostic(causeDiagnostics(child, known+text))
+			}
+		}
+	}
+	return text
 }

@@ -51,9 +51,18 @@ reasonCode := errors.ReasonCode(err)
 
 `FromError` 的处理顺序是：
 
-1. 从错误链中查找本包的 `*Error`；
+1. 按由外到内的顺序查找明确状态，直接读取本包错误或实现 `GetCode/GetReason/GetMessage/GetMetadata` 的本地错误；
 2. 尝试恢复 gRPC status 及 `ErrorInfo`；
-3. 其他错误转换为 500/UNKNOWN，并把原错误文本作为消息。
+3. 其他错误转换为 500/UNKNOWN，并把原错误文本作为诊断消息。
+
+服务端出口使用 `Normalize(err)`，再交给 HTTP/gRPC 编码器。它保留明确结构化错误的 HTTP 状态、reason 和业务码，
+将无结构化信息的未知服务端故障转换为安全的 500/UNKNOWN，原始错误仅存于本地 cause。调用取消返回 499，截止时间超限返回 504；
+已明确设置的外层业务状态不会被内部 cause 覆盖。`Normalize(nil)` 返回 nil。`FromError` 是诊断读取 API，不能单独用来保证未知错误的公开消息安全。
+
+旧 `cyberkite_pb` 错误无需更换依赖即可在发送端适配：422 直接从本地状态读取，然后由 Foundation 序列化携带 `http_code=422`。
+旧 `http_data` 使用原始 JSON 恢复以保留大整数精度，旧 `http_header` 映射到 HTTP 响应头；metadata 会复制，原错误不被修改。
+旧堆栈和 cause 诊断通过服务间 gRPC details 的 `err_stack` 保留，接收端可继续包装和转发；HTTP metadata 仍过滤堆栈，gRPC 不转发响应头。如果旧发送端已经将 422 丢失成 gRPC Unknown，
+且没有携带 `http_code`，接收端无法恢复；不能用独立业务码 `reason_code` 猜测 HTTP 状态。
 
 本包的状态错误使用 HTTP 状态码和 reason 参与 `errors.Is` 匹配。底层 cause 仍可通过 `errors.Is` 和 `errors.As` 访问。
 
@@ -89,7 +98,7 @@ WithValidationError(validationErrors)
 ## 日志与公开信息
 
 - `Error()`、`%s` 和 `%v` 只输出公开状态与公开 metadata。
-- `%+v` 和 `ErrStack` 会包含调用栈及底层 cause，只能写入受控的内部日志。
+- `%+v` 和 `ErrStack` 会包含调用栈及底层 cause，可用于受控内部日志和服务间 gRPC 诊断，必须在网关公开出口屏蔽。
 - `message`、HTTP data、validation error 和普通 metadata 都可能离开进程，必须在创建错误时完成脱敏。
 - 底层包应返回带 `%w` 的原因错误；决定 HTTP/gRPC 呈现的边界层再创建本包状态错误。
 
@@ -97,7 +106,7 @@ WithValidationError(validationErrors)
 
 可 JSON 编码的 `WithHTTPData` 快照通过 `ErrorInfo.Metadata` 的私有 `http_data` 字段传输，
 `FromError` 恢复后可继续供 HTTP 网关编码或再次经 gRPC 转发。数字保留为 `json.Number`；
-栈和 HTTP headers 不随之传输。不可编码的数据或损坏的远端 JSON 会被省略，错误身份保持不变。
+栈通过独立私有 `err_stack` 字段传输，HTTP headers 不随之传输。不可编码的数据或损坏的远端 JSON 会被省略，错误身份保持不变。
 
 ```mermaid
 flowchart LR
@@ -109,4 +118,20 @@ flowchart LR
  E -- 否 --> D
  F --> G[HTTP 网关编码或 gRPC 再次转发]
  D --> H[返回无 data 的错误]
+```
+
+### 服务间堆栈与网关出口
+
+`GRPCStatus` 将 `ErrStack()` 的诊断文本写入 `ErrorInfo.Metadata["err_stack"]`；`FromError` 保留收到的堆栈。业务通过 `WithCause(err)` 或 `%w` 包装后，后续发送仍包含远端栈、本地已有栈和 cause 文本。普通转发不主动采集新的调用栈；需要定位新增失败阶段时使用 `WithErrStack`。Go 错误对象及 `errors.Is/As` 身份仅在本进程内有效，网络上传输的是诊断文本。
+
+网关先用 `errors.ErrStack(err)` 或 `%+v` 记录内部诊断，再使用 Foundation HTTP Encoder 输出公开错误，它会通过 `PublicMetadata` 过滤 `err_stack`。如果网关对外提供 gRPC，需要在该出口过滤 ErrorInfo 中的 `err_stack`；不能把内部 gRPC status 原样返回公网客户端。本次只修改 Foundation，不代表外部网关已完成改造。
+
+```mermaid
+flowchart LR
+ A[服务 A: 原始栈与 cause] --> B[gRPC details: err_stack]
+ B --> C[服务 B: 恢复并包装错误]
+ C --> D[gRPC details: 累积诊断]
+ D --> E[网关: 记录完整诊断]
+ E --> F[公开出口: 过滤 err_stack]
+ F --> G[客户端: 公开状态与业务数据]
 ```

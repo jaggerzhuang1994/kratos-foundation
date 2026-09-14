@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"encoding/json"
-	stderrors "errors"
 	"fmt"
 	"io"
 	nethttp "net/http"
@@ -23,14 +22,9 @@ type errResponse struct {
 // Encoder 返回标准 HTTP 服务端错误编码器；调用方必须显式挂载，不修改全局行为。
 func Encoder() kratoshttp.EncodeErrorFunc {
 	return func(w nethttp.ResponseWriter, r *nethttp.Request, err error) {
-		se := errors.FromError(err)
-		var explicit *errors.Error
-		if se == nil || (se.Code >= nethttp.StatusInternalServerError && !stderrors.As(err, &explicit)) {
-			se = errors.New(
-				nethttp.StatusInternalServerError,
-				"UNKNOWN",
-				nethttp.StatusText(nethttp.StatusInternalServerError),
-			)
+		se := errors.FromError(errors.Normalize(err))
+		if se == nil {
+			se = errors.New(nethttp.StatusInternalServerError, "UNKNOWN", nethttp.StatusText(nethttp.StatusInternalServerError))
 		}
 		for k, vv := range se.HTTPHeaders() {
 			for _, v := range vv {

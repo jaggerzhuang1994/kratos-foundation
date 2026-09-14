@@ -106,8 +106,8 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 	if !proto.Equal(policies.current, next) {
 		t.Fatalf("current middleware = %v, want %v", policies.current, next)
 	}
-	if got := len(newMiddlewares(policies)); got != 8 {
-		t.Fatalf("newMiddlewares() length = %d, want 8", got)
+	if got := len(newMiddlewares(policies)); got != 9 {
+		t.Fatalf("newMiddlewares() length = %d, want 9", got)
 	}
 
 	accepted := proto.CloneOf(policies.current)

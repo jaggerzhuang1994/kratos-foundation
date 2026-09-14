@@ -27,6 +27,7 @@ import (
 // 订阅、但该字段实际不生效」这种只看日志无法察觉的情况；具体某次更新只重建其中
 // 确实发生变化的项。
 type middlewarePolicies struct {
+	logger    log.Logger
 	deadline  *deadline.Store
 	metadata  *dynamicMiddleware
 	tracing   *dynamicMiddleware
@@ -71,6 +72,7 @@ func newMiddlewarePolicies(
 		return nil, nil, err
 	}
 	policies := &middlewarePolicies{
+		logger:    logger,
 		deadline:  deadlineStore,
 		metadata:  newDynamicMiddleware(built.metadata),
 		tracing:   newDynamicMiddleware(built.tracing),

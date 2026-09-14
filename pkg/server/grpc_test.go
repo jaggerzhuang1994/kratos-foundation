@@ -2,8 +2,13 @@ package server
 
 import (
 	"context"
+	"errors"
+	kratoserrors "github.com/go-kratos/kratos/v2/errors"
+	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"net"
 	"net/url"
+	"strings"
 	"testing"
 
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
@@ -36,7 +41,7 @@ func TestIntegrationGRPCServices(t *testing.T) {
 	// 内存 listener 没有 TCP 端口，显式 endpoint 避免运行时尝试推导地址。
 	spec.GRPC().Option(kratosgrpc.Listener(listener), kratosgrpc.CustomHealth(),
 		kratosgrpc.Endpoint(&url.URL{Scheme: "grpc", Host: "integration"})).Register(func(srv GRPCServer) error {
-		healthpb.RegisterHealthServer(srv, service)
+		healthpb.RegisterHealthServer(srv, &legacyHealthServer{Server: service})
 		return nil
 	})
 	runtime, cleanup, err := NewRuntime(testconfig.Empty(t), newRuntimeTestLogger(t),
@@ -82,6 +87,23 @@ func TestIntegrationGRPCServices(t *testing.T) {
 		}
 	})
 	client := healthpb.NewHealthClient(connection)
+	ctx, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+	defer cancel()
+	_, legacyErr := client.Check(ctx, &healthpb.HealthCheckRequest{Service: "legacy-validator"})
+	restored := foundationerrors.FromError(legacyErr)
+	if restored.Code != 422 || restored.ReasonCode() != 42201 || !strings.Contains(restored.ErrStack(), "private-stack") {
+		t.Fatalf("legacy error roundtrip: %+v", restored)
+	}
+	for _, detail := range status.Convert(legacyErr).Details() {
+		if info, ok := detail.(*errdetails.ErrorInfo); ok && !strings.Contains(info.Metadata["err_stack"], "private-stack") {
+			t.Fatal("legacy stack lost over gRPC")
+		}
+	}
+	_, unknownErr := client.Check(ctx, &healthpb.HealthCheckRequest{Service: "database-failure"})
+	if status.Code(unknownErr) != codes.Internal || strings.Contains(unknownErr.Error(), "private-query") {
+		t.Fatalf("unsafe unknown error: %v", unknownErr)
+	}
+
 	for _, test := range []struct {
 		name, service string
 		canceled      bool
@@ -108,4 +130,31 @@ func TestIntegrationGRPCServices(t *testing.T) {
 			}
 		})
 	}
+}
+
+// legacyHealthServer 通过真实服务分发验证旧错误在离开进程前完成归一化。
+type legacyHealthServer struct{ *health.Server }
+
+func (s *legacyHealthServer) Check(ctx context.Context, req *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
+	switch req.Service {
+	case "legacy-validator":
+		return nil, &legacyRPCError{Status: kratoserrors.Status{Code: 422, Reason: "VALIDATOR", Message: "invalid request", Metadata: map[string]string{"reason_code": "42201", "err_stack": "private-stack"}}}
+	case "database-failure":
+		return nil, errors.New("private-query failed")
+	default:
+		return s.Server.Check(ctx, req)
+	}
+}
+
+// legacyRPCError 模拟旧 cyberkite 错误的状态访问器与未经保护的 gRPC 编码方式。
+type legacyRPCError struct{ kratoserrors.Status }
+
+func (e *legacyRPCError) Error() string { return e.Message }
+
+func (e *legacyRPCError) GRPCStatus() *status.Status {
+	result, err := status.New(codes.Unknown, e.Message).WithDetails(&errdetails.ErrorInfo{Reason: e.Reason, Metadata: e.Metadata})
+	if err != nil {
+		panic(err)
+	}
+	return result
 }

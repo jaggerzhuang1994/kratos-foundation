@@ -333,7 +333,7 @@ WebAuthn 撤销凭证错误携带 `rpId` 和 `credentialId`，调用方依赖这
 当前 Foundation 的 [gRPC 错误实现](pkg/errors/grpc.go) 已携带并恢复可 JSON 编码的 HTTPData，
 相关契约位于 [gRPC 错误测试](pkg/errors/grpc_test.go)；发布版本需要包含该行为。
 此单测覆盖 status 编解码，不代表真实网络和网关链路已经通过；还需实际 gRPC→HTTP 互通验收。
-不要要求内部错误栈、cause 或响应头同样跨网络保留。
+服务间 gRPC 保留错误栈和 cause 的诊断文本，Go cause 对象及 sentinel 身份不能跨网络恢复，HTTP 响应头不转发。
 
 Redis 迁移除 `Manager.Default()` / `Connection(name)` 外，还应将缺失键判断迁到
 `github.com/redis/go-redis/v9` 的 `Nil`，继续使用 `errors.Is`。
@@ -421,3 +421,10 @@ flowchart TD
     G -- 否 --> E
     G -- 是 --> H([完成迁移])
 ```
+
+
+### 旧 cyberkite 错误的运行期兼容
+
+新版 `errors.FromError` 可直接读取旧结构化错误的 Code/Reason/Message/Metadata，旧 422 不再先经 gRPC Unknown 丢失为 500。Server 默认常驻错误边界与 HTTP Encoder 使用 `errors.Normalize`，发送 gRPC 时保留 `http_code`、`err_stack` 及 cause 诊断文本，过滤响应头。普通未知故障的公开消息统一安全兜底；网关记录诊断后在公开出口过滤堆栈。
+
+尚未升级的发送端若已经丢失 HTTP 状态，接收端仍不能从 reason_code 推断原状态；应升级发送端。业务应去除返回错误处重复日志，保留原因链。默认访问日志不再记录 args/完整堆栈，关闭访问摘要仍保留服务端错误日志；该变化的流程与配置边界见 [Server 错误边界](pkg/server/README.md#请求错误边界与安全日志)。

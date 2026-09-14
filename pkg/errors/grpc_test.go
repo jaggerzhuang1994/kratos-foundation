@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	kratoserrors "github.com/go-kratos/kratos/v2/errors"
@@ -158,8 +159,8 @@ func TestGRPCStatusRoundTripPreservesHTTPData(t *testing.T) {
 	if _, ok := restored.PublicMetadata()[mdHTTPDataKey]; ok {
 		t.Fatal("HTTP data leaked into public metadata")
 	}
-	if restored.ErrStack() != "" {
-		t.Fatal("error stack crossed gRPC")
+	if restored.ErrStack() == "" {
+		t.Fatal("error stack lost across gRPC")
 	}
 	restored.HTTPData().(map[string]any)["rpId"] = "changed"
 	if got := restored.HTTPData().(map[string]any)["rpId"]; got != "example.com" {
@@ -188,5 +189,26 @@ func TestFromErrorIgnoresMalformedHTTPData(t *testing.T) {
 	invalid := New(400, "INVALID", "invalid").WithHTTPData(make(chan int))
 	if got := FromError(invalid.GRPCStatus().Err()); got.HTTPData() != nil || got.Reason != "INVALID" {
 		t.Fatalf("unencodable data changed error: %v", got)
+	}
+}
+
+func TestStackSurvivesMultipleServicesAndCauseWrapping(t *testing.T) {
+	origin := New(500, "INTERNAL", "internal error").WithMetadata(map[string]string{"err_stack": "origin-frame"}).WithCause(fmt.Errorf("database root cause"))
+	remote := origin.GRPCStatus().Err()
+	middle := New(503, "DEPENDENCY", "dependency unavailable").WithMetadata(map[string]string{"err_stack": "middle-frame"}).WithCause(fmt.Errorf("call account service: %w", remote))
+	gateway := FromError(middle.GRPCStatus().Err())
+	for _, want := range []string{"origin-frame", "middle-frame", "database root cause", "call account service"} {
+		if !strings.Contains(gateway.ErrStack(), want) {
+			t.Fatalf("lost %q: %s", want, gateway.ErrStack())
+		}
+	}
+	for range 3 {
+		gateway = FromError(status.Convert(Normalize(gateway.GRPCStatus().Err())).Err())
+	}
+	if strings.Count(gateway.ErrStack(), "origin-frame") != 1 {
+		t.Fatalf("forwarding duplicated origin stack: %s", gateway.ErrStack())
+	}
+	if strings.Contains(fmt.Sprint(gateway.PublicMetadata()), "origin-frame") || strings.Contains(gateway.Error(), "database root cause") {
+		t.Fatal("diagnostics exposed through public representation")
 	}
 }

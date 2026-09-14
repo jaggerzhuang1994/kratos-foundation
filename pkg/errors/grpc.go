@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// grpcMetadata 只加入跨 gRPC 边界仍有业务意义的私有字段，并携带原始 HTTP 状态码。
+// grpcMetadata 为服务间调用保留业务状态和完整诊断，公开出口由网关过滤。
 func (e *Error) grpcMetadata() map[string]string {
 	md := e.PublicMetadata()
 	if md == nil {
@@ -26,7 +26,11 @@ func (e *Error) grpcMetadata() map[string]string {
 	}
 	// 必须以状态字段为准，避免调用方通过同名 metadata 伪造传输状态码。
 	md[mdHTTPCodeKey] = strconv.FormatInt(int64(e.Code), 10)
-	// HTTP 网关需要跨 gRPC 恢复业务 data；仅发送可编码的快照，不发送栈和响应头。
+	// 堆栈包含本地 cause 诊断，接收端可继续包装并转发；HTTP 响应头不随之传输。
+	if stack := e.ErrStack(); stack != "" {
+		md[mdErrStackKey] = stack
+	}
+	// HTTP 网关需要跨 gRPC 恢复业务 data，仅发送可编码的快照。
 	if e.httpData != nil {
 		encoded, err := json.Marshal(e.httpData)
 		if err == nil {
@@ -51,7 +55,7 @@ func FromError(err error) *Error {
 	if err == nil {
 		return nil
 	}
-	if se := new(Error); errors.As(err, &se) {
+	if se := localStatus(err); se != nil {
 		return se
 	}
 	gs, ok := status.FromError(err)
@@ -69,6 +73,9 @@ func FromError(err error) *Error {
 			ret.Reason = d.Reason
 			ret.Code = restoreUnknownHTTPCode(gs.Code(), d.Metadata, ret.Code)
 			ret = ret.WithMetadata(d.Metadata)
+			// 保留远端堆栈供内部日志和后续转发，仅清除响应头。
+			delete(ret.Metadata, mdHTTPHeadersKey)
+			delete(ret.Metadata, mdLegacyHTTPHeaderKey)
 			// UseNumber 保留大整数精度；无效远端 data 不影响原有错误码和 reason。
 			raw := d.Metadata[mdHTTPDataKey]
 			if json.Valid([]byte(raw)) {

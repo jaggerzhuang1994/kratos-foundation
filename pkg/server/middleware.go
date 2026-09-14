@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"github.com/go-kratos/kratos/v2/middleware"
-	"github.com/go-kratos/kratos/v2/middleware/recovery"
 	deadlinemiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/deadline"
 )
 
@@ -48,7 +47,7 @@ func newMiddlewares(policies *middlewarePolicies) middlewareSet {
 		{
 			Name:       "recovery",
 			Priority:   MiddlewarePriorityRecovery,
-			Middleware: recovery.Recovery(),
+			Middleware: recoverRequests(policies.logger),
 		},
 		{
 			Name:       "deadline",
@@ -69,6 +68,11 @@ func newMiddlewares(policies *middlewarePolicies) middlewareSet {
 			Name:       "metrics",
 			Priority:   MiddlewarePriorityMetrics,
 			Middleware: policies.metrics.Middleware(),
+		},
+		{
+			Name:       "errors",
+			Priority:   MiddlewarePriorityMetrics + 50,
+			Middleware: normalizeErrors(policies.logger),
 		},
 		{
 			Name:       "logging",

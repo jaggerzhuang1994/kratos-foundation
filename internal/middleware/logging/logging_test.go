@@ -176,3 +176,28 @@ func newTestLogger(t *testing.T) (foundationlog.Logger, string) {
 	t.Cleanup(cleanup)
 	return shared, path
 }
+
+// sensitiveRequest 的 String 不应被日志调用，防止完整认证材料被格式化。
+type sensitiveRequest struct{}
+
+func (sensitiveRequest) String() string { panic("request must not be formatted") }
+
+func TestAccessLogsOmitBodiesAndErrorDetails(t *testing.T) {
+	logger, path := newTestLogger(t)
+	for _, wrap := range []middleware.Middleware{Server(logger, nil), Client(logger, nil)} {
+		_, err := wrap(func(context.Context, any) (any, error) { return sensitiveRequest{}, errors.New("private-error-secret") })(context.Background(), sensitiveRequest{})
+		if err == nil {
+			t.Fatal("handler error lost")
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "private-error-secret") || strings.Contains(string(data), "args=") || strings.Contains(string(data), "stack=") {
+		t.Fatalf("access log disclosed details: %s", data)
+	}
+	if !strings.Contains(string(data), "code=500") {
+		t.Fatalf("status missing: %s", data)
+	}
+}

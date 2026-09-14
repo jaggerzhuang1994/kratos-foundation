@@ -6,10 +6,11 @@ import (
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware"
-	"github.com/go-kratos/kratos/v2/middleware/logging"
+	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/gorilla/websocket"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
+	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
@@ -23,7 +24,7 @@ func Server(log log.Logger, config Config) middleware.Middleware {
 		return nil
 	}
 
-	m := logging.Server(withDeadlineFields(log))
+	m := accessLog(withDeadlineFields(log), false)
 
 	return func(handler middleware.Handler) middleware.Handler {
 		logHandler := m(handler)
@@ -43,7 +44,7 @@ func Client(log log.Logger, config Config) middleware.Middleware {
 	if config.GetDisable() {
 		return nil
 	}
-	return logging.Client(withDeadlineFields(log))
+	return accessLog(withDeadlineFields(log), true)
 }
 
 // withDeadlineFields 为访问日志补充实际预算来源与关键时长。
@@ -86,5 +87,34 @@ func deadlineDuration(value func(deadline.Info) time.Duration) kratoslog.Valuer 
 			return nil
 		}
 		return value(info).Milliseconds()
+	}
+}
+
+// accessLog 只记录请求结果摘要，不读取请求或响应正文，也不重复输出错误堆栈。
+// 完整服务端故障由常驻错误边界记录，关闭访问日志不会关闭故障诊断。
+func accessLog(logger log.Logger, client bool) middleware.Middleware {
+	return func(next middleware.Handler) middleware.Handler {
+		return func(ctx context.Context, req any) (any, error) {
+			started := time.Now()
+			reply, err := next(ctx, req)
+			kind := "server"
+			info, ok := transport.FromServerContext(ctx)
+			if client {
+				kind = "client"
+				info, ok = transport.FromClientContext(ctx)
+			}
+			var operation, component string
+			if ok {
+				operation = info.Operation()
+				component = info.Kind().String()
+			}
+			logger.WithContext(ctx).Infow(
+				"msg", "accessLog | request.complete",
+				"kind", kind, "component", component, "operation", operation,
+				"code", foundationerrors.Code(foundationerrors.Normalize(err)), "reason", foundationerrors.Reason(err),
+				"latency", time.Since(started).Seconds(),
+			)
+			return reply, err
+		}
 	}
 }
