@@ -176,6 +176,9 @@ flowchart TD
 
 完整字段按 preset、进程共享 KV、派生 Logger KV、Context KV、本次调用字段合并。普通字符串 key 后值覆盖前值，保留第一次出现的位置；非字符串 key 不参与去重。根过滤与去重之后，各输出端继续执行自己的字段和级别过滤。
 
+输出字段固定按 `ts → module → caller → 其余 KV` 展示；其余字段保留原来的相对顺序。
+`ts` 或 `caller` 被过滤时直接省略，`module` 仍保留。
+
 `module` 是保留字段，使用以下独立规则：
 
 - 每条实际输出恰好包含一个非空且没有首尾空白的字符串 module；未指定时为 `unknown`。

@@ -608,7 +608,7 @@ func TestLoggerConcurrentWritesAndSharedUpdates(t *testing.T) {
 	}
 	for writer := range writers {
 		for entry := range entries {
-			if count := strings.Count(string(data), fmt.Sprintf("entry=%d:%d module=unknown\n", writer, entry)); count != 1 {
+			if count := strings.Count(string(data), fmt.Sprintf("entry=%d:%d\n", writer, entry)); count != 1 {
 				t.Fatalf("entry %d:%d count=%d", writer, entry, count)
 			}
 		}
@@ -980,6 +980,30 @@ func TestModuleOwnershipAndOutputFilters(t *testing.T) {
 			}
 			if strings.Count(string(data), "module=") != 1 || !strings.Contains(string(data), "module="+test.want) {
 				t.Fatalf("unexpected output: %s", data)
+			}
+		})
+	}
+}
+
+func TestLoggerDisplaysModuleBetweenTimestampAndCaller(t *testing.T) {
+	for _, module := range []string{"", "orders"} {
+		t.Run(module, func(t *testing.T) {
+			var buffer bytes.Buffer
+			shared := &sharedState{}
+			shared.custom.Store(&customState{})
+			base := &logger{shared: shared, config: &configState{
+				output: kratoslog.NewStdLogger(&buffer), level: kratoslog.LevelInfo, msgKey: defaultMsgKey,
+			}}
+			var view Logger = base
+			wantModule := "unknown"
+			if module != "" {
+				view = base.WithModule(module)
+				wantModule = module
+			}
+			view.With("ts", "now", "caller", "app.go:10", "a", 1, "b", 2).Info("ready")
+			want := "INFO ts=now module=" + wantModule + " caller=app.go:10 a=1 b=2 msg=ready\n"
+			if got := buffer.String(); got != want {
+				t.Fatalf("output=%q want=%q", got, want)
 			}
 		})
 	}
