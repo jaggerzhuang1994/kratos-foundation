@@ -75,7 +75,7 @@ flowchart TD
     P --> Q[锁外等待全部已受理创建完成]
     Q --> R[获取锁 接管缓存 释放锁]
     R --> S[锁外关闭实例]
-    S -- 失败 --> T[ERROR NewManager cleanup.failed]
+    S -- 失败 --> T[ERROR Failed to close an object storage client]
     S -- 成功 --> U([结束])
     T --> U
     D --> U

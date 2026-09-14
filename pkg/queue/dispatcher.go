@@ -45,7 +45,7 @@ func NewDispatcher(name string, store Store, observability Observability) (*Disp
 	if err != nil {
 		return nil, fmt.Errorf("create queue dispatcher telemetry: %w", err)
 	}
-	return &Dispatcher{name: name, store: store, log: observability.Logger, telemetry: telemetry}, nil
+	return &Dispatcher{name: name, store: store, log: observability.Logger.WithModule("queue"), telemetry: telemetry}, nil
 }
 
 // Dispatch 投递即时或延迟任务，返回实际 ID，不修改输入。

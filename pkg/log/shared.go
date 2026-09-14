@@ -23,7 +23,7 @@ func WithFilterEmpty(value bool) { processState.WithFilterEmpty(value) }
 // WithFilterKeys 修改进程共享字段过滤列表。
 func WithFilterKeys(keys ...string) { processState.WithFilterKeys(keys...) }
 
-// WithKV 合并进程共享日志字段。
+// WithKV 合并进程共享日志字段；保留键 module 不参与日志归属。
 func WithKV(values ...any) { processState.WithKV(values...) }
 
 // WithTimeFormat 修改进程共享时间格式。
@@ -90,7 +90,7 @@ func (s *sharedState) WithFilterKeys(keys ...string) {
 	})
 }
 
-// WithKV 增加进程级字段；重复字符串 key 使用后声明的值。
+// WithKV 增加进程级字段；重复字符串 key 使用后声明的值，module 在输出组装时忽略。
 func (s *sharedState) WithKV(keyvals ...any) {
 	values := append([]any(nil), keyvals...)
 	s.updateCustom("kv", func(state *customState) error {
@@ -137,6 +137,9 @@ func (s *sharedState) WithMsgKey(msgKey string) {
 		if strings.TrimSpace(msgKey) == "" {
 			return fmt.Errorf("log msgKey is empty")
 		}
+		if strings.TrimSpace(msgKey) == moduleKey {
+			return fmt.Errorf("log msgKey must not use reserved key %q", moduleKey)
+		}
 		state.msgKey = strings.TrimSpace(msgKey)
 		return nil
 	})
@@ -156,7 +159,7 @@ func (s *sharedState) updateCustom(field string, update func(*customState) error
 			next.filterKeys = append([]string(nil), old.filterKeys...)
 		}
 		if err := update(next); err != nil {
-			kratoslog.Warnw("msg", "log custom state update failed", "state", field, "error", err)
+			WithModule("log").With("function", "updateCustom", "state", field, "error", err).Warn("Rejected invalid logging settings; retaining the previous settings")
 			return
 		}
 		if s.custom.CompareAndSwap(old, next) {

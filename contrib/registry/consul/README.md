@@ -1,5 +1,7 @@
 # Consul 服务注册
 
+注册及心跳日志归属 `module=registry`，并包含 `driver=consul`。
+
 `NewRegistry(logger, config, client)` 返回 Kratos `registry.Registrar`。共享客户端为 nil 时禁用，公共 Wire 构造、tags、TCP 健康检查、TTL 心跳开关及间隔配置保持不变。关闭心跳时没有后台续报或恢复任务。`Register` 成功后由 `Deregister` 结束该实例的心跳；共享 HTTP 客户端仍由 `pkg/consul` cleanup 管理。
 
 `NewRegistry` 可直接加入业务 Wire provider 集合，其返回值注入 `bootstrap.NewKratosApp`（或直接调用的 `app.NewApp`）。无需服务注册时，改用返回 nil `registry.Registrar` 的业务 provider；两者只能选择一个。示例见 [Bootstrap 文档](../../../pkg/bootstrap/README.md#可选依赖由-wire-构造注入)。

@@ -91,7 +91,7 @@ func newConsumerRuntime(
 		config:    config,
 		consumer:  consumer,
 		handler:   handler,
-		log:       logger,
+		log:       logger.WithModule("kafka"),
 		telemetry: telemetry,
 		retry:     retry,
 		stop:      make(chan struct{}),

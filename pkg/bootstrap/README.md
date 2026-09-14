@@ -1,5 +1,7 @@
 # bootstrap
 
+日志 Bootstrap 安装 Kratos 模块适配器并借用实例输出；cleanup 恢复之前完整的全局绑定。配置源选择日志归属 `module=bootstrap`。
+
 `pkg/bootstrap` 负责跨组件集成与应用登记。领域包只声明自身依赖，提供普通 Go 构造函数；不导入 `app`、`bootstrap` 或 Wire 来参与应用组装。组件内部创建自身 SDK、配置解析与资源管理仍留在领域包中。
 
 ## 按应用选择组件（推荐）
@@ -77,7 +79,7 @@ flowchart TD
     K --> L([App 统一管理 Start及Stop])
 ```
 
-Consul 模式可使用 `ConsulBaseProviderSet` 完成基础组装；其他模式仍可按需选择构造函数。
+Consul 模式可使用 `BaseProviderSet` + `ConsulProviderSet` 完成基础组装；其他模式仍可按需选择构造函数。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |
@@ -112,7 +114,8 @@ flowchart TD
     J --> K([组装完成])
 ```
 
-构造错误由调用方处理，登记函数本身不重复记录日志。NewLogBootstrap 安装共享同一输出的派生 Logger，保留独立的 cleanup 身份，不增加固定 caller 跳过层数；默认模式由日志包统一识别 Kratos 全局函数及 Context/Helper 包装。深度统一按过滤包装后的调用点计数，详见 [日志 caller 规则](../log/README.md#caller-depth)。
+构造错误由调用方处理，登记函数本身不重复记录日志。NewLogBootstrap 安装共享同一输出的全局派生 Logger；App Spec 另行派生带 `module=kratos` 的 Logger 传给 Kratos App，
+不会给全局或其他组件日志附加该模块。全局派生 Logger 保留独立的 cleanup 身份，不增加固定 caller 跳过层数；默认模式由日志包统一识别 Kratos 全局函数及 Context/Helper 包装。深度统一按过滤包装后的调用点计数，详见 [日志 caller 规则](../log/README.md#caller-depth)。
 日志全局安装沿用单应用、逆序释放的约定；多个应用并发安装或交错释放全局 Logger 不受本包保障。优先将实例 Logger 显式注入组件。
 
 `JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `ConsumerRuntime` 通过 Go 方法集隐式满足 `app.Runtime`；由 Wire 调用 `queue.NewConsumerRuntime` 构造，再通过 `spec.RegisterRuntime` 登记；统一入口不代为构造消费者。
@@ -145,7 +148,7 @@ flowchart TD
 取得同一份 `app.Spec` 和 `StartupReady`；调用 `initializeJobs` 前须声明好任务。
 实际应用也可将这两个 nil provider 放进已有的完整 `wire.Build`，由现有 provider 构造其余依赖。
 
-`providers.go`（普通源码，生成后的应用也需要编译这些 provider）：
+`wire.go`（普通源码，生成后的应用也需要编译这些 provider）：
 
 ```go
 package assembly
@@ -269,63 +272,130 @@ app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo�
 
 日志 Wire provider 仅保留 log.NewLogger，配置加载与共享状态均由 log 包内部管理。
 
-## Consul 基础组装
+## 基础组装与 Consul
 
-`ConsulBaseProviderSet` 提供完整基础组装：共享 Consul 客户端、配置 Manager、服务注册与发现、
-Logger、Metrics、Tracing、Spec、启动阶段、停机策略和最终 Kratos App，
-以及 Database、Redis、Client、Kafka、OSS 的默认 Manager/Factory 构造函数。
-业务只需提供以下内容：
+业务从以下两个独立维度各选择一个集合，不要叠加同一维度的默认版与自定义版：
 
-- `appinfo.AppInfo`：由 main 构造。
-- `contrib/config/file.PathList`：有序本地文件或 glob 模式列表；空列表禁用本地来源。
-- `contrib/config/consul.PathList`：有序 Consul KV 路径列表；空列表禁用远程来源。
-- 业务 `Bootstrap`：声明端点、任务、自定义 Runtime 和生命周期钩子。
-- 业务 `internal.ProviderSet`：构造 service、biz、repository 等业务实现，并选择具体驱动。
+| 维度 | 默认集合 | 自定义集合 | 自定义版要求业务提供 |
+| --- | --- | --- | --- |
+| 通用基础组装 | `BaseProviderSet` | `BaseProviderSetWithCustomJobCoordinator` | `job.ConcurrencyCoordinator` |
+| Consul 接入 | `ConsulProviderSet` | `ConsulProviderSetWithCustomRemoteConfigDirName` | `bootstrap.RemoteConfigDirName` |
+
+`BaseProviderSet` 包含 Logger、Metrics、Tracing、`config.NewManager`、Spec、启动阶段、停机策略、
+Kratos App，以及 Database、Redis、Client、Kafka、OSS 的默认 Manager/Factory。
+它消费 `config.Sources`、`registry.Registrar` 和依赖图需要的 `registry.Discovery`，不构造 Consul。
+自定义后端时省略整个 Consul 集合，业务提供这些契约即可，不必提供本地或远程路径类型。
+
+`ConsulProviderSet` 提供共享客户端、服务注册发现、本地源、远程路径、远程源和最终 `config.Sources`。
+默认内置 `DefaultAppRemoteConfigDirNameProvider(info appinfo.AppInfo)`，返回 `info.Name()`；
+当前 AppInfo 的 Name 是可执行文件名，不保证等于部署服务名。需要稳定业务目录时使用自定义版。
+两个 Consul 集合都要求业务提供 `LocalConfigPath`，非 local 可传空值，此时不访问本地文件。
+两类集合可以自由组合，不另建四种交叉组合的 ProviderSet，也不提供独立 ConfigProviderSet。
+
+业务还需提供 main 构造的 `appinfo.AppInfo`、声明组件的 `Bootstrap` 及业务 provider。
+以下为业务 wireinject 文件中的片段；`Bootstrap` 与 `internal.ProviderSet` 沿用上文业务实现：
 
 ```go
-func wireApp(info appinfo.AppInfo, files fileconfig.PathList) (*kratos.App, func(), error) {
+func wireApp(info appinfo.AppInfo, local bootstrap.LocalConfigPath) (*kratos.App, func(), error) {
     panic(wire.Build(
-        bootstrap.ConsulBaseProviderSet,
-        internal.ProviderSet, // 包含业务的 consulconfig.PathList provider
+        bootstrap.BaseProviderSet,
+        bootstrap.ConsulProviderSet,
+        internal.ProviderSet,
         Bootstrap,
     ))
 }
 ```
 
-默认资源 provider 仅在依赖图需要时才会出现在生成代码中；未使用的组件不会构造或建立连接。
-数据库、OSS 等具体驱动仍由业务显式导入。Queue 消费者、具名 Producer、锁协调器等需要业务参数的实例仍由业务构造。
-不要再次提供集合已有的 provider 或接口绑定。`ConsulBaseProviderSet` 内置 `job.DefaultCoordinator`，业务无需重复提供。
-需要跨进程协调时，将集合替换为 `ConsulBaseProviderSetWithCustomJobCoordinator`，
-并在业务 ProviderSet 中提供 `job.ConcurrencyCoordinator`；两个集合二选一，不要叠加使用。
-`job.DefaultCoordinator()` 返回真正的 nil，不是本地协调器；进程内并发策略仍由 Job 自身处理，
-选择分布式 Cron 策略而未提供实际 Coordinator 时，构造会失败。
+自定义目录时，把 `ConsulProviderSet` 换为 `ConsulProviderSetWithCustomRemoteConfigDirName`，
+并增加 `directory bootstrap.RemoteConfigDirName` 输入或业务 provider。
+自定义协调器时，把 `BaseProviderSet` 换为 `BaseProviderSetWithCustomJobCoordinator`，
+并提供 `job.ConcurrencyCoordinator`。两者可同时替换。
+不要给默认集合重复提供目录名或 Coordinator；Wire 不支持用后面的 provider 覆盖已有绑定。
+`DefaultAppRemoteConfigDirNameProvider` 也可单独用于手动组装。
 
-`NewKratosApp` 内部使用 `context.Background()` 作为根上下文，Context 不通过 Wire 注入。
-业务通过 `Spec.AddContext` 增加上下文信息；运行中的应用通过信号或 `App.Stop()` 停止，
-Job 完成或运行时失败仍遵循既有停机流程。直接使用底层 `app.NewApp` 的调用方仍可指定 Context。
+main 应检查 `wireApp` 返回的错误，成功后 `defer cleanup()`，再调用 `application.Run()` 并处理错误。
+生成和运行示例的真实 fixture 位于 `testdata/wireassembly`，在仓库根目录执行 `make test-business`，
+由 `go tool wire` 在临时模块生成代码并验证四种组合、定制后端和 cleanup。
 
-本地目录命名和文件选择规则属于业务。main 可将命令行参数包装为业务 `conf.ConfigPath`，
-由 `internal/conf` 的 provider 转换为 `file.PathList`；Foundation 只消费最终列表。
-业务既可以选择目录中的特定文件，也可以直接提供文件或 glob 列表。
+默认资源 provider 仅在依赖图需要时构造。具体数据库和 OSS 驱动仍由业务显式导入；
+Queue 消费者、具名 Producer、锁协调器等需要业务参数的实例仍由业务构造。
+默认 `job.DefaultCoordinator()` 返回真正的 nil，不启用跨进程协调；
+选择分布式 Cron 策略却未提供实际 Coordinator 时，构造会失败。
+`NewKratosApp` 使用 `context.Background()`，业务通过 `Spec.AddContext` 增加上下文信息。
 
-`NewConsulSources(files, remote)` 组合两类来源并返回 `config.Sources`。
-每组内后面的配置覆盖前面的配置；`local` 环境本地优先，其他环境 Consul 优先。
-Consul 连接从环境读取，先于 Manager 构造，避免依赖环；`DISABLE_CONSUL=true` 时注册和发现为 nil。
-资源仍通过 Wire cleanup 逆序释放，Manager 先停止监听，再释放共享 Consul 客户端。
+### 配置选择和路径约定
+
+`LocalConfigPath` 支持具体文件、目录或 `filepath.Glob` 模式（例如 `configs/*/app?.yaml`）。
+已存在的字面路径优先；否则展开 glob，过滤非普通文件，匹配到目录不会隐式加载其内容。
+local 下路径为空、模式非法或没有可加载文件时返回错误。目录只选择直属 `*.yaml` 普通文件（可跟随文件符号链接），
+按文件名字典序加载，后面的覆盖前面的；目录简写忽略 `.yml` 和子目录，显式文件及 glob 不限制扩展名。
+显式文件或 glob 的扩展名不受路径解析限制，但最终必须有对应的 Kratos codec；匹配成功不代表内容可解码。
+`NewLocalConfigSources` 把路径作为单项 `file.PathList` 交给 `file.NewSources`，
+只负责环境判断和结果非空检查；底层文件源通过全局日志记录构造事件，
+不依赖注入 Logger。本地文件列表在构造期固定，监听已选文件的修改、替换和删除；新增文件需重启重新选择。
+
+`RemoteConfigDirName` 必须是非空单层目录名，不允许首尾空白、`.`、`..`、路径分隔符或 glob 元字符。
+`NewRemoteConfigPaths` 在构造期读取环境，生成以下八层，后层覆盖前层：
+
+```text
+configs/common.yaml
+configs/{env}/common.yaml
+secrets/common.yaml
+secrets/{env}/common.yaml
+configs/{RemoteConfigDirName}/*.yaml
+configs/{RemoteConfigDirName}/{env}/*.yaml
+secrets/{RemoteConfigDirName}/*.yaml
+secrets/{RemoteConfigDirName}/{env}/*.yaml
+```
+
+默认八层中的 `common.yaml` 路径优先匹配精确键；若键不存在，则按同名目录的直属 `*.yaml` 解析。
+自定义 Consul PathList 同样支持目录、文件和 glob；尾部 `/` 强制按目录解析。
+每个远程 `*.yaml` 只匹配该目录直属键，按完整键名字典序排列；不递归，不匹配 `.yml`。
+监听保留目录前缀，新增和删除匹配键会更新完整快照。缺失的远程层允许为空；
+连接失败或初始配置解码、校验失败会使启动失败。底层 Consul 适配器还支持
+[完整 path.Match 模式](../../contrib/config/consul/README.md#路径边界)，自定义路径列表可直接使用。`secrets/` 只是路径分类，权限由 Consul ACL 控制；
+应用普通配置可覆盖公共 secrets 的同名字段，符合上述顺序。
+
+`NewConfigSources` 在 local 只选择 `LocalConfigSources`，其他环境只选择 `RemoteConfigSources`，
+两者不混合，也不因远程故障回退本地。未设置环境时按 `env.AppEnv()` 默认 local。
+非 local 的远程源要求非 nil 客户端及非空路径列表；`DISABLE_CONSUL=true` 会导致该组装失败。
+local 跳过远程配置源，但共享客户端仍遵循 `pkg/consul` 的启用规则：
+未配置 Consul 地址时默认禁用，显式配置地址且未禁用时仍会连接并探测，用于服务注册发现。
+因此 local 只读本地配置不等于完全不连接 Consul。
+
+Consul 连接配置从环境读取，先于 Manager 构造，避免配置依赖环。
+客户端、配置源构造和来源选择均使用全局日志，不注入 Logger；
+`NewRemoteConfigSources(client, paths)` 和 `NewConfigSources(local, remote)` 无 Logger 透传参数。
+注册、发现及其他运行期资源仍保留实例 Logger 注入。
+来源切片在交给 Manager 后不再修改，Source 对象由一个 Manager 管理；`NewConfigSources` 只复制切片。
+Wire cleanup 逆序释放资源，Manager 先停止配置监听，再释放共享客户端。
 
 ```mermaid
 flowchart TD
-    A([AppInfo / 两类 PathList / Coordinator / 业务 provider]) --> B[公共集合构造日志与共享 Consul 客户端]
-    B --> C[组合本地与远程源 加载 Manager]
-    C --> D{基础设施构造成功?}
-    D -- 否 --> X([返回错误并逆序释放资源])
-    D -- 是 --> E[完成日志 追踪 指标和配置观测贡献]
-    E --> F[业务 Bootstrap 声明组件和钩子]
-    F --> G[组件组装并登记 Runtime]
-    G --> H{组装成功?}
-    H -- 否 --> X
-    H -- 是 --> I[NewKratosApp 创建 Background 并冻结 Spec]
-    I --> J{应用构造成功?}
-    J -- 否 --> X
-    J -- 是 --> K([返回 App 和 cleanup])
+    A([业务输入和两组集合]) --> B[构造共享 Consul 客户端（启动诊断使用全局日志）]
+    B --> C{客户端构造或探测成功?}
+    C -- 否 --> X([返回错误并逆序 cleanup])
+    C -- 是或 local 禁用 --> D{env.IsLocal?}
+    D -- 是 --> E[解析文件 目录或 glob 并选择普通文件]
+    D -- 否 --> F[生成八层路径并要求可用客户端]
+    E -- 失败 --> X
+    F -- 失败 --> X
+    E -- 成功 --> G[全局 INFO Matched local configuration files]
+    F -- 成功 --> R[全局 INFO Preparing Consul configuration sources]
+    R --> H
+    G --> H[全局 INFO Selected configuration sources for the current environment]
+    H --> I[Manager 加载并监听选中来源]
+    I -- 失败或超时 --> X
+    I -- 成功 --> J[登记基础设施与业务组件]
+    J --> K[NewKratosApp 冻结 Spec]
+    K -- 失败 --> X
+    K -- 成功 --> L([返回 App 和 cleanup])
 ```
+
+### 从旧 Consul 基础集合迁移
+
+旧 `ConsulBaseProviderSet` 替换为 `BaseProviderSet` + `ConsulProviderSet`；
+旧 `ConsulBaseProviderSetWithCustomJobCoordinator` 替换为 `BaseProviderSetWithCustomJobCoordinator` + `ConsulProviderSet`。
+旧 `file.PathList` 和 `consul.PathList` 注入改为 `LocalConfigPath` 和可选的 `RemoteConfigDirName`。
+原 `NewConsulSources` 的混合优先级语义已移除，改用 `NewConfigSources` 的环境二选一。
+需要保留任意路径列表或混合来源的应用应自定义 `config.Sources`，使用底层 file/consul 适配器显式组合。

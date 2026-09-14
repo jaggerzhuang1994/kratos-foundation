@@ -106,7 +106,8 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-完整的构造、错误处理和 Wire cleanup 示例见 [`bootstrap`](pkg/bootstrap/README.md)。显式组装时，业务提供 `bootstrap.Bootstrap`，由 `bootstrap.NewBootstrap` 返回 `StartupReady`；统一 Spec 入口使用 `bootstrap.NewApplicationBootstrap` 返回相同的最终标记。资源 cleanup 由 Wire 逆序执行。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
+`BaseProviderSet`（或自定义 Job Coordinator 版本）可搭配 `ConsulProviderSet`（或自定义远程目录名版本），
+默认提供注册发现及按环境二选一的配置源；自定义后端可直接提供相同契约。完整的构造、错误处理和 Wire cleanup 示例见 [`bootstrap`](pkg/bootstrap/README.md)。显式组装时，业务提供 `bootstrap.Bootstrap`，由 `bootstrap.NewBootstrap` 返回 `StartupReady`；统一 Spec 入口使用 `bootstrap.NewApplicationBootstrap` 返回相同的最终标记。资源 cleanup 由 Wire 逆序执行。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
 
 ## 日志
 
@@ -114,9 +115,10 @@ flowchart LR
 
 - 基于 `LOG_*` 环境变量的严格配置解析。
 - stdout/stderr 分流与可轮转文件输出。
-- 进程级全局日志状态：任意位置通过 log.WithXXX 修改，已有 Logger 和全局日志共享生效。
-- 每次 `NewLogger` 构造独立输出并返回 cleanup；输出配置构造后固定，包级 `WithXXX` 只更新共享的非资源设置。
+- 进程级全局日志状态：任意位置通过 `log.WithLevel/WithKV/WithMsgKey` 等共享设置方法修改，已有 Logger 和全局日志共享生效。
+- 每次 `NewLogger` 构造独立输出并返回 cleanup；输出配置构造后固定，包级共享设置方法只更新非资源状态；`log.WithModule` 返回借用当前输出的派生视图。
 - 不可变的模块、上下文、级别和敏感字段派生。
+- 每条输出保留有效 `module`，缺失时为 `unknown`；通过 Foundation 安装全局绑定后，Kratos SDK 日志归属 `kratos`。
 
 完整用法、配置表和设计边界见 [`pkg/log/README.md`](pkg/log/README.md)。
 

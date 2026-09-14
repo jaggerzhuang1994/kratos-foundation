@@ -1,6 +1,6 @@
 # app
 
-`pkg/app` 定义应用依赖、配置与构造函数。它保存构造期的 `Spec`、启动期固定的 `Config`、可热更新的 `StopPolicy`，并构造受监督的 Kratos 应用。业务 Wire 层显式选择启用哪些组件；`pkg/app` 不自动发现组件，也不依赖具体的 AppInfo、日志、Tracing、Metrics、Server 或 Job 包。
+`pkg/app` 定义应用依赖、配置与构造函数。它保存构造期的 `Spec`、启动期固定的 `Config`、可热更新的 `StopPolicy`，并构造受监督的 Kratos 应用。业务 Wire 层显式选择启用哪些组件；`pkg/app` 不自动发现组件，也不依赖具体的 AppInfo、Tracing、Metrics、Server 或 Job 包；日志接受 Kratos 契约，并识别 Foundation Logger 的固定模块派生能力。
 
 `App` 直接持有启动钩子、停止状态、首个故障、服务完成计数和父上下文监听状态；没有独立的 lifecycle runner 或 runtime tracker。`NewApp` 返回 `*app.App`，嵌入的 `*kratos.App` 提供 Run、Stop 和应用信息；组装层通过 `NewKratosApp` 返回底层 Kratos 应用。
 
@@ -23,7 +23,7 @@ flowchart TD
     A([NewApp 接收依赖]) --> B[冻结 Spec 与构造上下文]
     B --> C{依赖与上下文有效?}
     C -- 否 --> D([返回错误，由组装层 cleanup])
-    C -- 是 --> E[构造 App 及其持有的 Kratos 应用]
+    C -- 是 --> E[构造 App 向 Kratos 传入带 module=kratos 的 Logger]
     E --> F([返回应用，调用方负责 Run])
 ```
 
@@ -35,6 +35,10 @@ flowchart TD
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
 - `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
 - 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 表示禁用服务注册，具体实现可使用 `contrib/registry/consul.NewRegistry`。
+
+`Spec.RegisterLogger` 为 Kratos App 派生带 `module=kratos` 的 Logger，
+原 Logger 不被修改，派生视图共用原输出且不增加 cleanup。StopPolicy 自身日志归属 `app`。
+`NewApp` 恢复 `kratos.New` 临时设置前的完整全局绑定。经 Foundation `log.SetLogger` / Bootstrap 安装后，Kratos 全局日志适配器仍然保留，HTTP/gRPC 启停日志归属 `kratos`；入口与覆盖规则见 [日志文档](../log/README.md#字段过滤与去重)。
 
 构造函数拥有资源创建，Wire 接收并逆序调用其 cleanup。Bootstrap 本身通常没有 cleanup；例外是 `bootstrap.NewLogBootstrap` 的全局 Logger 恢复函数。Runtime 的 `Start`/`Stop`、Hook、Registrar 补偿和停机预算由 App 直接管理。
 

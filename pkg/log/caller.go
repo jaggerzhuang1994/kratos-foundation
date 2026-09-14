@@ -49,7 +49,10 @@ func callerWrapper(function string) bool {
 		return true
 	}
 	switch function {
-	case foundation + "database.(*gormLoggerWriter).Printf",
+	case foundation + "log.globalLogger.Log",
+		foundation + "log.(*kratosBridge).Log",
+		foundation + "log/internal/output.(*moduleLogger).Log",
+		foundation + "database.(*gormLoggerWriter).Printf",
 		foundation + "kafka.(*loggerAdapter).Log",
 		foundation + "job.(*cronLogger).Info",
 		foundation + "job.(*cronLogger).Error",
@@ -58,6 +61,9 @@ func callerWrapper(function string) bool {
 	}
 	const kratos = "github.com/go-kratos/kratos/v2/log."
 	name, ok := strings.CutPrefix(function, kratos)
+	if !ok {
+		name, ok = strings.CutPrefix(function, foundation+"log.")
+	}
 	if !ok {
 		return false
 	}

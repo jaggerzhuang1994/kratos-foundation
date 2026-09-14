@@ -60,7 +60,7 @@ func newManagedProducer(
 	return &managedProducer{
 		Producer:    producer,
 		destination: destination,
-		log:         logger,
+		log:         logger.WithModule("kafka"),
 		telemetry:   telemetry,
 	}
 }

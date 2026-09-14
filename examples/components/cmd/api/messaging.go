@@ -63,6 +63,7 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 			cleanup()
 		}
 	}()
+	logger = logger.WithModule("messaging")
 	m := &messaging{logger: logger, business: []businessQueue{
 		{name: emailQueue, taskType: "email.render", payload: "welcome"},
 		{name: reportQueue, taskType: "report.summarize", payload: "daily"},

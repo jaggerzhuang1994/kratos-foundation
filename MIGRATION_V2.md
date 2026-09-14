@@ -229,7 +229,7 @@ flowchart TD
     G -- 是 --> H([发布快照 供 Load 和订阅解码])
     E -- 否 --> I{热更新?}
     G -- 否 --> I
-    I -- 是 --> J[ERROR manager.watch config.rejected 通知订阅 保留旧快照]
+    I -- 是 --> J[ERROR Rejected configuration update 通知订阅 保留旧快照]
     I -- 否 --> K[释放源 返回构造错误]
     J --> L([等待下一次源更新])
     K --> M([结束])
@@ -272,7 +272,8 @@ go version -m ./tools/protoc-gen-jsonschema
 
 ### Wire 成功不代表业务服务已登记
 
-本例已采用 `ConsulBaseProviderSet`、单一 `bootstrap.Spec` 和统一组件构造，
+本例记录的是旧 `ConsulBaseProviderSet`、单一 `bootstrap.Spec` 和统一组件构造的迁移阶段；
+当前集合已拆为 `BaseProviderSet` + `ConsulProviderSet`，新代码按 [Bootstrap 文档](pkg/bootstrap/README.md) 组装。
 维护者有意将 `cmd/auth_service/bootstrap.go` 的 Auth HTTP、Auth gRPC、RBAC gRPC 注册调用注释用于框架联调，
 对应服务参数也被移除。`wire_gen.go` 因此没有构造 AuthService、RbacService 及其业务依赖。
 ProviderSet 列出了构造函数，并不表示 Wire 一定执行它们。
@@ -307,13 +308,14 @@ Go、gRPC、HTTP、Foundation client/errors、校验和文档产物必须指向�
 
 ### 配置验收覆盖来源、合并结果和外部配置
 
-目录转 `file.PathList` 的规则由业务定义。本例是根目录 `*.yaml` 后加载 `{APP_ENV}/*.yaml`，
-每组按 glob 字典序展开；不递归，也不包含 `.yml`。单文件、空路径、缺失路径和空目录都有独立语义。
-示例放在独立子目录可避免被默认 glob 当成实际配置加载。
-
-`ConsulBaseProviderSet` 的 `NewConsulSources` 在 local 环境让文件优先，其他环境让 Consul 优先；
-同组内后面的源覆盖前面的源。Consul KV 前缀和环境路径仍由业务提供，
-并且 local 文件优先不等于禁用 Consul 或远端故障回退。
+以下配置示例属于旧版混合来源迁移记录：当时目录转 `file.PathList` 的规则由业务定义，
+根目录 `*.yaml` 后加载 `{APP_ENV}/*.yaml`，local 文件优先、其他环境 Consul 优先。
+当前 `ConsulProviderSet` 已改为 local 仅加载本地文件（支持具体文件、目录直属 `*.yaml` 或 glob），其他环境仅加载远程八层路径，
+不混合来源、不回退本地；默认目录名来自 AppInfo.Name，自定义目录使用对应自定义集合。
+`file.PathList` 的每一项也统一采用目录、文件或 glob 规则；目录在构造时展开直属 `*.yaml`，
+不再动态加入新增文件，已选文件删除时保留旧配置并等待重建。详见 [文件配置源](contrib/config/file/README.md)。
+请按 [当前路径、失败边界与组装流程](pkg/bootstrap/README.md#配置选择和路径约定) 迁移，
+不要沿用旧目录层级与来源优先级的预期。
 
 本例 `internal/conf/source_test.go` 用临时文件验证顺序和最终覆盖值，并通过 v2 Manager
 读取业务 Duration 与 `server.middleware.deadline.fallback_timeout`。这类测试比单独检查 YAML 语法更有效，
@@ -432,3 +434,24 @@ flowchart TD
 新版 `errors.FromError` 可直接读取旧结构化错误的 Code/Reason/Message/Metadata，旧 422 不再先经 gRPC Unknown 丢失为 500。Server 默认常驻错误边界与 HTTP Encoder 使用 `errors.Normalize`，发送 gRPC 时保留 `http_code`、`err_stack` 及 cause 诊断文本，过滤响应头。普通未知故障的公开消息统一安全兜底；网关记录诊断后在公开出口过滤堆栈。
 
 尚未升级的发送端若已经丢失 HTTP 状态，接收端仍不能从 reason_code 推断原状态；应升级发送端。业务应去除返回错误处重复日志，保留原因链。默认访问日志不再记录 args/完整堆栈，关闭访问摘要仍保留服务端错误日志；该变化的流程与配置边界见 [Server 错误边界](pkg/server/README.md#请求错误边界与安全日志)。
+
+## 日志 module 必需字段
+
+每条 Foundation 输出现在包含一个有效 module。根实例与未标记的全局调用使用 `unknown`；组件构造入口应使用 `WithModule`。固定模块不再被普通 KV 覆盖，共享 KV 和 Context 不参与模块选择，所有过滤规则均保留 module。普通字段的覆盖规则不变；孤立字段补值 `(MISSING)`。
+
+全局输出通过 Foundation `log.SetLogger` 安装；Kratos 全局 SDK 日志由适配器标记为 `kratos`。直接使用 Kratos SetLogger 会绕过此适配器。Bootstrap cleanup 恢复完整旧绑定。详细规则和流程见 [日志文档](pkg/log/README.md#字段过滤与去重)。
+
+```mermaid
+flowchart LR
+    A([迁移日志]) --> B[组件入口声明稳定 module]
+    B --> C[移除通过共享字段、Context 或过滤器改变 module 的用法]
+    C --> D[通过 Foundation SetLogger 或 Bootstrap 安装全局输出]
+    D --> E[核对 Foundation 模块与 Kratos 启停日志]
+    E --> F([完成])
+```
+
+## 日志消息与自定义 msgKey
+
+全局及实例消息方法统一应用当前 `msgKey`。调用方改用 `log.WithModule("config/file").With("files", matches).Info("Matched local configuration files")`，其中 `matches` 为已匹配的文件列表，避免通过 `Infow("msg", ...)` 写死消息字段。原始 `Log/*w` 仍保留调用者给定的键值。
+
+模块视图借用获取时的全局输出，持续应用共享设置，但不跟随之后的 SetLogger；在使用处获取。`Context` 返回的 Kratos Helper 捕获构造时消息字段名，长期保存时优先使用模块 Logger 的 WithContext 视图。消息文案改为具体描述，函数、错误和业务上下文保留为独立字段；原先按管道分隔消息字符串检索的规则需同步调整。流程及完整契约见 [消息输出规则](pkg/log/README.md#字段过滤与去重)。

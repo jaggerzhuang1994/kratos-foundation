@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // Notification 是一次订阅投递。Terminal 表示投递后关闭该订阅。
@@ -212,12 +212,12 @@ func (s *Subscription) notify(callback Callback, notification Notification) {
 func notify(callback Callback, notification Notification) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			kratoslog.Errorf(
-				"config observer for %q panicked: %v\n%s",
-				notification.Key,
-				recovered,
-				debug.Stack(),
-			)
+			log.WithModule("config").With(
+				"function", "notify",
+				"key", notification.Key,
+				"panic", recovered,
+				"stack", string(debug.Stack()),
+			).Error("Configuration observer panicked while processing an update")
 		}
 	}()
 	callback(notification)

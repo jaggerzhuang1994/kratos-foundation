@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/decoder"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/snapshot"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/source"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/subscription"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb"
 )
 
@@ -195,7 +195,7 @@ func (m *manager) watch() {
 		next, err := newValidatedSnapshot(update.Values)
 		if err != nil {
 			m.recordRejected("invalid_snapshot")
-			log.Errorf("manager.watch | config.rejected | err=%v", err)
+			log.WithModule("config").With("function", "manager.watch", "error", err).Error("Rejected configuration update; continuing to use the last accepted configuration")
 			m.notifyError(fmt.Errorf("load config update snapshot: %w", err), false)
 			continue
 		}
@@ -292,7 +292,7 @@ func (m *manager) failWatcher(cause error) {
 		}
 	}
 	m.mu.Unlock()
-	log.Errorf("manager.failWatcher | watcher.stopped | err=%v", cause)
+	log.WithModule("config").With("function", "manager.failWatcher", "error", cause).Error("Configuration watcher stopped; configuration is no longer healthy")
 	m.deliver(deliveries)
 }
 
@@ -303,11 +303,11 @@ func (m *manager) deliver(deliveries []delivery) {
 			m.status.Overloads++
 			m.status.LastErrorCode = "observer_overloaded"
 			m.mu.Unlock()
-			log.Errorf(
-				"manager.deliver | observer.overloaded | key=%q err=%v",
-				next.notification.Key,
-				ErrObserverOverloaded,
-			)
+			log.WithModule("config").With(
+				"function", "manager.deliver",
+				"key", next.notification.Key,
+				"error", ErrObserverOverloaded,
+			).Error("Configuration subscription stopped because its pending update queue is full")
 		}
 	}
 }

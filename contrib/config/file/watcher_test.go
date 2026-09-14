@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type watchResult struct {
@@ -28,12 +27,7 @@ func nextFileUpdate(watcher config.Watcher) <-chan watchResult {
 
 func newFileWatcher(t *testing.T, path string) config.Watcher {
 	t.Helper()
-	logger, releaseLogger, logErr := log.NewLogger()
-	if logErr != nil {
-		t.Fatal(logErr)
-	}
-	t.Cleanup(releaseLogger)
-	sources, err := NewSources(logger, PathList{path})
+	sources, err := NewSources(PathList{path})
 	if err != nil || len(sources) != 1 {
 		t.Fatalf("sources=%v err=%v", sources, err)
 	}
@@ -111,30 +105,6 @@ func TestFileWatcherSurvivesRemovalRecreationAndAtomicReplacement(t *testing.T) 
 	waitFileValue(t, watcher, "value: final\n")
 }
 
-func TestDirectoryWatcherPublishesDeletionAsFullEmptySnapshot(t *testing.T) {
-	directory := t.TempDir()
-	path := filepath.Join(directory, "config.yaml")
-	if err := os.WriteFile(path, []byte("value: initial\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	watcher := newFileWatcher(t, directory)
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case result := <-nextFileUpdate(watcher):
-		if result.err != nil || len(result.values) != 0 {
-			t.Fatalf("deleted snapshot=%v err=%v", result.values, result.err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("directory deletion was not observed")
-	}
-	if err := os.WriteFile(path, []byte("value: new\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	waitFileValue(t, watcher, "value: new\n")
-}
-
 func TestFileWatcherStopCancelsMissingFileRecovery(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte("value: initial\n"), 0o600); err != nil {
@@ -185,7 +155,7 @@ func TestFileWatcherSurvivesParentDirectoryReplacement(t *testing.T) {
 	waitFileValue(t, watcher, "value: final\n")
 }
 
-func TestDirectoryWatcherBindsReplacementsBeforePublishing(t *testing.T) {
+func TestExpandedDirectoryFilesBindReplacementsBeforePublishing(t *testing.T) {
 	root := t.TempDir()
 	directory := filepath.Join(root, "config")
 	if err := os.Mkdir(directory, 0o700); err != nil {
@@ -197,8 +167,7 @@ func TestDirectoryWatcherBindsReplacementsBeforePublishing(t *testing.T) {
 	}
 	watcher := newFileWatcher(t, directory)
 
-	// The temporary file's own rename may be delivered before the replaced
-	// target's remove event, so reload must bind every file in the snapshot.
+	// 目录已展开为单文件源，替换文件后必须先绑定新目标再发布快照。
 	replacement := filepath.Join(directory, ".replacement.yaml")
 	if err := os.WriteFile(replacement, []byte("value: replaced\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -207,14 +176,13 @@ func TestDirectoryWatcherBindsReplacementsBeforePublishing(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFileValue(t, watcher, "value: replaced\n")
-	// A published replacement must already be watched. Do not give the SDK a
-	// scheduling delay to finish its automatic leaf registration before writing.
+	// 发布后立即写入，验证新目标已被监听。
 	if err := os.WriteFile(path, []byte("value: immediately-updated\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	waitFileValue(t, watcher, "value: immediately-updated\n")
 
-	// Replacing the directory must also discard explicitly watched old leaves.
+	// 父目录整体替换后仍需跟踪已选中的同名文件。
 	if err := os.Rename(directory, filepath.Join(root, "old")); err != nil {
 		t.Fatal(err)
 	}

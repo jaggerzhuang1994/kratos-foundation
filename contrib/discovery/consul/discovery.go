@@ -26,7 +26,7 @@ func NewDiscovery(
 	config config.Manager,
 	client baseconsul.Client,
 ) (registry.Discovery, error) {
-	logger = logger.WithModule("discovery")
+	logger = logger.WithModule("discovery").With("driver", "consul")
 
 	if client == nil {
 		logger.Warn("discovery not loaded: consul client not initialized")

@@ -3,8 +3,6 @@ package main
 import (
 	"path/filepath"
 	"testing"
-
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 func TestInitializeAndCleanup(t *testing.T) {
@@ -25,12 +23,7 @@ func TestInitializeAndCleanup(t *testing.T) {
 
 func TestSourcesRejectsDirectory(t *testing.T) {
 	t.Setenv("LOG_FILE_DISABLE", "true")
-	logger, cleanup, err := log.NewLogger()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	if _, err := newSources(logger, configPath(t.TempDir())); err == nil {
+	if _, err := newSources(configPath(t.TempDir())); err == nil {
 		t.Fatal("directory accepted as configuration")
 	}
 }

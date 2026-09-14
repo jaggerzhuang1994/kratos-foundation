@@ -1,10 +1,10 @@
 package consul
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"io"
 	"net"
 	"net/http"
@@ -12,7 +12,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/hashicorp/consul/api"
@@ -37,22 +36,12 @@ func TestConsulCleanupIsIdempotent(t *testing.T) {
 	}
 }
 
-func testLogger(t *testing.T) log.Logger {
-	t.Helper()
-	shared, cleanup, err := testlog.New(testlog.Config{TimeFormat: time.RFC3339, Std: testlog.OutputConfig{Disable: true}, File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cleanup)
-	return shared
-}
-
 func TestNewSkipsWhenExplicitlyDisabled(t *testing.T) {
 	t.Setenv(DisableConsul, "true")
 	options := NewOptions()
 	t.Setenv(DisableConsul, "false")
 	t.Setenv("APP_ENV", "dev")
-	client, cleanup, err := New(testLogger(t), options)
+	client, cleanup, err := New(options)
 	if err != nil || client != nil {
 		t.Fatalf("disabled New = %v, %v", client, err)
 	}
@@ -77,7 +66,7 @@ func TestNewPreservesInputConfigAndExplicitEnableDecision(t *testing.T) {
 	t.Setenv(DisableConsul, "true")
 	t.Setenv("APP_ENV", "local")
 	t.Setenv(api.HTTPAddrEnvName, "")
-	client, cleanup, err := New(testLogger(t), options)
+	client, cleanup, err := New(options)
 	defer cleanup()
 	if err != nil || client == nil {
 		t.Fatalf("explicitly enabled New = %v, %v", client, err)
@@ -89,7 +78,7 @@ func TestNewPreservesInputConfigAndExplicitEnableDecision(t *testing.T) {
 }
 
 func TestNewRejectsMissingConfigWhenEnabled(t *testing.T) {
-	client, cleanup, err := New(testLogger(t), Options{})
+	client, cleanup, err := New(Options{})
 	if err == nil || client != nil {
 		t.Fatalf("New without config = %v, %v, want an error", client, err)
 	}
@@ -99,7 +88,7 @@ func TestNewRejectsMissingConfigWhenEnabled(t *testing.T) {
 func TestNewRejectsEmptyAddressBeforeProbe(t *testing.T) {
 	for _, address := range []string{"", " \t\n"} {
 		t.Run(fmt.Sprintf("address=%q", address), func(t *testing.T) {
-			client, cleanup, err := New(testLogger(t), Options{Config: &api.Config{
+			client, cleanup, err := New(Options{Config: &api.Config{
 				Address:    address,
 				HttpClient: &http.Client{Transport: rejectProbeTransport{t: t}},
 			}})
@@ -124,7 +113,7 @@ func TestNewSkipsWhenLocalAddressIsEmpty(t *testing.T) {
 	t.Setenv(DisableConsul, "false")
 	t.Setenv("APP_ENV", "local")
 	t.Setenv(api.HTTPAddrEnvName, "")
-	client, cleanup, err := New(testLogger(t), NewOptions())
+	client, cleanup, err := New(NewOptions())
 	if err != nil || client != nil {
 		t.Fatalf("local no-address New = %v, %v", client, err)
 	}
@@ -146,7 +135,7 @@ func TestNewSkipsWhenLocalAddressIsUnset(t *testing.T) {
 		_ = os.Unsetenv(api.HTTPAddrEnvName)
 	})
 
-	client, cleanup, err := New(testLogger(t), NewOptions())
+	client, cleanup, err := New(NewOptions())
 	if err != nil || client != nil {
 		t.Fatalf("local unset-address New = %v, %v", client, err)
 	}
@@ -177,7 +166,7 @@ func TestNewProbesLocalLeaderAndRejectsEmptyOrError(t *testing.T) {
 			t.Setenv(DisableConsul, "false")
 			t.Setenv("APP_ENV", "dev")
 			t.Setenv(api.HTTPAddrEnvName, server.Listener.Addr().String())
-			client, cleanup, err := New(testLogger(t), NewOptions())
+			client, cleanup, err := New(NewOptions())
 			defer cleanup()
 			if result.wantErr && err == nil {
 				t.Fatal("New() succeeded")
@@ -190,25 +179,13 @@ func TestNewProbesLocalLeaderAndRejectsEmptyOrError(t *testing.T) {
 }
 
 func TestNewReturnsDisabledClientWithoutNetworkProbe(t *testing.T) {
+	previous := log.GetLogger()
+	var output bytes.Buffer
+	log.SetLogger(kratoslog.NewStdLogger(&output))
+	t.Cleanup(func() { log.SetLogger(previous) })
 	t.Setenv(DisableConsul, "true")
-	shared, release, err := testlog.New(testlog.Config{
-		Level:      kratoslog.LevelInfo,
-		TimeFormat: time.RFC3339,
-		Std: testlog.OutputConfig{
-			Disable: true,
-			Level:   kratoslog.LevelInfo,
-		},
-		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
-			Disable: true,
-			Level:   kratoslog.LevelInfo,
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(release)
 
-	client, cleanup, err := New(shared, NewOptions())
+	client, cleanup, err := New(NewOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,6 +197,11 @@ func TestNewReturnsDisabledClientWithoutNetworkProbe(t *testing.T) {
 	}
 	cleanup()
 	cleanup()
+	for _, field := range []string{"Consul client is disabled", "module=consul"} {
+		if !strings.Contains(output.String(), field) {
+			t.Fatalf("missing global log field %q: %s", field, output.String())
+		}
+	}
 }
 
 func TestNewKeepsHostnameForEveryDial(t *testing.T) {
@@ -230,7 +212,7 @@ func TestNewKeepsHostnameForEveryDial(t *testing.T) {
 		addresses = append(addresses, address)
 		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
 	}}
-	client, cleanup, err := New(testLogger(t), Options{Config: &api.Config{Address: "http://consul.invalid:8500", Transport: transport}})
+	client, cleanup, err := New(Options{Config: &api.Config{Address: "http://consul.invalid:8500", Transport: transport}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +249,7 @@ func TestNewPreservesHostnameAndSDKAddressOptions(t *testing.T) {
 				}
 				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`"leader:8300"`))}, nil
 			})
-			_, cleanup, err := New(testLogger(t), Options{Config: &api.Config{Address: test.address, Scheme: test.scheme, HttpClient: &http.Client{Transport: transport}}})
+			_, cleanup, err := New(Options{Config: &api.Config{Address: test.address, Scheme: test.scheme, HttpClient: &http.Client{Transport: transport}}})
 			if err != nil {
 				t.Fatal(err)
 			}

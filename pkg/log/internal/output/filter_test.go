@@ -74,3 +74,17 @@ func TestFilterKeysSetReturnsIndependentMembershipSnapshot(t *testing.T) {
 		t.Fatalf("FilterKeysSet() length = %d, want 2 unique keys", len(got))
 	}
 }
+
+func TestFilterPreservesModule(t *testing.T) {
+	for _, key := range []string{"module", "mod*", "*"} {
+		t.Run(key, func(t *testing.T) {
+			recorder := new(recordingLogger)
+			if err := NewFilter(recorder, true, FilterKeysSet([]string{key})).Log(kratoslog.LevelInfo, "module", "orders"); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(recorder.calls[0].keyvals, []any{"module", "orders"}) {
+				t.Fatal(recorder.calls)
+			}
+		})
+	}
+}

@@ -1,5 +1,7 @@
 # 组件业务演示
 
+示例业务日志统一使用注入的 Foundation Logger：服务入口为 `demo`、数据操作为 `data`、消息处理为 `messaging`、Redis 维护任务为 `maintenance`。不再使用独立的 slog 默认输出。
+
 这个示例让组件产生真实的操作指标，供业务接入和 Grafana 排障练习。保留独立的 [最小示例](../minimal/README.md)：不需要全部组件的项目从 minimal 开始，按需复制本例的 provider、声明和业务代码。
 
 ## 运行

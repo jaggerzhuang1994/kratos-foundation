@@ -31,6 +31,7 @@ func NewRuntime(
 	tracingProvider tracing.Provider,
 	spec *Spec,
 ) (*Runtime, func(), error) {
+	logger = logger.WithModule("server")
 	if err := spec.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("validate server spec: %w", err)
 	}

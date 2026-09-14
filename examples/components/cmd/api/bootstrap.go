@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 
 type configPath string
 
-func newSources(logger log.Logger, path configPath) (config.Sources, error) {
+func newSources(path configPath) (config.Sources, error) {
 	// 模板要求一个存在的文件，避免文件源未匹配时仅告警并使用默认配置启动。
 	info, err := os.Stat(string(path))
 	if err != nil {
@@ -28,7 +27,7 @@ func newSources(logger log.Logger, path configPath) (config.Sources, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("configuration must be a regular file")
 	}
-	sources, err := fileconfig.NewSources(logger, fileconfig.PathList{string(path)})
+	sources, err := fileconfig.NewSources(fileconfig.PathList{string(path)})
 	return config.Sources(sources), err
 }
 
@@ -42,7 +41,7 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *de
 	// 任务只读 Redis，沿用调度器的超时和释放顺序，不创建额外后台状态。
 	for _, name := range []string{"redis-heartbeat", "cache-size", "cache-ttl"} {
 		spec.Job().RegisterCron(name, "@every 10s", job.TaskFunc(func(ctx context.Context) error {
-			return runRedisJob(ctx, redisManager, name)
+			return runRedisJob(ctx, redisManager, name, service.logger)
 		}))
 	}
 
@@ -52,7 +51,7 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *de
 	return bootstrap.Bootstrap{}, nil
 }
 
-func runRedisJob(ctx context.Context, manager redis.Manager, name string) error {
+func runRedisJob(ctx context.Context, manager redis.Manager, name string, logger log.Logger) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	var value any
@@ -71,6 +70,6 @@ func runRedisJob(ctx context.Context, manager redis.Manager, name string) error 
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
-	slog.InfoContext(ctx, "runRedisJob | sampled", "job_name", name, "value", value)
+	logger.WithModule("maintenance").WithContext(ctx).With("function", "runRedisJob", "job_name", name, "value", value).Info("Collected Redis maintenance data")
 	return nil
 }

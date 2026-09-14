@@ -25,7 +25,7 @@ func TestHTTPExportsDashboardMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(closeMetrics)
-	sources, err := newSources(logger, "../../configs/config.yaml")
+	sources, err := newSources("../../configs/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

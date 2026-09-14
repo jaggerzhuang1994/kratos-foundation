@@ -10,6 +10,7 @@ func kvFromContext(ctx context.Context) []any {
 }
 
 // WithKv 向 Context 追加日志字段，并保留父 Context 中已有的字段。
+// module 不参与日志归属，防止请求上下文改写组件模块。
 func WithKv(ctx context.Context, kv ...any) context.Context {
 	prefix := kvFromContext(ctx)
 	values := make([]any, 0, len(prefix)+len(kv))

@@ -74,6 +74,10 @@ func (f *filterLogger) Log(level log.Level, keyvals ...any) error {
 
 // filtered 判断键是否命中精确规则或尾部星号转换出的前缀规则。
 func (f *filterLogger) filtered(key string) bool {
+	// module 是归属契约，任何精确或前缀过滤都必须保留它。
+	if key == "module" {
+		return false
+	}
 	if _, ok := f.filterKeys[key]; ok {
 		return true
 	}

@@ -8,13 +8,12 @@ import (
 	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
 type configPath string
 
-func newSources(logger log.Logger, path configPath) (config.Sources, error) {
+func newSources(path configPath) (config.Sources, error) {
 	// 模板要求一个存在的文件，避免文件源未匹配时仅告警并使用默认配置启动。
 	info, err := os.Stat(string(path))
 	if err != nil {
@@ -23,7 +22,7 @@ func newSources(logger log.Logger, path configPath) (config.Sources, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("configuration must be a regular file")
 	}
-	sources, err := fileconfig.NewSources(logger, fileconfig.PathList{string(path)})
+	sources, err := fileconfig.NewSources(fileconfig.PathList{string(path)})
 	return config.Sources(sources), err
 }
 

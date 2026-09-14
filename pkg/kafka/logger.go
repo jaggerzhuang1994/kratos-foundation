@@ -40,15 +40,15 @@ func (l *loggerAdapter) Level() kgo.LogLevel {
 
 // Log 把 franz-go 结构化日志转发到 Foundation Logger。
 func (l *loggerAdapter) Log(level kgo.LogLevel, message string, keyvals ...any) {
-	keyvals = append([]any{"msg", message}, keyvals...)
+	logger := l.log.With(keyvals...)
 	switch level {
 	case kgo.LogLevelError:
-		l.log.Errorw(keyvals...)
+		logger.Error(message)
 	case kgo.LogLevelWarn:
-		l.log.Warnw(keyvals...)
+		logger.Warn(message)
 	case kgo.LogLevelInfo:
-		l.log.Infow(keyvals...)
+		logger.Info(message)
 	default:
-		l.log.Debugw(keyvals...)
+		logger.Debug(message)
 	}
 }

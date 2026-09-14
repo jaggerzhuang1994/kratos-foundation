@@ -24,9 +24,9 @@ func (c *consumer) logFetchEvents(fetches kgo.Fetches) {
 		var groupSession *kgo.ErrGroupSession
 		switch {
 		case errors.As(fetchError.Err, &dataLoss):
-			c.logger.Errorw("msg", "Kafka consumer data loss", "error", err)
+			c.logger.With("function", "logFetchEvents", "error", err).Error("Kafka reported data loss while fetching records")
 		case errors.As(fetchError.Err, &groupSession):
-			c.logger.Warnw("msg", "Kafka consumer group session lost", "error", err)
+			c.logger.With("function", "logFetchEvents", "error", err).Warn("Kafka consumer group session was lost")
 		}
 	}
 }

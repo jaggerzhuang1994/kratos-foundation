@@ -11,6 +11,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/lock"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/sqlite"
@@ -18,6 +19,12 @@ import (
 )
 
 func TestDataService(t *testing.T) {
+	t.Setenv("LOG_FILE_DISABLE", "true")
+	logger, closeLog, err := log.NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeLog)
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "orders.db")))
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +51,7 @@ func TestDataService(t *testing.T) {
 	})
 	cache := &orderCacheHook{values: map[string]string{}}
 	client.AddHook(cache)
-	service, err := newDataService(&orderDatabase{db: db}, orderRedis{client}, provider)
+	service, err := newDataService(&orderDatabase{db: db}, orderRedis{client}, provider, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

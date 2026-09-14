@@ -2,8 +2,8 @@ package config
 
 import (
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
-	"github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/decoder"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/pkg/errors"
 )
 
@@ -79,7 +79,7 @@ func NewManager(sources Sources) (Manager, func(), error) {
 	}
 	return manager, func() {
 		if closeErr := manager.close(); closeErr != nil {
-			log.Errorf("NewManager.cleanup | close.failed | err=%v", closeErr)
+			log.WithModule("config").With("function", "NewManager.cleanup", "error", closeErr).Error("Failed to close the configuration manager")
 		}
 	}, nil
 }

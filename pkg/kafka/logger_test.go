@@ -45,7 +45,7 @@ func TestKafkaLoggerLevelsAndForwarding(t *testing.T) {
 	for _, fragment := range []string{
 		"DEBUG ", "INFO ", "WARN ", "ERROR ",
 		"msg=debug event", "msg=info event", "msg=warn event", "msg=error event",
-		fmt.Sprintf("caller=kafka/logger_test.go:%d msg=info event", line+1),
+		fmt.Sprintf("caller=kafka/logger_test.go:%d", line+1),
 		"partition=1", "partition=2", "partition=3", "partition=4",
 	} {
 		if !strings.Contains(logs, fragment) {

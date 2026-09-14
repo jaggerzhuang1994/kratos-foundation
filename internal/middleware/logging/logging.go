@@ -108,12 +108,15 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 				operation = info.Operation()
 				component = info.Kind().String()
 			}
-			logger.WithContext(ctx).Infow(
-				"msg", "accessLog | request.complete",
-				"kind", kind, "component", component, "operation", operation,
-				"code", foundationerrors.Code(foundationerrors.Normalize(err)), "reason", foundationerrors.Reason(err),
+			logger.WithContext(ctx).With(
+				"function", "accessLog",
+				"kind", kind,
+				"component", component,
+				"operation", operation,
+				"code", foundationerrors.Code(foundationerrors.Normalize(err)),
+				"reason", foundationerrors.Reason(err),
 				"latency", time.Since(started).Seconds(),
-			)
+			).Info("Request completed")
 			return reply, err
 		}
 	}

@@ -157,13 +157,13 @@ Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_con
 ```mermaid
 flowchart TD
     A([database 订阅收到新配置]) --> B{解码与配置校验通过?}
-    B -- 否 --> C[ERROR subscribeConnectionPools: database config update rejected]
+    B -- 否 --> C[ERROR Rejected database configuration update]
     B -- 是 --> D{排除池参数后与启动配置相同?}
-    D -- 否 --> E[WARN subscribeConnectionPools: database hot update skipped]
+    D -- 否 --> E[WARN Skipped database hot update]
     D -- 是 --> F[查询原连接池：短暂持有 factory 锁后释放]
     F --> G[补齐默认值；先更新总上限，再更新空闲上限与过期时间]
     G --> H{有连接完成更新?}
-    H -- 是 --> J[INFO subscribeConnectionPools: database connection pool config updated]
+    H -- 是 --> J[INFO Updated database connection pool settings]
     C --> I([结束])
     E --> I
     H -- 否 --> I
@@ -228,7 +228,7 @@ flowchart TD
     E --> G[Wire cleanup 停配置订阅]
     G --> H[停采集并注销指标]
     H --> I[逆序关闭连接池]
-    I -- 关闭失败 --> J[ERROR manager.close: database cleanup failed]
+    I -- 关闭失败 --> J[ERROR Failed to close a database connection]
     I -- 成功 --> K([结束])
     J --> K
     F --> K

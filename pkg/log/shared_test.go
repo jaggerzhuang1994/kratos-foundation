@@ -109,6 +109,7 @@ func TestGlobalCustomUpdateWarnsAndPreservesState(t *testing.T) {
 		{"partial fields", "kv", func() { WithKV("existing", "changed", "", "invalid") }},
 		{"time format", "time_format", func() { WithTimeFormat(" ") }},
 		{"message key", "msg_key", func() { WithMsgKey(" ") }},
+		{"reserved message key", "msg_key", func() { WithMsgKey("module") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			warnings = nil
@@ -123,6 +124,9 @@ func TestGlobalCustomUpdateWarnsAndPreservesState(t *testing.T) {
 			fields := make(map[string]any)
 			for i := 0; i < len(warnings[0]); i += 2 {
 				fields[warnings[0][i].(string)] = warnings[0][i+1]
+			}
+			if fields["module"] != "log" {
+				t.Fatalf("missing log module: %v", fields)
 			}
 			if fields["state"] != test.field {
 				t.Fatalf("state = %v, want %s", fields["state"], test.field)

@@ -1,5 +1,7 @@
 # Consul 服务发现
 
+发现及重试日志归属 `module=discovery`，并包含 `driver=consul`。
+
 `NewDiscovery(logger, config, client)` 返回 Kratos `registry.Discovery`。共享客户端为 nil 时禁用，配置与公共 Wire 构造签名保持不变。默认请求超时 10 秒，支持单数据中心和多数据中心。
 
 每个 `Watch` 独立拥有取消函数、最新快照 channel 和工作协程。首次请求失败直接返回错误，不创建缓存或后台任务；再次订阅会重新请求。首次成功即推送快照，包括空列表。后续成功的 Consul index 变化也会推送空列表，及时移除失效节点。消费者慢时合并为最新快照。`GetService` 单次直接查询，没有健康实例时返回未解析错误。

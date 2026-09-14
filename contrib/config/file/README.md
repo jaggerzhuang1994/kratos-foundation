@@ -1,11 +1,13 @@
 # 文件配置源
 
-`contrib/config/file` 把明确的文件路径或 `filepath.Glob` 模式转换成 Kratos 配置源。路径和匹配结果保持输入顺序，后面的文件优先级更高；重叠模式命中的同一文件只加载一次。
+配置源诊断使用全局日志，声明 `module=config/file`；未匹配路径和匹配文件列表使用结构化字段。
+
+`contrib/config/file` 把目录、具体文件路径或 `filepath.Glob` 模式转换成 Kratos 配置源。按 PathList 输入顺序处理，每项匹配结果按文件名字典序排列，后面的文件优先级更高；重叠模式命中的同一路径只加载一次，保留第一次出现的位置。
 
 使用 `NewSources`，让 `pkg/config` 直接驱动每个底层文件源：
 
 ```go
-fileSources, err := file.NewSources(logger, file.PathList{
+fileSources, err := file.NewSources(file.PathList{
 	"config/base.yaml",
 	"config/custom/*.yaml",
 })
@@ -22,15 +24,26 @@ if err != nil {
 defer cleanup()
 ```
 
-空路径列表、全部未匹配的模式都会返回 nil 且不报错；非法 glob 模式返回错误。未匹配模式会记录警告，方便同一镜像在不同环境使用可选配置挂载。
+`NewSources` 只接收 `PathList`，使用 `pkg/log` 全局日志，不要求注入或构造 Logger。
+应用 Logger 安装前使用默认标准输出；Bootstrap 安装后使用当前应用输出，本构造函数不拥有日志资源或 cleanup。
 
-文件监听绑定父目录，文件被原子替换后仍能接收后续变更；普通父目录被移走重建时会重新绑定监听。已选中的文件或目录暂时不存在时保留最后有效配置，使用 100ms 至 5s 的指数退避与抖动等待重建，`Stop` 会取消等待。目录源中删除子文件会发布完整快照（包括空快照），让已删除的覆盖配置退出优先级合并。
+每一项采用相同的路径规则：
 
-Glob 只在构造时展开，不会自动加入之后新增的匹配文件；需要动态增删文件时应直接配置目录路径。符号链接文件同时监听真实目标的写入和链接所在父目录的替换；链接切换目标后移除旧目标监听，并在发布快照前绑定新目标。不承诺跟踪任意祖先符号链接的替换。监控父目录的方式符合 [fsnotify 的原子写入建议](https://github.com/fsnotify/fsnotify#watching-a-file-doesnt-work-well)。
+- 已存在的字面文件：直接加载，文件名中的 glob 元字符不再展开。
+- 已存在的目录：只选择直属 `*.yaml` 普通文件，忽略 `.yml` 和子目录，允许文件符号链接。
+- 其他输入：使用 `filepath.Glob` 展开，仅保留普通文件；匹配到目录不会加载目录内容。`*` 不跨目录。
+
+显式文件或 glob 不限制扩展名，但内容需要有对应的 Kratos codec 才能解码。
+空列表返回 nil；空路径项、非法模式、文件状态或目录读取错误返回错误。
+空目录和未匹配项会记录警告并跳过，全部未匹配时返回 nil。Bootstrap 在 local 下额外要求最终结果非空。
+
+文件监听绑定父目录，文件被原子替换后仍能接收后续变更；普通父目录被移走重建时会重新绑定监听。已选中的文件暂时不存在时保留最后有效配置，使用 100ms 至 5s 的指数退避与抖动等待重建，`Stop` 会取消等待。文件删除不会发布空快照或撤销旧配置，而是等待原路径恢复。
+
+目录和 glob 都只在构造时展开，不会自动加入之后新增的匹配文件；需要重新构造配置源才能重新选择。这是与旧目录源动态增删行为的区别。符号链接文件同时监听真实目标的写入和链接所在父目录的替换；链接切换目标后移除旧目标监听，并在发布快照前绑定新目标。不承诺跟踪任意祖先符号链接的替换。监控父目录的方式符合 [fsnotify 的原子写入建议](https://github.com/fsnotify/fsnotify#watching-a-file-doesnt-work-well)。
 
 ```mermaid
 flowchart TD
-    A([父目录 源目录或真实目标变更]) --> T[解析目标路径 移除旧目标并绑定新目标]
+    A([父目录 文件或真实目标变更]) --> T[解析目标路径 移除旧目标并绑定新目标]
     T --> C{绑定成功?}
     C -- 是 --> B[读取完整快照]
     C -- 否 --> E{路径暂时不存在?}
@@ -45,17 +58,22 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([开始]) --> B[展开 PathList 与 glob]
-    B --> C{模式是否合法?}
+    A([开始]) --> B[逐项解析文件 目录或 glob 并过滤非普通文件]
+    B --> C{路径解析成功?}
     C -- 否 --> D[返回错误]
-    C -- 是 --> E{是否匹配文件?}
-    E -- 否 --> F[WARN: glob.unmatched]
-    F --> G[返回 nil Sources]
-    E -- 是 --> H[按顺序创建文件 Source]
-    H --> J[返回全部底层 Sources 交给 Manager]
+    C -- 是 --> F[对未匹配项记录全局 WARN: No local configuration files matched the pattern]
+    F --> E{合并去重后是否有文件?}
+    E -- 否 --> G[返回 nil Sources]
+    E -- 是 --> O[全局 INFO: Matched local configuration files]
+    O --> H[按顺序创建文件 Source]
+    H -- 成功 --> J[返回全部底层 Sources 交给 Manager]
+    H -- 失败 --> D
     J --> L([结束])
     D --> L
     G --> L
 ```
 
-Watcher 显式声明 `FullSnapshot() bool` 为 true，配置管理器复制通知结果后直接更新本源缓存，不再重复读取文件；初始 Load 保留。空结果表示完整删除，缓冲所有权与第三方兼容规则见 [配置契约](../../../pkg/config/README.md#watcher-完整快照契约)。
+Watcher 显式声明 `FullSnapshot() bool` 为 true，配置管理器复制通知结果后直接更新本源缓存，不再重复读取文件；初始 Load 保留。文件暂时缺失时不会发布空结果；缓冲所有权与第三方兼容规则见 [配置契约](../../../pkg/config/README.md#watcher-完整快照契约)。
+
+`bootstrap.LocalConfigPath` 直接委托此实现，仅额外负责环境选择和 local 结果非空检查，
+详见 [Bootstrap 路径约定](../../../pkg/bootstrap/README.md#配置选择和路径约定)。

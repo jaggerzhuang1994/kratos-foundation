@@ -43,7 +43,7 @@ func TestDemoHTTP(t *testing.T) {
 	if err := os.WriteFile(path, []byte("tracing:\n  disable: true\nclient:\n  clients:\n    greeting:\n      protocol: HTTP\n      target: "+upstream.URL+"\n    components:\n      protocol: HTTP\n      target: http://"+components.Listener.Addr().String()+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	sources, err := newSources(logger, configPath(path))
+	sources, err := newSources(configPath(path))
 	if err != nil {
 		t.Fatal(err)
 	}

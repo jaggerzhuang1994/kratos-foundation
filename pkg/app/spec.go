@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // Spec 保存 Bootstrap 阶段的可变组装状态。
@@ -80,6 +81,8 @@ func (s *Spec) RegisterAppInfo(info AppInfo) error {
 	return nil
 }
 
+// RegisterLogger 登记仅供 Kratos App 使用的带 module=kratos 的派生 Logger。
+// 派生视图借用原输出，不修改输入 Logger 或全局绑定。
 func (s *Spec) RegisterLogger(logger kratoslog.Logger) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -90,6 +93,14 @@ func (s *Spec) RegisterLogger(logger kratoslog.Logger) error {
 		return fmt.Errorf("app logger is already registered")
 	}
 	s.logger = logger
+	// nil 仍表示未登记，由 NewApp 保持原有缺失依赖错误。
+	if logger != nil {
+		if base, ok := logger.(foundationlog.Logger); ok {
+			s.logger = base.WithModule("kratos")
+		} else {
+			s.logger = kratoslog.With(logger, "module", "kratos")
+		}
+	}
 	return nil
 }
 

@@ -24,11 +24,11 @@
 | 包 | 主要职责 | 开发模式 | 生命周期与关键边界 |
 | --- | --- | --- | --- |
 | [`app`](app/README.md) | 应用核心编排 | M7 核心 + M2 契约 | 定义 `app.Runtime`，冻结 Spec，监督启动与停止；不导入具体 Server/Job 实现 |
-| [`bootstrap`](bootstrap/README.md) | 应用组装 | M6 Bootstrap | 集中组件登记与完成标记；ProviderSet 由业务维护 |
+| [`bootstrap`](bootstrap/README.md) | 应用组装 | M6 Bootstrap | 集中组件登记与完成标记；提供 Base/Consul 默认集合及独立自定义入口 |
 | [`config`](config/README.md) | 基础配置服务 + Source 抽象 | M3 资源 + M2 契约 | Manager 构造时加载并监听；cleanup 关闭监听和源；非 Runtime |
 | [`env`](env/README.md) | 基础环境工具 | M1 工具 | 按调用读取环境；依赖进程环境，不是纯函数；无 cleanup |
 | [`errors`](errors/README.md) | 基础错误模型与协议转换 | M1 值对象/工具 | 无常驻资源；包含 Kratos、HTTP/gRPC 等语义，不是仅含接口的抽象包 |
-| [`log`](log/README.md) | 基础日志服务 | M3 资源 | 每次 NewLogger 拥有独立输出及 cleanup；包级设置仅共享非资源状态；组装层 cleanup 恢复全局 Logger 绑定；非 Runtime |
+| [`log`](log/README.md) | 基础日志服务 | M3 资源 | 每次 NewLogger 拥有独立输出及 cleanup；包级设置仅共享非资源状态；组装层 cleanup 恢复全局 Logger 绑定；输出保留 module，缺失时 unknown；非 Runtime |
 | [`appinfo`](appinfo/README.md) | 应用身份与元数据 | M1 值对象 | 同步采集身份，组装层贡献 AppInfo 和日志字段；非 Runtime |
 | [`metrics`](metrics/README.md) | 指标服务 | M3 Provider | Provider cleanup 关闭资源；组装层注入 ContextDecorator，不启动 Runtime |
 | [`tracing`](tracing/README.md) | 链路追踪服务 | M3 Provider | Provider 管理 exporter/sampler 等资源；组装层贡献日志字段；非 Runtime |

@@ -33,7 +33,7 @@ func newDemoService(data *dataService, storage *objectStorage, messages *messagi
 	if err != nil {
 		return nil, err
 	}
-	return &demoService{cache: data.cache, steps: []demoStep{{"database-cache-lock", data.Run}, {"oss", storage.Run}, {"kafka-queue", messages.Run}}, clients: clients, logger: logger, runs: counter}, nil
+	return &demoService{cache: data.cache, steps: []demoStep{{"database-cache-lock", data.Run}, {"oss", storage.Run}, {"kafka-queue", messages.Run}}, clients: clients, logger: logger.WithModule("demo"), runs: counter}, nil
 }
 
 func (s *demoService) register(srv server.HTTPServer) {
@@ -68,7 +68,7 @@ func (s *demoService) inventory(ctx context.Context, _ any) (any, error) {
 	// 真实读取当前 Redis 库键数量，不将其冒充商品库存；不改变演示数据。
 	count, err := s.cache.DBSize(ctx).Result()
 	if err != nil {
-		s.logger.With("error", err).Error("inventory | cache.read_failed")
+		s.logger.With("function", "inventory", "error", err).Error("Failed to read inventory from the cache")
 		return nil, fmt.Errorf("inventory unavailable")
 	}
 	return map[string]int64{"cache_keys": count}, nil
@@ -81,7 +81,7 @@ func (s *demoService) execute(ctx context.Context, _ any) (any, error) {
 	id := uuid.NewString()
 	for _, step := range s.steps {
 		if err := step.run(ctx, id); err != nil {
-			s.logger.With("run_id", id, "component", step.name, "error", err).Error("execute | demo.failed")
+			s.logger.With("function", "execute", "run_id", id, "component", step.name, "error", err).Error("Failed to execute a demonstration component")
 			return nil, fmt.Errorf("component demo failed: %s", step.name)
 		}
 	}
@@ -109,11 +109,11 @@ func (s *demoService) execute(ctx context.Context, _ any) (any, error) {
 	} {
 		var result map[string]any
 		if err := components.Invoke(ctx, http.MethodGet, endpoint.path, nil, &result, kratoshttp.Operation(endpoint.operation)); err != nil {
-			s.logger.With("run_id", id, "operation", endpoint.operation, "error", err).Error("execute | components.request_failed")
+			s.logger.With("function", "execute", "run_id", id, "operation", endpoint.operation, "error", err).Error("Request to a demonstration endpoint failed")
 			return nil, err
 		}
 	}
 	s.runs.Add(ctx, 1)
-	s.logger.With("run_id", id).Info("execute | demo.completed")
+	s.logger.With("function", "execute", "run_id", id).Info("Completed all demonstration requests")
 	return map[string]string{"run_id": id, "status": "submitted", "message": "synchronous operations verified; kafka and queue complete asynchronously"}, nil
 }

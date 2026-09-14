@@ -3,7 +3,7 @@ package config
 import (
 	"sync/atomic"
 
-	"github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type hotReloadValueWrapper[T any] struct {
@@ -36,7 +36,11 @@ func NewHotReloadValue[T any](config Manager, key string, optionalDefault ...*T)
 
 	cancel, err := config.Subscribe(key, new(T), func(_ string, value any, err error) {
 		if err != nil {
-			log.Warnf("config subscribe '%s' error: %v", key, err)
+			log.WithModule("config").With(
+				"function", "NewHotReloadValue",
+				"key", key,
+				"error", err,
+			).Warn("Failed to update the subscribed configuration value; retaining the previous value")
 			return
 		}
 		for {

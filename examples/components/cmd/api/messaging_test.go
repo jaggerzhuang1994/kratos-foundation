@@ -114,6 +114,8 @@ func (s *messagingStore) Enqueue(_ context.Context, task *queue.Task) error {
 
 type messagingLogger struct{ log.Logger }
 
+func (l messagingLogger) WithModule(string) log.Logger { return l }
+
 func (l messagingLogger) WithContext(context.Context) log.Logger { return l }
 func (messagingLogger) Infow(...any)                             {}
 func (messagingLogger) Errorw(...any)                            {}

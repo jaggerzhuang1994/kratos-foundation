@@ -183,7 +183,7 @@ func TestConsumerRecoveryBackoffGrowsAndResetsAfterCommit(t *testing.T) {
 	}
 	var attempts []string
 	for _, line := range strings.Split(string(data), "\n") {
-		if strings.Contains(line, "Kafka consumer reconnecting") {
+		if strings.Contains(line, "Reconnecting the Kafka consumer after a connection failure") {
 			attempts = append(attempts, line)
 		}
 	}

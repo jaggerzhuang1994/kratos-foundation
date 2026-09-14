@@ -38,17 +38,18 @@ func TestInitializeAndCleanup(t *testing.T) {
 
 func TestSourcesRejectsDirectory(t *testing.T) {
 	t.Setenv("LOG_FILE_DISABLE", "true")
-	logger, cleanup, err := log.NewLogger()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	if _, err := newSources(logger, configPath(t.TempDir())); err == nil {
+	if _, err := newSources(configPath(t.TempDir())); err == nil {
 		t.Fatal("directory accepted as configuration")
 	}
 }
 
 func TestRedisJobs(t *testing.T) {
+	t.Setenv("LOG_FILE_DISABLE", "true")
+	logger, closeLog, err := log.NewLogger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeLog)
 	cache := redis.NewClient(&redis.Options{Addr: "unused"})
 	cache.AddHook(&demoRedisReadHook{})
 	t.Cleanup(func() {
@@ -58,7 +59,7 @@ func TestRedisJobs(t *testing.T) {
 	})
 	for _, name := range []string{"redis-heartbeat", "cache-size", "cache-ttl"} {
 		t.Run(name, func(t *testing.T) {
-			if err := runRedisJob(context.Background(), orderRedis{cache}, name); err != nil {
+			if err := runRedisJob(context.Background(), orderRedis{cache}, name, logger); err != nil {
 				t.Fatal(err)
 			}
 		})

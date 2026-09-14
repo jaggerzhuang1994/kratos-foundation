@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	redislock "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/lock/redis"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/lock"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	foundationredis "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/redis"
 	"github.com/redis/go-redis/v9"
@@ -23,13 +23,14 @@ type demoOrder struct {
 }
 
 type dataService struct {
+	logger log.Logger
 	db     database.Manager
 	cache  *redis.Client
 	counts *metrics.CacheMetrics
 	locker lock.Locker
 }
 
-func newDataService(db database.Manager, cache foundationredis.Manager, provider metrics.Provider) (*dataService, error) {
+func newDataService(db database.Manager, cache foundationredis.Manager, provider metrics.Provider, logger log.Logger) (*dataService, error) {
 	counts, err := metrics.NewCacheMetrics(provider, "orders")
 	if err != nil {
 		return nil, err
@@ -48,7 +49,7 @@ func newDataService(db database.Manager, cache foundationredis.Manager, provider
 	if err := db.Connection(ctx).AutoMigrate(&demoOrder{}); err != nil {
 		return nil, fmt.Errorf("migrate demo orders: %w", err)
 	}
-	return &dataService{db: db, cache: cache.Default(), counts: counts, locker: locker}, nil
+	return &dataService{logger: logger.WithModule("data"), db: db, cache: cache.Default(), counts: counts, locker: locker}, nil
 }
 
 func (s *dataService) Run(ctx context.Context, runID string) (runErr error) {
@@ -108,7 +109,7 @@ func (s *dataService) Run(ctx context.Context, runID string) (runErr error) {
 		}
 		return errors.New("deleted demo order still exists")
 	}
-	slog.InfoContext(ctx, "dataService.Run | completed", "run_id", runID, "cache_hits", 3, "cache_misses", 1)
+	s.logger.WithContext(ctx).With("function", "dataService.Run", "run_id", runID, "cache_hits", 3, "cache_misses", 1).Info("Completed the database and cache demonstration")
 	return nil
 }
 
@@ -172,6 +173,6 @@ func (s *dataService) exerciseLock(ctx context.Context, key string) (runErr erro
 	if err := lease.Refresh(ctx, time.Minute); err != nil {
 		return fmt.Errorf("refresh order lease: %w", err)
 	}
-	slog.InfoContext(ctx, "dataService.exerciseLock | refreshed", "key", key, "contended", true)
+	s.logger.WithContext(ctx).With("function", "dataService.exerciseLock", "key", key, "contended", true).Info("Refreshed the distributed lock lease")
 	return nil
 }

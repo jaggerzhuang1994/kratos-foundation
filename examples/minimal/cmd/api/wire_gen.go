@@ -57,7 +57,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	sources, err := newSources(logger, path)
+	sources, err := newSources(path)
 	if err != nil {
 		cleanup3()
 		cleanup2()

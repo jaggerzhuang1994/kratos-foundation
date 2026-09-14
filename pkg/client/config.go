@@ -99,7 +99,7 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) (logChanged bool,
 	f.mu.Unlock()
 
 	if timeoutChanged {
-		f.logger.Warn("factory.applyValidatedConfig | cleanup_timeout.changed | restart required")
+		f.logger.With("function", "factory.applyValidatedConfig").Warn("Client cleanup timeout changed; restart the application to apply it")
 	}
 	for _, cancel := range cancels {
 		cancel()

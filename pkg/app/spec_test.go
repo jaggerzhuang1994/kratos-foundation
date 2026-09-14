@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/url"
@@ -242,4 +243,30 @@ func TestRegisterRuntimePreservesOrderAndRepeatedInstances(t *testing.T) {
 type orderedTestRuntime struct {
 	testRuntime
 	id int
+}
+
+func TestRegisteredAppLoggerAddsKratosModuleWithoutChangingInput(t *testing.T) {
+	var output bytes.Buffer
+	logger := kratoslog.NewStdLogger(&output)
+	spec := NewSpec()
+	if err := spec.RegisterLogger(logger); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := spec.freeze(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := snapshot.logger.Log(kratoslog.LevelInfo, "msg", "framework event"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "module=kratos") {
+		t.Fatalf("app logger lacks module: %s", output.String())
+	}
+	output.Reset()
+	if err := logger.Log(kratoslog.LevelInfo, "msg", "business event"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "module=kratos") {
+		t.Fatalf("input logger changed: %s", output.String())
+	}
 }

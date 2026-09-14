@@ -168,7 +168,8 @@ func TestBootstrapRegistersStableLoggerAndRestoresPreviousGlobal(t *testing.T) {
 }
 
 func TestBootstrapLoggerSurvivesNewAppAndCleanupRestoresPreviousGlobal(t *testing.T) {
-	shared, release, err := testlog.New(bootstrapConfig())
+	path := filepath.Join(t.TempDir(), "global.log")
+	shared, release, err := testlog.New(bootstrapLogConfig(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,6 +209,24 @@ func TestBootstrapLoggerSurvivesNewAppAndCleanupRestoresPreviousGlobal(t *testin
 	}
 	if foundationlog.GetLogger() != installed {
 		t.Fatal("NewApp replaced the logger installed by log bootstrap")
+	}
+
+	kratoslog.Info("framework-after-app")
+	foundationlog.Infow("module", "bootstrap", "msg", "foundation-after-app")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(content)), "\n") {
+		if strings.Contains(line, "framework-after-app") && !strings.Contains(line, "module=kratos") {
+			t.Fatalf("framework ownership lost: %s", line)
+		}
+		if strings.Contains(line, "foundation-after-app") && !strings.Contains(line, "module=bootstrap") {
+			t.Fatalf("foundation ownership lost: %s", line)
+		}
+	}
+	if !strings.Contains(string(content), "framework-after-app") || !strings.Contains(string(content), "foundation-after-app") {
+		t.Fatalf("missing events: %s", content)
 	}
 
 	cleanup()

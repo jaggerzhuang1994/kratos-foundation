@@ -1,5 +1,7 @@
 # Server
 
+默认访问日志、错误边界和中间件配置更新归属 `module=server`，健康状态变化为 `server/health`，WebSocket 为 `server/websocket`。通过 Foundation 全局绑定的 Kratos HTTP/gRPC 启停日志归属 `kratos`。
+
 `pkg/server` 是业务与 Wire 声明 HTTP、gRPC 和 WebSocket 服务并构造服务器运行时的公共入口。业务只依赖 `Spec`、Builder、协议契约、`NewRuntime`；应用登记由 `pkg/bootstrap` 提供的 `NewServerBootstrap` 负责；不应导入 `pkg/server/internal/*`。
 
 下面是手工组装片段：配置 Manager、Logger、Metrics/Tracing Provider 和 appSpec 已由外层创建，外层最后逆序释放它们；注册回调由业务提供。完整 Wire 组装见 [bootstrap](../bootstrap/README.md)。
@@ -181,7 +183,7 @@ spec.HTTP().Health(server.HealthConfig{
 执行，只注册接收业务流量必需的依赖。检查函数必须支持 Context、可并发调用、无写入副作用；
 超时通知不能强杀不合作的检查函数，框架不另起可能泄漏的 goroutine 包装检查。
 配置在组装后固定；不得并发修改 Spec 或 SetReadinessSource。普通探针不逐次记录日志，readiness
-结果变化记录 `healthState.ready | readiness.changed`（成功 INFO、失败 WARN），只包含状态和检查名。
+结果变化记录 `event=readiness.changed`（成功 INFO、失败 WARN），只包含状态和检查名。
 
 ```mermaid
 flowchart TD
@@ -307,9 +309,9 @@ flowchart TD
 
 默认 HTTP/gRPC 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
 
-`normalizeErrors | request.failed` 对服务端故障记录一次带请求 context 的诊断；`server.middleware.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。服务端与客户端访问日志不读取请求/响应正文，不输出 cause/stack，只记录操作、状态、耗时及 deadline 字段。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
+`Request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.middleware.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。服务端与客户端访问日志不读取请求/响应正文，不输出 cause/stack，只记录操作、状态、耗时及 deadline 字段。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
 
-最外层 `recoverRequests | request.panic` 记录 panic 类型与堆栈，并将堆栈保存到服务间错误诊断，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
+最外层 `Recovered from a panic while handling a request` 记录 panic 类型与堆栈，并将堆栈保存到服务间错误诊断，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
 
 业务通过 Spec 同名替换 `errors` 或 `recovery` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC 请求链；WebSocket 异步消息回调需自行处理错误和日志。
 
@@ -324,10 +326,10 @@ flowchart TD
     F --> G
     G --> H[Normalize: 保留已知状态或安全兜底]
     H --> I{服务端故障?}
-    I -- 是 --> J[ERROR normalizeErrors request.failed]
+    I -- 是 --> J[ERROR Request failed with a server error]
     I -- 否 --> K([返回安全协议错误或成功])
     J --> K
-    G -. panic .-> L[ERROR recoverRequests request.panic: 类型和栈]
+    G -. panic .-> L[ERROR Recovered from a panic while handling a request: 类型和栈]
     L --> M([安全 500])
 ```
 

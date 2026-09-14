@@ -1,5 +1,7 @@
 # 配置管理
 
+配置热更新、订阅异常及清理诊断使用全局日志，固定声明 `module=config`。
+
 `pkg/config` 负责应用全部配置源的加载、监听、优先级合并、类型解码和订阅生命周期。应用层只需要按顺序组装 `Sources`，不需要直接调用 Source 的 `Load`、`Watch` 或 Watcher 的 `Stop`。
 
 ## 基本用法
@@ -28,7 +30,7 @@ if err := manager.Load("server", &server); err != nil {
 Manager 在首次加载及每次更新发布前检查 Foundation 协议中的 reserved 字段。
 已删除字段即使为 null 或空对象也会返回 `ErrRemovedField`，错误只包含字段路径，不包含值。
 其他业务字段仍允许存在；protobuf Load/Subscribe 也检查对应消息的 reserved 字段。
-首次加载失败会释放配置源；非法更新记录 `manager.watch | config.rejected`，通知订阅错误并保留旧快照，修正后可继续更新。
+首次加载失败会释放配置源；非法更新记录 `Rejected configuration update`，通知订阅错误并保留旧快照，修正后可继续更新。
 `Load("", &target)` 可读取整个有效配置。
 
 | 已删除配置 | 迁移方式 |
@@ -57,7 +59,7 @@ flowchart TD
     B --> C{已知消息包含 reserved 字段?}
     C -- 是 --> D[ErrRemovedField 只包含路径]
     D --> F{热更新?}
-    F -- 是 --> L[ERROR manager.watch config.rejected]
+    F -- 是 --> L[ERROR Rejected configuration update]
     L --> E
     F -- 否 --> K[释放配置源 返回构造错误]
     C -- 否 --> G[发布快照 Load 与订阅读取]
@@ -241,7 +243,7 @@ ${RESOURCE}:
 - 替换后的内容仍须是合法 JSON/YAML。未设置的 `"value": "${VAR}"` 会得到空字符串；`"value": ${VAR}` 会因 JSON 格式非法而失败。已设置为空的未加引号值也可能导致 JSON 失败或 YAML 解析成 null。原始文本替换避免的是模板被提前按数字等类型校验，并不取消最终类型约束。
 - 未指定 Format 的 KeyValue 在键替换后按点分路径展开，值仍是字符串；指定 Format 时 Key 是源标识，正文中的键决定配置路径。Format 自身不替换。
 - Source 原始键值不会被修改。初始加载与任意源更新构建快照时重新读取环境；单独改变环境不会触发通知，`Load` 只读取已发布快照。默认值对象不进行模板替换。
-- 模板非法、必填检查失败或替换后格式非法会使整个快照构建失败，即使对应值随后可能被高优先级源覆盖。首次失败释放源并返回错误；更新失败沿用 `manager.watch | config.rejected` 日志和订阅错误通知，保留旧快照，后续有效更新可恢复。模板语法错误不携带完整配置正文；必填错误保留变量名和描述。
+- 模板非法、必填检查失败或替换后格式非法会使整个快照构建失败，即使对应值随后可能被高优先级源覆盖。首次失败释放源并返回错误；更新失败沿用 `Rejected configuration update` 日志和订阅错误通知，保留旧快照，后续有效更新可恢复。模板语法错误不携带完整配置正文；必填错误保留变量名和描述。
 
 配置源之间按环境替换后的键名精确合并；默认值与结构体字段合并时会兼容大小写、下划线、连字符和空白差异；业务 map（含 protobuf map）的键始终精确匹配，例如 `order_service` 与 `order-service` 是两个不同资源名。旧配置引用应改为部署时生成的实际值或环境变量，见 [迁移说明](../../MIGRATION_V2.md#移除配置自身引用)。
 
@@ -283,7 +285,7 @@ ReadinessCheck 显式检查 WatcherRunning 和所关心订阅状态；框架不�
 flowchart TD
     A([配置监听更新]) --> B{快照可接受?}
     B -- 否 --> C[保留旧快照 记录拒绝类别与次数]
-    C --> D[错误通知或 ERROR config.rejected]
+    C --> D[错误通知或 ERROR Rejected configuration update]
     B -- 是 --> E[Manager 锁内替换快照 递增序号和成功计数]
     E --> F[释放 Manager 锁]
     F --> G[订阅锁内入队]

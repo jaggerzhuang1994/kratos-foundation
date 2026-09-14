@@ -41,13 +41,13 @@ func NewOptions() Options {
 
 // New 构造并探测共享 Consul 客户端，返回幂等的空闲连接清理函数。
 //
+// 启动诊断使用全局日志，无需先构造应用 Logger。
 // Options.Disabled 为 true 时返回 nil 客户端和空清理函数。
-func New(logger log.Logger, options Options) (Client, func(), error) {
+func New(options Options) (Client, func(), error) {
 	nopCleanup := func() {}
-	logger = logger.WithModule("consul")
 
 	if options.Disabled {
-		logger.Warn("consul is disabled")
+		log.WithModule("consul").With("function", "New").Warn("Consul client is disabled")
 		return nil, nopCleanup, nil
 	}
 	if options.Config == nil {
@@ -61,7 +61,7 @@ func New(logger log.Logger, options Options) (Client, func(), error) {
 	}
 	// 保留域名，由 HTTP transport 在每次新建连接时解析，允许 DNS 切换后恢复。
 
-	logger.Info("consul.address: ", config.Address)
+	log.WithModule("consul").With("function", "New", "address", config.Address).Info("Initializing Consul client and checking the cluster leader")
 
 	client, err := api.NewClient(&config)
 	// SDK 可能补全 Transport 或使用自定义 HttpClient，清理绑定实际使用的连接池。

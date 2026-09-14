@@ -9,9 +9,9 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
-	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -83,15 +83,21 @@ func TestConsulBaseAssemblyWithDisabledConsul(t *testing.T) {
 	}
 	custom := &fixtureCoordinator{}
 	info := appinfo.New("test")
-	files := fileconfig.PathList{filepath.Join(dir, "config.yaml")}
+	files := bootstrap.LocalConfigPath(dir)
 	for _, tc := range []struct {
 		name  string
 		want  job.ConcurrencyCoordinator
 		build func() (*consulAssembly, func(), error)
 	}{
-		{"default", nil, func() (*consulAssembly, func(), error) { return initializeConsulBase(info, files, nil) }},
+		{"custom directory", nil, func() (*consulAssembly, func(), error) {
+			return initializeConsulCustomDirectory(info, files, "custom-app")
+		}},
+		{"custom both", custom, func() (*consulAssembly, func(), error) {
+			return initializeConsulCustomBoth(info, files, "custom-app", custom)
+		}},
+		{"default", nil, func() (*consulAssembly, func(), error) { return initializeConsulBase(info, files) }},
 		{"custom", custom, func() (*consulAssembly, func(), error) {
-			return initializeConsulCustomCoordinator(info, files, nil, custom)
+			return initializeConsulCustomCoordinator(info, files, custom)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -135,5 +141,20 @@ func TestGeneratedAssemblyRollsBackOnAppConstructionFailure(t *testing.T) {
 	}
 	if kratoslog.GetLogger() != previous {
 		t.Fatal("generated error rollback did not restore previous global logger")
+	}
+}
+
+func TestCustomBackendWithoutConsul(t *testing.T) {
+	t.Setenv("CONSUL_HTTP_ADDR", ":invalid:")
+	built, cleanup, err := initializeCustomBackend(appinfo.New("custom"), businessSources(t), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if built.Registrar != nil || built.Discovery != nil {
+		t.Fatal("custom backend contracts changed")
+	}
+	if err := built.App.Run(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -21,6 +21,7 @@ logger.WithModule("orders").Info("ready")
 
 应用组装前，`log.Info` 等全局方法使用标准输出，仍应用进程自定义设置，不读取文件输出环境配置、不打开日志文件，也不需要全局 cleanup。
 `bootstrap.NewLogBootstrap(logger, appSpec)` 安装 Wire Logger 的全局视图，并在清理时恢复此前的 Logger。全局绑定只借用实例，Wire 按顺序先恢复绑定，再关闭输出。
+登记到 App Spec 的 Logger 派生 `module=kratos`。`SetLogger` 同时为 Kratos 全局入口安装模块适配器；Foundation 全局入口使用原 Logger，二者借用同一组输出，不增加 cleanup。`GetLogger` 返回原 Logger；Bootstrap 捕获并恢复完整 Kratos 绑定，应用构造不会丢失适配器。
 
 ```mermaid
 flowchart TD
@@ -36,7 +37,7 @@ flowchart TD
     Q --> C[构造实例输出]
     C --> D[返回 Logger 和 cleanup]
     D --> E[根 Logger 与派生 Logger 复用实例输出]
-    F[log.WithXXX] --> G{校验通过?}
+    F[log.WithLevel/WithKV 等共享设置方法] --> G{校验通过?}
     G -- 是 --> H[CAS 发布全局非资源快照]
     G -- 否 --> I[保留原状态并记录 warning]
     H --> E
@@ -62,7 +63,7 @@ log.WithKV("region", "hk", "deployment", "blue")
 
 根过滤及其他共享单值的优先级为：派生 Logger > 进程级设置 > 环境配置/包内默认值。filter keys 按 Config、Override、派生 Logger 三层取并集，高层不能取消低层的敏感字段过滤规则。
 
-实例 `Logger` 的 `Debug/Info/Warn/Error` 及对应 `f` 方法，会先检查禁用状态和根级别，再执行消息格式化；被根过滤拒绝的消息不会调用参数的 `String()`。调用表达式本身仍由 Go 在进入方法前求值；输出端独立过滤也仍在格式化之后发生。此保证不涵盖 Kratos 包级辅助函数内部的预格式化。`Fatal/Fatalf` 被禁用时跳过格式化，但仍以状态码 1 退出。
+实例 `Logger` 及 Foundation 全局入口的 `Debug/Info/Warn/Error` 及对应 `f` 方法，会先检查禁用状态和根级别，再执行消息格式化；被根过滤拒绝的消息不会调用参数的 `String()`。调用表达式本身仍由 Go 在进入方法前求值；输出端独立过滤也仍在格式化之后发生。此保证不涵盖 Kratos 包级辅助函数内部的预格式化。`Fatal/Fatalf` 被禁用时跳过格式化，但仍以状态码 1 退出。
 
 ```mermaid
 flowchart TD
@@ -108,7 +109,7 @@ flowchart TD
 
 ## 共享配置更新与实例输出
 
-包级完整配置 Update 及底层输出替换已移除。私有 `envConfig` 只作为 env 解析与 Logger 构造的输入；实例创建后输出配置固定，进程级定制通过 `log.WithXXX` 完成。
+包级完整配置 Update 及底层输出替换已移除。私有 `envConfig` 只作为 env 解析与 Logger 构造的输入；实例创建后输出配置固定，进程级定制通过 `log.WithLevel/WithKV/WithMsgKey` 等共享设置方法完成。
 每个 Logger 的包装缓存只跟踪共享设置版本。构建过程中若共享快照已变化，放弃该次缓存并重试；这不会创建、关闭或切换输出资源。
 
 文件轮转使用 Timberjack；轮转工作由对应实例的 cleanup 停止并等待。文件备份名为 `app-<timestamp>-size.log`，压缩后追加 `.gz`；不会自动重命名或删除旧 lumberjack 的备份格式。
@@ -173,15 +174,71 @@ flowchart TD
 - `authorization` 只过滤同名字段；
 - `payload.secret*` 过滤所有以 `payload.secret` 开头的字段。
 
-完整字段依次来自 preset、module、Context KV、Override KV、派生 Logger KV 和本次 `Log` 调用。根过滤完成后，独立去重层会在进入输出栈前统一处理所有字符串 key：
+完整字段按 preset、进程共享 KV、派生 Logger KV、Context KV、本次调用字段合并。普通字符串 key 后值覆盖前值，保留第一次出现的位置；非字符串 key 不参与去重。根过滤与去重之后，各输出端继续执行自己的字段和级别过滤。
 
-- 重复 key 使用最后声明的值；
-- key 保留第一次出现的位置；
-- 非字符串 key 不参与去重；
-- 奇数个参数的最后一项会原样保留；
-- 没有重复字符串 key 时直接透传原切片。
+`module` 是保留字段，使用以下独立规则：
 
-因此，本次 `Log` 调用可以覆盖派生 Logger、Context 或 Override 中的同名字段。各输出端自己的 filter 和 level 规则在去重后执行。
+- 每条实际输出恰好包含一个非空且没有首尾空白的字符串 module；未指定时为 `unknown`。
+- `WithModule` / `WithModuleConfig` 指定的固定模块优先；普通字段不能覆盖它，重新调用 `WithModule` 可以派生其他模块。
+- 没有固定模块时，派生 `With` 和本次调用中的最后一个有效 module 生效。非法值被忽略；没有有效值则使用 `unknown`。显式 `WithModule` 仍会对非法常量 panic，`WithModuleConfig` 返回错误。
+- 共享 `WithKV` 和 Context 中的 module 不参与归属选择；请求字段不能修改组件模块。
+- 所有根、共享、实例、模块和输出端过滤均保留 module，即使过滤规则为 `module`、`mod*` 或 `*`。
+- `With` / Context 字段中的 Valuer 求值后，module 统一规范化；单次 `Log/*w` 参数中的 Valuer 沿用 Kratos 行为，不自动求值。孤立字段补值 `(MISSING)`，防止追加的 module 被误识别为前一个字段的值。
+
+全局调用推荐在使用处派生模块视图，把消息与结构化字段分开：
+
+```go
+log.WithModule("config/file").
+    With("function", "NewSources", "files", matches).
+    Info("Matched local configuration files")
+```
+
+以上片段中的 `matches` 是已经匹配到的文件列表。`WithModule` 返回借用当前全局输出的 Logger，不创建文件或 cleanup；已有视图持续应用共享日志设置，但后续 `SetLogger` 不会替换它借用的输出。因此应在调用处获取，避免在包初始化时长期保存启动 fallback 的视图；输出仍由原所有者释放。
+
+`Info/Warn/Error/Debug/Fatal` 和对应 `f` 方法使用当前 `msgKey`；Foundation 包级消息方法也遵循此规则。`log.WithMsgKey("message")` 会让上述日志输出 `message=Matched local configuration files`。`module` 是保留字段，不能用作 msgKey；设置时会告警并保留旧值。附加字段使用 `With`，不要手写 `"msg"` 再包装 `fmt.Sprintf`。`Log` 和 `*w` 是原始键值入口，保留调用者提供的字段，不自动猜测或重命名消息字段。
+
+`log.Context(ctx)` 保留 Kratos Helper 返回类型，它在构造时捕获当前消息字段名；需要已保存视图持续跟随 `WithMsgKey` 时，使用 `log.WithModule("orders").WithContext(ctx)`。
+
+消息直接说明发生了什么、失败了什么以及实际采取的回退；`function`、`error`、路径、配置键等作为独立字段。避免把 `function | phase | context` 拼进消息。稳定的 `event` 字段可继续用于检索，不能替代可读的诊断说明。
+
+绑定 Logger 及调用均未指定模块时兜底 `unknown`。通过 `log.SetLogger` 或 Bootstrap 绑定后，直接调用 Kratos 全局入口的 SDK 日志归属 `kratos`，包括 HTTP/gRPC 启停日志。共享绑定沿用 Kratos 既有机制，没有新增锁或输出资源。
+
+```mermaid
+flowchart TD
+    A([消息调用]) --> B[WithModule 获取借用当前输出的视图]
+    B --> C[With 附加 function、error 等结构化字段]
+    C --> D{消息方法或原始键值方法?}
+    D -- Info/Error 及 f 方法 --> E{现有级别策略允许输出?}
+    E -- 是 --> F[格式化消息并使用当前 msgKey]
+    E -- 否 --> I
+    D -- Log 或 w 方法 --> G[保留调用者提供的键值]
+    F --> H[进入现有字段合并、module 保留和输出链]
+    G --> H
+    H --> I([结束；写入错误沿用现有返回约定])
+```
+
+直接调用第三方 `kratoslog.SetLogger` 会绕过模块适配器；应通过 Foundation 的 `log.SetLogger` 安装输出。Foundation 全局函数会在转交外部 Logger 前规范化 module，但无法约束外部 Logger 自行删除或改写字段。直接调用任意外部 Logger、标准库 slog 或其他未接入适配器的 SDK，不属于本包的输出保证。
+
+```mermaid
+flowchart TD
+    A([开始日志调用]) --> B{入口}
+    B -- Foundation 全局 --> C[取原 Logger；沿用模块规则，缺失时 unknown]
+    B -- Kratos 全局 --> D[适配器固定 module=kratos]
+    B -- 实例 --> E[使用实例模块策略]
+    C --> E
+    D --> E
+    E --> F{禁用或级别不足?}
+    F -- 是 --> Z([结束])
+    F -- 否 --> G[沿用版本缓存与读锁；合并并求值字段]
+    G --> H[固定模块优先；否则取最后有效 module 或 unknown]
+    H --> I[过滤与去重；保留 module]
+    I --> J[沿用输出读锁；输出端级别与字段过滤]
+    J --> K[写入 stdout、stderr 或文件]
+    K --> L[释放现有读锁；Log 返回写入错误，便捷方法忽略错误]
+    L --> Z
+```
+
+模块归属约定：`config/file`、`config/consul`、`config`、`bootstrap`、`log`、`app`、`server`、`server/health`、`server/websocket`、`queue`、`kafka`、`client`、`database`、`database/gorm`、`redis`、`oss`、`job`、`job/cron`、`consul`、`registry`、`discovery`。Consul 注册和发现另带 `driver=consul`。业务组件在构造入口派生稳定模块名，队列名、任务名和实例名使用独立字段。
 
 ## 环境变量
 

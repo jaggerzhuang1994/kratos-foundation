@@ -171,7 +171,7 @@ func (c *mysqlMetricsCollector) refresh(parent context.Context) {
 	rows, err := c.db.QueryContext(ctx, "SHOW STATUS")
 	if err != nil {
 		if parent.Err() == nil {
-			c.log.With("error", err).Warn("mysqlMetricsCollector.refresh | database MySQL metrics collection failed")
+			c.log.With("function", "mysqlMetricsCollector.refresh", "error", err).Warn("Failed to query MySQL metrics")
 		}
 		return
 	}
@@ -182,7 +182,7 @@ func (c *mysqlMetricsCollector) refresh(parent context.Context) {
 		var variable string
 		var rawValue string
 		if err := rows.Scan(&variable, &rawValue); err != nil {
-			c.log.With("error", err).Warn("mysqlMetricsCollector.refresh | database MySQL metrics row scan failed")
+			c.log.With("function", "mysqlMetricsCollector.refresh", "error", err).Warn("Failed to decode a MySQL metrics row")
 			return
 		}
 		if len(c.variables) > 0 {
@@ -200,13 +200,13 @@ func (c *mysqlMetricsCollector) refresh(parent context.Context) {
 		values[variable] = value
 	}
 	if err := rows.Err(); err != nil {
-		c.log.With("error", err).Warn("mysqlMetricsCollector.refresh | database MySQL metrics rows failed")
+		c.log.With("function", "mysqlMetricsCollector.refresh", "error", err).Warn("Failed while reading MySQL metrics rows")
 		return
 	}
 	// 先完成描述符注册，再公布快照，确保 pedantic Registry 只采集已登记的指标。
 	for variable := range values {
 		if err := c.registerVariable(variable); err != nil {
-			c.log.With("error", err).Warn("mysqlMetricsCollector.refresh | metric registration failed")
+			c.log.With("function", "mysqlMetricsCollector.refresh", "error", err).Warn("Failed to register a MySQL metric")
 			return
 		}
 	}

@@ -1,5 +1,7 @@
 # Queue
 
+Worker 和 Dispatcher 在构造时从注入 Logger 派生 `module=queue`，业务 handler 的日志由业务自行声明模块。
+
 `pkg/queue` 是持久化后台任务队列，提供 `Task`、`Store`、`Dispatcher` 和 `Worker`。业务显式选择 [Redis Store](../../contrib/queue/redis/README.md) 或 [Database Repo 适配器](../../contrib/queue/database/README.md)，通过构造参数注入业务 Handler 和观测依赖。Kafka 消息生产、消费组、重试/死信位于独立的 [pkg/kafka](../kafka/README.md)，不作为任务 Store。`pkg/job` 保留 Cron、Once、Daemon；`job.DelayIfRunning` 不是持久化延迟队列。
 
 ## 契约与所有权

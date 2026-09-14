@@ -85,7 +85,7 @@ func NewWorker(config WorkerConfig, store Store, handlers map[string]Handler, ob
 	if err != nil {
 		return nil, fmt.Errorf("create queue worker telemetry: %w", err)
 	}
-	return &Worker{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger, telemetry: telemetry, stop: make(chan struct{}), done: make(chan struct{})}, nil
+	return &Worker{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, stop: make(chan struct{}), done: make(chan struct{})}, nil
 }
 
 // Start 阻塞运行所有领取循环；存储故障取消同实例其他循环，等待全部退出后返回错误。
@@ -119,7 +119,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	err := group.Wait()
 	if err != nil {
 		w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
-		w.log.WithContext(ctx).Errorw("function", "Worker", "event", "storage.failed", "queue", w.config.Queue, "worker", w.config.Name)
+		w.log.WithContext(ctx).Errorw("function", "Worker", "event", "storage.failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
 		return err
 	}
 	return nil

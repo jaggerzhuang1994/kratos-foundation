@@ -366,6 +366,8 @@ const fatalHelperEnvironment = "KRATOS_FOUNDATION_FATAL_HELPER"
 
 func TestLoggerFatalMethodsLogAndExit(t *testing.T) {
 	tests := map[string]string{
+		"global-fatal":    "fatal-value",
+		"global-fatalf":   "fatalf-42",
 		"fatal":           "fatal-value",
 		"fatalf":          "fatalf-42",
 		"fatalw":          "fatalw-value",
@@ -419,6 +421,12 @@ func TestLoggerFatalHelperProcess(t *testing.T) {
 		mode = strings.TrimPrefix(mode, "disabled-")
 	}
 	switch mode {
+	case "global-fatal":
+		SetLogger(logger)
+		Fatal("fatal-value")
+	case "global-fatalf":
+		SetLogger(logger)
+		Fatalf("fatalf-%d", 42)
 	case "fatal":
 		logger.Fatal("fatal-value")
 	case "fatalf":
@@ -600,7 +608,7 @@ func TestLoggerConcurrentWritesAndSharedUpdates(t *testing.T) {
 	}
 	for writer := range writers {
 		for entry := range entries {
-			if count := strings.Count(string(data), fmt.Sprintf("entry=%d:%d\n", writer, entry)); count != 1 {
+			if count := strings.Count(string(data), fmt.Sprintf("entry=%d:%d module=unknown\n", writer, entry)); count != 1 {
 				t.Fatalf("entry %d:%d count=%d", writer, entry, count)
 			}
 		}
@@ -930,4 +938,49 @@ func writeCallerThroughWrapper(l Logger) int {
 	_, _, line, _ := runtime.Caller(0)
 	kratoslog.NewHelper(l).WithContext(context.Background()).Info("message")
 	return line + 1
+}
+
+func TestModuleOwnershipAndOutputFilters(t *testing.T) {
+	shared := &sharedState{}
+	shared.custom.Store(&customState{})
+	shared.WithKV("module", "shared")
+	shared.WithFilterKeys("module")
+	for _, test := range []struct{ name, module, want string }{
+		{"unknown ignores context and shared", "", "unknown"},
+		{"component wins", "orders", "orders"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "module.log")
+			config := envConfig{Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339, File: fileConfig{Rotating: rotatingConfig{Disable: true}}}
+			config.File.Path = path
+			config.File.Disable = false
+			config.File.FilterKeys = []string{"*"}
+			config.Std.Disable = true
+			root, cleanup, err := newLogger(shared, config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			l := root.WithContext(WithKv(context.Background(), "module", "context"))
+			if test.module != "" {
+				l = l.With("module", "fixed-kv").WithModule(test.module)
+			}
+			l = l.WithFilterKeys("mod*")
+			fields := []any{"msg", "event"}
+			if test.module != "" {
+				fields = append(fields, "module", "call")
+			}
+			if err := l.Log(kratoslog.LevelInfo, fields...); err != nil {
+				t.Fatal(err)
+			}
+			cleanup()
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Count(string(data), "module=") != 1 || !strings.Contains(string(data), "module="+test.want) {
+				t.Fatalf("unexpected output: %s", data)
+			}
+		})
+	}
 }

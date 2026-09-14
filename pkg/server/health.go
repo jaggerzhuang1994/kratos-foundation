@@ -3,12 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
-	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // ReadinessCheck 声明关键依赖检查。Check 必须响应 Context，且可以被多个探针并发调用。
@@ -114,9 +115,14 @@ func (h *healthState) ready(ctx context.Context) (ready bool) {
 		// 仅记录探针结果变化，不在每次请求上写日志；检查名由组装层提供，不记录原始错误。
 		if h.lastStatus.Swap(status) != status {
 			if ready {
-				kratoslog.Infow("event", "healthState.ready | readiness.changed", "status", status)
+				log.WithModule("server/health").With("function", "healthState.ready", "event", "readiness.changed", "status", status).Info("Service is ready to accept requests")
 			} else {
-				kratoslog.Warnw("event", "healthState.ready | readiness.changed", "status", status, "check", failedCheck)
+				log.WithModule("server/health").With(
+					"function", "healthState.ready",
+					"event", "readiness.changed",
+					"status", status,
+					"check", failedCheck,
+				).Warn("Service is not ready to accept requests")
 			}
 		}
 	}()

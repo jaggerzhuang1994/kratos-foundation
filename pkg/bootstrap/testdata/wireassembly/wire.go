@@ -9,8 +9,6 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/google/wire"
-	consulconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/consul"
-	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -73,17 +71,33 @@ func initializeComponents(sources config.Sources, version string) (*kratos.App, 
 func newRegistrar() registry.Registrar { return nil }
 
 // 消费完整公共集合，同时验证默认 Coordinator 可替换。
-func initializeConsulBase(info appinfo.AppInfo, files fileconfig.PathList, paths consulconfig.PathList) (*consulAssembly, func(), error) {
-	wire.Build(bootstrap.ConsulBaseProviderSet, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+func initializeConsulBase(info appinfo.AppInfo, files bootstrap.LocalConfigPath) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, bootstrap.ConsulProviderSet, componentsBoot, wire.Struct(new(consulAssembly), "*"))
 	return nil, nil, nil
 }
 
-func initializeDefaultResources(info appinfo.AppInfo, files fileconfig.PathList, paths consulconfig.PathList) (*defaultResources, func(), error) {
-	wire.Build(bootstrap.ConsulBaseProviderSet, wire.Struct(new(defaultResources), "*"))
+func initializeDefaultResources(info appinfo.AppInfo, files bootstrap.LocalConfigPath) (*defaultResources, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, bootstrap.ConsulProviderSet, wire.Struct(new(defaultResources), "*"))
 	return nil, nil, nil
 }
 
-func initializeConsulCustomCoordinator(info appinfo.AppInfo, files fileconfig.PathList, paths consulconfig.PathList, coordinator job.ConcurrencyCoordinator) (*consulAssembly, func(), error) {
-	wire.Build(bootstrap.ConsulBaseProviderSetWithCustomJobCoordinator, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+func initializeConsulCustomCoordinator(info appinfo.AppInfo, files bootstrap.LocalConfigPath, coordinator job.ConcurrencyCoordinator) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSetWithCustomJobCoordinator, bootstrap.ConsulProviderSet, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+	return nil, nil, nil
+}
+
+func initializeConsulCustomDirectory(info appinfo.AppInfo, files bootstrap.LocalConfigPath, directory bootstrap.RemoteConfigDirName) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, bootstrap.ConsulProviderSetWithCustomRemoteConfigDirName, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+	return nil, nil, nil
+}
+
+func initializeConsulCustomBoth(info appinfo.AppInfo, files bootstrap.LocalConfigPath, directory bootstrap.RemoteConfigDirName, coordinator job.ConcurrencyCoordinator) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSetWithCustomJobCoordinator, bootstrap.ConsulProviderSetWithCustomRemoteConfigDirName, componentsBoot, wire.Struct(new(consulAssembly), "*"))
+	return nil, nil, nil
+}
+
+// 自定义注册、发现与配置可完全不引入 Consul 集合或路径类型。
+func initializeCustomBackend(info appinfo.AppInfo, sources config.Sources, registrar registry.Registrar, discovery registry.Discovery) (*consulAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, componentsBoot, wire.Struct(new(consulAssembly), "*"))
 	return nil, nil, nil
 }

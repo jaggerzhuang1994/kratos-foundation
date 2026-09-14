@@ -30,7 +30,7 @@ func newFileSource(path string) (*fileSource, error) {
 
 // Watch 监听稳定的父目录，避免文件被原子替换后仍然监听旧 inode。
 func (s *fileSource) Watch() (kratosconfig.Watcher, error) {
-	info, err := os.Stat(s.path)
+	_, err := os.Stat(s.path)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (s *fileSource) Watch() (kratosconfig.Watcher, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	result := &fileWatcher{
-		source: s, notifications: watcher, directory: info.IsDir(),
+		source: s, notifications: watcher,
 		symlink: linkInfo.Mode()&os.ModeSymlink != 0, ctx: ctx, cancel: cancel,
 	}
 	if err := result.bind(); err != nil {
@@ -56,7 +56,6 @@ func (s *fileSource) Watch() (kratosconfig.Watcher, error) {
 type fileWatcher struct {
 	source        *fileSource
 	notifications *fsnotify.Watcher
-	directory     bool
 	symlink       bool
 	target        string
 	ctx           context.Context
@@ -92,7 +91,6 @@ func (w *fileWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 			}
 			parent := filepath.Dir(event.Name)
 			if event.Name == w.source.path || event.Name == w.target || event.Name == filepath.Dir(w.source.path) ||
-				(w.directory && (parent == w.source.path || parent == w.target)) ||
 				(w.symlink && parent == filepath.Dir(w.source.path)) {
 				if event.Op&(fsnotify.Rename|fsnotify.Remove) != 0 {
 					if err := w.removeReplaced(event.Name); err != nil {
@@ -151,21 +149,7 @@ func (w *fileWatcher) bind() error {
 			return err
 		}
 	}
-	if !w.directory {
-		return nil
-	}
-	entries, err := os.ReadDir(w.target)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		if err := w.notifications.Add(filepath.Join(w.target, entry.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-	}
+
 	return nil
 }
 

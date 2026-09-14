@@ -1,5 +1,7 @@
 # Kafka
 
+SDK 适配器、消费者，以及独立 NewManagedProducer / NewConsumerRuntime 的运行日志均归属 `module=kafka`。
+
 `pkg/kafka` 提供业务与 Wire 使用的 `ClientFactory`，按具名配置创建 franz-go 客户端。工厂只保存连接配置，不持有或共享创建出的客户端，因此不使用 Driver Registry，也不返回资源 cleanup。
 
 先在配置 Manager 的 `kafka.connections` 中声明示例引用的 `events`：

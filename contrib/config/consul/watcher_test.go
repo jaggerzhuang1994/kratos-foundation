@@ -13,7 +13,6 @@ import (
 
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
 	consulapi "github.com/hashicorp/consul/api"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 func consulTestSource(t *testing.T, handler http.HandlerFunc) (kratosconfig.Source, *httptest.Server) {
@@ -24,12 +23,7 @@ func consulTestSource(t *testing.T, handler http.HandlerFunc) (kratosconfig.Sour
 	if err != nil {
 		t.Fatal(err)
 	}
-	logger, releaseLogger, logErr := log.NewLogger()
-	if logErr != nil {
-		t.Fatal(logErr)
-	}
-	t.Cleanup(releaseLogger)
-	sources, err := NewSources(client, logger, PathList{"settings"})
+	sources, err := NewSources(client, PathList{"settings/*"})
 	if err != nil {
 		t.Fatal(err)
 	}

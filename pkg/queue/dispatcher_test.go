@@ -23,6 +23,13 @@ type testLog struct {
 	events []string
 }
 
+func (l *testLog) WithModule(module string) log.Logger {
+	if module != "queue" {
+		panic("unexpected queue module: " + module)
+	}
+	return l
+}
+
 func (l *testLog) WithContext(context.Context) log.Logger { return l }
 func (l *testLog) Debugw(args ...any) {
 	l.mu.Lock()

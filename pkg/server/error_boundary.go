@@ -18,11 +18,13 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 			reply, err := next(ctx, req)
 			err = foundationerrors.Normalize(err)
 			if err != nil && foundationerrors.Code(err) >= 500 {
-				logger.WithContext(ctx).Errorw(
-					"msg", "normalizeErrors | request.failed", "operation", requestOperation(ctx),
-					"code", foundationerrors.Code(err), "reason", foundationerrors.Reason(err),
+				logger.WithContext(ctx).With(
+					"function", "normalizeErrors",
+					"operation", requestOperation(ctx),
+					"code", foundationerrors.Code(err),
+					"reason", foundationerrors.Reason(err),
 					"error", fmt.Sprintf("%+v", err),
-				)
+				).Error("Request failed with a server error")
 			}
 			return reply, err
 		}
@@ -37,10 +39,12 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 			defer func() {
 				if recovered := recover(); recovered != nil {
 					stack := string(debug.Stack())
-					logger.WithContext(ctx).Errorw(
-						"msg", "recoverRequests | request.panic", "operation", requestOperation(ctx),
-						"panic_type", fmt.Sprintf("%T", recovered), "stack", stack,
-					)
+					logger.WithContext(ctx).With(
+						"function", "recoverRequests",
+						"operation", requestOperation(ctx),
+						"panic_type", fmt.Sprintf("%T", recovered),
+						"stack", stack,
+					).Error("Recovered from a panic while handling a request")
 					reply = nil
 					err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithMetadata(map[string]string{"err_stack": stack})
 				}

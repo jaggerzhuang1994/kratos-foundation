@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
@@ -38,11 +39,12 @@ func NewLogBootstrap(logger log.Logger, spec *app.Spec) (LogBootstrap, func(), e
 	}
 	// 保留每次安装的独立身份供 cleanup 判断所有权，不附加固定 caller 跳栈。
 	installed := global.With()
-	previous := log.GetLogger()
+	previous := kratoslog.GetLogger()
 	log.SetLogger(installed)
+	binding := kratoslog.GetLogger()
 	cleanup := func() {
-		if log.GetLogger() == installed {
-			log.SetLogger(previous)
+		if kratoslog.GetLogger() == binding {
+			kratoslog.SetLogger(previous)
 		}
 	}
 	return LogBootstrap{}, cleanup, nil

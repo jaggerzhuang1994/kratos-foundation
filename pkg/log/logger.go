@@ -92,7 +92,7 @@ type logger struct {
 
 // configState 是单个 Wire Logger 持有的不可变默认配置及输出，派生 Logger 复用它。
 type configState struct {
-	output      *outputLogger
+	output      kratoslog.Logger
 	level       kratoslog.Level
 	filterEmpty bool
 	filterKeys  []string
@@ -381,6 +381,7 @@ func (l *logger) buildCache(custom *customState) bool {
 	filterKeys = append(filterKeys, custom.filterKeys...)
 	filterKeys = append(filterKeys, l.filterKeys...)
 	cache = output.NewFilter(cache, filterEmpty, output.FilterKeysSet(filterKeys))
+	cache = output.NewModule(cache, l.module)
 
 	timeFormat := config.timeFormat
 	if l.timeFormat != "" {
@@ -398,10 +399,10 @@ func (l *logger) buildCache(custom *customState) bool {
 	if l.module != "" {
 		kvs = append(kvs, moduleKey, l.module)
 	}
-	kvs = append(kvs, custom.kv...)
+	kvs = appendNonModuleFields(kvs, custom.kv)
 	kvs = append(kvs, l.kv...)
 	if l.ctx != nil {
-		kvs = append(kvs, kvFromCtx(l.ctx)...)
+		kvs = appendNonModuleFields(kvs, kvFromCtx(l.ctx))
 	}
 	cache = kratoslog.With(cache, kvs...)
 
@@ -422,4 +423,20 @@ func (l *logger) buildCache(custom *customState) bool {
 		msgKey:        msgKey,
 	}
 	return true
+}
+
+// appendNonModuleFields 防止进程共享字段和请求上下文改变事件所属模块。
+func appendNonModuleFields(dst, fields []any) []any {
+	for i := 0; i < len(fields); i += 2 {
+		if key, ok := fields[i].(string); ok && key == moduleKey {
+			continue
+		}
+		dst = append(dst, fields[i])
+		if i+1 < len(fields) {
+			dst = append(dst, fields[i+1])
+		} else {
+			dst = append(dst, "(MISSING)")
+		}
+	}
+	return dst
 }

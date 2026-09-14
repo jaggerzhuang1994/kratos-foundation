@@ -26,7 +26,7 @@ func NewRegistry(
 	config config.Manager,
 	client baseconsul.Client,
 ) (registry.Registrar, error) {
-	logger = logger.WithModule("registry")
+	logger = logger.WithModule("registry").With("driver", "consul")
 
 	if client == nil {
 		logger.Warn("registry not loaded: consul client not initialized")

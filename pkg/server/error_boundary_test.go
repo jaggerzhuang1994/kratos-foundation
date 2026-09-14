@@ -14,6 +14,7 @@ import (
 type boundaryLogger struct {
 	log.Logger
 	entries []string
+	fields  []any
 	context context.Context
 }
 
@@ -21,8 +22,13 @@ func (l *boundaryLogger) WithContext(ctx context.Context) log.Logger {
 	l.context = ctx
 	return l
 }
-func (l *boundaryLogger) Errorw(fields ...any) {
-	l.entries = append(l.entries, fmt.Sprint(fields...))
+func (l *boundaryLogger) With(fields ...any) log.Logger {
+	l.fields = append([]any(nil), fields...)
+	return l
+}
+func (l *boundaryLogger) Error(message ...any) {
+	l.entries = append(l.entries, fmt.Sprint(message...)+fmt.Sprint(l.fields...))
+	l.fields = nil
 }
 
 func TestNormalizeErrorsRecordsOnlyServerFailure(t *testing.T) {

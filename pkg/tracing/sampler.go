@@ -84,9 +84,9 @@ func (s *dynamicSampler) snapshot() *samplerSnapshot {
 			continue
 		}
 		if err != nil {
-			otel.Handle(fmt.Errorf("dynamicSampler.snapshot | config update rejected | version=%d: %w", version, err))
+			otel.Handle(fmt.Errorf("dynamicSampler.snapshot rejected tracing sampler configuration update at version %d: %w", version, err))
 		} else if !samplerOnlyChange(old.config, current) {
-			otel.Handle(errors.New("dynamicSampler.snapshot | tracing hot update only applies sampler; changes to disable or exporter require a restart"))
+			otel.Handle(errors.New("dynamicSampler.snapshot only applies sampler hot updates; restart the application to change exporter or disable settings"))
 		}
 		return &next
 	}
