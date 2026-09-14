@@ -1,6 +1,7 @@
 package log
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -108,7 +109,8 @@ func newEnvConfig() (envConfig, error) {
 		ServiceVersionKey,
 	})
 
-	fileDisable, err := envBool(EnvFileDisable, false)
+	// go test 注册 test.v 标志；测试进程默认不创建文件，显式环境变量仍可覆盖。
+	fileDisable, err := envBool(EnvFileDisable, flag.Lookup("test.v") != nil)
 	if err != nil {
 		return envConfig{}, err
 	}

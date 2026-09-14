@@ -173,7 +173,7 @@ func TestNewEnvConfigAppliesDocumentedDefaults(t *testing.T) {
 			FilterKeys: []string{"service.id", "service.name", "service.version"},
 		},
 		File: fileConfig{
-			outputConfig: outputConfig{Level: kratoslog.LevelInfo},
+			outputConfig: outputConfig{Disable: true, Level: kratoslog.LevelInfo},
 			Path:         "./app.log",
 			Rotating: rotatingConfig{
 				MaxSize: 100,
@@ -182,6 +182,19 @@ func TestNewEnvConfigAppliesDocumentedDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("default config = %#v, want %#v", got, want)
+	}
+}
+
+func TestNewEnvConfigAllowsExplicitFileOutputInTests(t *testing.T) {
+	clearEnvironment(t, logEnvironmentKeys...)
+	t.Setenv(EnvFileDisable, "false")
+
+	got, err := newEnvConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.File.Disable {
+		t.Fatal("explicit LOG_FILE_DISABLE=false did not enable file output")
 	}
 }
 
@@ -273,6 +286,7 @@ func TestNewEnvConfigRejectsMalformedAndOutOfRangeEnvironment(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			clearEnvironment(t, logEnvironmentKeys...)
+			t.Setenv(EnvFileDisable, "false")
 			t.Setenv(test.key, test.value)
 			_, err := newEnvConfig()
 			if err == nil || !strings.Contains(err.Error(), test.key) {

@@ -24,8 +24,16 @@ logger.WithModule("orders").Info("ready")
 
 ```mermaid
 flowchart TD
-    A[Wire 调用 NewLogger] --> B[读取 LOG_* 并校验]
-    B --> C[构造实例输出]
+    A[Wire 调用 NewLogger] --> B[读取 LOG_*]
+    B --> T{设置 LOG_FILE_DISABLE?}
+    T -- 是 --> V[使用显式值]
+    T -- 否 --> U{存在 go test 的 test.v 标志?}
+    U -- 是 --> X[默认禁用文件输出]
+    U -- 否 --> Y[默认启用文件输出]
+    V --> Q[校验配置]
+    X --> Q
+    Y --> Q
+    Q --> C[构造实例输出]
     C --> D[返回 Logger 和 cleanup]
     D --> E[根 Logger 与派生 Logger 复用实例输出]
     F[log.WithXXX] --> G{校验通过?}
@@ -186,7 +194,7 @@ flowchart TD
 | `LOG_STD_DISABLE` | `false` | 禁用标准输出端 |
 | `LOG_STD_LEVEL` | `LOG_LEVEL` | 标准输出端最低级别 |
 | `LOG_STD_FILTER_KEYS` | `service.id,service.name,service.version` | 标准输出端过滤键 |
-| `LOG_FILE_DISABLE` | `false` | 禁用文件输出端 |
+| `LOG_FILE_DISABLE` | 非测试 `false`；`go test` 中 `true` | 禁用文件输出端 |
 | `LOG_FILE_LEVEL` | `LOG_LEVEL` | 文件输出端最低级别 |
 | `LOG_FILE_FILTER_KEYS` | 空 | 文件输出端过滤键 |
 | `LOG_FILE_PATH` | `./app.log` | 当前日志文件 |
@@ -198,6 +206,7 @@ flowchart TD
 | `LOG_FILE_ROTATING_COMPRESS` | `false` | gzip 压缩轮转文件 |
 
 环境日志级别忽略大小写和首尾空白。布尔值接受 `strconv.ParseBool` 支持的形式。CSV 字段会去除空项并稳定去重。非法显式值在首次 `NewLogger` 初始化时返回错误，不会静默回退到默认值。
+测试进程通过已注册的 `test.v` 标志识别；仅当 `LOG_FILE_DISABLE` 未设置时默认禁用文件输出。测试若需要验证文件日志，可显式设置 `LOG_FILE_DISABLE=false`，该显式值优先于测试环境默认值。
 
 ## 代码结构
 
