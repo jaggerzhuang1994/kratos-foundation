@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"gorm.io/gorm"
 	"maps"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"gorm.io/gorm"
 )
 
 // DriverConfig 是数据库驱动工厂创建连接所需的最小配置。
@@ -85,7 +87,12 @@ func (r *driverRegistry) snapshotAndFreeze() map[string]DriverFactory {
 
 // RegisterDriver 注册数据库驱动工厂。首次构造 Manager 后注册表会被冻结。
 func RegisterDriver(name string, factory DriverFactory) error {
-	return databaseDrivers.register(name, factory)
+	if err := databaseDrivers.register(name, factory); err != nil {
+		return err
+	}
+	// register 已释放注册表锁，日志输出不会阻塞锁内注册与查询。
+	log.WithModule("database").With("function", "RegisterDriver", "driver", normalizeDriverName(name)).Info("Registered database driver")
+	return nil
 }
 
 // MustRegisterDriver 注册数据库驱动工厂，注册失败时 panic，适合驱动包的 init 使用。

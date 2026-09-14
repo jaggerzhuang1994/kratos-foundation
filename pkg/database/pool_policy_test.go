@@ -1,9 +1,11 @@
 package database
 
 import (
+	"fmt"
 	"testing"
 
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 )
@@ -83,11 +85,15 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			}
 
 			manager := &poolPolicyConfig{initial: initial}
-			cancel, err := subscribeConnectionPools(manager, newManagerTestLogger(t), initial, factory, drivers)
+			logger := &poolPolicyLogger{Logger: newManagerTestLogger(t)}
+			cancel, err := subscribeConnectionPools(manager, logger, initial, factory, drivers)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(cancel)
+			if len(logger.messages) != 0 {
+				t.Fatalf("initial replay logged an update: %v", logger.messages)
+			}
 
 			withLimits := func(config *config_pb.Database, base int32) *config_pb.Database {
 				next := proto.CloneOf(config)
@@ -108,6 +114,13 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			// 先成功热更新，确保拒绝后保留的是正在使用的池参数。
 			manager.observer("database", withLimits(initial, 10), nil)
 			assertLimits(10)
+			if len(logger.messages) != 1 {
+				t.Fatalf("update logs=%v", logger.messages)
+			}
+			manager.observer("database", withLimits(initial, 10), nil)
+			if len(logger.messages) != 1 {
+				t.Fatal("identical notification logged another update")
+			}
 			changed := withLimits(initial, 20)
 			tt.change(changed.Connections["default"])
 			if err := validateDatabaseConfig(changed, drivers); err != nil {
@@ -126,6 +139,22 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			assertLimits(50)
 			manager.observer("database", withLimits(initial, 60), nil)
 			assertLimits(60)
+			manager.observer("database", proto.CloneOf(initial), nil)
+			assertLimits(1)
+			if len(logger.messages) != 4 {
+				t.Fatalf("restore to initial configuration must log a real update: %v", logger.messages)
+			}
 		})
 	}
+}
+
+// poolPolicyLogger 仅捕获更新提示，错误和警告沿用测试 Logger。
+type poolPolicyLogger struct {
+	log.Logger
+	messages []string
+}
+
+func (l *poolPolicyLogger) With(...any) log.Logger { return l }
+func (l *poolPolicyLogger) Info(values ...any) {
+	l.messages = append(l.messages, fmt.Sprint(values...))
 }

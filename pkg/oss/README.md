@@ -35,6 +35,21 @@ oss:
 
 首个 `oss.NewManager` 会冻结全局驱动注册表并持有不可变快照。所有驱动包都必须在此之前导入；冻结后调用 `RegisterDriver` 或 `MustRegisterDriver` 会失败。驱动工厂的执行不持有注册表锁。
 
+驱动注册成功时使用全局日志输出 INFO 事件 `Registered OSS driver`，包含 `module=oss`、`function=RegisterDriver` 和规范化的 `driver` 名称。空导入 Aliyun 驱动会记录 `driver=aliyun`；此时仅完成工厂注册，不代表 Bucket 已创建或远程连接成功。日志使用注册时的全局 logger，通常早于应用 logger 的组装，不记录 Bucket 配置或凭据；注册失败只返回错误，`MustRegisterDriver` 将错误转为 panic。
+
+```mermaid
+flowchart TD
+    A([RegisterDriver 并发入口]) --> B[规范化名称并校验工厂]
+    B -- 无效 --> C([返回错误 MustRegisterDriver 转为 panic])
+    B -- 有效 --> D[获取注册表写锁]
+    D --> E{已冻结或名称重复?}
+    E -- 是 --> F[释放锁]
+    F --> C
+    E -- 否 --> G[写入共享工厂表并释放锁]
+    G --> H[锁外输出 INFO Registered OSS driver]
+    H --> I([返回成功])
+```
+
 ## 构造与释放
 
 构造入口为 `oss.NewManager(configManager config.Manager, logger log.Logger) (Manager, func(), error)`。在 Wire 中直接提供该构造函数；手工构造时使用返回的 cleanup 释放资源。

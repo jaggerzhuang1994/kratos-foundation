@@ -15,7 +15,7 @@ import (
 )
 ```
 
-空导入触发的 `init()` 只向 `pkg/database` 注册无状态工厂，不会打开连接或访问数据库。连接由 `database.NewManager` 根据配置创建和管理。
+空导入触发的 `init()` 向 `pkg/database` 注册无状态工厂并记录注册日志，不会打开连接或访问数据库。连接由 `database.NewManager` 根据配置创建和管理。
 
 配置中的 canonical 驱动名是 `mysql` 和 `sqlite3`；省略 `driver` 时使用 `mysql`：
 
@@ -146,7 +146,24 @@ flowchart TD
 
 新增 PostgreSQL 等实现时，应在独立公共 `contrib/database/<driver>` 包中调用 `database.MustRegisterDriver`，业务只需选择性空导入该包。
 
+驱动注册成功时使用全局日志记录 `module=database`、`function=RegisterDriver` 和规范化的 `driver` 名称，消息为 `Registered database driver`。MySQL、SQLite 的空导入注册均适用；不记录 DSN 或密钥，注册失败只返回错误。
+
+```mermaid
+flowchart TD
+    A([RegisterDriver]) --> B[规范化名称并校验工厂]
+    B -- 无效 --> E([返回错误])
+    B -- 有效 --> C[获取注册表写锁]
+    C --> D{注册表已冻结或名称重复?}
+    D -- 是 --> F[释放锁并返回错误]
+    F --> E
+    D -- 否 --> G[登记工厂并释放锁]
+    G --> H[全局 INFO Registered database driver]
+    H --> I([注册成功])
+```
+
 ## 连接池热更新
+
+连接建立时已应用初始池参数；订阅的同步回放及未变化的通知不记录更新日志。只有实际配置变化才应用并记录 `Updated database connection pool settings`，恢复到初始值也属于实际更新。
 
 Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime` 和 `conn_max_idle_time`。DSN、驱动、连接集合和其他非池参数决定启动时创建的资源，变更后需要重启。
 
@@ -160,9 +177,12 @@ flowchart TD
     B -- 否 --> C[ERROR Rejected database configuration update]
     B -- 是 --> D{排除池参数后与启动配置相同?}
     D -- 否 --> E[WARN Skipped database hot update]
-    D -- 是 --> F[查询原连接池：短暂持有 factory 锁后释放]
+    D -- 是 --> D1{与最近已应用配置相同?}
+    D1 -- 是 --> I
+    D1 -- 否 --> F[查询原连接池：短暂持有 factory 锁后释放]
     F --> G[补齐默认值；先更新总上限，再更新空闲上限与过期时间]
-    G --> H{有连接完成更新?}
+    G --> G1[保存最近已应用快照 同一订阅回调串行执行]
+    G1 --> H{有连接完成更新?}
     H -- 是 --> J[INFO Updated database connection pool settings]
     C --> I([结束])
     E --> I

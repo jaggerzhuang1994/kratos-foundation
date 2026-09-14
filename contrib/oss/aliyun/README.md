@@ -12,7 +12,8 @@
 ```mermaid
 flowchart LR
     A([业务 Wire 组装]) --> B[导入本包注册 aliyun 驱动]
-    B --> C[oss.NewManager 固定驱动与配置]
+    B --> L[INFO Registered OSS driver: driver=aliyun]
+    L --> C[oss.NewManager 固定驱动与配置]
     C --> D[按逻辑名称取得 Bucket]
     D --> E{配置和构造成功?}
     E -- 否 --> F[返回错误给调用方]

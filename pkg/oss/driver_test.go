@@ -1,9 +1,14 @@
 package oss
 
 import (
+	"bytes"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 func stubOSSDriver(BucketConfig) (Bucket, error) {
@@ -63,13 +68,27 @@ func TestDriverRegistryConcurrentNames(t *testing.T) {
 
 func TestPublicDriverRegistryFunctions(t *testing.T) {
 	previous := ossDrivers
+	previousLogger := kratoslog.GetLogger()
 	ossDrivers = newDriverRegistry()
-	t.Cleanup(func() { ossDrivers = previous })
+	t.Cleanup(func() {
+		ossDrivers = previous
+		kratoslog.SetLogger(previousLogger)
+	})
+	var buffer bytes.Buffer
+	foundationlog.SetLogger(kratoslog.NewStdLogger(&buffer))
 
 	if err := RegisterDriver(" Zeta ", stubOSSDriver); err != nil {
 		t.Fatal(err)
 	}
 	MustRegisterDriver("alpha", stubOSSDriver)
+	for _, want := range []string{"INFO", "module=oss", "function=RegisterDriver", "driver=zeta", "driver=alpha"} {
+		if !strings.Contains(buffer.String(), want) {
+			t.Fatalf("missing %q in %s", want, buffer.String())
+		}
+	}
+	if got := strings.Count(buffer.String(), "Registered OSS driver"); got != 2 {
+		t.Fatalf("successful registration log count = %d, want 2", got)
+	}
 	if got := RegisteredDrivers(); !slices.Equal(got, []string{"alpha", "zeta"}) {
 		t.Fatalf("RegisteredDrivers() = %v", got)
 	}
@@ -77,6 +96,10 @@ func TestPublicDriverRegistryFunctions(t *testing.T) {
 		if recovered := recover(); recovered == nil {
 			t.Fatal("MustRegisterDriver did not panic for a duplicate")
 		}
+		if buffer.Len() != 0 {
+			t.Fatalf("failed registration logged success: %s", buffer.String())
+		}
 	}()
+	buffer.Reset()
 	MustRegisterDriver("ALPHA", stubOSSDriver)
 }

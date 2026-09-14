@@ -35,6 +35,8 @@ func subscribeConnectionPools(
 	// 连接身份始终对应启动时的资源。比较时忽略池参数，且不让任何后续
 	// 快照推进基线，避免被拒绝的拓扑变更在下一次更新时绕过检查。
 	startupConfig := proto.CloneOf(initial)
+	// 同一订阅的回调串行执行；初始连接已应用此配置，回放和重复通知无需再次写入或记日志。
+	appliedConfig := startupConfig
 	cancel, err := configManager.Subscribe(
 		"database",
 		new(config_pb.Database),
@@ -62,7 +64,11 @@ func subscribeConnectionPools(
 				)
 				return
 			}
+			if proto.Equal(appliedConfig, next) {
+				return
+			}
 			applied := applyConnectionPools(factory, next)
+			appliedConfig = proto.CloneOf(next)
 			if applied > 0 {
 				logger.With("function", "subscribeConnectionPools", "connections", applied).Info(
 					"Updated database connection pool settings",
