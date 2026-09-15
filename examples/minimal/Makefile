@@ -18,4 +18,4 @@ test:
 	cd $(ROOT) && go vet ./examples/minimal/cmd/api
 
 run:
-	cd $(ROOT) && LOG_FILE_DISABLE=true go run ./examples/minimal/cmd/api
+	cd $(ROOT) && LOG_FILE_ENABLE=false go run ./examples/minimal/cmd/api

@@ -8,8 +8,10 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	"google.golang.org/protobuf/proto"
 	"io"
 	nethttp "net/http"
 	"net/http/httptest"
@@ -23,12 +25,16 @@ func (discardLogger) Log(kratoslog.Level, ...any) error { return nil }
 
 func newTestRealBuilder(t testing.TB, discovery registry.Discovery) *builder {
 	t.Helper()
+	var resolver DiscoveryResolver
+	if discovery != nil {
+		resolver = testDiscoveryResolver{discovery}
+	}
 	builder := newBuilder(
 		newTestLogger(discardLogger{}),
 		appinfo.New("test"),
 		newTestTracingProvider(t),
 		newTestMetricsProvider(t),
-		discovery,
+		resolver,
 	)
 	return builder
 }
@@ -163,3 +169,50 @@ func TestBuilderUsesConstructionEnvironmentSnapshot(t *testing.T) {
 		t.Fatalf("response body = %q", body)
 	}
 }
+
+func TestBuilderHTTPPropagatesRequestDebug(t *testing.T) {
+	received := make(chan string, 1)
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		received <- r.Header.Get("x-foundation-debug")
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte("{}")); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	builder := newTestRealBuilder(t, nil)
+	for _, propagate := range []bool{true, false} {
+		result, err := builder.build(t.Context(), newClientSpec("debug", &config_pb.ClientOption{
+			Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL,
+			Middleware: &config_pb.ClientMiddleware{RequestDebug: &config_pb.Middleware_RequestDebug{Propagate: proto.Bool(propagate)}},
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, debug := range []bool{false, true} {
+			ctx := t.Context()
+			if debug {
+				ctx = request.WithDebug(ctx)
+			}
+			err = result.httpClient.Invoke(ctx, nethttp.MethodGet, "/", nil, &map[string]any{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := ""
+			if debug && propagate {
+				want = "1"
+			}
+			if got := <-received; got != want {
+				t.Fatalf("debug=%v propagate=%v header=%q", debug, propagate, got)
+			}
+		}
+		if err := result.close(); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+// 测试替身只提供内存发现能力，生产入口不再接收单个 Discovery。
+type testDiscoveryResolver struct{ discovery registry.Discovery }
+
+func (r testDiscoveryResolver) Discovery(string) (registry.Discovery, error) { return r.discovery, nil }

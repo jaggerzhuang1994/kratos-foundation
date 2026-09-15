@@ -19,42 +19,40 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-func TestBootstrapSkipsEmptyManager(t *testing.T) {
-	spec := app.NewSpec()
-	manager := newTestManager(t, job.NewSpec())
-	got, err := bootstrap.NewJobBootstrap(spec, manager)
-	if err != nil {
+func TestJobBootstrapSelection(t *testing.T) {
+	for _, selection := range []string{"none", "empty", "daemon", "invalid", "frozen"} {
+		t.Run(selection, func(t *testing.T) {
+			spec := bootstrap.NewSpec()
+			switch selection {
+			case "empty":
+				spec.Job()
+			case "daemon", "frozen":
+				spec.Job().RegisterDaemon("worker", job.TaskFunc(func(context.Context) error { return nil }))
+			case "invalid":
+				spec.Job().RegisterCron("invalid", "not a schedule", job.TaskFunc(func(context.Context) error { return nil }))
+			}
+			if selection == "frozen" {
+				_, _ = app.NewApp(context.Background(), bootstrap.ApplicationSpec(spec), nil, nil, nil)
+			}
+			logger, tracer, meter := newTestObservability(t)
+			_, err := bootstrap.NewJobBootstrap(spec, nil, logger, meter, tracer, bootstrap.Bootstrap{})
+			if (err != nil) != (selection == "invalid" || selection == "frozen") {
+				t.Fatal(err)
+			}
+			if selection == "frozen" && !errors.Is(err, app.ErrSpecFrozen) {
+				t.Fatal(err)
+			}
+			if _, err := bootstrap.NewJobBootstrap(spec, nil, logger, meter, tracer, bootstrap.Bootstrap{}); err == nil {
+				t.Fatal("repeated assembly accepted")
+			}
+		})
+	}
+	if _, err := bootstrap.NewJobBootstrap(nil, nil, nil, nil, nil, bootstrap.Bootstrap{}); err == nil {
+		t.Fatal("nil spec accepted")
+	}
+	if _, err := bootstrap.NewJobBootstrap(bootstrap.NewSpec(), nil, nil, nil, nil, bootstrap.Bootstrap{}); err != nil {
 		t.Fatal(err)
 	}
-	if got != (bootstrap.JobBootstrap{}) {
-		t.Fatalf("bootstrap = %#v, want zero value", got)
-	}
-	if _, err := bootstrap.NewJobBootstrap(spec, manager); err != nil {
-		t.Fatalf("second bootstrap error = %v, want nil", err)
-	}
-}
-
-func TestBootstrapRegistersNonEmptyManagerAllowsRepeatedRegistration(t *testing.T) {
-	jobSpec := job.NewSpec()
-	jobSpec.RegisterDaemon("worker", job.TaskFunc(func(context.Context) error { return nil }))
-	manager := newTestManager(t, jobSpec)
-	spec := app.NewSpec()
-	if _, err := bootstrap.NewJobBootstrap(spec, manager); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := bootstrap.NewJobBootstrap(spec, manager); err != nil {
-		t.Fatalf("second bootstrap error = %v, want nil", err)
-	}
-}
-
-func newTestManager(t *testing.T, spec *job.Spec) *job.Manager {
-	t.Helper()
-	logger, tracingProvider, metricsProvider := newTestObservability(t)
-	manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return manager
 }
 
 func newTestObservability(t *testing.T) (log.Logger, tracing.Provider, metrics.Provider) {
@@ -98,11 +96,11 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 		result error
 	}{{"completed", nil}, {"failed", failure}} {
 		t.Run(tt.name, func(t *testing.T) {
-			jobSpec := job.NewSpec()
-			jobSpec.RegisterOnce("once", job.TaskFunc(func(context.Context) error { return tt.result })).ExitWhenDone()
-			manager := newTestManager(t, jobSpec)
-			spec := app.NewSpec()
-			if _, err := bootstrap.NewJobBootstrap(spec, manager); err != nil {
+			components := bootstrap.NewSpec()
+			components.Job().RegisterOnce("once", job.TaskFunc(func(context.Context) error { return tt.result })).ExitWhenDone()
+			jobLogger, tracer, meter := newTestObservability(t)
+			spec := bootstrap.ApplicationSpec(components)
+			if _, err := bootstrap.NewJobBootstrap(components, nil, jobLogger, meter, tracer, bootstrap.Bootstrap{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := spec.RegisterAppInfo(appinfo.New("test")); err != nil {
@@ -117,7 +115,7 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			policy, release, err := app.NewStopPolicy(config, configs, logger, 0)
+			policy, release, err := app.NewStopPolicy(config, configs, logger)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -139,5 +137,18 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 				t.Fatalf("job did not stop App before deadline: %v", ctx.Err())
 			}
 		})
+	}
+}
+
+// 嵌入接口仅用于构造契约：Bootstrap 不应在构造期执行任务或调用协调器。
+type constructionCoordinator struct{ job.ConcurrencyCoordinator }
+
+func TestJobBootstrapInjectsCoordinator(t *testing.T) {
+	logger, tracing, metrics := newTestObservability(t)
+	spec := bootstrap.NewSpec()
+	spec.Job().RegisterCron("distributed", "@hourly", job.TaskFunc(func(context.Context) error { return nil }), job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
+	_, err := bootstrap.NewJobBootstrap(spec, constructionCoordinator{}, logger, metrics, tracing, bootstrap.Bootstrap{})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

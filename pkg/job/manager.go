@@ -54,10 +54,7 @@ func NewManager(
 		}
 	}
 	options := newManagerOptions(spec)
-	jobLogger, err := newJobLog(logger, options)
-	if err != nil {
-		return nil, fmt.Errorf("configure job logger: %w", err)
-	}
+	jobLogger := newJobLog(logger, options)
 	middlewares, err := newMiddlewares(
 		jobLogger,
 		options,
@@ -67,10 +64,7 @@ func NewManager(
 	if err != nil {
 		return nil, err
 	}
-	cronLogger, err := newCronLog(logger, options)
-	if err != nil {
-		return nil, fmt.Errorf("configure cron logger: %w", err)
-	}
+	cronLogger := newCronLog(logger, options)
 	parser := newScheduleParser(cronLogger)
 	scheduler := newCron(
 		cronLogger,

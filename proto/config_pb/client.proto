@@ -12,10 +12,8 @@ import "validate/validate.proto";
 message Client {
   // [热更新] 后续调用使用新配置，旧连接等待活跃调用释放。
   map<string, ClientOption> clients = 1;
-  // logger 配置。[需重启] 只在 Factory 构造时读取。
-  optional ModuleLog log = 2;
   // cleanup 等待租约与在途活动的上限，默认 30s；超时强制关闭连接并记录日志。[需重启]
-  optional google.protobuf.Duration cleanup_timeout = 3 [(validate.rules).duration = {gt: {}}];
+  optional google.protobuf.Duration cleanup_timeout = 2 [(validate.rules).duration = {gt: {}}];
 }
 
 message ClientOption {
@@ -27,6 +25,8 @@ message ClientOption {
   string target = 2;
   // 中间件
   optional ClientMiddleware middleware = 3;
+  // discovery 目标使用的 registry.instances 名称；省略或空值默认 default。
+  string discovery = 4;
 }
 
 enum Protocol {
@@ -34,20 +34,18 @@ enum Protocol {
   GRPC = 0;
   // http请求
   HTTP = 1;
-  reserved 2;
-  reserved "GRPCS";
   // https请求
   HTTPS = 3;
 }
 
 // 客户端中间件配置
 message ClientMiddleware {
-  reserved 1;
-  reserved "timeout";
-  optional Middleware.Deadline deadline = 7;
-  optional Middleware.Metadata metadata = 2;
-  optional Middleware.Tracing tracing = 3;
-  optional Middleware.Metrics metrics = 4;
-  optional Middleware.Logging logging = 5;
-  optional Middleware.CircuitBreaker circuit_breaker = 6;
+  optional Middleware.Metadata metadata = 1;
+  optional Middleware.Tracing tracing = 2;
+  optional Middleware.Metrics metrics = 3;
+  optional Middleware.Logging logging = 4;
+  optional Middleware.CircuitBreaker circuit_breaker = 5;
+  optional Middleware.Deadline deadline = 6;
+  // 请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。
+  optional Middleware.RequestDebug request_debug = 7;
 }

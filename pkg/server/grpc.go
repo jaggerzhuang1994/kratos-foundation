@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
 )
 
 // GRPCServer 是 Foundation service 使用的 Kratos gRPC Server。
@@ -58,6 +59,22 @@ func newGRPCServerOptions(
 	}
 	if conf.GetDisableReflection() {
 		opts = append(opts, grpc.DisableReflection())
+	}
+	// 流需要在建立时恢复状态；复用相同的动态 debug 策略和按名替换规则。
+	var debugEntries middlewareSet
+	for _, entry := range middlewares {
+		if entry.Name == "request_debug" {
+			debugEntries = append(debugEntries, entry)
+		}
+	}
+	var debugOverrides []MiddlewareSpec
+	for _, entry := range spec.grpc.middlewares {
+		if entry.Name == "request_debug" {
+			debugOverrides = append(debugOverrides, entry)
+		}
+	}
+	for _, debug := range debugEntries.build(debugOverrides) {
+		opts = append(opts, grpc.StreamInterceptor(requestdebug.StreamServer(debug)))
 	}
 	opts = append(opts, spec.grpc.options...)
 	opts = append(opts, grpc.Middleware(middlewares.build(spec.grpc.middlewares)...))

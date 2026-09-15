@@ -1,6 +1,6 @@
 # bootstrap
 
-日志 Bootstrap 安装 Kratos 模块适配器并借用实例输出；cleanup 恢复之前完整的全局绑定。配置源选择日志归属 `module=bootstrap`。
+日志 Bootstrap 安装 Kratos 模块适配器并借用实例输出；cleanup 恢复之前完整的全局绑定。配置源选择日志归属各 contrib 包。
 
 `pkg/bootstrap` 负责跨组件集成与应用登记。领域包只声明自身依赖，提供普通 Go 构造函数；不导入 `app`、`bootstrap` 或 Wire 来参与应用组装。组件内部创建自身 SDK、配置解析与资源管理仍留在领域包中。
 
@@ -37,62 +37,60 @@ func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *jobim
 未调用 `Http()`、`Grpc()` 的 worker 不构造服务器，也不读取服务器配置；未调用 `Job()` 不构造任务管理器。
 空 Spec 可用于不需要这些组件的应用；基础设施仍由 Wire 显式选择，本入口不会自动创建数据库、Redis 或消息客户端。
 
-Wire 使用 `bootstrap.NewSpec, bootstrap.ApplicationSpec, Boot, bootstrap.NewComponentsBootstrap, bootstrap.NewApplicationBootstrap`。
+Wire 使用 `bootstrap.NewSpec, bootstrap.ApplicationSpec, Boot, bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap, bootstrap.NewApplicationBootstrap`。
 bootstrap.NewSpec 创建组件声明及其持有的 app.Spec；ApplicationSpec 向基础设施 provider 暴露同一实例。
 统一模式不要再提供 app.NewSpec，避免生成第二份状态或出现重复 provider。
-Boot 返回 `Bootstrap`，NewComponentsBootstrap 依赖该标记，保证先声明后构造。
-NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；此模式不使用旧的 NewBootstrap。
-Boot 不得依赖 ComponentsBootstrap，否则形成循环；Boot 只接收 *bootstrap.Spec，直接调用 BeforeStart 等方法登记应用贡献。
-停机策略使用 `bootstrap.NewStopPolicy` 替代 `app.NewStopPolicy`，自动从组件标记取得服务器等待时间；无服务器时为零。
-业务无需提供 time.Duration 适配函数；停机策略的订阅 cleanup 继续由 Wire 在组件资源之前释放。
-不要为同一组件同时使用统一入口与旧的独立 Bootstrap，否则会重复登记。
+Boot 返回 `Bootstrap`，NewServerBootstrap 和 NewJobBootstrap 都依赖该标记，保证先声明后构造；NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
+NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；这是唯一的 StartupReady 构造入口。
+Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则形成循环；Boot 只接收 *bootstrap.Spec，直接调用 BeforeStart 等方法登记应用贡献。
+停机策略直接使用 `app.NewStopPolicy(config, manager, logger)`，不依赖组件标记或服务器等待时间。建议总停机预算为服务器等待和资源清理预留足够时间，不做跨组件硬校验。
+业务无需提供 time.Duration 适配函数；各 provider 的 cleanup 由 Wire 按实际依赖逆序释放。
+不要为同一组件同时使用统一入口与独立 Bootstrap，否则会重复登记。
 
 `bootstrap.Spec` 在构造期串行填充，只能组装一次；组装开始后不可再修改 Spec 或保留的 Builder。
-`NewComponentsBootstrap` 不启动后台任务。成功返回的 cleanup 归 Wire，在应用停止后调用；
-错误会保留原因链并释放已创建的服务器资源，失败的 app.Spec 应丢弃。
+`NewRuntimeBootstrap(spec, serverBootstrap, jobBootstrap)` 仅登记自定义 Runtime，返回 `(RuntimeBootstrap, error)`，不再返回空 cleanup。服务器资源由 NewServerBootstrap 的 cleanup 释放；后续组装失败时 Wire 会逆序回滚，失败的 app.Spec 应丢弃。
 底层数据库、消息客户端和消费者资源的 cleanup 仍归各自 provider；运行时 Start/Stop 由 app 生命周期管理。
 bootstrap.Spec 按模块提供 Http()、Grpc()、Job()；业务无需接收第二个 Spec。
-生命周期方法直接挂在 spec 上；日志仅通过 log.WithKV、log.WithTimeFormat 等包级方法修改全局状态，不再提供 spec.Log()。
+生命周期方法直接挂在 spec 上；日志运行期策略来自 log 配置热更新，代码通过返回派生实例的 WithLevel 等方法定制，不提供 spec.Log()。
 最终 app.NewApp 冻结的正是这份由私有字段持有的状态；冻结后直接调用 BeforeStart、AddMetadata 等方法会返回 app.ErrSpecFrozen。
 请使用 bootstrap.NewSpec 创建统一声明，不能使用其零值；app 包仍然不依赖 server、job、queue。
 
 ```mermaid
 flowchart TD
-    A([cmd 选择业务实现]) --> B[Wire 构造依赖和 Spec，完成基础设施及配置观测]
-    B --> P[Boot 声明组件和应用贡献]
-    P --> Q{Boot 成功}
-    Q -- 否 --> X
-    Q -- 是 --> C{是否选中组件}
-    C -- HTTP或gRPC --> D[创建 Server Runtime]
-    C -- Job --> E[将协调器构造参数传给 Job Manager]
-    C -- Runtime --> F[登记 Wire 已构造的 Runtime]
-    C -- 无 --> G[跳过组件构造]
-    D --> H{构造及登记成功}
-    E --> H
-    F --> H
-    G --> I[ComponentsBootstrap]
-    H -- 否 --> X[释放本次资源并返回错误]
-    X --> Y([调用方处理错误])
-    H -- 是 --> I
-    I --> J[NewApplicationBootstrap 解除最终屏障]
-    J --> K[NewKratosApp 接收 Registrar 并冻结 app.Spec]
-    K --> L([App 统一管理 Start及Stop])
+    A([Wire 构造统一 Spec 及基础设施]) --> B[业务 Boot 声明组件]
+    B --> C{Boot 成功?}
+    C -- 否 --> X[Wire 逆序释放已有资源]
+    C -- 是 --> D[NewServerBootstrap 与 NewJobBootstrap 分别构造登记]
+    D --> E{成功或未选择对应组件?}
+    E -- 否 --> X
+    E -- 是 --> F[NewRuntimeBootstrap 接收 ServerBootstrap 和 JobBootstrap]
+    F --> G[登记自定义 Runtime]
+    G --> H{成功?}
+    H -- 否 --> X
+    H -- 是 --> I[NewApplicationBootstrap 返回 StartupReady]
+    I --> J[NewKratosApp 冻结应用 Spec]
+    J --> K{成功?}
+    K -- 否 --> X
+    K -- 是 --> L([返回应用及 Wire cleanup])
+    X --> Y([返回错误])
 ```
 
-Consul 模式可使用 `BaseProviderSet` + `ConsulProviderSet` 完成基础组装；其他模式仍可按需选择构造函数。
+基础组装使用 `DriverProviderSet`，具体后端由具名驱动配置选择。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |
-| `NewAppInfoBootstrap(info, spec)` | `AppInfoBootstrap` | 登记身份并设置日志服务字段 |
-| `NewLogBootstrap(logger, spec)` | `LogBootstrap` | 登记 Logger，安装全局 Logger 并返回恢复 cleanup |
+| `NewAppInfoBootstrap(spec, info)` | `AppInfoBootstrap` | 登记身份并设置日志服务字段 |
+| `NewLogBootstrap(spec, manager, logger)` | `LogBootstrap` | 订阅 log 配置、登记 Logger，安装全局 Logger；cleanup 取消订阅并恢复绑定 |
 | `NewTracingBootstrap()` | `TracingBootstrap` | 设置日志中的 trace/span 动态字段 |
 | `NewMetricsBootstrap(spec, meter)` | `MetricsBootstrap` | 将默认 Meter 注入 App Context |
-| `NewServerBootstrap(spec, runtime)` | `ServerBootstrap` | 登记已启用的 HTTP/gRPC Server |
-| `NewJobBootstrap(spec, manager)` | `JobBootstrap` | 登记非空任务管理器并适配任务完成结果 |
+| `NewServerBootstrap(spec, manager, logger, metrics, tracing, boot)` | `ServerBootstrap` | 按统一 Spec 构造和登记服务器，返回 cleanup |
+| `NewJobBootstrap(spec, coordinator, logger, metrics, tracing, boot)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
 
-这些构造函数都返回 error，登记失败时保留错误链；独立登记函数中仅 LogBootstrap 额外返回 `func()` cleanup。其他资源的 cleanup 来自领域构造函数，由 Wire 在构造失败或调用方退出时逆序执行。Bootstrap 不启动 Runtime。
+构造参数统一按 Spec、配置依赖、组件专属依赖、观测依赖（Logger、Metrics、Tracing）、阶段完成标记排列；不存在的类别直接省略。纯阶段聚合函数按阶段顺序接收标记。参数位置只用于阅读，Wire 仍按类型解析依赖；组装顺序由完成标记建立，见下方流程图。
 
-`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing、Metrics 和 ConfigObservability 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和所需的 `ServerBootstrap`、`JobBootstrap` 等标记，返回 `Bootstrap`。`NewBootstrap` 汇合基础设施和业务标记后，`NewKratosApp` 才调用 `app.NewApp` 冻结 Spec。
+这些构造函数都返回 error，登记失败时保留错误链；LogBootstrap 和 ServerBootstrap 额外返回 `func()` cleanup。其他资源的 cleanup 来自领域构造函数，由 Wire 在构造失败或调用方退出时逆序执行。Bootstrap 不启动 Runtime。ServerBootstrap 由 NewServerBootstrap 在业务 Boot 后构造并登记服务器，再注入 NewRuntimeBootstrap 作为前置依赖；服务器 cleanup 独立归 Wire 所有。
+
+`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap 与 NewJobBootstrap 分别构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后登记自定义 Runtime，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `NewKratosApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 `bootstrap.NewSpec` 持有的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
 
 Wire 只执行最终返回值的依赖链。仅把构造函数放进 set 不保证执行；业务必须让每项贡献被最终标记引用。阶段内只保留实际依赖：仅在最终业务 provider 接收基础设施标记，不会推迟其所有参数的构造。
 
@@ -104,8 +102,10 @@ flowchart TD
     C -- 是 --> D[NewXXXBootstrap 同步登记贡献]
     D --> E{登记成功?}
     E -- 否 --> X
-    E -- 是 --> F[汇合 InfrastructureBootstrap 与 Bootstrap]
-    F --> G[NewBootstrap 返回 StartupReady]
+    E -- 是 --> F[业务 Boot 返回 Bootstrap]
+    F --> S[NewServerBootstrap 与 NewJobBootstrap 构造登记]
+    S --> F1[NewRuntimeBootstrap 登记自定义 Runtime]
+    F1 --> G[NewApplicationBootstrap 汇合基础设施并返回 StartupReady]
     G --> H[NewKratosApp 调用 app.NewApp 冻结 Spec]
     H --> I{App 构造成功?}
     I -- 否 --> X
@@ -139,8 +139,8 @@ flowchart TD
 
 ## 可选依赖由 Wire 构造注入
 
-`registry.Registrar` 直接注入 `NewKratosApp(spec, ready, config, stopPolicy, registrar)`；
-`job.ConcurrencyCoordinator` 注入 `NewComponentsBootstrap(spec, manager, logger, metrics, tracing, boot, coordinator)`，
+`registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`；
+`job.ConcurrencyCoordinator` 注入 `NewJobBootstrap(spec, coordinator, logger, metrics, tracing, boot)`，
 再传给 `job.NewManager`。它们不属于 Spec 声明，不需要 Boot 登记。
 
 下面是完整的最小 Wire 示例，两个文件放在消费项目的同一个组装包中，并执行该项目的 Wire 生成命令。
@@ -198,7 +198,7 @@ nil Registrar 禁用服务注册；nil Coordinator 允许普通 Cron、Once、Da
 注入协调器本身不会启用分布式策略，仍须显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。Delay 默认限制每任务每进程的进入数量，可通过 `spec.Job().RegisterCron(..., job.WithDelayOverflowHandler(handler))` 接入满额通知；容量、回调与超额跳过语义见 [Job 文档](../job/README.md#delay-容量)。
 这些依赖在构造时确定，不支持通过事后修改 Spec 切换。
 
-启用服务注册时，将 `noRegistrar` 替换为 [`contrib/registry/consul.NewRegistry`](../../contrib/registry/consul/README.md)，并提供其配置与客户端依赖。
+应用组装使用 `app.NewRegistrar` 和 `registry.NewFactory`，由 `app.registry` 选择实例（省略或为空使用 default），驱动禁用时跳过注册；上例的 nil Registrar 仅说明 App 底层接口语义。
 启用 Redis 协调时，将 `noCoordinator` 替换为 [Job 文档中的 `newJobCoordinator`](../job/README.md)，由业务 provider 固定连接名及协调参数。
 每个接口只保留一个 provider；无需额外 `wire.Bind`，这些 provider 已返回目标接口。
 共享客户端仍由其构造函数返回的 cleanup 管理；先停止应用，再由 Wire 逆序释放依赖。
@@ -219,183 +219,85 @@ flowchart TD
 
 以上构造路径返回错误，不额外记录日志；运行时服务注册及租约获取、续租、释放流程见对应领域和 contrib 文档。
 
-## 配置观测组装
+## 配置订阅与监控端点
 
-将 `bootstrap.NewConfigObservabilityBootstrap` 加入 Wire provider 集合；
-`NewInfrastructureBootstrap` 已聚合其完成标记，业务 Boot 只需依赖 `InfrastructureBootstrap`。它依赖现有
-`config.Manager` 和 `metrics.Provider`，返回标记、幂等 cleanup、error；Wire 负责在关闭
-metrics Provider 和配置 Manager 之前取消注册。自定义 Manager 未实现 `config.StatusReader`
-会明确返回错误，重复注册也会失败，不会静默替换已有 collector。
+Manager 已采用官方配置语义，不再提供 ConfigObservability collector；配置错误通过官方日志排查，业务是否应用更新应从对应组件观察。
 
-该可选组装直接接入实例私有 registry，现有 HTTP metrics 端点自动暴露指标，无新增轮询任务：
-
-| 指标 | 含义 |
-| --- | --- |
-| foundation_config_watcher_up | 监听正常为 1，终止或关闭为 0 |
-| foundation_config_revision | 本地接受快照序号 |
-| foundation_config_updates_total{result="accepted\|rejected"} | 包括初始加载的接受次数、后续拒绝次数 |
-| foundation_config_last_success_timestamp_seconds | 最近接受快照时间 |
-| foundation_config_subscription_overloads_total | 累计订阅过载次数 |
-| foundation_config_subscriptions_accepting | 仍接受更新的订阅数 |
-| foundation_config_subscription_queue_depth | 当前注册订阅待处理通知总数，含终止通知 |
-| foundation_config_callbacks_running | 当前注册订阅中正在运行的回调数 |
-| foundation_config_callback_duration_seconds_sum / _count | 完成回调耗时总和、次数，无分位数 |
-
-告警起点：`foundation_config_watcher_up == 0`，以及
-`increase(foundation_config_subscription_overloads_total[5m]) > 0`。回调平均耗时可使用
-`rate(foundation_config_callback_duration_seconds_sum[5m]) / rate(foundation_config_callback_duration_seconds_count[5m])`，无回调时分母为零，不解释为故障。
-不因长期无配置更新告警，也不把快照接受或回调结束解释为业务应用成功。指标没有 key、订阅 ID、
-配置值或原始错误标签，避免高基数及敏感信息。详细定位使用 Status 和已有错误日志。
-
-```mermaid
-flowchart TD
-    A([Wire 组装]) --> B{Manager 实现 StatusReader?}
-    B -- 否 --> C[返回组装错误]
-    B -- 是 --> D[注册实例私有 collector]
-    D --> E{注册成功?}
-    E -- 否 --> C
-    E -- 是 --> F[启动 HTTP metrics 端点]
-    F --> G[并发抓取时读取状态副本 不执行回调]
-    G --> H[输出固定指标]
-    H --> I[停机后 Wire cleanup 一次性取消注册]
-    I --> J([关闭依赖并结束])
-    C --> J
-```
-
-Wire 业务 fixture 同时验证配置指标实际可抓取，以及默认 healthz、readyz 在应用启动后的响应。
-
-ServerBootstrap 同时登记业务监听与 `Runtime.ManagementServers()` 返回的独立监控监听；管理端口不加入业务服务发现。地址复用规则见 [server 监控监听配置](../server/README.md#监控端点监听地址)。
+NewServerBootstrap 同时登记业务监听与 `Runtime.ManagementServers()` 返回的独立监控监听；管理端口不加入业务服务发现。地址复用规则见 [server 监控监听配置](../server/README.md#监控端点监听地址)。
 
 业务 Spec 显式开放组件声明、AddContext、AddMetadata、AddEndpoints、AddSignals 和四个生命周期钩子。
 app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo、RegisterLogger 或 Ready；
 运行时使用 RegisterRuntime() 声明。ApplicationSpec 仅作为 Wire 组装桥接函数供 Foundation provider 使用，业务 Boot 不应调用它。
 
-日志 Wire provider 仅保留 log.NewLogger，配置加载与共享状态均由 log 包内部管理。
+日志 Wire provider 使用 log.NewLogger 创建输出；NewLogBootstrap 注入 config.Manager 订阅 log，日志包校验并原子发布完整策略。策略优先级与 API 边界见 [日志文档](../log/README.md#三层策略与公共-api)。
 
-## 基础组装与 Consul
+## 驱动组装
 
-业务从以下两个独立维度各选择一个集合，不要叠加同一维度的默认版与自定义版：
-
-| 维度 | 默认集合 | 自定义集合 | 自定义版要求业务提供 |
-| --- | --- | --- | --- |
-| 通用基础组装 | `BaseProviderSet` | `BaseProviderSetWithCustomJobCoordinator` | `job.ConcurrencyCoordinator` |
-| Consul 接入 | `ConsulProviderSet` | `ConsulProviderSetWithCustomRemoteConfigDirName` | `bootstrap.RemoteConfigDirName` |
-
-`BaseProviderSet` 包含 Logger、Metrics、Tracing、`config.NewManager`、Spec、启动阶段、停机策略、
-Kratos App，以及 Database、Redis、Client、Kafka、OSS 的默认 Manager/Factory。
-它消费 `config.Sources`、`registry.Registrar` 和依赖图需要的 `registry.Discovery`，不构造 Consul。
-自定义后端时省略整个 Consul 集合，业务提供这些契约即可，不必提供本地或远程路径类型。
-
-`ConsulProviderSet` 提供共享客户端、服务注册发现、本地源、远程路径、远程源和最终 `config.Sources`。
-默认内置 `DefaultAppRemoteConfigDirNameProvider(info appinfo.AppInfo)`，返回 `info.Name()`；
-当前 AppInfo 的 Name 是可执行文件名，不保证等于部署服务名。需要稳定业务目录时使用自定义版。
-两个 Consul 集合都要求业务提供 `LocalConfigPath`，非 local 可传空值，此时不访问本地文件。
-两类集合可以自由组合，不另建四种交叉组合的 ProviderSet，也不提供独立 ConfigProviderSet。
-
-业务还需提供 main 构造的 `appinfo.AppInfo`、声明组件的 `Bootstrap` 及业务 provider。
-以下为业务 wireinject 文件中的片段；`Bootstrap` 与 `internal.ProviderSet` 沿用上文业务实现：
+使用 `DriverProviderSet`，业务提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot。需要自定义 Job Coordinator 时改用 `DriverProviderSetWithCustomJobCoordinator`，并提供 `job.ConcurrencyCoordinator`；两个集合二选一。
 
 ```go
-func wireApp(info appinfo.AppInfo, local bootstrap.LocalConfigPath) (*kratos.App, func(), error) {
-    panic(wire.Build(
-        bootstrap.BaseProviderSet,
-        bootstrap.ConsulProviderSet,
-        internal.ProviderSet,
-        Bootstrap,
-    ))
+// wireinject 文件中的业务 provider：Boot 已声明应用组件。
+func wireApp(info appinfo.AppInfo, spec *bootstrap.Spec) (*kratos.App, func(), error) {
+    wire.Build(bootstrap.DriverProviderSet, Boot)
+    return nil, nil, nil
 }
 ```
 
-自定义目录时，把 `ConsulProviderSet` 换为 `ConsulProviderSetWithCustomRemoteConfigDirName`，
-并增加 `directory bootstrap.RemoteConfigDirName` 输入或业务 provider。
-自定义协调器时，把 `BaseProviderSet` 换为 `BaseProviderSetWithCustomJobCoordinator`，
-并提供 `job.ConcurrencyCoordinator`。两者可同时替换。
-不要给默认集合重复提供目录名或 Coordinator；Wire 不支持用后面的 provider 覆盖已有绑定。
-`DefaultAppRemoteConfigDirNameProvider` 也可单独用于手动组装。
-
-main 应检查 `wireApp` 返回的错误，成功后 `defer cleanup()`，再调用 `application.Run()` 并处理错误。
-生成和运行示例的真实 fixture 位于 `testdata/wireassembly`，在仓库根目录执行 `make test-business`，
-由 `go tool wire` 在临时模块生成代码并验证四种组合、定制后端和 cleanup。
-
-默认资源 provider 仅在依赖图需要时构造。具体数据库和 OSS 驱动仍由业务显式导入；
-Queue 消费者、具名 Producer、锁协调器等需要业务参数的实例仍由业务构造。
-默认 `job.DefaultCoordinator()` 返回真正的 nil，不启用跨进程协调；
-选择分布式 Cron 策略却未提供实际 Coordinator 时，构造会失败。
-`NewKratosApp` 使用 `context.Background()`，业务通过 `Spec.AddContext` 增加上下文信息。
-
-### 配置选择和路径约定
-
-`LocalConfigPath` 支持具体文件、目录或 `filepath.Glob` 模式（例如 `configs/*/app?.yaml`）。
-已存在的字面路径优先；否则展开 glob，过滤非普通文件，匹配到目录不会隐式加载其内容。
-local 下路径为空、模式非法或没有可加载文件时返回错误。目录只选择直属 `*.yaml` 普通文件（可跟随文件符号链接），
-按文件名字典序加载，后面的覆盖前面的；目录简写忽略 `.yml` 和子目录，显式文件及 glob 不限制扩展名。
-显式文件或 glob 的扩展名不受路径解析限制，但最终必须有对应的 Kratos codec；匹配成功不代表内容可解码。
-`NewLocalConfigSources` 把路径作为单项 `file.PathList` 交给 `file.NewSources`，
-只负责环境判断和结果非空检查；底层文件源通过全局日志记录构造事件，
-不依赖注入 Logger。本地文件列表在构造期固定，监听已选文件的修改、替换和删除；新增文件需重启重新选择。
-
-`RemoteConfigDirName` 必须是非空单层目录名，不允许首尾空白、`.`、`..`、路径分隔符或 glob 元字符。
-`NewRemoteConfigPaths` 在构造期读取环境，生成以下八层，后层覆盖前层：
-
-```text
-configs/common.yaml
-configs/{env}/common.yaml
-secrets/common.yaml
-secrets/{env}/common.yaml
-configs/{RemoteConfigDirName}/*.yaml
-configs/{RemoteConfigDirName}/{env}/*.yaml
-secrets/{RemoteConfigDirName}/*.yaml
-secrets/{RemoteConfigDirName}/{env}/*.yaml
-```
-
-默认八层中的 `common.yaml` 路径优先匹配精确键；若键不存在，则按同名目录的直属 `*.yaml` 解析。
-自定义 Consul PathList 同样支持目录、文件和 glob；尾部 `/` 强制按目录解析。
-每个远程 `*.yaml` 只匹配该目录直属键，按完整键名字典序排列；不递归，不匹配 `.yml`。
-监听保留目录前缀，新增和删除匹配键会更新完整快照。缺失的远程层允许为空；
-连接失败或初始配置解码、校验失败会使启动失败。底层 Consul 适配器还支持
-[完整 path.Match 模式](../../contrib/config/consul/README.md#路径边界)，自定义路径列表可直接使用。`secrets/` 只是路径分类，权限由 Consul ACL 控制；
-应用普通配置可覆盖公共 secrets 的同名字段，符合上述顺序。
-
-`NewConfigSources` 在 local 只选择 `LocalConfigSources`，其他环境只选择 `RemoteConfigSources`，
-两者不混合，也不因远程故障回退本地。未设置环境时按 `env.AppEnv()` 默认 local。
-非 local 的远程源要求非 nil 客户端及非空路径列表；`DISABLE_CONSUL=true` 会导致该组装失败。
-local 跳过远程配置源，但共享客户端仍遵循 `pkg/consul` 的启用规则：
-未配置 Consul 地址时默认禁用，显式配置地址且未禁用时仍会连接并探测，用于服务注册发现。
-因此 local 只读本地配置不等于完全不连接 Consul。
-
-Consul 连接配置从环境读取，先于 Manager 构造，避免配置依赖环。
-客户端、配置源构造和来源选择均使用全局日志，不注入 Logger；
-`NewRemoteConfigSources(client, paths)` 和 `NewConfigSources(local, remote)` 无 Logger 透传参数。
-注册、发现及其他运行期资源仍保留实例 Logger 注入。
-来源切片在交给 Manager 后不再修改，Source 对象由一个 Manager 管理；`NewConfigSources` 只复制切片。
-Wire cleanup 逆序释放资源，Manager 先停止配置监听，再释放共享客户端。
+业务通过普通导入调用配置源添加函数，通过空导入选择注册驱动。源链及优先级在 Configuration 中显式声明，不再按环境自动选择本地/远程，也不自动拼接远程目录。main 检查构造错误，成功后 `defer cleanup()`，再调用 `application.Run()` 并处理错误。完整示例与生命周期见[具名驱动文档](../registry/README.md)。
 
 ```mermaid
 flowchart TD
-    A([业务输入和两组集合]) --> B[构造共享 Consul 客户端（启动诊断使用全局日志）]
-    B --> C{客户端构造或探测成功?}
-    C -- 否 --> X([返回错误并逆序 cleanup])
-    C -- 是或 local 禁用 --> D{env.IsLocal?}
-    D -- 是 --> E[解析文件 目录或 glob 并选择普通文件]
-    D -- 否 --> F[生成八层路径并要求可用客户端]
-    E -- 失败 --> X
-    F -- 失败 --> X
-    E -- 成功 --> G[全局 INFO Matched local configuration files]
-    F -- 成功 --> R[全局 INFO Preparing Consul configuration sources]
-    R --> H
-    G --> H[全局 INFO Selected configuration sources for the current environment]
-    H --> I[Manager 加载并监听选中来源]
-    I -- 失败或超时 --> X
-    I -- 成功 --> J[登记基础设施与业务组件]
-    J --> K[NewKratosApp 冻结 Spec]
-    K -- 失败 --> X
-    K -- 成功 --> L([返回 App 和 cleanup])
+ A([业务导入注册驱动]) --> B[init 登记无状态工厂]
+ B --> C[Wire 执行 Configuration，env 在源链首位]
+ C --> D{Load/Watch 成功?}
+ D -- 否 --> X[回滚 watcher 和源依赖，返回错误]
+ D -- 是 --> E[Manager 提供完整配置]
+ E --> F[构造 Registry Factory 具名实例]
+ F --> G{驱动构造和实例解析成功?}
+ G -- 否 --> X
+ G -- 是 --> H[app.NewRegistrar 按 app.registry 解析；Client 按 discovery 解析]
+ H --> I[Spec 登记贡献并启动 App]
+ I --> J[停止 App 和客户端监听]
+ J --> K[释放实例、Manager、配置源依赖]
+ K --> L([结束])
+ X --> L
 ```
 
-### 从旧 Consul 基础集合迁移
+默认资源 provider 只在 Wire 依赖图需要时构造。具体数据库、OSS、配置源和注册驱动由业务显式导入。`NewKratosApp` 继续接收 Registrar 接口，App 不访问驱动工厂。
 
-旧 `ConsulBaseProviderSet` 替换为 `BaseProviderSet` + `ConsulProviderSet`；
-旧 `ConsulBaseProviderSetWithCustomJobCoordinator` 替换为 `BaseProviderSetWithCustomJobCoordinator` + `ConsulProviderSet`。
-旧 `file.PathList` 和 `consul.PathList` 注入改为 `LocalConfigPath` 和可选的 `RemoteConfigDirName`。
-原 `NewConsulSources` 的混合优先级语义已移除，改用 `NewConfigSources` 的环境二选一。
-需要保留任意路径列表或混合来源的应用应自定义 `config.Sources`，使用底层 file/consul 适配器显式组合。
+根 `make test-business` 在临时模块生成并运行 Wire，验证完整驱动依赖图、失败回滚及 cleanup。已删除旧基础/Consul 组合集合和环境路径组装入口，不提供兼容别名。
+
+## Configuration 配置阶段
+
+业务提供 Spec 的构造函数应先完成配置声明，不能在依赖基础设施或业务服务的 Boot 中添加来源，避免配置依赖循环：
+
+```go
+func newSpec() (*bootstrap.Spec, error) {
+    spec := bootstrap.NewSpec()
+    if err := spec.Configuration(
+        file.AddConfigSource("configs/app.yaml"),
+        consul.AddConfigSource("configs/production/app.yaml"),
+    ); err != nil { return nil, err }
+    return spec, nil
+}
+```
+
+以上使用普通导入的 `contrib/config/file` 和 `contrib/config/consul`。`AddConfigSource` 复制路径并返回 `config.SourceLoader`，声明时不执行 I/O。Wire 使用 `newSpec` 提供唯一 Spec，`DriverProviderSet` 内的 `NewConfigManager` 先按声明顺序创建来源，再构造包含官方 env source 的 Manager；配置完整后才提供给其他组件。该 provider set 不再包含 `NewSpec`，不要重复提供它。
+
+不使用 provider set 时，可显式组合 `newSpec`、`bootstrap.NewConfigManager`、`bootstrap.ApplicationSpec` 与所需组件。没有额外来源时由 `bootstrap.NewSpec` 提供空声明即可。来源集合在构造阶段确定，运行中监听来源内容；没有全局配置源注册表，也不提供运行时增删来源接口。Configuration 消费后拒绝追加或重复构造，失败后应丢弃 Spec。返回 cleanup 由 Wire 逆序调用，取消 Manager 轮询并停止 watcher；不等待已开始的订阅回调，共享 Consul 客户端不释放。
+
+```mermaid
+flowchart TD
+ A([业务构造 Spec]) --> B[Configuration 收集 SourceLoader，不执行 I/O]
+ B --> C[NewConfigManager 标记声明已消费，串行创建来源]
+ C --> D{来源创建成功?}
+ D -- 否 --> X([返回构造错误，丢弃 Spec])
+ D -- 是 --> E[NewManager：env 加上有序来源]
+ E --> F{加载与校验成功?}
+ F -- 否 --> G[停止全部已创建 watcher]
+ G --> X
+ F -- 是 --> H[Wire 向其他组件提供 Manager]
+ H --> I([配置阶段完成])
+```
+
+可执行示例见 `examples/minimal/cmd/api/bootstrap.go`，对应生成入口为仓库根目录执行 `make -C examples/minimal generate`。

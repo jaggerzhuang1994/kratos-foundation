@@ -17,10 +17,7 @@ type cronFailure struct {
 
 func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T) {
 	logger, logPath := testFileFoundationLogger(t)
-	cronLog, err := newCronLog(logger, managerOptions{LoggingEnabled: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	cronLog := newCronLog(logger, managerOptions{LoggingEnabled: true})
 	parser := newScheduleParser(cronLog)
 	failures := make(chan cronFailure, 1)
 	wantErr := errors.New("refresh failed")
@@ -66,10 +63,7 @@ func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T
 
 func TestCronSchedulerDefaultErrorHandlerLogsJobFailure(t *testing.T) {
 	logger, logPath := testFileFoundationLogger(t)
-	cronLog, err := newCronLog(logger, managerOptions{LoggingEnabled: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	cronLog := newCronLog(logger, managerOptions{LoggingEnabled: true})
 	parser := newScheduleParser(cronLog)
 	scheduler := newCron(cronLog, managerOptions{}, parser, newCronLogger(cronLog))
 	schedule, err := parser.ParseJob("cleanup", "@daily", true)

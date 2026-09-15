@@ -1,10 +1,10 @@
 # Client
 
-`pkg/client` 是业务与 Wire 构造 Kratos HTTP/gRPC 客户端的公共入口。`NewFactory` 直接接收配置、日志、应用身份、观测能力和服务发现；同包的 `builder.go` 负责传输及其中间件构造，`client_spec.go` 负责配置规范化，`pool.go` 负责构造结果和版本租约，`config.go` 与 `cleanup.go` 分别负责热更新和释放；实现类型不导出。独立熔断中间件保留在 `internal/middleware/circuitbreaker`。
+`pkg/client` 是业务与 Wire 构造 Kratos HTTP/gRPC 客户端的公共入口。`NewFactory` 直接接收配置、日志、应用身份、观测能力和具名 DiscoveryResolver；同包的 `builder.go` 负责传输及其中间件构造，`client_spec.go` 负责配置规范化，`pool.go` 负责构造结果和版本租约，`config.go` 与 `cleanup.go` 分别负责热更新和释放；实现类型不导出。独立熔断中间件保留在 `internal/middleware/circuitbreaker`。
 
 ```go
 factory, cleanup, err := client.NewFactory(
-    configManager, logger, appInfo, tracingProvider, metricsProvider, discovery,
+    configManager, logger, appInfo, tracingProvider, metricsProvider, discoveries,
 )
 if err != nil {
     return nil, err
@@ -19,7 +19,7 @@ defer release()
 // 在 release 前使用当前协议对应的 httpClient 或 grpcConn。
 ```
 
-除 `discovery` 外，构造依赖必须非 nil，由组装层保证，构造函数不重复判空。服务发现仅在使用 `discovery:///...` 目标时需要；直连客户端可传 nil。名称不能为空，未配置的名称按 `discovery:///<name>` 构造默认 gRPC 客户端。
+除 `discoveries` 外，构造依赖必须非 nil，由组装层保证，构造函数不重复判空。服务发现仅在使用 `discovery:///...` 目标时需要；直连客户端可传 nil。客户端名称不能为空，未配置的名称使用默认 discovery 目标和 default 发现实例；需要提供 registry.instances.default 对应能力。
 
 最小直连配置如下，先由配置源交给 config.Manager，再构造 Factory：
 
@@ -37,13 +37,13 @@ client:
       target: "https://payments.example.com:443"
 ```
 
-`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，需注入匹配的 Discovery；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。删除具名配置后再次获取会退回默认 discovery gRPC 配置，不会禁用该名称。
+`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，`discovery` 省略或为空时使用 `default`，需注入包含该实例的 DiscoveryResolver；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。获取未配置的名称时同样使用 default 实例；实例缺失或不可用时返回发现解析错误。官方默认 merge 保留更新中省略的字段，不能通过从源中删除条目移除有效配置。
 
 当前 Factory 的 gRPC 使用 `DialInsecure`，不提供 gRPC TLS/mTLS 配置，`GRPCS` 已移除；目标 URL 和单次调用选项不能启用 gRPC TLS。HTTPS 使用 TLS，标准 Transport 至少要求 TLS 1.2，并保留其已有 TLS 配置；自定义 RoundTripper/TLS 拨号函数须自行实现安全与取消策略。需要 gRPC TLS 时应由应用单独构造并管理原生客户端。
 
 Factory 在构造时读取 `appInfo.Metadata()` 中的环境和主机名并保存独立快照。后续修改进程环境或原始 Metadata 不影响该 Factory 的路由。非 local 环境只匹配同环境节点；local 环境依次优先同环境同主机、同环境，均无匹配时保留全部节点。协议过滤和目标 URL 中的元数据过滤仍会继续应用。
 
-每次成功获取连接都必须在调用完成后执行幂等 `release`。同名同版本客户端共享底层连接；配置更新后旧版本继续服务已有租约，最后一个租约释放后关闭。客户端连接配置可热更新，日志模块和 `client.cleanup_timeout` 变化需重启。cleanup 幂等取消订阅、阻止新租约、取消未完成构建，并最多等待 `client.cleanup_timeout`（默认 **30s**，必须为正的 Go duration）。预算耗尽后记录 WARN 并强制关闭仍被租用的当前及退役连接，晚到的幂等 release 不会重复关闭连接。该设置限制排空等待，不包含底层 Close 和日志输出耗时；业务回调及外部 I/O 仍必须遵守取消和有界返回约定，Go 无法强制终止任意阻塞函数。HTTP 正在执行的请求可能被取消，gRPC 在途 RPC 可能失败。它是 Wire 资源释放阶段的独立预算，不自动继承 app.stop_timeout。
+每次成功获取连接都必须在调用完成后执行幂等 `release`。同名同版本客户端共享底层连接；配置更新后旧版本继续服务已有租约，最后一个租约释放后关闭。客户端连接配置可热更新，`client.cleanup_timeout` 变化需重启，模块日志由 log.modules 热更新。cleanup 幂等取消订阅、阻止新租约、取消未完成构建，并最多等待 `client.cleanup_timeout`（默认 **30s**，必须为正的 Go duration）。预算耗尽后记录 WARN 并强制关闭仍被租用的当前及退役连接，晚到的幂等 release 不会重复关闭连接。该设置限制排空等待，不包含底层 Close 和日志输出耗时；业务回调及外部 I/O 仍必须遵守取消和有界返回约定，Go 无法强制终止任意阻塞函数。HTTP 正在执行的请求可能被取消，gRPC 在途 RPC 可能失败。它是 Wire 资源释放阶段的独立预算，不自动继承 app.stop_timeout。
 
 HTTP 的 Invoke 和 Do 都绑定连接资源的取消信号。收到响应头不会提前取消 Context；
 响应体读取期间仍受资源关闭控制，调用方必须关闭 Body。关闭 Body 只释放该请求的取消注册，
@@ -166,12 +166,12 @@ flowchart TD
 
 ## 模块日志
 
-`client.log` 同时作用于工厂生命周期日志和 HTTP/gRPC 访问日志；禁用、级别和字段过滤在构造时固定。单个客户端的 `middleware.logging.disable` 仍可独立关闭访问日志。
+工厂生命周期日志和 HTTP/gRPC 访问日志使用 module=client，禁用、级别和字段过滤统一由 `log.modules` 热更新；不再提供 `client.log`。单个客户端的 `middleware.logging.disable` 仍可独立关闭访问日志。
 
 ```mermaid
 flowchart TD
     A([NewFactory]) --> B[加载 client 配置 派生模块 Logger]
-    B --> C{加载或日志配置失败?}
+    B --> C{加载失败?}
     C -- 是 --> D([返回错误])
     C -- 否 --> E[用同一 Logger 构造 builder 和 factory]
     E --> F{配置校验和订阅成功?}
@@ -216,3 +216,15 @@ flowchart TD
 ## 可运行的组合用例
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。
+
+## 请求 debug
+
+向客户端调用传入 `request.WithDebug(ctx)` 派生的 Context，HTTP/gRPC 会传递该状态。`client.clients.<name>.middleware.request_debug.propagate` 默认 true；对外部服务可设为 false。它只控制出站传播，不清除本地状态，也不受通用 metadata 的 disable/prefix 控制。`accept_incoming` 字段仅服务端消费。
+
+该字段随 `clients` 配置更新重建客户端；已有租约使用原策略，新租约使用新策略。gRPC stream 在建立时写入 metadata，原生 outgoing metadata 中的旧 debug 值会被清除。完整边界与流程见 [request](../request/README.md)。
+
+## 驱动组装入口
+
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。
+
+`NewFactory` 接收 `DiscoveryResolver`，按每个 `client.clients.<name>.discovery` 选择实例。发现目标必须指定有效实例，错误在构造或配置更新校验时返回；更新被拒绝时保留原客户端。切换实例名称会重建连接。直连目标不使用发现配置。单个 Discovery 注入入口已删除。

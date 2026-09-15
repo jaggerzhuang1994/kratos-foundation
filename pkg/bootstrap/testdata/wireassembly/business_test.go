@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kratos/kratos/v2/transport"
 	textconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
@@ -45,7 +44,7 @@ func businessSources(t *testing.T) config.Sources {
 func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	built, cleanup, err := initialize(businessSources(t), "business-test", 0, nil)
+	built, cleanup, err := initialize(businessSources(t), "business-test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +54,7 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	httpRuntime, _ := built.Server.Servers()
-	endpoint, err := httpRuntime.(transport.Endpointer).Endpoint()
+	endpoint, err := built.Server.http.Endpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +94,12 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		body, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		_, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 		closeErr := response.Body.Close()
 		if readErr != nil || closeErr != nil || response.StatusCode != 200 {
 			t.Fatalf("probe %s: status=%d read=%v close=%v", path, response.StatusCode, readErr, closeErr)
 		}
-		if path == "/metrics" && !strings.Contains(string(body), "foundation_config_watcher_up 1") {
-			t.Fatal("configuration metrics absent from HTTP endpoint")
-		}
+
 	}
 	for _, tt := range []struct {
 		name   string
@@ -158,28 +154,6 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 	}
 }
 
-func TestBusinessRejectsRemovedConfig(t *testing.T) {
-	for _, legacy := range []string{
-		`{"log":{}}`, `{"metrics":{}}`, `{"job":{}}`,
-		`{"server":{"middleware":{"timeout":{}}}}`,
-		`{"database":{"connections":{"default":{"replicas":[]}}}}`,
-	} {
-		t.Run(legacy, func(t *testing.T) {
-			source, err := textconfig.NewSource("legacy.json", config.JSONFormat, legacy)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, cleanup, err := initialize(config.NewSources(source), "legacy-test", 0, nil)
-			if cleanup != nil {
-				t.Cleanup(cleanup)
-			}
-			if !errors.Is(err, config.ErrRemovedField) {
-				t.Fatalf("legacy config should fail explicitly: %v", err)
-			}
-		})
-	}
-}
-
 func TestMonitoringBindFailureStopsApplication(t *testing.T) {
 	occupied, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -195,7 +169,7 @@ func TestMonitoringBindFailureStopsApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	sources := append(businessSources(t), source)
-	built, cleanup, err := initialize(sources, "monitoring-test", 0, nil)
+	built, cleanup, err := initialize(sources, "monitoring-test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

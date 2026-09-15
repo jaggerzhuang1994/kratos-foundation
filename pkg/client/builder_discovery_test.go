@@ -193,7 +193,7 @@ func TestFactoryHTTPDiscoveryWatcherLivesUntilClientClose(t *testing.T) {
 		},
 	}}
 	builder := newTestRealBuilder(t, discovery)
-	clientFactory, cleanup, err := NewFactory(testconfig.New(t, "client", initial), builder.logger, appinfo.New("test"), builder.tracing, builder.metrics, builder.discovery)
+	clientFactory, cleanup, err := NewFactory(testconfig.New(t, "client", initial), builder.logger, appinfo.New("test"), builder.tracing, builder.metrics, builder.discoveries)
 	if err != nil {
 		t.Fatal(err)
 	}

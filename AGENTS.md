@@ -49,7 +49,7 @@ Buffers、接口契约及相关文档时，应遵循本规范，并优先保持�
 - 类型及其紧密关联的方法尽量放在一起；同一职责的短小辅助实现优先留在同一文件，不按每个类型或函数机械拆文件。测试跟随职责组织，避免维护超大测试文件。
 - 保留显式构造函数与 Wire 依赖注入模式；由构造返回 cleanup 的资源继续由组装层负责逆序释放。
 - Bootstrap 统一位于 `pkg/bootstrap`，在构造期同步向 `app.Spec` 登记贡献；业务 Wire 层聚合 `bootstrap.StartupReady` 后通过 `bootstrap.NewKratosApp` 调用 `app.NewApp`。领域包只声明自身依赖并提供普通构造函数，不导入 app、bootstrap 或 Wire 参与组装，也不自行启动应用运行时或管理全局容器。
-- 推荐的统一 Spec 模式由 `bootstrap.NewSpec` 持有唯一的 `app.Spec`，通过 `ApplicationSpec` 共享；业务 Boot 声明后由 `NewComponentsBootstrap` 构造选定组件，`NewApplicationBootstrap` 返回 `StartupReady`。不要同时提供 `app.NewSpec` 或为同一组件重复调用独立 Bootstrap。旧的显式登记模式仍使用 `NewBootstrap` 聚合屏障；两种完整用法见 [Bootstrap 文档](pkg/bootstrap/README.md)。
+- 推荐的统一 Spec 模式由 `bootstrap.NewSpec` 持有唯一的 `app.Spec`，通过 `ApplicationSpec` 共享；业务 Boot 声明后由 `NewServerBootstrap` 和 `NewJobBootstrap` 分别构造登记服务器与任务，`NewRuntimeBootstrap` 依赖二者的完成标记后登记自定义 Runtime，`NewApplicationBootstrap` 返回 `StartupReady`。不要同时提供 `app.NewSpec` 或为同一组件重复调用独立 Bootstrap。`NewApplicationBootstrap` 是唯一的 `StartupReady` 构造入口；自行登记的 Runtime 贡献也须通过业务 Boot 纳入依赖链，完整用法见 [Bootstrap 文档](pkg/bootstrap/README.md)。
 
 ### Driver Registry 适用条件
 

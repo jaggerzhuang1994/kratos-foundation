@@ -1,13 +1,23 @@
 syntax = "proto3";
 option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
-
 package kratos_foundation_pb;
-
 import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
 
-// 服务注册。[需重启] 配置在创建 Consul Registrar 时读取一次；修改后需要重启才会以新
-// 参数重新注册。
+// Registry 声明启动时构造的具名注册与发现实例。
 message Registry {
+  // 使用默认注册或发现名称时，必须提供 default 实例及其驱动配置。
+  map<string, RegistryInstance> instances = 1;
+}
+
+// RegistryInstance 声明一个驱动及其专属配置。
+message RegistryInstance {
+  string driver = 1;
+  google.protobuf.Struct options = 2;
+}
+
+// RegistrarOptions 是 Consul 驱动 options.registry 的启动配置。
+message RegistrarOptions {
   // 是否禁用健康检查【默认false】
   optional bool disable_health_check = 1;
   // 是否禁用心跳【默认false】
@@ -19,4 +29,20 @@ message Registry {
   // 注册到 Consul 服务实例的标签，用于 Consul 侧分类、查询和 tag 过滤。
   // 标签不会自动写入 Kratos ServiceInstance.Metadata。
   repeated string tags = 5;
+}
+
+// Discovery 是 Consul 驱动 options.discovery 的启动配置。
+// [需重启] 配置在创建 Consul Discovery 时读取一次。
+message Discovery {
+  // 获取服务的超时时间【默认10s】
+  optional google.protobuf.Duration timeout = 1;
+  // 数据中心【默认 SINGLE】
+  optional DC dc = 2;
+}
+
+enum DC {
+  // 单数据中心
+  SINGLE = 0;
+  // 多数据中心
+  MULTI = 1;
 }

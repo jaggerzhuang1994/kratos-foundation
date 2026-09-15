@@ -27,10 +27,7 @@ type runtimeObservability struct {
 func newRuntimeObservability(t *testing.T) runtimeObservability {
 	t.Helper()
 	logger, logPath := testFileFoundationLogger(t)
-	log, err := newJobLog(logger, managerOptions{LoggingEnabled: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	log := newJobLog(logger, managerOptions{LoggingEnabled: true})
 	metricsProvider, cleanupMetrics, err := foundationmetrics.NewProvider(appinfo.New("test"))
 	if err != nil {
 		t.Fatal(err)

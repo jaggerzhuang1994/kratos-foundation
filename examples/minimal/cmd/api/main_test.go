@@ -6,7 +6,7 @@ import (
 )
 
 func TestRunRejectsInvalidStartup(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
+	t.Setenv("LOG_FILE_ENABLE", "false")
 	for _, args := range [][]string{{"-unknown"}, {"-config", t.TempDir() + "/missing.yaml"}} {
 		if err := run(args); err == nil {
 			t.Fatal("invalid startup succeeded")

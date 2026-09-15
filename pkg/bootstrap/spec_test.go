@@ -3,12 +3,13 @@ package bootstrap_test
 import (
 	"context"
 	"errors"
-
 	"reflect"
 	"testing"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 )
 
@@ -24,11 +25,14 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	}
 	spec.Job().RegisterOnce("finish", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
 	logger, tracing, metrics := newTestObservability(t)
-	_, cleanup, err := bootstrap.NewComponentsBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{}, nil)
+	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cleanup()
+	_, err = bootstrap.NewRuntimeBootstrap(spec, bootstrap.ServerBootstrap{}, jobBootstrap)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := runComponentsApp(t, application); err != nil {
 		t.Fatal(err)
 	}
@@ -64,5 +68,70 @@ func TestSpecHidesInfrastructureAssembly(t *testing.T) {
 		if fields.Field(i).IsExported() {
 			t.Errorf("assembly field %s is exposed", fields.Field(i).Name)
 		}
+	}
+}
+
+func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
+	spec := bootstrap.NewSpec()
+	var calls []int
+	loaders := []config.SourceLoader{}
+	for i := 1; i <= 2; i++ {
+		loaders = append(loaders, func() (config.Sources, error) {
+			calls = append(calls, i)
+			value := "first"
+			if i == 2 {
+				value = "second"
+			}
+			source, err := text.NewSource("test", config.JSONFormat, `{"phase":"`+value+`"}`)
+			return config.Sources{source}, err
+		})
+	}
+	if err := spec.Configuration(loaders...); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 0 {
+		t.Fatal("declaration executed loaders")
+	}
+	manager, cleanup, err := bootstrap.NewConfigManager(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	var value string
+	if err := manager.Load("phase", &value); err != nil || value != "second" {
+		t.Fatalf("%q %v", value, err)
+	}
+	if !reflect.DeepEqual(calls, []int{1, 2}) {
+		t.Fatal(calls)
+	}
+	if err := spec.Configuration(); err == nil {
+		t.Fatal("late registration accepted")
+	}
+	if _, _, err := bootstrap.NewConfigManager(spec); err == nil {
+		t.Fatal("configuration consumed twice")
+	}
+}
+
+func TestConfigurationFailureAndDefaultEnvironment(t *testing.T) {
+	spec := bootstrap.NewSpec()
+	if err := spec.Configuration(nil); err == nil {
+		t.Fatal("nil loader accepted")
+	}
+	expected := errors.New("source construction failed")
+	if err := spec.Configuration(func() (config.Sources, error) { return nil, expected }); err != nil {
+		t.Fatal(err)
+	}
+	if _, cleanup, err := bootstrap.NewConfigManager(spec); !errors.Is(err, expected) || cleanup != nil {
+		t.Fatalf("%v", err)
+	}
+	t.Setenv("FOUNDATION_CONFIGURATION_DEFAULT", "yes")
+	manager, cleanup, err := bootstrap.NewConfigManager(bootstrap.NewSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	var value string
+	if err := manager.Load("FOUNDATION_CONFIGURATION_DEFAULT", &value); err != nil || value != "yes" {
+		t.Fatalf("%q %v", value, err)
 	}
 }

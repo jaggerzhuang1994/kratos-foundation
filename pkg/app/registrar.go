@@ -7,7 +7,18 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2/registry"
+	foundationregistry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/registry"
 )
+
+// NewRegistrar 在组装阶段按 app.registry 解析注册能力；省略或空值使用 default 实例。
+// App 继续接收 Registrar 接口，资源由 Registry Factory 的 cleanup 释放。
+func NewRegistrar(settings Config, factory *foundationregistry.Factory) (registry.Registrar, error) {
+	name := settings.GetRegistry()
+	if name == "" {
+		name = "default"
+	}
+	return factory.Registrar(name)
+}
 
 type supervisedRegistrar struct {
 	registry.Registrar

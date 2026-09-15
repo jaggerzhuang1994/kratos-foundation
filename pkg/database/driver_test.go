@@ -67,8 +67,8 @@ func TestDriverRegistryConcurrentNames(t *testing.T) {
 }
 
 func TestRegisterDriverLogsSuccessfulRegistration(t *testing.T) {
-	previous, previousRegistry := kratoslog.GetLogger(), databaseDrivers
-	t.Cleanup(func() { kratoslog.SetLogger(previous); databaseDrivers = previousRegistry })
+	previous, previousRegistry := foundationlog.GetLogger(), databaseDrivers
+	t.Cleanup(func() { foundationlog.SetLogger(previous); databaseDrivers = previousRegistry })
 	databaseDrivers = newDriverRegistry()
 	var buffer bytes.Buffer
 	foundationlog.SetLogger(kratoslog.NewStdLogger(&buffer))

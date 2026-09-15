@@ -83,7 +83,7 @@ tracer := provider.Tracer(
 
 业务和 Wire 只需要依赖本包的 `Provider`、`NewProvider`、`Tracing`、`NewTracing` 与 `Trace`，并负责调用 `NewProvider` 返回的幂等 cleanup。公共契约和业务 Span 辅助函数位于 `tracing.go`；`provider.go` 管理 OpenTelemetry SDK Resource、实例和关闭状态；`config.go`、`sampler.go` 分别负责配置和动态采样，导出器构造也位于 `provider.go`。实现与契约位于同包，具体 Provider、Sampler 类型和组装辅助函数不导出。构造、生命周期和热更新测试随实现放在同一包内。
 
-组装期调用 `bootstrap.NewTracingBootstrap()` 会同步通过 `log.WithKV` 加入进程共享的 Kratos TraceID 和 SpanID 的动态字段，键固定为 `trace.id` 和 `span.id`：
+组装期调用 `bootstrap.NewTracingBootstrap()` 会同步通过 `log.RegisterFields` 加入进程共享的 Kratos TraceID 和 SpanID 的动态字段，键固定为 `trace.id` 和 `span.id`：
 
 ```go
 contribution, err := bootstrap.NewTracingBootstrap()

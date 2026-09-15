@@ -26,10 +26,7 @@ func NewClientFactory(
 	if err != nil {
 		return nil, err
 	}
-	moduleLogger, err := logger.WithModuleConfig("kafka", config.GetLog())
-	if err != nil {
-		return nil, fmt.Errorf("configure kafka logger: %w", err)
-	}
+	moduleLogger := logger.WithModule("kafka")
 	connections := make(map[string]connectionConfig, len(config.GetConnections()))
 	names := make([]string, 0, len(config.GetConnections()))
 	for name := range config.GetConnections() {
@@ -50,10 +47,7 @@ func NewClientFactory(
 	}
 	return &ClientFactory{
 		connections: connections,
-		logger: newKafkaLogger(
-			moduleLogger,
-			config.GetLog(),
-		),
+		logger:      newKafkaLogger(moduleLogger),
 	}, nil
 }
 

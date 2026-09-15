@@ -13,6 +13,8 @@ const (
 	MiddlewarePriorityRecovery = 100
 	// MiddlewarePriorityDeadline 在恢复层之后统一约束请求生命周期。
 	MiddlewarePriorityDeadline = 200
+	// MiddlewarePriorityRequestDebug 在观测与业务处理前恢复已授权的请求诊断标记。
+	MiddlewarePriorityRequestDebug = 250
 	// MiddlewarePriorityMetadata 在观测逻辑前完成传输元数据导入。
 	MiddlewarePriorityMetadata = 300
 	// MiddlewarePriorityTracing 让后续处理都处于服务端 span 内。
@@ -54,6 +56,7 @@ func newMiddlewares(policies *middlewarePolicies) middlewareSet {
 			Priority:   MiddlewarePriorityDeadline,
 			Middleware: deadlinemiddleware.Server(policies.deadline),
 		},
+		{Name: "request_debug", Priority: MiddlewarePriorityRequestDebug, Middleware: policies.requestDebug.Middleware()},
 		{
 			Name:       "metadata",
 			Priority:   MiddlewarePriorityMetadata,

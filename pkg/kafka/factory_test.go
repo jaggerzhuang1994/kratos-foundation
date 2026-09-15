@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -96,9 +95,7 @@ func TestProducerAndConsumerClientsBuildFromValidatedSnapshotWithoutDialing(t *t
 
 func TestNewNormalizesSnapshotsAndPropagatesConfigurationFailures(t *testing.T) {
 	logger, _ := newProviderTestLogger(t)
-	debug := "debug"
 	manager, err := NewClientFactory(logger, testconfig.New(t, "kafka", &config_pb.Kafka{
-		Log: &config_pb.ModuleLog{Level: &debug},
 		Connections: map[string]*config_pb.KafkaConnection{
 			" main ": {Brokers: []string{" broker:9092 "}},
 		},
@@ -120,19 +117,10 @@ func TestNewNormalizesSnapshotsAndPropagatesConfigurationFailures(t *testing.T) 
 	if got, err := NewClientFactory(logger, testconfig.New(t, "kafka", duplicate)); got != nil || err == nil || !strings.Contains(err.Error(), "more than once") {
 		t.Fatalf("NewClientFactory(duplicate names) = (%v, %v)", got, err)
 	}
-
-	wantErr := errors.New("module log rejected")
-	if got, err := NewClientFactory(
-		failingKafkaModuleLogger{Logger: logger, err: wantErr},
-		testconfig.Empty(t),
-	); got != nil || !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "configure kafka logger") {
-		t.Fatalf("NewClientFactory(logger failure) = (%v, %v)", got, err)
-	}
 }
 
 func TestNewBuildsProducerAndConsumerOptionsWithoutDialing(t *testing.T) {
 	logger, _ := newProviderTestLogger(t)
-	debug := "debug"
 	clientID := "configured-client"
 	allowAutoCreate := true
 	insecure := true
@@ -146,7 +134,6 @@ func TestNewBuildsProducerAndConsumerOptionsWithoutDialing(t *testing.T) {
 	fetchMin := int32(1024)
 	fetchMax := int32(8192)
 	manager, err := NewClientFactory(logger, testconfig.New(t, "kafka", &config_pb.Kafka{
-		Log: &config_pb.ModuleLog{Level: &debug},
 		Connections: map[string]*config_pb.KafkaConnection{
 			"main": {
 				Brokers:                []string{" broker-a:9092 ", "broker-b:9092"},
@@ -272,16 +259,4 @@ func newProviderTestLogger(t testing.TB) (foundationlog.Logger, string) {
 	}
 	t.Cleanup(cleanup)
 	return shared, path
-}
-
-type failingKafkaModuleLogger struct {
-	foundationlog.Logger
-	err error
-}
-
-func (l failingKafkaModuleLogger) WithModuleConfig(
-	string,
-	foundationlog.ModuleConfig,
-) (foundationlog.Logger, error) {
-	return nil, l.err
 }

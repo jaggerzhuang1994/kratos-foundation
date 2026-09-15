@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/go-kratos/kratos/v2/middleware"
-	"github.com/go-kratos/kratos/v2/registry"
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
@@ -13,6 +12,7 @@ import (
 	loggingmiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/logging"
 	metadatamiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metadata"
 	metricsmiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
 	tracingmiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/tracing"
 	foundationhttp "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
@@ -29,7 +29,7 @@ type builder struct {
 	logger      log.Logger
 	tracing     tracing.Provider
 	metrics     metrics.Provider
-	discovery   registry.Discovery
+	discoveries DiscoveryResolver
 	environment string
 	hostname    string
 }
@@ -40,14 +40,14 @@ func newBuilder(
 	appInfo appinfo.AppInfo,
 	tracingProvider tracing.Provider,
 	metricsProvider metrics.Provider,
-	discoveryProvider registry.Discovery,
+	discoveryProvider DiscoveryResolver,
 ) *builder {
 	metadata := appInfo.Metadata()
 	return &builder{
 		logger:      logger,
 		tracing:     tracingProvider,
 		metrics:     metricsProvider,
-		discovery:   discoveryProvider,
+		discoveries: discoveryProvider,
 		environment: metadata[appinfo.MetadataEnvironment],
 		hostname:    metadata[appinfo.MetadataHostname],
 	}
@@ -103,12 +103,13 @@ func (b *builder) build(ctx context.Context, spec clientSpec) (clientResult, err
 func (b *builder) newGRPCClient(ctx context.Context, spec clientSpec) (*stdgrpc.ClientConn, error) {
 	opts := []kratosgrpc.ClientOption{kratosgrpc.WithEndpoint(spec.target)}
 	if spec.useDiscovery() {
-		if b.discovery == nil {
+		discovery, resolveErr := b.resolveDiscovery(spec)
+		if resolveErr != nil {
 			return nil, fmt.Errorf(
 				"configure gRPC discovery for client %q target %q: %w",
 				spec.name,
 				spec.target,
-				ErrDiscoveryNotInitialized,
+				resolveErr,
 			)
 		}
 		filters, err := b.getNodeFilters(spec)
@@ -116,7 +117,7 @@ func (b *builder) newGRPCClient(ctx context.Context, spec clientSpec) (*stdgrpc.
 			return nil, err
 		}
 		opts = append(opts,
-			kratosgrpc.WithDiscovery(b.discovery),
+			kratosgrpc.WithDiscovery(discovery),
 			kratosgrpc.WithNodeFilter(filters...),
 		)
 	}
@@ -128,7 +129,7 @@ func (b *builder) newGRPCClient(ctx context.Context, spec clientSpec) (*stdgrpc.
 	opts = append(opts,
 		kratosgrpc.WithTimeout(0),
 		kratosgrpc.WithMiddleware(middlewares...),
-		kratosgrpc.WithOptions(grpcReconnectOption()),
+		kratosgrpc.WithOptions(grpcReconnectOption(), stdgrpc.WithChainStreamInterceptor(requestdebug.StreamClient(spec.middleware.GetRequestDebug()))),
 	)
 	return kratosgrpc.DialInsecure(ctx, opts...)
 }
@@ -154,12 +155,13 @@ func (b *builder) newHTTPClient(ctx context.Context, spec clientSpec) (*kratosht
 		opts = append(opts, kratoshttp.WithTLSConfig(tlsConfig))
 	}
 	if spec.useDiscovery() {
-		if b.discovery == nil {
+		discovery, resolveErr := b.resolveDiscovery(spec)
+		if resolveErr != nil {
 			return nil, nil, fmt.Errorf(
 				"configure HTTP discovery for client %q target %q: %w",
 				spec.name,
 				spec.target,
-				ErrDiscoveryNotInitialized,
+				resolveErr,
 			)
 		}
 		filters, err := b.getNodeFilters(spec)
@@ -167,7 +169,7 @@ func (b *builder) newHTTPClient(ctx context.Context, spec clientSpec) (*kratosht
 			return nil, nil, err
 		}
 		opts = append(opts,
-			kratoshttp.WithDiscovery(b.discovery),
+			kratoshttp.WithDiscovery(discovery),
 			kratoshttp.WithNodeFilter(filters...),
 			kratoshttp.WithBlock(),
 		)
@@ -202,6 +204,7 @@ func (b *builder) newMiddleware(spec clientSpec) ([]middleware.Middleware, error
 
 	middlewares := []middleware.Middleware{
 		deadlinemiddleware.Client(deadlineStore),
+		requestdebug.Client(spec.middleware.GetRequestDebug()),
 		tracingmiddleware.Client(b.tracing, spec.middleware.GetTracing()),
 		metadatamiddleware.Client(spec.middleware.GetMetadata()),
 		metricsClient,

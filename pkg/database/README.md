@@ -37,7 +37,7 @@ database:
 
 每个 `DBConnection` 对应一个独立的 SQL 连接池和 GORM 根实例，方言、SQL 构造器、回调、AES 与连接级 GORM 配置相互隔离。默认调用使用 `database.default`；跨库访问通过 `database.UseConnection(ctx, "local")` 选择连接。连接上的 `gorm` 配置只覆盖显式设置的字段，包括显式 `false`，其余字段继承全局配置。
 
-已删除读写分离和隐式表路由：迁移时移除 `replicas`、`datas`、`trace_resolver_mode` 配置及 `GormDialector` 类型；原字段编号与名称已保留为 protobuf `reserved`。删除 `UseRead` / `UseWrite` 调用，将需要访问的其他数据库声明为独立的 `connections` 条目，并用 `UseConnection` 选择。`datas` 原来关联的表不会再自动切换连接。
+已删除读写分离和隐式表路由：迁移时移除 `replicas`、`datas`、`trace_resolver_mode` 配置及 `GormDialector` 类型；配置协议已移除这些字段及 reserved 声明，迁移时应主动清理旧键。删除 `UseRead` / `UseWrite` 调用，将需要访问的其他数据库声明为独立的 `connections` 条目，并用 `UseConnection` 选择。`datas` 原来关联的表不会再自动切换连接。
 
 事务在进入 `Transaction` 时固定数据库连接、GORM 配置和 AES key。回调内使用传入 Context 调用 `Connection` 或嵌套 `Transaction`；同一 Manager 的事务 Context 即使指定另一个已存在连接，也继续使用当前事务。未知连接仍返回 `ErrConnectionUnknown`。事务 Context 仅在回调期间有效。
 
@@ -163,13 +163,13 @@ flowchart TD
 
 ## 连接池热更新
 
-连接建立时已应用初始池参数；订阅的同步回放及未变化的通知不记录更新日志。只有实际配置变化才应用并记录 `Updated database connection pool settings`，恢复到初始值也属于实际更新。
+连接建立时已应用初始池参数；订阅在下一轮成功扫描异步回放当前值，未变化的回放或通知不记录更新日志。只有实际配置变化才应用并记录 `Updated database connection pool settings`，恢复到初始值也属于实际更新。
 
 Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime` 和 `conn_max_idle_time`。DSN、驱动、连接集合和其他非池参数决定启动时创建的资源，变更后需要重启。
 
 每次更新都与启动配置比较，比较时忽略上述四个池参数。包含非池参数变化的整次更新会被跳过，并保持现有池参数；被跳过的配置不会成为后续比较基线。恢复启动时的连接身份与集合后，合法的池参数更新可以立即生效。
 
-池参数每次完整应用。删除字段会恢复默认值：`max_open_conns` 为 0（不限总连接数），`max_idle_conns` 为 2，两个过期时间为 0（不因时间关闭连接）。显式设置 `max_idle_conns: 0` 表示不保留空闲连接。更新时先设置总连接上限，再设置空闲上限，避免扩容被旧上限截断；最终空闲上限仍受新总上限约束。
+池参数每次完整应用。官方默认 merge 会保留更新中省略的字段，删除源中的字段不会恢复默认值。启动时未配置的默认值为：`max_open_conns` 为 0（不限总连接数），`max_idle_conns` 为 2，两个过期时间为 0（不因时间关闭连接）。显式设置 `max_idle_conns: 0` 表示不保留空闲连接。更新时先设置总连接上限，再设置空闲上限，避免扩容被旧上限截断；最终空闲上限仍受新总上限约束。
 
 ```mermaid
 flowchart TD
@@ -304,3 +304,5 @@ flowchart TD
     G --> H
     H --> I([按 Foundation 策略过滤并输出日志])
 ```
+
+数据库管理日志使用 `database`，SQL 日志使用 `database/gorm`；通过 `log.modules` 集中配置级别、禁用和追加过滤，`database.log` 已移除。可用 `database*` 匹配两者。GORM 自身的 SQL 生成开关、慢查询阈值等仍由 gorm.logger 决定，Foundation 模块策略不能恢复 GORM 未生成的日志。详见 [log](../log/README.md#模块策略)。

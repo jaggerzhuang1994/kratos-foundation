@@ -92,6 +92,8 @@ func (m *App) validate(all bool) error {
 
 	// no validation rules for Metadata
 
+	// no validation rules for Registry
+
 	if m.RegistrarTimeout != nil {
 
 		if all {

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-kratos/kratos/v2/registry"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
@@ -80,22 +79,22 @@ type factory struct {
 
 var _ Factory = (*factory)(nil)
 
-// NewFactory 创建订阅 client 配置并管理客户端生命周期的 Factory。
+// NewFactory 使用具名发现实例创建客户端工厂。
+// cleanup 必须先于 DiscoveryResolver 的资源释放执行。
 func NewFactory(
 	manager config.Manager,
 	logger foundationlog.Logger,
-	appInfo appinfo.AppInfo,
+	info appinfo.AppInfo,
 	tracingProvider tracing.Provider,
 	metricsProvider metrics.Provider,
-	discovery registry.Discovery,
+	discoveries DiscoveryResolver,
 ) (Factory, func(), error) {
 	initial, moduleLogger, err := loadFactoryConfig(manager, logger)
 	if err != nil {
 		return nil, nil, err
 	}
-	// 在构造传输前固定模块日志，访问日志与资源生命周期日志使用同一策略。
-	builder := newBuilder(moduleLogger, appInfo, tracingProvider, metricsProvider, discovery)
-	return newConfiguredFactory(manager, builder, moduleLogger, initial)
+	b := newBuilder(moduleLogger, info, tracingProvider, metricsProvider, discoveries)
+	return newConfiguredFactory(manager, b, moduleLogger, initial)
 }
 
 func loadFactoryConfig(manager config.Manager, logger foundationlog.Logger) (*config_pb.Client, foundationlog.Logger, error) {
@@ -103,10 +102,7 @@ func loadFactoryConfig(manager config.Manager, logger foundationlog.Logger) (*co
 	if err := manager.Load("client", initial, new(config_pb.Client)); err != nil {
 		return nil, nil, fmt.Errorf("load client config: %w", err)
 	}
-	logger, err := logger.WithModuleConfig("client", initial.GetLog())
-	if err != nil {
-		return nil, nil, fmt.Errorf("configure client logger: %w", err)
-	}
+	logger = logger.WithModule("client")
 	return initial, logger, nil
 }
 

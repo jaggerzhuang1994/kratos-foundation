@@ -21,7 +21,6 @@ type stopTimeoutSnapshot struct {
 type StopPolicy struct {
 	value        *foundationconfig.HotReloadValue[durationpb.Duration]
 	currentValue atomic.Pointer[stopTimeoutSnapshot]
-	stopDelay    time.Duration
 	logger       stopPolicyLogger
 }
 
@@ -32,8 +31,8 @@ type stopPolicyLogger interface {
 }
 
 // NewStopPolicy 通过点分路径订阅停机超时，cleanup 取消订阅。
-func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger kratoslog.Logger, stopDelay time.Duration) (*StopPolicy, func(), error) {
-	if err := validateStopTimeout(config.GetStopTimeout().AsDuration(), stopDelay); err != nil {
+func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger kratoslog.Logger) (*StopPolicy, func(), error) {
+	if err := validateStopTimeout(config.GetStopTimeout().AsDuration()); err != nil {
 		return nil, nil, err
 	}
 	value, cancel, err := foundationconfig.NewHotReloadValue[durationpb.Duration](configManager, "app.stop_timeout", defaultConfig.GetStopTimeout())
@@ -45,7 +44,7 @@ func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger
 		cancel()
 		return nil, nil, fmt.Errorf("app stop_timeout: %w", err)
 	}
-	if err := validateStopTimeout(initial.AsDuration(), stopDelay); err != nil {
+	if err := validateStopTimeout(initial.AsDuration()); err != nil {
 		cancel()
 		return nil, nil, err
 	}
@@ -55,24 +54,18 @@ func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger
 	} else {
 		policyLogger = kratoslog.NewHelper(kratoslog.With(logger, "module", "app", "function", "StopPolicy.current"))
 	}
-	policy := &StopPolicy{value: value, stopDelay: stopDelay, logger: policyLogger}
+	policy := &StopPolicy{value: value, logger: policyLogger}
 	policy.currentValue.Store(&stopTimeoutSnapshot{version: version, timeout: initial.AsDuration()})
 	var once sync.Once
 	return policy, func() { once.Do(cancel) }, nil
 }
 
-// validateStopTimeout 保证应用总停机时间严格大于服务预停等待。
-func validateStopTimeout(timeout, stopDelay time.Duration) error {
+// validateStopTimeout 仅校验应用自身预算；服务器预停等待由部署配置协调。
+func validateStopTimeout(timeout time.Duration) error {
 	if timeout <= 0 {
 		return fmt.Errorf("app stop_timeout must be positive")
 	}
-	if timeout <= stopDelay {
-		return fmt.Errorf(
-			"app stop_timeout (%s) must be greater than server stop_delay (%s)",
-			timeout,
-			stopDelay,
-		)
-	}
+
 	return nil
 }
 
@@ -86,7 +79,7 @@ func (p *StopPolicy) current() time.Duration {
 		}
 		err := value.CheckValid()
 		if err == nil {
-			err = validateStopTimeout(value.AsDuration(), p.stopDelay)
+			err = validateStopTimeout(value.AsDuration())
 		}
 		next := &stopTimeoutSnapshot{version: version, timeout: old.timeout}
 		if err == nil {

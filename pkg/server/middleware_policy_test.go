@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"errors"
+	"github.com/go-kratos/kratos/v2/transport"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"strings"
 	"testing"
 	"time"
@@ -106,8 +108,8 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 	if !proto.Equal(policies.current, next) {
 		t.Fatalf("current middleware = %v, want %v", policies.current, next)
 	}
-	if got := len(newMiddlewares(policies)); got != 9 {
-		t.Fatalf("newMiddlewares() length = %d, want 9", got)
+	if got := len(newMiddlewares(policies)); got != 10 {
+		t.Fatalf("newMiddlewares() length = %d, want 10", got)
 	}
 
 	accepted := proto.CloneOf(policies.current)
@@ -159,5 +161,48 @@ func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
 	manager.observer("server.middleware", proto.CloneOf(next), nil)
 	if logger.updates != 1 {
 		t.Fatal("duplicate snapshot logged as update")
+	}
+}
+
+// debugPolicyTransport 只提供此策略实际消费的传输头。
+type debugPolicyTransport struct {
+	transport.Transporter
+	transport.Header
+}
+
+func (d debugPolicyTransport) RequestHeader() transport.Header { return d }
+func (d debugPolicyTransport) Values(string) []string          { return []string{"1"} }
+
+func TestRequestDebugPolicyHotUpdate(t *testing.T) {
+	manager := &serverManagerStub{}
+	policies, cleanup, err := newMiddlewarePolicies(manager, newRuntimeTestLogger(t), &config_pb.Server{},
+		testMetricsProvider{registry: prometheus.NewRegistry()}, runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	var captured context.Context
+	handler := policies.requestDebug.Middleware()(func(ctx context.Context, _ any) (any, error) { captured = ctx; return request.IsDebug(ctx), nil })
+	ctx := transport.NewServerContext(context.Background(), debugPolicyTransport{})
+	if got, err := handler(ctx, nil); err != nil || got != true {
+		t.Fatalf("default accept incoming: got=%v err=%v", got, err)
+	}
+	var enabledContext context.Context
+	for _, enabled := range []bool{false, true, false} {
+		manager.observer("server.middleware", &config_pb.ServerMiddleware{RequestDebug: &config_pb.Middleware_RequestDebug{AcceptIncoming: proto.Bool(enabled)}}, nil)
+		got, err := handler(ctx, nil)
+		if err != nil || got != enabled {
+			t.Fatalf("enabled=%v got=%v err=%v", enabled, got, err)
+		}
+		if enabled {
+			enabledContext = captured
+		}
+	}
+	if !request.IsDebug(enabledContext) {
+		t.Fatal("config update changed an existing request")
+	}
+	got, err := handler(request.WithDebug(ctx), nil)
+	if err != nil || got != true {
+		t.Fatalf("local debug lost: %v %v", got, err)
 	}
 }

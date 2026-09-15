@@ -49,9 +49,6 @@ func validateDatabaseConfig(
 	config *config_pb.Database,
 	drivers map[string]DriverFactory,
 ) error {
-	if err := config.GetLog().ValidateAll(); err != nil {
-		return fmt.Errorf("validate database config: module log: %w", err)
-	}
 	if err := validateConnections(config, drivers); err != nil {
 		return err
 	}

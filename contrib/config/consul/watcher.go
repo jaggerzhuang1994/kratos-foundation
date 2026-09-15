@@ -18,10 +18,6 @@ type kvWatcher struct {
 	index  uint64
 }
 
-// FullSnapshot 声明每次成功的 Next 返回本源完整状态；空结果表示全部删除。
-// 返回值至少在下一次 Next 前保持稳定，Stream 会复制后发布，不再重复 Load。
-func (w *kvWatcher) FullSnapshot() bool { return true }
-
 func (w *kvWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 	for attempt := 0; ; attempt++ {
 		if err := w.ctx.Err(); err != nil {

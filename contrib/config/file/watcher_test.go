@@ -35,9 +35,6 @@ func newFileWatcher(t *testing.T, path string) config.Watcher {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if full, ok := watcher.(interface{ FullSnapshot() bool }); !ok || !full.FullSnapshot() {
-		t.Fatal("built-in watcher must declare full snapshots")
-	}
 	t.Cleanup(func() {
 		if err := watcher.Stop(); err != nil {
 			t.Error(err)

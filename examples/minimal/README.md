@@ -11,7 +11,7 @@ make -C examples/minimal help
 make -C examples/minimal generate
 make -C examples/minimal test
 make -C examples/minimal build
-APP_ENV=local LOG_FILE_DISABLE=true /tmp/foundation-minimal-api -config examples/minimal/configs/config.yaml
+APP_ENV=local LOG_FILE_ENABLE=false /tmp/foundation-minimal-api -config examples/minimal/configs/config.yaml
 ```
 
 在另一个终端验证：
@@ -77,3 +77,5 @@ flowchart TD
 本地完整监控体验见 [部署入口](../../deploy/observability/README.md)，Kubernetes 接入见 [Kubernetes 示例](../../deploy/kubernetes/README.md)。
 
 需要观察数据库、Redis、Kafka、Queue、OSS 等真实操作指标时，运行独立的 [components 演示](../components/README.md)。
+
+示例已导入 Consul 注册驱动并配置 `registry.instances.default`。`app.registry` 默认选择此实例；本地未设置 `CONSUL_HTTP_ADDR` 时驱动自动禁用，也可显式设置 `DISABLE_CONSUL=true` 跳过注册。生产环境按 Consul 驱动文档配置环境变量。

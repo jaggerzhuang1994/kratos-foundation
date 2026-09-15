@@ -51,11 +51,6 @@ func New(target any, defaultValue []any) (*Decoder, error) {
 	return valueDecoder, nil
 }
 
-// HasDefault 报告调用方是否提供了默认值。
-func (d *Decoder) HasDefault() bool {
-	return d.hasDefault
-}
-
 // NewTarget 为订阅回调分配独立 target。
 func (d *Decoder) NewTarget() any {
 	target := reflect.New(d.targetType.Elem())

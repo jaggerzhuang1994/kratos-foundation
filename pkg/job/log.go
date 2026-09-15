@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"os"
 	"time"
 
 	log2 "github.com/go-kratos/kratos/v2/log"
@@ -17,45 +18,55 @@ var nameValuer = log2.Valuer(func(ctx context.Context) any {
 	return JobNameFromContext(ctx)
 })
 
-// newJobLog 根据运行时开关选择真实或禁用日志，并显式返回模块配置错误。
-func newJobLog(log log.Logger, options managerOptions) (moduleLog, error) {
-	logger, err := withModule(log, "job", options)
-	if err != nil {
-		return nil, err
-	}
-	return logger.With("job", nameValuer), nil
+// newJobLog 根据任务日志开关选择真实或空日志。
+func newJobLog(logger log.Logger, options managerOptions) moduleLog {
+	return withModule(logger, "job", options).With("job", nameValuer)
 }
 
 // cronLog 区分调度器自身日志与具体任务日志。
 type cronLog log.Logger
 
-// newCronLog 让调度器沿用同一任务名字段，并显式返回模块配置错误。
-func newCronLog(log log.Logger, options managerOptions) (cronLog, error) {
-	logger, err := withModule(log, "job/cron", options)
-	if err != nil {
-		return nil, err
-	}
-	return logger.With("job", nameValuer), nil
+// newCronLog 让调度器沿用同一任务名字段。
+func newCronLog(logger log.Logger, options managerOptions) cronLog {
+	return withModule(logger, "job/cron", options).With("job", nameValuer)
 }
 
-// withModule 在关闭生命周期日志时仍保留同一 Logger 调用面，并传播配置错误。
-func withModule(logger log.Logger, module string, options managerOptions) (log.Logger, error) {
+func withModule(logger log.Logger, module string, options managerOptions) log.Logger {
 	if options.LoggingEnabled {
-		return logger.WithModule(module), nil
+		return logger.WithModule(module)
 	}
-	return logger.WithModuleConfig(module, disabledModuleLog{})
+	return &disabledLogger{}
 }
 
-type disabledModuleLog struct{}
+// disabledLogger 仅用于任务显式关闭生命周期日志，派生操作保持关闭状态。
+type disabledLogger struct{}
 
-// GetDisable 声明该模块配置为关闭。
-func (disabledModuleLog) GetDisable() bool { return true }
+func (l *disabledLogger) Log(log2.Level, ...any) error           { return nil }
+func (l *disabledLogger) With(...any) log.Logger                 { return l }
+func (l *disabledLogger) WithModule(string) log.Logger           { return l }
+func (l *disabledLogger) WithContext(context.Context) log.Logger { return l }
+func (l *disabledLogger) WithLevel(log2.Level) log.Logger        { return l }
+func (l *disabledLogger) WithCallerDepth(int) log.Logger         { return l }
+func (l *disabledLogger) WithFilterKeys(...string) log.Logger    { return l }
 
-// GetLevel 返回空级别，让日志组件沿用默认级别。
-func (disabledModuleLog) GetLevel() string { return "" }
+// 便捷入口统一经过丢弃输出，不拼接参数，避免关闭日志后仍触发业务格式化回调。
+func (l *disabledLogger) Debug(...any)          { _ = l.Log(log2.LevelDebug) }
+func (l *disabledLogger) Debugf(string, ...any) { _ = l.Log(log2.LevelDebug) }
+func (l *disabledLogger) Debugw(...any)         { _ = l.Log(log2.LevelDebug) }
+func (l *disabledLogger) Info(...any)           { _ = l.Log(log2.LevelInfo) }
+func (l *disabledLogger) Infof(string, ...any)  { _ = l.Log(log2.LevelInfo) }
+func (l *disabledLogger) Infow(...any)          { _ = l.Log(log2.LevelInfo) }
+func (l *disabledLogger) Warn(...any)           { _ = l.Log(log2.LevelWarn) }
+func (l *disabledLogger) Warnf(string, ...any)  { _ = l.Log(log2.LevelWarn) }
+func (l *disabledLogger) Warnw(...any)          { _ = l.Log(log2.LevelWarn) }
+func (l *disabledLogger) Error(...any)          { _ = l.Log(log2.LevelError) }
+func (l *disabledLogger) Errorf(string, ...any) { _ = l.Log(log2.LevelError) }
+func (l *disabledLogger) Errorw(...any)         { _ = l.Log(log2.LevelError) }
 
-// GetFilterKeys 表示禁用模块没有额外字段过滤规则。
-func (disabledModuleLog) GetFilterKeys() []string { return nil }
+// Fatal 系列仍终止进程，任务日志开关只控制输出。
+func (l *disabledLogger) Fatal(...any)          { os.Exit(1) }
+func (l *disabledLogger) Fatalf(string, ...any) { os.Exit(1) }
+func (l *disabledLogger) Fatalw(...any)         { os.Exit(1) }
 
 // cronLoggerContract 只保留 robfig/cron 实际需要的日志能力。
 type cronLoggerContract cron.Logger

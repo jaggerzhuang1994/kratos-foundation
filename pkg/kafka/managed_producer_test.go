@@ -366,9 +366,6 @@ func (l *recordingLogger) Log(level kratoslog.Level, keyvals ...any) error {
 
 func (l *recordingLogger) With(...any) log.Logger       { return l }
 func (l *recordingLogger) WithModule(string) log.Logger { return l }
-func (l *recordingLogger) WithModuleConfig(string, log.ModuleConfig) (log.Logger, error) {
-	return l, nil
-}
 func (l *recordingLogger) WithContext(ctx context.Context) log.Logger {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -418,3 +415,5 @@ func (l *recordingLogger) lastContext() context.Context {
 }
 
 var _ log.Logger = (*recordingLogger)(nil)
+
+func (l *recordingLogger) WithLevel(kratoslog.Level) log.Logger { return l }

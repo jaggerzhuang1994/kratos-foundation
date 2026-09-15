@@ -2,9 +2,7 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -100,79 +98,7 @@ func (l *testLogger) With(keyvals ...any) foundationlog.Logger {
 }
 
 func (l *testLogger) WithModule(module string) foundationlog.Logger {
-	logger, err := l.WithModuleConfig(module, nil)
-	if err != nil {
-		panic(err)
-	}
-	return logger
-}
-
-func (l *testLogger) WithModuleConfig(
-	module string,
-	config foundationlog.ModuleConfig,
-) (foundationlog.Logger, error) {
-	trimmedModule := strings.TrimSpace(module)
-	if trimmedModule == "" {
-		return nil, fmt.Errorf("log module name is empty")
-	}
-	if trimmedModule != module {
-		return nil, fmt.Errorf("log module name %q contains surrounding whitespace", module)
-	}
-	if config == nil {
-		return l.With("module", module), nil
-	}
-	if config.GetDisable() {
-		return newTestLogger(discardLogger{}), nil
-	}
-
-	logger := kratoslog.With(l.logger, "module", module)
-	if configuredLevel := config.GetLevel(); configuredLevel != "" {
-		if strings.TrimSpace(configuredLevel) != configuredLevel {
-			return nil, fmt.Errorf("log module level %q contains surrounding whitespace", configuredLevel)
-		}
-		level, ok := testLogLevel(configuredLevel)
-		if !ok {
-			return nil, fmt.Errorf("log module level must be one of debug, info, warn, error, fatal")
-		}
-		logger = kratoslog.NewFilter(logger, kratoslog.FilterLevel(level))
-	}
-
-	filterKeys := config.GetFilterKeys()
-	seen := make(map[string]struct{}, len(filterKeys))
-	for _, key := range filterKeys {
-		trimmedKey := strings.TrimSpace(key)
-		if trimmedKey == "" {
-			return nil, fmt.Errorf("log module filter key is empty")
-		}
-		if trimmedKey != key {
-			return nil, fmt.Errorf("log module filter key %q contains surrounding whitespace", key)
-		}
-		if _, exists := seen[key]; exists {
-			return nil, fmt.Errorf("log module filter key %q is duplicated", key)
-		}
-		seen[key] = struct{}{}
-	}
-	if len(filterKeys) > 0 {
-		logger = kratoslog.NewFilter(logger, kratoslog.FilterKey(filterKeys...))
-	}
-	return newTestLogger(logger), nil
-}
-
-func testLogLevel(value string) (kratoslog.Level, bool) {
-	switch strings.ToLower(value) {
-	case "debug":
-		return kratoslog.LevelDebug, true
-	case "info":
-		return kratoslog.LevelInfo, true
-	case "warn":
-		return kratoslog.LevelWarn, true
-	case "error":
-		return kratoslog.LevelError, true
-	case "fatal":
-		return kratoslog.LevelFatal, true
-	default:
-		return 0, false
-	}
+	return l.With("module", module)
 }
 
 func (l *testLogger) WithContext(ctx context.Context) foundationlog.Logger {
@@ -504,3 +430,5 @@ func newFactory(manager config.Manager, builder clientBuilder, logger foundation
 	}
 	return newConfiguredFactory(manager, builder, logger, initial)
 }
+
+func (l *testLogger) WithLevel(kratoslog.Level) foundationlog.Logger { return l }

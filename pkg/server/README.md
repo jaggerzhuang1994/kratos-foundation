@@ -2,34 +2,33 @@
 
 默认访问日志、错误边界和中间件配置更新归属 `module=server`，健康状态变化为 `server/health`，WebSocket 为 `server/websocket`。通过 Foundation 全局绑定的 Kratos HTTP/gRPC 启停日志归属 `kratos`。
 
-`pkg/server` 是业务与 Wire 声明 HTTP、gRPC 和 WebSocket 服务并构造服务器运行时的公共入口。业务只依赖 `Spec`、Builder、协议契约、`NewRuntime`；应用登记由 `pkg/bootstrap` 提供的 `NewServerBootstrap` 负责；不应导入 `pkg/server/internal/*`。
+`pkg/server` 是业务与 Wire 声明 HTTP、gRPC 和 WebSocket 服务并构造服务器运行时的公共入口。业务只依赖 `Spec`、Builder、协议契约、`NewRuntime`；服务器构造和应用登记由 `bootstrap.NewServerBootstrap` 完成；不应导入 `pkg/server/internal/*`。
 
-下面是手工组装片段：配置 Manager、Logger、Metrics/Tracing Provider 和 appSpec 已由外层创建，外层最后逆序释放它们；注册回调由业务提供。完整 Wire 组装见 [bootstrap](../bootstrap/README.md)。
+业务通过统一 Spec 声明协议，下面假设 registerHTTP/registerGRPC 是业务提供的注册回调：
 
 ```go
-spec := server.NewSpec()
-spec.HTTP().Register(registerHTTP)
-spec.GRPC().Register(registerGRPC)
-runtime, cleanup, err := server.NewRuntime(
-	configManager,
-	logger,
-	metricsProvider,
-	tracingProvider,
-	spec,
-)
-if err != nil {
-	return err
+func Boot(spec *bootstrap.Spec) bootstrap.Bootstrap {
+    spec.Http().Register(registerHTTP)
+    spec.Grpc().Register(registerGRPC)
+    return bootstrap.Bootstrap{}
 }
-defer cleanup() // 此作用域须覆盖应用 Run，确保运行时停止后才释放。
-if _, err := bootstrap.NewServerBootstrap(appSpec, runtime); err != nil {
-	return err
-}
-// 此后构造并运行应用；Run 返回后才离开当前作用域。
 ```
 
-`bootstrap.NewServerBootstrap` 同步将启用的业务 HTTP/gRPC Runtime 和独立管理监听分别登记到 `app.Spec`，不启动协议、不创建 goroutine，也不返回 cleanup。`NewRuntime` 返回的 cleanup 由构造调用方持有，使用 Wire 时由 Wire 逆序释放；Runtime 的 Start/Stop 由 `app.NewApp` 创建的应用生命周期监督层拥有。
+Wire 提供 `bootstrap.NewSpec` 并将 Boot 纳入组装链。`NewServerBootstrap` 在 Boot 完成后构造服务器，内部登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；不启动服务。成功返回的 cleanup 由 Wire 在应用停止后逆序执行，构造失败会回滚。完整示例见 [bootstrap](../bootstrap/README.md)。它返回的 ServerBootstrap 标记注入 NewRuntimeBootstrap，保证服务器登记先完成。
 
-协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
+```mermaid
+flowchart LR
+ A([业务 Boot 声明协议]) --> B[NewServerBootstrap 构造并登记 Runtime]
+ B --> C{构造和内部登记成功?}
+ C -- 否 --> D([释放资源 返回错误])
+ C -- 是 --> G[NewRuntimeBootstrap 接收 ServerBootstrap]
+ G --> E[NewApplicationBootstrap 返回 StartupReady]
+ E --> F([NewKratosApp 构造应用])
+```
+
+手工调用 `server.NewRuntime` 时，调用方负责 `SetReadinessSource`，将 `Servers()` 中的非 nil 业务 Runtime 和 `ManagementServers()` 登记到应用 Spec，并处理登记错误；Runtime 的 Start/Stop 由 App 监督，构造 cleanup 由调用方在应用停止后释放。
+
+协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、requestdebug、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
 
 启用 BBR 时，`bucket` 必须为正数，`window` 必须是可精确表示为 Go `time.Duration` 的正时长，整除后的每桶时长必须在 1ns–1s 内。`cpu_threshold` 必须为正数；`cpu_quota` 必须是有限非负数，零值沿用默认 CPU 采样。缺失字段沿用 Aegis 默认值（10s、100 桶、阈值 800），仍参与组合校验。禁用 BBR 时忽略其参数。`NewRuntime` 和中间件热更新使用相同校验；非法更新保留全部旧策略。更新先完成变化项的构造，再沿用逐项原子替换，不重建未变化的统计窗口；并发请求仍可能短暂读到新旧策略组合。
 
@@ -297,7 +296,7 @@ flowchart TD
     R --> S([释放监听并结束])
 ```
 
-中间件配置订阅的首次快照回放及内容相同的重复通知不会打印 `server middleware config updated`；
+中间件配置订阅在下一轮成功扫描异步回放当前值，内容相同的回放或重复通知不会打印 `server middleware config updated`；
 只有配置实际变化且成功应用后才记录更新日志，非法更新仍记录 rejected 并保留旧配置。
 
 ## 集成测试与边界用法
@@ -334,3 +333,9 @@ flowchart TD
 ```
 
 服务端与客户端指标使用归一化后的 HTTP 状态计数，保留 422 等非标准 gRPC 映射的状态；指标观察不改变业务调用方收到的原始错误。
+
+## 请求 debug
+
+`server.middleware.request_debug.accept_incoming` 默认 true；可显式设为 false 关闭接收。默认请求链的 `request_debug` 优先级为 250，位于 deadline（200）与 metadata（300）之间，在访问日志前恢复 `request.WithDebug` 状态。关闭通用 metadata 不影响它。gRPC 流在建立时恢复标记，之后配置更新不改变已建立流的 Context。
+
+该配置随 `server.middleware` 热更新，复用现有动态策略；非法更新保留旧配置。`propagate` 字段仅客户端消费。传输协议、信任边界和流程见 [request](../request/README.md)。

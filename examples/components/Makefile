@@ -21,7 +21,7 @@ test:
 	cd $(ROOT) && go vet ./examples/components/cmd/api
 
 run:
-	cd $(ROOT) && LOG_FILE_DISABLE=true go run ./examples/components/cmd/api
+	cd $(ROOT) && LOG_FILE_ENABLE=false go run ./examples/components/cmd/api
 
 COMPOSE = docker compose -f $(ROOT)/deploy/observability/compose.yaml -f compose.yaml
 .PHONY: up down exercise

@@ -135,3 +135,16 @@ func TestRotatingFileCleanupFinishesCompressionAndRetention(t *testing.T) {
 		})
 	}
 }
+
+func TestNewFileRejectsDirectoryWithoutRenamingIt(t *testing.T) {
+	for _, rotating := range []*RotatingFileConfig{nil, {MaxSize: 1}} {
+		directory := t.TempDir()
+		if _, _, err := NewFile(FileConfig{Path: directory, Rotating: rotating}); err == nil {
+			t.Fatal("accepted directory")
+		}
+		info, err := os.Stat(directory)
+		if err != nil || !info.IsDir() {
+			t.Fatalf("directory changed: %v", err)
+		}
+	}
+}

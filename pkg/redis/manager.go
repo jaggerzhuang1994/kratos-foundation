@@ -59,10 +59,7 @@ func NewManager(
 		return nil, nil, err
 	}
 	config = proto.CloneOf(config)
-	moduleLogger, err := log.WithModuleConfig("redis", config.GetLog())
-	if err != nil {
-		return nil, nil, fmt.Errorf("configure redis logger: %w", err)
-	}
+	moduleLogger := log.WithModule("redis")
 	c := &manager{
 		Logger:  moduleLogger,
 		tracing: tracingProvider,

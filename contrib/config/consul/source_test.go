@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,12 +27,12 @@ func TestNewSourcesReturnsOneSourcePerPath(t *testing.T) {
 	}
 	paths := PathList{"service/base", "service/override"}
 
-	sources, err := NewSources(client, paths)
+	sources, err := newSources(client, paths)
 	if err != nil {
-		t.Fatalf("NewSources() error = %v", err)
+		t.Fatalf("newSources() error = %v", err)
 	}
 	if len(sources) != 2 {
-		t.Fatalf("NewSources() count = %d, want 2", len(sources))
+		t.Fatalf("newSources() count = %d, want 2", len(sources))
 	}
 	for index, source := range sources {
 		if source == nil {
@@ -46,13 +47,13 @@ func TestNewSourcesHandlesDisabledAndInvalidInputs(t *testing.T) {
 		t.Fatalf("create Consul client: %v", err)
 	}
 
-	empty, err := NewSources(client, nil)
+	empty, err := newSources(client, nil)
 	if err != nil || empty != nil {
-		t.Fatalf("NewSources(empty) = %#v, %v; want nil, nil", empty, err)
+		t.Fatalf("newSources(empty) = %#v, %v; want nil, nil", empty, err)
 	}
-	disabled, err := NewSources(nil, PathList{"service/config"})
+	disabled, err := newSources(nil, PathList{"service/config"})
 	if err != nil || disabled != nil {
-		t.Fatalf("NewSources(nil client) = %#v, %v; want nil, nil", disabled, err)
+		t.Fatalf("newSources(nil client) = %#v, %v; want nil, nil", disabled, err)
 	}
 
 	tests := []struct {
@@ -65,8 +66,8 @@ func TestNewSourcesHandlesDisabledAndInvalidInputs(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := NewSources(client, test.paths); err == nil {
-				t.Fatal("NewSources() error = nil")
+			if _, err := newSources(client, test.paths); err == nil {
+				t.Fatal("newSources() error = nil")
 			}
 		})
 	}
@@ -209,7 +210,7 @@ func TestExternalConsulSnapshotUpdateDeletionAndStop(t *testing.T) {
 		}
 	})
 	put(`{"feature":{"value":1}}`)
-	sources, err := NewSources(client, PathList{prefix + "/*.json"})
+	sources, err := newSources(client, PathList{prefix + "/*.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,5 +418,88 @@ func TestLiteralPathReevaluatesExactKeyForEachSnapshot(t *testing.T) {
 		if err != nil || len(values) != 1 || values[0].Key != want {
 			t.Fatalf("exact=%v values=%v err=%v", exact, values, err)
 		}
+	}
+}
+
+func TestConsulOutageRecoversWithOfficialMerge(t *testing.T) {
+	var outage, deleted atomic.Bool
+	watching, changed, failed := make(chan struct{}), make(chan struct{}), make(chan struct{}, 1)
+	var watchingOnce, resumedOnce sync.Once
+	resumed := make(chan struct{})
+	remote, _ := consulTestSource(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("index") {
+		case "1":
+			watchingOnce.Do(func() { close(watching) })
+			select {
+			case <-changed:
+			case <-r.Context().Done():
+				return
+			}
+		case "2":
+			resumedOnce.Do(func() { close(resumed) })
+			<-r.Context().Done()
+			return
+		}
+		if outage.Load() {
+			select {
+			case failed <- struct{}{}:
+			default:
+			}
+			http.Error(w, "offline", http.StatusServiceUnavailable)
+			return
+		}
+		values := consulapi.KVPairs{{Key: "settings/feature.json", Value: []byte(`{"feature":{"enabled":true}}`), ModifyIndex: 1}}
+		w.Header().Set("X-Consul-Index", "1")
+		if deleted.Load() {
+			values = consulapi.KVPairs{}
+			w.Header().Set("X-Consul-Index", "2")
+		}
+		_ = json.NewEncoder(w).Encode(values)
+	})
+	base, err := text.NewSource("base.json", "json", `{"feature":{"enabled":false}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, cleanup, err := foundationconfig.NewManager(foundationconfig.Sources{base, remote})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	type feature struct {
+		Enabled bool `json:"enabled"`
+	}
+	hot, stop, err := foundationconfig.NewHotReloadValue[feature](manager, "feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	select {
+	case <-watching:
+	case <-time.After(time.Second):
+		t.Fatal("blocking query did not start")
+	}
+	outage.Store(true)
+	deleted.Store(true)
+	close(changed)
+	select {
+	case <-failed:
+	case <-time.After(time.Second):
+		t.Fatal("outage was not observed")
+	}
+	if value, _ := hot.GetCurrent(); !value.Enabled {
+		t.Fatal("outage discarded the valid remote snapshot")
+	}
+	if err := manager.Load("feature", new(feature)); err != nil {
+		t.Fatalf("manager became terminal during outage: %v", err)
+	}
+	outage.Store(false)
+	select {
+	case <-resumed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("watch did not recover")
+	}
+	// 官方默认合并不会因空来源结果删除此前的覆盖值。
+	if value, _ := hot.GetCurrent(); !value.Enabled {
+		t.Fatal("empty update unexpectedly deleted cached value")
 	}
 }

@@ -64,8 +64,8 @@ def panels(items):
         yield from panels(panel.get("panels", []))
 
 
-# 默认示例必须真的有运行时、配置与两条健康探测样本，不能只验证空查询语法。
-for metric_name in ["go_cpu_classes_gc_total_cpu_seconds_total", "go_sched_latencies_seconds_count", "process_virtual_memory_bytes", "foundation_config_watcher_up"]:
+# 默认示例必须真的有运行时与两条健康探测样本，不能只验证空查询语法。
+for metric_name in ["go_cpu_classes_gc_total_cpu_seconds_total", "go_sched_latencies_seconds_count", "process_virtual_memory_bytes"]:
     query = urllib.parse.urlencode({"query": metric_name + '{foundation="true"}'})
     with urllib.request.urlopen("http://127.0.0.1:19090/api/v1/query?" + query, timeout=5) as response:
         samples = json.load(response)["data"]["result"]

@@ -39,7 +39,7 @@ make -C examples/components exercise
 | Queue 邮件与报表 | email.render 渲染模板，report.summarize 汇总固定数据 | 两个队列各生产、消费、attempt success +1 |
 | Queue 积压 | 独立无 Worker 队列放入立即任务及 24 小时后任务 | ready +1、scheduled +1；最老 ready 年龄随时间增长 |
 | Job | 每 10 秒执行 Redis Ping、DBSIZE、TTL | `redis-heartbeat`、`cache-size`、`cache-ttl` success 持续增加，不按演示轮次断言 |
-| Config | 脚本将运行副本 max_open_conns 从 8 改为 9，再写语法不完整的 YAML，最后恢复 | accepted/rejected 分别增加；非法 YAML 快照被拒绝，不替换有效快照 |
+| Config | 脚本将运行副本 max_open_conns 从 8 改为 9，再恢复 | 核验数据库连接池最大值变为 9，最终恢复为 8 |
 | Health / Go | 实际 blackbox 探测与默认采集 | healthz/readyz=1，Redis 为 readiness 关键依赖；协程/GC/内存/CPU等可见 |
 
 SQL 示例设置 slow_threshold: 0.010s（10ms），每轮执行真实递归汇总 UPDATE，验证 raw 慢操作至少 +1；实际机器若低于阈值会使核验失败，不伪造耗时。protobuf Duration 配置使用秒格式，不能写 10ms。
@@ -50,7 +50,7 @@ OSS 使用**真实 Aliyun SDK 和 Foundation 包装器访问本地协议模拟�
 
 Queue 失败记录和 backlog 故意留存供图表观察，多轮会累积；24 小时后 scheduled 转为 ready。请按需停止演示，旧 ready 超过告警阈值会触发示例告警。Kafka 消费完成后的 lag 为零是正确结果；这里不伪造非零 lag。未发生的运行时故障、超时、错误等计数可能尚无序列，图表为空不应补假数据。
 
-Config 的 accepted 表示快照解析及保留字段检查通过，不保证全部组件语义校验或热应用成功。本次实测：未被热订阅读取的 stop_delay 非法 duration 仍会增加 accepted，因此拒绝场景使用确定的 YAML 语法错误。成功场景使用实际支持热更新的 max_open_conns，并核验连接池最大值变为 9、最终恢复为 8。脚本最后恢复原始配置；文件 watcher 和组件自身的热更新范围见 [配置组件](../../pkg/config/README.md)。
+Config 验证直接观察连接池实际参数。脚本最后恢复原始配置；不再依赖已退役的配置状态指标。文件 watcher 和组件自身的热更新范围见 [配置组件](../../pkg/config/README.md)。
 
 ## 生命周期与并发边界
 
@@ -114,8 +114,8 @@ flowchart TD
     C --> D[等待异步消费和采集 对比精确增量]
     D -- 超时或偏差 --> F
     D --> E[核对Go Redis Job Health Queue状态和Kafka lag]
-    E --> G[修改运行配置有效值 等待accepted增加]
-    G --> H[写入非法YAML 等待rejected增加]
+    E --> G[修改连接池上限为9并验证实际值]
+    G --> H[恢复原始配置并验证上限为8]
     H --> I[finally恢复原文件]
     G & H -- 失败或超时 --> I
     I --> J{全部通过?}
@@ -126,3 +126,5 @@ flowchart TD
 ```
 
 本次逐项结果见 [本地实测记录](verification.md)。
+
+示例已导入 Consul 注册驱动并配置 `registry.instances.default`。`app.registry` 默认选择此实例；本地未设置 `CONSUL_HTTP_ADDR` 时驱动自动禁用，也可显式设置 `DISABLE_CONSUL=true` 跳过注册。生产环境按 Consul 驱动文档配置环境变量。

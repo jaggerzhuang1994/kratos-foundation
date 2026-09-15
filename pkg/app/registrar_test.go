@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	foundationregistry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
 type registrarCallFake struct {
@@ -299,5 +303,19 @@ func receiveError(t testing.TB, result <-chan error, description string) error {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timed out waiting for %s", description)
 		return nil
+	}
+}
+
+func TestNewRegistrarSelection(t *testing.T) {
+	factory, cleanup, err := foundationregistry.NewFactory(testconfig.Empty(t), log.WithModule("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if _, err := NewRegistrar(&config_pb.App{}, factory); err == nil {
+		t.Fatal("missing default registry accepted")
+	}
+	if _, err := NewRegistrar(&config_pb.App{Registry: "missing"}, factory); err == nil {
+		t.Fatal("unknown registry accepted")
 	}
 }

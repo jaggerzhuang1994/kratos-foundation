@@ -6,10 +6,11 @@ package kratos_foundation_pb;
 import "pubg/jsonschema.proto";
 
 import "config_pb/app.proto";
+import "config_pb/log.proto";
 import "config_pb/tracing.proto";
 import "config_pb/server.proto";
 import "config_pb/database.proto";
-import "config_pb/discovery.proto";
+
 import "config_pb/redis.proto";
 import "config_pb/registry.proto";
 import "config_pb/client.proto";
@@ -29,35 +30,27 @@ option (pubg.jsonschema.file) = {
 //   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。
 //
 // 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：
-// app.stop_timeout、server.middleware、client.clients、tracing.sampler
+// log、app.stop_timeout、server.middleware、client.clients、tracing.sampler
 // 以及 database 各连接的连接池参数。
 message Config {
   // 应用配置。仅 stop_timeout 支持热更新。
   optional App app = 1;
-  reserved 2;
-  reserved "log";
-  reserved 3;
-  reserved "metrics";
   // 链路追踪组件配置。仅 sampler 支持热更新。
-  optional Tracing tracing = 4;
+  optional Tracing tracing = 2;
   // 服务组件配置。仅 middleware 支持热更新。
-  optional Server server = 5;
+  optional Server server = 3;
   // 数据库配置。仅各连接的连接池参数支持热更新。
-  optional Database database = 6;
-  // 服务发现。[需重启]
-  optional Discovery discovery = 7;
+  optional Database database = 4;
   // redis配置。[需重启]
-  optional Redis redis = 8;
+  optional Redis redis = 5;
   // 服务注册。[需重启]
-  optional Registry registry = 9;
+  optional Registry registry = 6;
   // 客户端组件配置。仅 clients 支持热更新。
-  optional Client client = 10;
-  reserved 11;
-  reserved "job";
-  reserved 12;
-  reserved "queue";
+  optional Client client = 7;
   // Kafka 连接配置。[需重启]
-  optional Kafka kafka = 13;
+  optional Kafka kafka = 8;
   // 对象存储配置。[需重启]
-  optional OSS oss = 14;
+  optional OSS oss = 9;
+  // 全局输出日志策略。[热更新]。
+  optional Logging log = 10;
 }

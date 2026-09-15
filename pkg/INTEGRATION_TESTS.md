@@ -2,13 +2,12 @@
 
 从仓库根目录执行 `make test-components`。该入口强制重新执行下表的自包含场景并启用竞态检测，每包超时为 2 分钟。需要当前 `go.mod` 对应的 Go 工具链、SQLite 驱动所需的 CGO/C 编译环境及本机临时端口绑定权限；无需 Docker、账号或已有数据库。SQLite 与日志文件由 `t.TempDir()` 隔离并清理，HTTP 服务由测试创建并关闭，gRPC 使用 bufconn 内存连接。真实 Kafka/Redis/锁场景另运行 `make test-components-external`，运行条件见下文。
 
-这些自包含集成用例按仓库规范合入所属测试文件，以 `TestIntegration` 前缀单独筛选，也会随普通包测试执行。测试名称表示验证场景，不代表每个模块的全部能力已被覆盖。
+配置轮询用例从仓库根目录执行 `go test -race ./pkg/config/...`，包含虚拟时间下的间隔、缺失 key、串行回调和取消验证。其他自包含集成用例按仓库规范合入所属测试文件，以 `TestIntegration` 前缀单独筛选，也会随普通包测试执行。测试名称表示验证场景，不代表每个模块的全部能力已被覆盖。
 
 | 组合与入口 | 场景 | 检查结果 |
 | --- | --- | --- |
-| [`config` + `contrib/config/text`](config/manager_load_test.go)，`TestIntegrationConfigSources` | YAML 基础配置叠加 JSON；map 递归合并；显式 false/0；slice 替换与清空；省略字段；类型解码失败后继续读取 | 精确比较完整配置；修改返回 map/slice 后重新读取不受污染；调用方默认值不变；其他配置仍可读取，共 6 场景 |
+| [`config`](config/manager_test.go)，`TestManagerOfficialMergeAndIndependentObservers` | 官方默认 merge 保留省略字段、同 key 独立订阅 | 对最近扫描值和独立通知进行断言 |
 | [`database` + SQLite](database/transaction_test.go)，`TestIntegrationTransactionSavepoints` | 内外提交；内层回滚后继续；外层回滚包含已成功内层；两层回滚；唯一约束失败；捕获内层 panic 后继续；开始前取消 | 比较最终有序主键集合；验证错误链、panic 值及取消时回调不执行，共 7 场景 |
-| [`config` + `client` + HTTP](client/factory_test.go)，`TestIntegrationConfiguredHTTPFactory` | 主服务、具名服务、查询转义、中文 JSON POST、422 业务拒绝、404、已取消请求 | 比较实际到达服务、方法、查询及正文；检查错误 code/reason；已取消请求不发送；每个其他请求只发送一次；重复 release 与 cleanup 后拒绝新租约，共 7 场景 |
 
 ## 阅读和复用
 

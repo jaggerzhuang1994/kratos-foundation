@@ -11,17 +11,10 @@ func (f *factory) updateConfigActive(next *config_pb.Client) error {
 		return err
 	}
 	next = proto.CloneOf(next)
-	logChanged, err := f.applyValidatedConfig(next)
-	if err != nil {
-		return err
-	}
-	if logChanged {
-		f.logger.Warn("client log config changed; restart required")
-	}
-	return nil
+	return f.applyValidatedConfig(next)
 }
 
-func (f *factory) applyValidatedConfig(next *config_pb.Client) (logChanged bool, err error) {
+func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 	var (
 		cancels []context.CancelFunc
 		retired []retiredClient
@@ -34,11 +27,10 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) (logChanged bool,
 	f.mu.Lock()
 	if f.closed {
 		f.mu.Unlock()
-		return false, ErrFactoryClosed
+		return ErrFactoryClosed
 	}
 
 	current := f.config
-	logChanged = !proto.Equal(current.GetLog(), next.GetLog())
 	timeoutChanged := !proto.Equal(current.GetCleanupTimeout(), next.GetCleanupTimeout())
 	currentClients := current.GetClients()
 	nextClients := next.GetClients()
@@ -107,7 +99,7 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) (logChanged bool,
 	for _, client := range retired {
 		f.closeAndLog(client)
 	}
-	return logChanged, nil
+	return nil
 }
 
 func reasonForConfigChange(oldPresent, nextPresent bool) retireReason {

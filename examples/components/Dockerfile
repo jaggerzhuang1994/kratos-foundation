@@ -7,7 +7,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -trimpath -o /out/components-api ./examples/components/cmd/api
 FROM gcr.io/distroless/base-debian12:nonroot
 COPY --from=build /out/components-api /app/components-api
-ENV LOG_FILE_DISABLE=true
+ENV LOG_FILE_ENABLE=false
 EXPOSE 8000 9001
 ENTRYPOINT ["/app/components-api"]
 CMD ["-config", "/app/configs/config.yaml"]

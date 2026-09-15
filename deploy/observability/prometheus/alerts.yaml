@@ -34,20 +34,6 @@ groups:
         annotations:
           summary: "应用 P95 超过 500ms，且最近 5 分钟请求至少 100 次"
           runbook: "deploy/observability/docs/troubleshooting.md#foundationhighlatency"
-      - alert: FoundationConfigRejected
-        expr: increase(foundation_config_updates_total{foundation="true",result="rejected"}[5m]) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: "配置快照被拒绝"
-          runbook: "deploy/observability/docs/troubleshooting.md#foundationconfigrejected"
-      - alert: FoundationConfigSubscriptionOverloaded
-        expr: increase(foundation_config_subscription_overloads_total{foundation="true"}[5m]) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: "配置订阅因过载终止"
-          runbook: "deploy/observability/docs/troubleshooting.md#foundationconfigsubscriptionoverloaded"
       - alert: FoundationNodeCPUHigh
         expr: |
           (1 - avg by (env, cluster, node) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.90
@@ -150,14 +136,6 @@ groups:
         annotations:
           summary: "Queue 状态采集失败，积压数量与年龄不可用"
           runbook: "deploy/observability/docs/troubleshooting.md#积压与传输指标"
-      - alert: FoundationConfigWatcherStopped
-        expr: foundation_config_watcher_up{foundation="true"} == 0
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "已接入配置观测的 watcher 停止运行"
-          runbook: "deploy/observability/docs/troubleshooting.md#健康探测与配置状态"
       - alert: FoundationQueueReadyTooOld
         expr: max by (env,cluster,namespace,app,queue_destination) (queue_oldest_ready_age_seconds{foundation="true"}) > 300
         for: 5m

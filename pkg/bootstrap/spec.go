@@ -1,19 +1,28 @@
 package bootstrap
 
 import (
+	"fmt"
+	"net/url"
+	"os"
+
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
 // Spec 按领域收集应用声明。使用 NewSpec 构造，仅在组装前串行修改。
 type Spec struct {
-	application *app.Spec
-	server      *server.Spec
-	http, grpc  bool
-	jobs        *job.Spec
-	runtimes    []app.Runtime
-	assembled   bool
+	configuration      []config.SourceLoader
+	configurationBuilt bool
+	application        *app.Spec
+	server             *server.Spec
+	serverBuilt        bool
+	http, grpc         bool
+	jobs               *job.Spec
+	jobsBuilt          bool
+	runtimes           []app.Runtime
+	assembled          bool
 }
 
 // NewSpec 创建应用组件及生命周期声明。
@@ -23,6 +32,39 @@ func NewSpec() *Spec {
 
 // ApplicationSpec 向 Foundation provider 暴露同一应用状态，不应同时提供 app.NewSpec。
 func ApplicationSpec(spec *Spec) *app.Spec { return spec.application }
+
+// Configuration 按顺序声明额外配置源；声明阶段不执行 I/O。
+// 必须在提供 Spec 的构造函数中调用，不能放进依赖 Manager 的业务 Boot。
+func (s *Spec) Configuration(loaders ...config.SourceLoader) error {
+	if s.configurationBuilt {
+		return fmt.Errorf("configuration is already assembled")
+	}
+	for _, loader := range loaders {
+		if loader == nil {
+			return fmt.Errorf("config source loader is nil")
+		}
+	}
+	s.configuration = append(s.configuration, loaders...)
+	return nil
+}
+
+// NewConfigManager 执行 Configuration 阶段，再向 Wire 提供完整的应用配置。
+// 配置声明串行执行且仅能消费一次；失败后丢弃 Spec。cleanup 归组装层所有。
+func NewConfigManager(spec *Spec) (config.Manager, func(), error) {
+	if spec.configurationBuilt {
+		return nil, nil, fmt.Errorf("configuration is already assembled")
+	}
+	spec.configurationBuilt = true
+	var sources config.Sources
+	for index, loader := range spec.configuration {
+		next, err := loader()
+		if err != nil {
+			return nil, nil, fmt.Errorf("create config source %d: %w", index, err)
+		}
+		sources = append(sources, next...)
+	}
+	return config.NewManager(sources)
+}
 
 // Http 选择 HTTP 并返回端点声明；默认遵循配置中的 disable。
 func (s *Spec) Http() server.HTTPBuilder {
@@ -56,4 +98,44 @@ func (s *Spec) Job() job.Builder {
 func (s *Spec) RegisterRuntime(runtime app.Runtime) *Spec {
 	s.runtimes = append(s.runtimes, runtime)
 	return s
+}
+
+// AddContext 追加应用启动上下文的装饰函数。
+func (s *Spec) AddContext(decorate app.ContextDecorator) error {
+	return s.application.AddContext(decorate)
+}
+
+// AddMetadata 追加应用元数据。
+func (s *Spec) AddMetadata(metadata map[string]string) error {
+	return s.application.AddMetadata(metadata)
+}
+
+// AddEndpoints 追加对外公布的端点地址。
+func (s *Spec) AddEndpoints(endpoints ...*url.URL) error {
+	return s.application.AddEndpoints(endpoints...)
+}
+
+// AddSignals 指定触发应用退出的系统信号。
+func (s *Spec) AddSignals(signals ...os.Signal) error {
+	return s.application.AddSignals(signals...)
+}
+
+// BeforeStart 登记运行时启动前执行的业务钩子。
+func (s *Spec) BeforeStart(hooks ...app.HookFunc) error {
+	return s.application.BeforeStart(hooks...)
+}
+
+// AfterStart 登记所有运行时启动后执行的业务钩子。
+func (s *Spec) AfterStart(hooks ...app.HookFunc) error {
+	return s.application.AfterStart(hooks...)
+}
+
+// BeforeStop 登记运行时停止前执行的业务钩子。
+func (s *Spec) BeforeStop(hooks ...app.HookFunc) error {
+	return s.application.BeforeStop(hooks...)
+}
+
+// AfterStop 登记所有运行时停止后执行的业务钩子。
+func (s *Spec) AfterStop(hooks ...app.HookFunc) error {
+	return s.application.AfterStop(hooks...)
 }

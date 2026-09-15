@@ -13,3 +13,9 @@ server:
       addr: 0.0.0.0:9001
   grpc:
     disable: true
+
+# App 和发现客户端默认选择此实例；本地无 Consul 时禁用驱动。
+registry:
+  instances:
+    default:
+      driver: consul

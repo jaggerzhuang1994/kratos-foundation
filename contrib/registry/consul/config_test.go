@@ -2,6 +2,7 @@ package consul
 
 import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"testing"
 	"time"
 
@@ -23,8 +24,8 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	if defaults.healthCheckIntervalSeconds != 10 || defaults.deregisterCriticalAfterSeconds != 600 || defaults.disableHealthCheck || defaults.disableHeartbeat {
 		t.Fatalf("defaults = %#v", defaults)
 	}
-	value := &config_pb.Registry{DisableHealthCheck: proto.Bool(true), DisableHeartbeat: proto.Bool(true), HealthcheckInternal: durationpb.New(2 * time.Second), DeregisterCriticalServiceAfter: durationpb.New(5 * time.Second), Tags: []string{"blue", "api"}}
-	got, err := loadConfig(testconfig.New(t, "registry", value))
+	value := &config_pb.RegistrarOptions{DisableHealthCheck: proto.Bool(true), DisableHeartbeat: proto.Bool(true), HealthcheckInternal: durationpb.New(2 * time.Second), DeregisterCriticalServiceAfter: durationpb.New(5 * time.Second), Tags: []string{"blue", "api"}}
+	got, err := loadConfig(testPolicyConfig(t, "registry", value))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,23 +62,7 @@ func TestIntervalSecondsAndTagsRejectInvalidBoundaries(t *testing.T) {
 	}
 }
 
-func TestNewRegistryDisablesWithoutClient(t *testing.T) {
-	shared, cleanup, err := testlog.New(testlog.Config{
-		Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339,
-		Std:  testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cleanup)
-	registrar, err := NewRegistry(shared, nil, nil)
-	if err != nil || registrar != nil {
-		t.Fatalf("NewRegistry(nil client) = %v, %v", registrar, err)
-	}
-}
-
-func TestNewRegistryBuildsAdapterForSharedClient(t *testing.T) {
+func TestRegistrarBuildsAdapterForSharedClient(t *testing.T) {
 	shared, cleanup, err := testlog.New(testlog.Config{
 		Level: kratoslog.LevelInfo, TimeFormat: time.RFC3339,
 		Std:  testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
@@ -91,8 +76,19 @@ func TestNewRegistryBuildsAdapterForSharedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registrar, err := NewRegistry(shared, testconfig.Empty(t), client)
+	registrar, err := newRegistrar(shared, testconfig.Empty(t), client)
 	if err != nil || registrar == nil {
-		t.Fatalf("NewRegistry() = %v, %v", registrar, err)
+		t.Fatalf("newRegistrar() = %v, %v", registrar, err)
 	}
+}
+
+// 使用独立顶层 key，根 registry/discovery 的旧参数现已被协议拒绝。
+type policyReader struct{ config.Manager }
+
+func (r policyReader) Load(_ string, target any, defaults ...any) error {
+	return r.Manager.Load("policy", target, defaults...)
+}
+func testPolicyConfig(t *testing.T, _ string, value proto.Message) config.Reader {
+	t.Helper()
+	return policyReader{testconfig.New(t, "policy", value)}
 }

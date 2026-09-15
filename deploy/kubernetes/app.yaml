@@ -59,8 +59,8 @@ spec:
           env:
             - name: APP_ENV
               value: dev
-            - name: LOG_FILE_DISABLE
-              value: "true"
+            - name: LOG_FILE_ENABLE
+              value: "false"
           ports:
             - name: http
               containerPort: 8000

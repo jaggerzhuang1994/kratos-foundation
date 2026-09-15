@@ -46,14 +46,29 @@ func TestConfigDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.GetRegistrarTimeout().AsDuration() != 10*time.Second || config.GetStopTimeout().AsDuration() != 30*time.Second {
+	if config.GetRegistry() != "default" || config.GetRegistrarTimeout().AsDuration() != 10*time.Second || config.GetStopTimeout().AsDuration() != 30*time.Second {
 		t.Fatalf("defaults = %#v", config)
 	}
 	_, err = NewConfig(testconfig.New(t, "app", &config_pb.App{StopTimeout: durationpb.New(0)}))
 	if err == nil {
 		t.Fatal("zero stop timeout accepted")
 	}
-	if err := validateStopTimeout(time.Second, time.Second); err == nil {
-		t.Fatal("stop timeout equal delay accepted")
+}
+
+func TestConfigRegistrySelection(t *testing.T) {
+	for _, name := range []string{"", "default", "custom"} {
+		t.Run(name, func(t *testing.T) {
+			settings, err := NewConfig(testconfig.New(t, "app", &config_pb.App{Registry: name}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := name
+			if want == "" {
+				want = "default"
+			}
+			if settings.GetRegistry() != want {
+				t.Fatalf("registry = %q, want %q", settings.GetRegistry(), want)
+			}
+		})
 	}
 }

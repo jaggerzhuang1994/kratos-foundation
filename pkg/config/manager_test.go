@@ -4,321 +4,235 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
-
-	kratosconfig "github.com/go-kratos/kratos/v2/config"
 )
 
-type managerWatcherResult struct {
-	err error
+type testSource struct {
+	values   []*KeyValue
+	watcher  *testWatcher
+	loadErr  error
+	watchErr error
+}
+type testWatcher struct {
+	events  chan []*KeyValue
+	done    chan struct{}
+	once    sync.Once
+	stopErr error
 }
 
-type managerWatcher struct {
-	results  chan managerWatcherResult
-	done     chan struct{}
-	stopOnce sync.Once
-}
-
-func newManagerWatcher() *managerWatcher {
-	return &managerWatcher{
-		results: make(chan managerWatcherResult, 32),
-		done:    make(chan struct{}),
-	}
-}
-
-func (w *managerWatcher) Next() ([]*kratosconfig.KeyValue, error) {
+func (s *testSource) Load() ([]*KeyValue, error) { return s.values, s.loadErr }
+func (s *testSource) Watch() (Watcher, error)    { return s.watcher, s.watchErr }
+func (w *testWatcher) Next() ([]*KeyValue, error) {
 	select {
-	case result := <-w.results:
-		return nil, result.err
+	case values := <-w.events:
+		return values, nil
 	case <-w.done:
 		return nil, context.Canceled
 	}
 }
-
-func (w *managerWatcher) Stop() error {
-	w.stopOnce.Do(func() { close(w.done) })
-	return nil
+func (w *testWatcher) Stop() error { w.once.Do(func() { close(w.done) }); return w.stopErr }
+func newTestSource(text string) *testSource {
+	return &testSource{values: jsonValues(text), watcher: &testWatcher{events: make(chan []*KeyValue, 8), done: make(chan struct{})}}
 }
-
-type managerSource struct {
-	mu      sync.RWMutex
-	values  []*kratosconfig.KeyValue
-	loadErr error
-	watcher *managerWatcher
+func jsonValues(text string) []*KeyValue {
+	return []*KeyValue{{Key: "test.json", Format: JSONFormat, Value: []byte(text)}}
 }
-
-func newManagerSource(content string) *managerSource {
-	return &managerSource{
-		values:  managerJSONValues(content),
-		watcher: newManagerWatcher(),
+func receive(t *testing.T, events <-chan int) int {
+	t.Helper()
+	select {
+	case v := <-events:
+		return v
+	case <-time.After(time.Second):
+		t.Fatal("missing callback")
+		return 0
 	}
 }
 
-func (s *managerSource) Load() ([]*kratosconfig.KeyValue, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.loadErr != nil {
-		return nil, s.loadErr
-	}
-	return cloneManagerValues(s.values), nil
-}
-
-func (s *managerSource) Watch() (kratosconfig.Watcher, error) { return s.watcher, nil }
-
-func (s *managerSource) update(content string) {
-	s.mu.Lock()
-	s.values = managerJSONValues(content)
-	s.mu.Unlock()
-	s.watcher.results <- managerWatcherResult{}
-}
-
-func (s *managerSource) fail(err error) {
-	s.watcher.results <- managerWatcherResult{err: err}
-}
-
-type managerEvent struct {
-	value int
-	err   error
-}
-
-type managerFeature struct {
-	Value int `json:"value"`
-}
-
-func TestManagerPublishesOnlyValidSnapshotsAndRecovers(t *testing.T) {
-	source := newManagerSource(`{"feature":{"value":1}}`)
-	manager, err := newManager(Sources{source})
+func TestManagerOfficialMergeAndIndependentObservers(t *testing.T) {
+	t.Setenv("CONFIG_POLL_INTERVAL", "10ms")
+	source := newTestSource(`{"feature":{"value":1,"keep":true}}`)
+	m, cleanup, err := NewManager(Sources{source})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = manager.close() })
-
-	events := make(chan managerEvent, 3)
-	cancel, err := manager.Subscribe("feature", new(managerFeature), func(_ string, value any, err error) {
-		events <- managerEvent{value: value.(*managerFeature).Value, err: err}
-	})
-	if err != nil {
-		t.Fatal(err)
+	defer cleanup()
+	first := make(chan int, 8)
+	second := make(chan int, 8)
+	type feature struct {
+		Value int
+		Keep  bool
 	}
-	t.Cleanup(cancel)
-	if event := receiveManagerEvent(t, events); event.err != nil || event.value != 1 {
-		t.Fatalf("initial event = %+v", event)
-	}
-
-	source.update(`{"feature":`)
-	failed := receiveManagerEvent(t, events)
-	if failed.err == nil {
-		t.Fatal("invalid snapshot did not notify observer")
-	}
-	var current managerFeature
-	if err := manager.Load("feature", &current); err != nil {
-		t.Fatal(err)
-	}
-	if current.Value != 1 {
-		t.Fatalf("current value after invalid snapshot = %d, want 1", current.Value)
-	}
-
-	source.update(`{"feature":{"value":2}}`)
-	recovered := receiveManagerEvent(t, events)
-	if recovered.err != nil || recovered.value != 2 {
-		t.Fatalf("recovered event = %+v", recovered)
-	}
-}
-
-func TestManagerBecomesUnhealthyAfterTerminalWatcherError(t *testing.T) {
-	source := newManagerSource(`{"feature":{"value":1}}`)
-	manager, err := newManager(Sources{source})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = manager.close() })
-
-	events := make(chan managerEvent, 2)
-	cancel, err := manager.Subscribe("feature", new(managerFeature), func(_ string, value any, err error) {
-		events <- managerEvent{value: value.(*managerFeature).Value, err: err}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cancel)
-	receiveManagerEvent(t, events)
-
-	cause := errors.New("connection lost")
-	source.fail(cause)
-	failed := receiveManagerEvent(t, events)
-	if !errors.Is(failed.err, ErrWatcherStopped) || !errors.Is(failed.err, cause) {
-		t.Fatalf("observer error = %v, want watcher stopped and cause", failed.err)
-	}
-	if err := manager.Load("feature", new(managerFeature)); !errors.Is(err, ErrWatcherStopped) || !errors.Is(err, cause) {
-		t.Fatalf("Load error = %v, want watcher stopped and cause", err)
-	}
-	if _, err := manager.Subscribe("feature", new(managerFeature), func(string, any, error) {}); !errors.Is(err, ErrWatcherStopped) {
-		t.Fatalf("Subscribe error = %v, want watcher stopped", err)
-	}
-}
-
-func TestManagerPreservesReplayBeforeConcurrentUpdate(t *testing.T) {
-	source := newManagerSource(`{"feature":{"value":1}}`)
-	manager, err := newManager(Sources{source})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = manager.close() })
-
-	enteredReplay := make(chan struct{})
-	releaseReplay := make(chan struct{})
-	events := make(chan int, 2)
-	subscribed := make(chan error, 1)
-	go func() {
-		_, subscribeErr := manager.Subscribe("feature", new(managerFeature), func(_ string, value any, err error) {
-			if err != nil {
-				subscribed <- err
-				return
-			}
-			next := value.(*managerFeature).Value
-			if next == 1 {
-				close(enteredReplay)
-				<-releaseReplay
-			}
-			events <- next
-		})
-		subscribed <- subscribeErr
-	}()
-	<-enteredReplay
-	source.update(`{"feature":{"value":2}}`)
-	close(releaseReplay)
-	if err := <-subscribed; err != nil {
-		t.Fatal(err)
-	}
-	if first := receiveManagerInt(t, events); first != 1 {
-		t.Fatalf("first event = %d, want 1", first)
-	}
-	if second := receiveManagerInt(t, events); second != 2 {
-		t.Fatalf("second event = %d, want 2", second)
-	}
-}
-
-func TestManagerSkipsUnchangedValues(t *testing.T) {
-	source := newManagerSource(`{"feature":{"value":1}}`)
-	manager, err := newManager(Sources{source})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = manager.close() })
-
-	events := make(chan managerEvent, 3)
-	cancel, err := manager.Subscribe("feature", new(managerFeature), func(_ string, value any, err error) {
-		events <- managerEvent{value: value.(*managerFeature).Value, err: err}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cancel)
-	receiveManagerEvent(t, events)
-
-	source.update(`{"feature":{"value":1}}`)
-	source.update(`{"feature":{"value":2}}`)
-	updated := receiveManagerEvent(t, events)
-	if updated.err != nil || updated.value != 2 {
-		t.Fatalf("first update callback = %+v, unchanged snapshot was not skipped", updated)
-	}
-}
-
-func TestManagerRemovesCanceledSubscriptions(t *testing.T) {
-	source := newManagerSource(`{"feature":{"value":1}}`)
-	manager, err := newManager(Sources{source})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = manager.close() })
-
-	cancel, err := manager.Subscribe("feature", new(managerFeature), func(string, any, error) {})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cancel()
-	cancel()
-	manager.mu.Lock()
-	watches := len(manager.watches)
-	manager.mu.Unlock()
-	if watches != 0 {
-		t.Fatalf("watch count after cancel = %d, want 0", watches)
-	}
-}
-
-func TestManagerCloseRejectsOperationsAndDoesNotWaitForCallback(t *testing.T) {
-	source := newManagerSource(`{"feature":{"value":1}}`)
-	manager, err := newManager(Sources{source})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var calls atomic.Int32
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	cancel, err := manager.Subscribe("feature", new(managerFeature), func(string, any, error) {
-		if calls.Add(1) == 2 {
-			close(entered)
-			<-release
+	cancel, err := m.Subscribe("feature", new(feature), func(_ string, v any, err error) {
+		if err != nil {
+			t.Error(err)
+			return
 		}
+		first <- v.(*feature).Value
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cancel()
-	source.update(`{"feature":{"value":2}}`)
-	<-entered
-
-	closed := make(chan error, 1)
-	go func() { closed <- manager.close() }()
-	select {
-	case err := <-closed:
+	source.watcher.events <- jsonValues(`{"feature":{"value":2}}`)
+	if receive(t, first) != 2 {
+		t.Fatal("update missing")
+	}
+	var got feature
+	if err := m.Load("feature", &got); err != nil || !got.Keep {
+		t.Fatalf("default merge should retain omitted field: %+v %v", got, err)
+	}
+	cancelSecond, err := m.Subscribe("feature", new(feature), func(_ string, v any, err error) {
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
+		}
+		second <- v.(*feature).Value
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancelSecond()
+	source.watcher.events <- jsonValues(`{"feature":{"value":3}}`)
+	if receive(t, second) != 3 {
+		t.Fatal("replacement observer missing")
+	}
+	if receive(t, first) != 3 {
+		t.Fatal("first observer lost")
+	}
+	cancelSecond()
+	cleanup()
+	if err := m.Load("feature", &got); !errors.Is(err, ErrManagerClosed) {
+		t.Fatal(err)
+	}
+}
+
+func TestManagerDefaultsEnvironmentAndValidation(t *testing.T) {
+	t.Setenv("FOUNDATION_ENV_LITERAL", "${FOUNDATION_ENV_REFERENCE}")
+	t.Setenv("FOUNDATION_ENV_REFERENCE", "resolved")
+	m, cleanup, err := NewManager(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	var value string
+	if err := m.Load("FOUNDATION_ENV_LITERAL", &value); err != nil || value != "resolved" {
+		t.Fatalf("%q %v", value, err)
+	}
+	fallback := "default"
+	if err := m.Load("missing", &value, &fallback); err != nil || value != fallback {
+		t.Fatal(err, value)
+	}
+	if err := m.Load("missing", &value); !errors.Is(err, ErrNotFound) {
+		t.Fatal(err)
+	}
+	if err := m.Load("missing", value); err == nil {
+		t.Fatal("non pointer accepted")
+	}
+	var root map[string]any
+	if err := m.Load("", &root); err != nil || root["FOUNDATION_ENV_LITERAL"] != "resolved" {
+		t.Fatal(err)
+	}
+	missingCancel, err := m.Subscribe("missing", new(string), func(string, any, error) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer missingCancel()
+	cancel, err := m.Subscribe("missing", new(string), func(string, any, error) { t.Error("unexpected replay") }, &fallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if _, err := m.Subscribe("missing", new(string), nil); err == nil {
+		t.Fatal("nil observer accepted")
+	}
+	if _, err := m.Subscribe("missing", "invalid", func(string, any, error) {}); err == nil {
+		t.Fatal("invalid prototype accepted")
+	}
+	cleanup()
+	if _, err := m.Subscribe("missing", new(string), func(string, any, error) {}); !errors.Is(err, ErrManagerClosed) {
+		t.Fatal(err)
+	}
+}
+
+func TestManagerConstructionRollback(t *testing.T) {
+	for _, kind := range []string{"load", "watch", "decode"} {
+		t.Run(kind, func(t *testing.T) {
+			first := newTestSource(`{}`)
+			second := newTestSource(`{}`)
+			failure := errors.New("failure")
+			switch kind {
+			case "load":
+				second.loadErr = failure
+			case "watch":
+				second.watchErr = failure
+			case "decode":
+				second.values = jsonValues(`{`)
+			}
+			first.watcher.stopErr = errors.New("stop failed")
+			if _, _, err := NewManager(Sources{first, second}); err == nil || !errors.Is(err, first.watcher.stopErr) {
+				t.Fatal(err)
+			}
+			select {
+			case <-first.watcher.done:
+			default:
+				t.Fatal("watcher leaked")
+			}
+		})
+	}
+	if _, _, err := NewManager(Sources{nil}); err == nil {
+		t.Fatal("nil source accepted")
+	}
+}
+
+func TestManagerTemplateAndOfficialResolver(t *testing.T) {
+	t.Setenv("CONFIG_POLL_INTERVAL", "10ms")
+	t.Setenv("FOUNDATION_TEMPLATE_VALUE", "8080")
+	source := newTestSource(`{"port":${FOUNDATION_TEMPLATE_VALUE},"database":{"host":"localhost"},"dsn":"postgres://$${database.host}:$${database.port:5432}/app","missing":"$${foundation_missing_key}"}`)
+	manager, cleanup, err := NewManager(Sources{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	var port int
+	if err := manager.Load("port", &port); err != nil || port != 8080 {
+		t.Fatal(port, err)
+	}
+	var dsn string
+	if err := manager.Load("dsn", &dsn); err != nil || dsn != "postgres://localhost:5432/app" {
+		t.Fatal(dsn, err)
+	}
+	var missing string
+	if err := manager.Load("missing", &missing); err != nil || missing != "" {
+		t.Fatal(missing, err)
+	}
+	updates := make(chan string, 1)
+	cancel, err := manager.Subscribe("dsn", new(string), func(_ string, value any, err error) {
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		updates <- *value.(*string)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancel()
+	source.watcher.events <- jsonValues(`{"database":{"host":"remote"},"dsn":"postgres://$${database.host}:$${database.port:5432}/app"}`)
+	select {
+	case got := <-updates:
+		if got != "postgres://remote:5432/app" {
+			t.Fatal(got)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("Close waited for running callback")
-	}
-	if err := manager.Load("feature", new(managerFeature)); !errors.Is(err, ErrManagerClosed) {
-		t.Fatalf("Load after Close = %v, want ErrManagerClosed", err)
-	}
-	close(release)
-}
-
-func receiveManagerEvent(t testing.TB, events <-chan managerEvent) managerEvent {
-	t.Helper()
-	select {
-	case event := <-events:
-		return event
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for manager event")
-		return managerEvent{}
+		t.Fatal("resolver update not delivered")
 	}
 }
 
-func receiveManagerInt(t testing.TB, events <-chan int) int {
-	t.Helper()
-	select {
-	case event := <-events:
-		return event
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for manager integer")
-		return 0
+func TestNewSourcesFiltersNilWithoutReordering(t *testing.T) {
+	first, second := newTestSource(`{}`), newTestSource(`{}`)
+	sources := NewSources(nil, first, nil, second)
+	if len(sources) != 2 || sources[0] != first || sources[1] != second {
+		t.Fatal(sources)
 	}
-}
-
-func managerJSONValues(content string) []*kratosconfig.KeyValue {
-	return []*kratosconfig.KeyValue{{Key: "config.json", Format: "json", Value: []byte(content)}}
-}
-
-func cloneManagerValues(values []*kratosconfig.KeyValue) []*kratosconfig.KeyValue {
-	result := make([]*kratosconfig.KeyValue, 0, len(values))
-	for _, value := range values {
-		next := *value
-		next.Value = append([]byte(nil), value.Value...)
-		result = append(result, &next)
-	}
-	return result
 }

@@ -447,9 +447,7 @@ func externalKafkaFactory(t testing.TB) (*ClientFactory, foundationlog.Logger, s
 	}
 	t.Cleanup(cleanup)
 	allow := true
-	level := "error"
 	factory, err := NewClientFactory(logger, testconfig.New(t, "kafka", &config_pb.Kafka{
-		Log:         &config_pb.ModuleLog{Level: &level},
 		Connections: map[string]*config_pb.KafkaConnection{"external": {Brokers: []string{address}, AllowAutoTopicCreation: &allow}},
 	}))
 	if err != nil {

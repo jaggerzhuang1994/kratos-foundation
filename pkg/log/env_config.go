@@ -1,7 +1,6 @@
 package log
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -38,6 +37,8 @@ type fileConfig struct {
 // envConfig 保存从 LOG_* 环境变量解析的实例启动配置。
 type envConfig struct {
 	Level       kratoslog.Level
+	Disable     bool
+	MsgKey      string
 	FilterEmpty bool
 	FilterKeys  []string
 	TimeFormat  string
@@ -46,6 +47,10 @@ type envConfig struct {
 }
 
 const (
+	// EnvDisable 固定根 Logger 的禁用状态，默认 false。
+	EnvDisable = "LOG_DISABLE"
+	// EnvMsgKey 固定消息字段名，默认 msg。
+	EnvMsgKey = "LOG_MSG_KEY"
 	// EnvLevel 配置根 Logger 的最低级别。
 	EnvLevel = "LOG_LEVEL"
 	// EnvFilterEmpty 控制是否过滤空值字段。
@@ -60,8 +65,8 @@ const (
 	EnvStdLevel = "LOG_STD_LEVEL"
 	// EnvStdFilterKeys 配置标准输出端敏感字段。
 	EnvStdFilterKeys = "LOG_STD_FILTER_KEYS"
-	// EnvFileDisable 控制是否禁用文件输出端。
-	EnvFileDisable = "LOG_FILE_DISABLE"
+	// EnvFileEnable 显式启用文件输出端，默认关闭。
+	EnvFileEnable = "LOG_FILE_ENABLE"
 	// EnvFileLevel 配置文件输出端最低级别。
 	EnvFileLevel = "LOG_FILE_LEVEL"
 	// EnvFileFilterKeys 配置文件输出端敏感字段。
@@ -88,6 +93,14 @@ func newEnvConfig() (envConfig, error) {
 	if err != nil {
 		return envConfig{}, err
 	}
+	disable, err := envBool(EnvDisable, false)
+	if err != nil {
+		return envConfig{}, err
+	}
+	msgKey := envString(EnvMsgKey, defaultMsgKey)
+	if strings.TrimSpace(msgKey) == "" || strings.TrimSpace(msgKey) != msgKey || msgKey == moduleKey {
+		return envConfig{}, fmt.Errorf("%s is invalid", EnvMsgKey)
+	}
 	filterEmpty, err := envBool(EnvFilterEmpty, true)
 	if err != nil {
 		return envConfig{}, err
@@ -99,7 +112,7 @@ func newEnvConfig() (envConfig, error) {
 	if err != nil {
 		return envConfig{}, err
 	}
-	stdLevel, err := envLevel(EnvStdLevel, level)
+	stdLevel, err := envLevel(EnvStdLevel, kratoslog.LevelDebug)
 	if err != nil {
 		return envConfig{}, err
 	}
@@ -109,12 +122,12 @@ func newEnvConfig() (envConfig, error) {
 		ServiceVersionKey,
 	})
 
-	// go test 注册 test.v 标志；测试进程默认不创建文件，显式环境变量仍可覆盖。
-	fileDisable, err := envBool(EnvFileDisable, flag.Lookup("test.v") != nil)
+	// 文件输出必须显式启用，普通进程与测试进程采用同一默认值。
+	fileEnable, err := envBool(EnvFileEnable, false)
 	if err != nil {
 		return envConfig{}, err
 	}
-	fileLevel, err := envLevel(EnvFileLevel, level)
+	fileLevel, err := envLevel(EnvFileLevel, kratoslog.LevelDebug)
 	if err != nil {
 		return envConfig{}, err
 	}
@@ -147,6 +160,8 @@ func newEnvConfig() (envConfig, error) {
 
 	config := envConfig{
 		Level:       level,
+		Disable:     disable,
+		MsgKey:      msgKey,
 		FilterEmpty: filterEmpty,
 		FilterKeys:  filterKeys,
 		TimeFormat:  timeFormat,
@@ -157,7 +172,7 @@ func newEnvConfig() (envConfig, error) {
 		},
 		File: fileConfig{
 			outputConfig: outputConfig{
-				Disable:    fileDisable,
+				Disable:    !fileEnable,
 				Level:      fileLevel,
 				FilterKeys: fileFilterKeys,
 			},

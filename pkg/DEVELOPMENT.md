@@ -67,7 +67,7 @@
 - **错误/观测**：构造/获取失败返回错误；`func()` 无返回通道，cleanup 的关闭错误必须通过明确的日志或已有错误处理机制报告。
 - **验收**：部分构造失败、重复 cleanup、关闭后访问、借用资源不被误关；有共享缓存/租约时验证并发获取、释放和热更新，执行竞态检测。
 
-**Registry 例外**：只有“多份具名资源、可使用不同实现、按 driver 配置选择、Manager 拥有生命周期”四项同时成立，才考虑注册表。当前 database/oss 使用此模式；`init` 只登记无状态 factory，不能执行 I/O 或启动 goroutine。其他能力优先显式注入。
+**Registry 例外**：只有“多份具名资源、可使用不同实现、按 driver 配置选择、Manager 拥有生命周期”四项同时成立，才考虑注册表。当前 database/oss/registry 使用此模式，config 注册无状态 source 工厂；`init` 只登记无状态 factory，不能执行 I/O 或启动 goroutine。其他能力优先显式注入。
 
 ## M4：操作级组件与行为装饰
 

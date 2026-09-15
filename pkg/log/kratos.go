@@ -2,51 +2,72 @@ package log
 
 import (
 	"context"
+	"slices"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 )
 
-// SetLogger 借用输出并安装 Kratos 模块适配器；输出资源仍由调用方释放。
-func SetLogger(target kratoslog.Logger) {
-	if bridge, ok := target.(*kratosBridge); ok {
-		target = bridge.target
+var globalBinding atomic.Pointer[kratosBridge]
+
+type kratosProxy struct{}
+
+func (kratosProxy) Log(level kratoslog.Level, keyvals ...any) error {
+	// 官方 Config 的这两类错误会拼入整份配置，包括已展开的凭据。
+	// 在固定桥接入口替换完整消息，不能保留也可能包含敏感值的 err/key。
+	for i := 0; i+1 < len(keyvals); i += 2 {
+		key, _ := keyvals[i].(string)
+		message, ok := keyvals[i+1].(string)
+		if key != "msg" || !ok {
+			continue
+		}
+		for _, prefix := range []string{"Failed to config decode error:", "Failed to config merge error:", "failed to merge config source:", "failed to merge next config:"} {
+			if strings.HasPrefix(message, prefix) {
+				keyvals = slices.Clone(keyvals)
+				keyvals[i+1] = "Failed to load configuration; raw configuration error omitted"
+				break
+			}
+		}
+	}
+	return globalBinding.Load().logger.Log(level, keyvals...)
+}
+
+// SetLogger 原子切换借用的全局输出，返回幂等恢复函数；输出仍由调用方释放。
+// 恢复仅在此绑定仍为当前绑定时生效，不覆盖后来安装的 Logger。
+// 应使用本入口，不能在运行期直接调用非线程安全的 kratoslog.SetLogger。
+func SetLogger(target kratoslog.Logger) func() {
+	if _, ok := target.(kratosProxy); ok {
+		target = GetLogger()
 	}
 	kratosTarget := target
 	if base, ok := target.(Logger); ok {
 		kratosTarget = base.WithModule("kratos")
 	}
-	kratoslog.SetLogger(&kratosBridge{target: target, logger: output.NewModule(kratosTarget, "kratos")})
+	next := &kratosBridge{target: target, logger: output.NewModule(kratosTarget, "kratos")}
+	previous := globalBinding.Swap(next)
+	var restored atomic.Bool
+	return func() {
+		if restored.CompareAndSwap(false, true) {
+			globalBinding.CompareAndSwap(next, previous)
+		}
+	}
 }
 
-// GetLogger 返回原始借用的 Logger，供 Foundation 调用及 Bootstrap 恢复绑定。
-func GetLogger() kratoslog.Logger {
-	target := kratoslog.GetLogger()
-	if bridge, ok := target.(*kratosBridge); ok {
-		return bridge.target
-	}
-	return target
-}
+// GetLogger 返回当前原始借用 Logger；不会暴露固定安装的 Kratos 代理。
+func GetLogger() kratoslog.Logger { return globalBinding.Load().target }
 
 type kratosBridge struct {
 	target kratoslog.Logger
 	logger kratoslog.Logger
 }
 
-func (l *kratosBridge) Log(level kratoslog.Level, keyvals ...any) error {
-	return l.logger.Log(level, keyvals...)
-}
-
 type globalLogger struct{}
 
 func (globalLogger) Log(level kratoslog.Level, keyvals ...any) error {
-	// 每次读取现有全局绑定，不缓存旧输出，也不新增全局可变状态。
-	target := GetLogger()
-	if base, ok := target.(*logger); ok {
-		return base.Log(level, keyvals...)
-	}
-	return output.NewModule(target, "").Log(level, keyvals...)
+	return currentLogger().Log(level, keyvals...)
 }
 
 var globalHelper = kratoslog.NewHelper(globalLogger{})
@@ -64,21 +85,11 @@ func currentLogger() *logger {
 	}}
 }
 
-// WithModule 派生当前全局 Logger 的模块视图，可继续 With 字段并通过 Info/Error 等方法记录消息。
-// 视图借用当前输出；后续 SetLogger 不会重绑已保存的视图，应在使用处获取。
-func WithModule(module string) Logger { return currentLogger().WithModule(module) }
-
 // Context 返回绑定上下文和当前消息字段名的全局日志 Helper。
 // Helper 保存构造时的 msgKey；需要持续跟随共享设置时使用 WithModule(...).WithContext(ctx)。
 func Context(ctx context.Context) *kratoslog.Helper {
 	base := currentLogger()
 	key := base.config.msgKey
-	if custom := base.shared.custom.Load(); custom.msgKey != "" {
-		key = custom.msgKey
-	}
-	if base.msgKey != "" {
-		key = base.msgKey
-	}
 	return kratoslog.NewHelper(base.WithContext(ctx), kratoslog.WithMessageKey(key))
 }
 
@@ -121,9 +132,12 @@ func Fatalf(format string, a ...any) { currentLogger().Fatalf(format, a...) }
 
 // 未组装应用时只使用标准输出；Bootstrap 安装实例后借用它的输出资源。
 func init() {
+	std := output.NewStd()
 	fallback := &logger{shared: processState, config: &configState{
-		output: &outputLogger{output: output.NewStd()}, level: kratoslog.LevelInfo,
+		output: &outputLogger{preparedOutput: &preparedOutput{output: std, config: envConfig{Std: outputConfig{Level: kratoslog.LevelDebug}}}}, level: kratoslog.LevelInfo,
 		filterEmpty: true, timeFormat: time.RFC3339, msgKey: defaultMsgKey,
 	}}
 	SetLogger(fallback)
+	// 包初始化在启动 goroutine 前执行；此后不再改写官方全局 Logger。
+	kratoslog.SetLogger(kratosProxy{})
 }

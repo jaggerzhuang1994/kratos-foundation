@@ -121,3 +121,38 @@ func TestMiddlewareDisabledAndMissingTransportPassThrough(t *testing.T) {
 }
 
 func boolp(v bool) *bool { return &v }
+
+func TestRequestDebugCannotUseGenericMetadata(t *testing.T) {
+	const key = "x-foundation-debug"
+	cfg := &config_pb.Middleware_Metadata{Prefix: []string{"x-"}, Constants: map[string]string{key: "1"}}
+	for _, side := range []string{"server", "client"} {
+		t.Run(side, func(t *testing.T) {
+			tr := &testTransport{header: headerCarrier{}}
+			ctx := context.Background()
+			mw := Server(cfg)
+			if side == "server" {
+				tr.header.Set(key, "1")
+				ctx = transport.NewServerContext(ctx, tr)
+			} else {
+				mw = Client(cfg)
+				ctx = kratosmetadata.NewClientContext(ctx, kratosmetadata.Metadata{key: {"1"}})
+				ctx = kratosmetadata.NewServerContext(ctx, kratosmetadata.Metadata{key: {"1"}})
+				ctx = transport.NewClientContext(ctx, tr)
+			}
+			_, err := mw(func(ctx context.Context, _ any) (any, error) {
+				if side == "server" {
+					md, _ := kratosmetadata.FromServerContext(ctx)
+					if md.Get(key) != "" {
+						t.Fatal("generic server metadata accepted debug")
+					}
+				} else if tr.header.Get(key) != "" {
+					t.Fatal("generic client metadata injected debug")
+				}
+				return nil, nil
+			})(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

@@ -1,310 +1,186 @@
 # 配置管理
 
-配置热更新、订阅异常及清理诊断使用全局日志，固定声明 `module=config`。
+Manager 内部持有 Kratos 官方 `config.Config`，使用其默认 decoder、默认 merge、默认 resolver、值缓存和监听循环。Foundation 组装来源、预处理环境模板，每轮 Scan 一次完整配置并持有不可变快照，按订阅 key 比较变化并串行通知。没有自定义源合并、内部根节点、订阅队列或配置健康指标。
 
-`pkg/config` 负责应用全部配置源的加载、监听、优先级合并、类型解码和订阅生命周期。应用层只需要按顺序组装 `Sources`，不需要直接调用 Source 的 `Load`、`Watch` 或 Watcher 的 `Stop`。
-
-## 基本用法
+## 组装
 
 ```go
-sources := config.NewSources()
-sources = append(sources, fileSources...)
-sources = append(sources, consulSources...)
-
-manager, cleanup, err := config.NewManager(sources)
+spec := bootstrap.NewSpec()
+if err := spec.Configuration(
+    file.AddConfigSource("configs/app.yaml"),
+    consul.AddConfigSource("configs/production/app.yaml"),
+); err != nil {
+    return err
+}
+manager, cleanup, err := bootstrap.NewConfigManager(spec)
 if err != nil {
-	return err
+    return err
 }
 defer cleanup()
-
-var server ServerConfig
-if err := manager.Load("server", &server); err != nil {
-	return err
-}
 ```
 
-`Sources` 是有序列表，后面的源优先级更高。每个源内部返回的多个 `KeyValue` 也保持原始顺序。map 会递归合并，slice、标量和显式 `null` 整体覆盖。
+片段使用 `pkg/bootstrap` 和普通导入的 `contrib/config/file`、`contrib/config/consul`；完整可运行示例见 [minimal](../../examples/minimal/README.md)。Wire 场景由业务 provider 返回已声明的 Spec，`bootstrap.NewConfigManager` 在依赖 Manager 的组件之前执行。来源集合只在构造阶段确定，内容按各 Source 的 Watch 能力更新。默认总是先添加官方 `config/env.NewSource()`，无前缀筛选，不改变键名。
 
-快照构建只在本次解析产生、尚未发布的私有树上合并；发布后仍按只读快照使用。重建不会修改旧快照或配置源原始数据，删除高优先级源后会重新显露低优先级配置。
-
-Manager 在首次加载及每次更新发布前检查 Foundation 协议中的 reserved 字段。
-已删除字段即使为 null 或空对象也会返回 `ErrRemovedField`，错误只包含字段路径，不包含值。
-其他业务字段仍允许存在；protobuf Load/Subscribe 也检查对应消息的 reserved 字段。
-首次加载失败会释放配置源；非法更新记录 `Rejected configuration update`，通知订阅错误并保留旧快照，修正后可继续更新。
-`Load("", &target)` 可读取整个有效配置。
-
-| 已删除配置 | 迁移方式 |
-|---|---|
-| 顶层 `log` | 使用 `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` |
-| 顶层 `metrics` | 显式构造 Provider，HTTP 暴露开关使用 `server.http.metrics` |
-| 顶层 `job`、`queue` | 使用各组件的强类型 Spec/构造配置并显式组装 |
-| `app.disable_registrar` | 由 Wire provider 返回 `registry.Registrar`；返回 nil 禁用服务注册 |
-| `server.middleware.timeout`、`client.clients.*.middleware.timeout` | 改为 `deadline`，明确设置 fallback/max/min 预算 |
-| `database.connections.*.replicas/datas/trace_resolver_mode` | 改为显式连接选择；本版不恢复自动读写路由 |
-| `server.log`、`tracing.log`、`tracing.tracer_name` | 使用 Logger 派生和 Provider 的 instrumentation scope |
-| `redis.connections.*.read_only/disable_indentity` | 删除已移除配置；拼写改为 `disable_identity` |
-
-App、Server、Database 保留字段恢复 main 的 wire 编号；删除字段的编号与名字保留，
-Deadline 使用新的字段编号，旧 Timeout 二进制不会被误解释成新策略。
-这不代表旧配置可以不迁移：已删除能力仍需按上表处理。
-恢复编号会破坏此前未发布 v2 的二进制配置，请从 YAML/JSON 重新生成，勿复用旧 v2 二进制。
+也可直接调用 `config.NewManager(config.Sources{source1, source2})`，适配官方或自定义 Source；`config.NewSources(...)` 仅过滤 nil。构造失败停止已经创建的 watcher；成功后 cleanup 幂等取消轮询、清空订阅并停止全部 watcher，包括某个 Stop 返回错误时的其他来源。已获准执行的回调不等待、不强制中断；它返回后轮询退出，因此回调也可调用 cleanup。业务回调必须能自行返回，否则会阻塞本 Manager 的通知任务。官方 Close 不等待最后的监听日志协程结束。共享 Consul 客户端不归 Manager 释放。
 
 ```mermaid
 flowchart TD
-    A([初始加载或配置源更新]) --> V[KeyValue Compose 环境模板替换 默认值与必填检查]
-    V --> B[解析 JSON/YAML 在本次私有树中按优先级合并]
-    V -- 模板或必填检查失败 --> F
-    B -- 失败 --> F
-    E[返回或通知错误 保留已有有效快照]
-    B --> C{已知消息包含 reserved 字段?}
-    C -- 是 --> D[ErrRemovedField 只包含路径]
-    D --> F{热更新?}
-    F -- 是 --> L[ERROR Rejected configuration update]
-    L --> E
-    F -- 否 --> K[释放配置源 返回构造错误]
-    C -- 否 --> G[发布快照 Load 与订阅读取]
-    G --> H([完成])
-    E --> H
-    K --> H
+ A([Configuration 声明来源]) --> B[env 加上有序业务 Source]
+ B --> C[官方 Config.Load 逐源 Load]
+ C --> D[业务源复制 KeyValue 并展开模板；env 保持字面值]
+ D --> E[官方默认 decoder 与 merge]
+ E --> F{初始加载成功?}
+ F -- 否 --> X[停止已创建 watcher，返回构造错误]
+ F -- 是 --> G[官方 Watch 循环]
+ G --> H{来源更新或错误?}
+ H -- 更新 --> D
+ H -- 错误 --> I[官方日志处理，遵循官方重试及取消行为]
+ I --> G
+ E --> R[官方 resolver 替换配置引用]
+ R --> J[官方有效配置]
+ J --> P[Manager 定期 Scan 并发布快照]
+ P --> Q[Load 读取及串行订阅回调]
+ K[cleanup] --> L[锁内标记关闭并清空订阅；锁外取消轮询和停止 watcher]
+ L --> Z([结束])
+ X --> Z
 ```
 
-```mermaid
-flowchart TD
-    A[应用组装 Sources] --> B[NewManager]
-    B --> C[internal/source.Open]
-    C --> D[注册全部 Watcher 并加载完整初始状态]
-    D --> E[internal/snapshot.New 先替换环境变量 再解析并保留 JSON 数值]
-    E --> F[发布不可变有效快照]
-    F --> G[internal/decoder 按目标类型合并 字段兼容别名 map 键精确匹配]
-    G --> H[Load]
-    G --> I[internal/subscription]
-    I --> J[Subscribe 回放与更新]
-    C --> K[各源 worker 并行等待变更通知]
-    K --> V{Watcher 显式声明 FullSnapshot 为 true?}
-    V -- 否 --> L[重新 Load 对应 Source 的完整状态]
-    V -- 是 --> M
-    L --> M[经可取消 channel 发送独立源快照]
-    M --> N[Manager 单一 watch 协程调用 Stream.Next]
-    N --> O[顺序更新缓存并按源优先级组装快照]
-    O --> E
-    L -->|暂时失败| P[向 observer 报错并可取消退避]
-    P --> L
-    K -->|监听终止| Q[ERROR manager.failWatcher 并终止订阅]
-    R[cleanup] --> S[取消 channel 等待与退避 停止 watcher 等待 worker 退出]
+## 来源与合并
+
+初次加载按列表顺序合并，后加载覆盖前加载。热更新由各来源的官方 watcher 循环独立合并到当前配置，不重新计算全源快照。因此：
+
+- 后续更新不保证固定来源优先级；低优先级来源的更新也可能覆盖原来的高优先级值。
+- 新结果省略字段或返回空列表，不会自动删除旧字段，也不会恢复低优先级来源的旧值。
+- 数组、零值和 null 的行为沿用当前依赖版本的官方默认 merge，不额外承诺整体替换或清空。
+- JSON 数字使用官方默认解码，不提供 `json.Number` 精度保证。大整数建议用字符串字段表达。
+- 更新使用 `Watcher.Next` 直接返回的 KeyValue，不额外调用 Source.Load。自定义 watcher 应返回可供官方 merge 处理的数据；`FullSnapshot` 扩展已移除。
+- 没有全局 reserved 字段校验及“完整快照校验后原子发布”的保证。业务 Load/Subscribe 解码 protobuf 时仍检查目标消息声明的保留字段；Foundation 自带配置协议已清除 reserved。
+
+## 环境变量模板
+
+业务 Source 的 `Load` 和 `Watcher.Next` 返回数据后、官方 decoder 解析 JSON/YAML 前，使用 compose-go/template 展开 KeyValue 的 key 和 value。默认 env source 的值按原样保留，不进行模板替换。
+
+支持 `$VAR`、`${VAR}`、`${VAR:-default}`、`${VAR:?required}` 和 `$$`；普通变量未设置时替换为空。替换结果仍须满足 JSON/YAML 及业务目标类型要求。随后由官方默认 resolver 在合并后的配置中替换 `${key}` / `${key:default}`，支持点分路径，缺失且无默认值时替换为空字符串；默认替换结果保持字符串，再由业务目标解码器转换。
+
+要将配置引用保留到第二阶段，业务源中须使用 `$$` 跳过环境模板处理：
+
+```yaml
+database:
+  host: localhost
+port: ${PORT:-8080}
+dsn: "postgres://$${database.host}:$${database.port:5432}/app"
 ```
 
-四个 `internal` 包都是单一职责叶子包，彼此不互相依赖；非导出 manager 是唯一编排层。
-`source` 管理配置源生命周期，`snapshot` 计算有效配置，`decoder` 写入业务对象，
-`subscription` 管理每个订阅的顺序投递和取消。
-`source` 的缓存只由 `Stream.Next` 更新，源加载可以并行，汇总和发布顺序保持一致，避免完整快照倒退；缓存不需要共享锁。
+例如 PORT 未设置时，decoder 将 port 解析为数字 8080，resolver 将 dsn 解析为 `postgres://localhost:5432/app`。`$${...}` 只跳过第一阶段，不能保证最终保留字面占位符；环境变量值中包含的 `${...}` 同样可能被第二阶段解析。官方 resolver 原地替换字符串，不维护引用依赖图；仅更新被引用字段不会自动重算已替换的字符串，更新时应一并提供引用模板。不额外提供递归引用或循环检测保证。
 
-## Watcher 完整快照契约
+预处理复制数据，不修改来源持有的原始模板。每次来源返回新数据时重新读取进程环境；单独修改环境变量不会触发通知，也不会重算其他来源。模板或来源错误遵循官方 watcher 的日志与重试路径，不通过 Manager.Observer 转发。
 
-默认将第三方 Watcher.Next 的返回值视为变更通知，随后重新 Load 该 Source，兼容仅返回增量的实现。Watcher 可以额外实现 `FullSnapshot() bool`，在构造后固定返回 true，显式声明每次成功 Next 都返回本源完整、有序的状态；nil 或空切片表示该源全部删除，不能用作心跳或“没有变化”。实现必须保证首次通知不回退到初始 Load 之前的过期状态，并按源内顺序发布。
+## 扫描间隔与快照
 
-内置 file 和 Consul watcher 已声明此能力，Stream 直接使用通知快照，每次更新省去一次文件/Consul 重读；初始 Load 保留。未实现或返回 false 的第三方 watcher 仍重新 Load，沿用错误报告、重试和删除回退路径。能力只在 worker 启动时读取，不支持热切换。Next 返回的 KeyValue、切片和字节至少保持到下一次 Next 调用前不变；Stream 在再次 Next 前复制数据，返回给上层的快照仍是独立副本。完整快照替换本源缓存后，仍按原 Sources 优先级合并，包括空快照恢复低优先级值。
+`CONFIG_POLL_INTERVAL` 在 Manager 构造时从进程环境读取一次，未设置默认 `1s`；支持 Go duration，例如 `500ms`、`2s`。显式空值、非 duration、零或负数均使构造失败。它不是热更新配置项，不从文件或 Consul 覆盖，也不支持通过零值关闭轮询。
+
+构造期间同步 Scan 初始快照，随后每个 Manager 仅用一个任务定期 Scan。Load 和订阅比较均使用最近成功扫描的快照，不会为每个订阅重复 Scan。扫描失败记 ERROR 并保留旧快照，下轮重试。每轮通知的是该次采样的变化，不能保证捕获两轮之间的中间值，例如 `A → B → A` 可能没有通知；慢回调会延迟下一轮，ticker 不积压扫描任务。
+
+官方来源仍独立更新，Scan 不提供跨来源事务或“merge 与 resolver 整体原子完成”的额外保证。业务默认值仅用于目标解码，不改变源合并结果。
 
 ## Load
 
-`Load` 的 target 必须是已经分配的非 nil 指针：
-
 ```go
-effective := new(ServerConfig)
-defaults := &ServerConfig{Port: 8080}
-if err := manager.Load("server", effective, defaults); err != nil {
-	return err
+var limits Limits
+if err := manager.Load("business.limits", &limits, &Limits{MaxBatch: 100}); err != nil {
+    return err
 }
 ```
 
-默认值最多传一个，并且必须与 target 的具体指针类型完全一致。Manager 先复制默认值，再用配置字段覆盖；调用方可以安全复用包级默认值。每次加载前都会清空 target，配置删除字段后不会残留旧数据。
+`target` 必须为已分配的非 nil 指针；最多一个默认值，其具体指针类型须与 target 一致。每次读取先清空 target，再将最近扫描快照中的值和业务默认值解码为独立对象。默认值仅用于这次业务读取，不写回来源，不改变官方 merge。
 
-JSON 配置源和默认值在合并时使用 `json.Number` 保留数值文本，`int64`、`uint64` 的完整范围以及嵌套数组中的整数不会经过 `float64` 舍入；订阅更新和默认值回退保持相同精度。未加引号的数字环境模板在解析前替换，也保留整数精度。JSON 源必须是单个完整值，非法内容或尾随的第二个值都会报错。
-
-普通 Go 类型使用 JSON 语义解码；protobuf message 使用 `protojson`，支持 proto 字段名、JSON 字段名和 duration 等 protobuf 类型。
+`Load("", &target)` 读取整份配置，包括官方 env source 的键。缺失且无默认值返回 `ErrNotFound`，cleanup 后返回 `ErrManagerClosed`。业务自定义 protobuf 若声明 reserved，解码命中时返回 `ErrRemovedField`。Foundation 自带配置协议不再声明 reserved，旧字段作为未知字段处理，不再触发此错误；未被业务读取的旧顶层字段不会因 Manager 创建而自动拒绝。
 
 ## Subscribe
 
 ```go
-cancel, err := manager.Subscribe(
-	"server.middleware.deadline",
-	new(DeadlineConfig),
-	func(key string, value any, err error) {
-		if err != nil {
-			// 根据 errors.Is 判断错误类别。
-			return
-		}
-		latest := value.(*DeadlineConfig)
-		_ = latest
-	},
-	&DeadlineConfig{Timeout: time.Second},
-)
+// 首次读取用于构造；订阅在下一轮扫描异步回放当前值，补上登记前的更新。
+if err := manager.Load("business.limits", &limits); err != nil {
+    return err
+}
+cancel, err := manager.Subscribe("business.limits", new(Limits), func(_ string, value any, err error) {
+    if err != nil {
+        // 处理业务值解码错误。
+        return
+    }
+    apply(value.(*Limits))
+})
 if err != nil {
-	return err
+    return err
 }
 defer cancel()
 ```
 
-Subscribe 在返回前同步回放一次当前值。后续每次回调都会分配新的同类型对象，调用方可以直接保存。单个订阅的回调按顺序执行，同时最多运行一个；不同订阅互不阻塞。
+`Subscribe` 登记后，在下一轮成功 Scan 时异步回放该轮当前值；不是登记时的历史快照，也不在 Subscribe 内同步调用。首次回放与后续通知均由同一个轮询任务按登记顺序串行执行。允许 key 不存在或为 null，无默认值也可登记；首次缺失按默认值或 ErrNotFound 通知，后续存在性、值或类型变化都会触发通知。相同 key 可以登记多个独立订阅；空 key 订阅整份配置。初次 Load 与 Subscribe 仍是两个操作，首次回放会补上两者之间已采样的更新，但不保证捕获采样之间的中间状态。
 
-每个订阅有独立的有界更新队列。回调持续落后时，该订阅会在已接受更新之后收到 `ErrObserverOverloaded` 并停止。cancel 和 Manager cleanup 不等待已经开始的业务回调，因此回调仍需自行保证最终可返回。
+每轮按订阅登记顺序串行执行回调，同一 Manager 内不会并行，也不会同时扫描下一轮；不同 Manager 不共享串行约束。快照发布后才通知，因此回调可安全调用 Load、Subscribe 或 cancel。新登记的订阅从下一轮成功扫描开始首次通知，之后参与比较；回调修改接收到的独立对象不影响快照或其他订阅。回调 panic 记录 ERROR 后继续后续通知，不重试该次回调；业务应自行处理错误并尽快返回。
 
-## 读取热更新快照
+cancel 幂等移除订阅，首次回放前取消会跳过该次回放；不等待已通过执行检查的回调。扫描、比较、解码和业务回调均不持有订阅锁；普通互斥锁只保护快照指针、订阅登记/移除和关闭状态的复合操作，避免注册和扫描交错导致状态不一致。
 
-只需要读取最新值时，可使用 `NewHotReloadValue`。以下片段中的 manager 已按前文构造；泛型参数是值类型，默认值和读取结果为其指针：
+存在性与值分别比较：若扫描结果中的 key 消失，无默认值通过 observer 返回 `ErrNotFound`，有默认值解码默认值；显式 null 按目标解码规则处理。源文件中省略字段不等于有效配置删除，仍受官方 merge 约束。Manager 不再使用官方 Value/Watch，因此不受其缺失 key、同 key 单 observer 和直接监听 null 的限制；resolver 等官方处理仍沿用上游行为。
 
-```go
-type Limits struct {
-    MaxBatch int `json:"max_batch"`
-}
-hot, cancel, err := config.NewHotReloadValue[Limits](
-    manager, "business.limits", &Limits{MaxBatch: 100},
-)
-if err != nil {
-    return err
-}
-defer cancel() // Wire 中由 provider 返回，在 Manager cleanup 前取消订阅。
-latest, version := hot.GetCurrent()
-maxBatch := latest.MaxBatch
-_ = maxBatch // 使用只读字段处理本次工作。
-_ = version  // 可用于避免对同一版本重复计算。
-```
-
-`GetCurrent` 返回一致的值与版本对，值是共享只读快照，不能修改其字段或嵌套 map/slice；需要修改时先复制，嵌套对象也应复制。原子发布只保护快照指针，不保护调用方对值的写入；修改共享值会绕过版本机制，并可能导致并发数据竞争。版本是本实例的成功通知计数，不是配置中心 revision，也不应假定初始版本为零。
-
-首次加载或订阅失败会返回错误；后续错误记录 `config subscribe` WARN 并保留旧值。辅助类型不校验业务约束、不暴露订阅终止状态，也不会自动重订阅；需要可靠感知过载或监听终止时，使用 `Subscribe` 的错误回调或 `StatusReader`。取消订阅后已开始的回调仍可能结束，读取对象仍保留最近快照；调用方负责停止使用并释放引用。
+`Observer.err` 表示目标解码错误或缺失值错误，不表示来源加载、模板失败或 watcher 健康状态。`ErrWatcherStopped`、`ErrObserverOverloaded`、`StatusReader` 和 ConfigObservability Bootstrap 不恢复。
 
 ```mermaid
 flowchart TD
-    A([NewHotReloadValue]) --> B[加载初值并订阅 同步回放]
-    B -- 失败 --> C([返回错误 由调用方处理])
-    B -- 成功 --> D[返回快照容器和 cancel]
-    E[订阅更新] --> F{通知成功?}
-    F -- 否 --> G[WARN config subscribe 保留旧值]
-    F -- 是 --> H[CAS 原子发布值与递增版本 冲突时重试]
-    D --> I[并发 GetCurrent 原子读取同一快照]
-    H --> I
-    I --> J([调用方只读使用])
-    D --> K[Wire cleanup 取消订阅 不等待已开始回调]
-    K --> L([随后释放 Manager])
+ A([构造并 Scan 初始快照]) --> B[单个轮询任务等待 ticker 或取消]
+ B --> C{已取消?}
+ C -- 是 --> Z([退出；不等待在途业务回调])
+ C -- 否 --> D[锁外 Scan 完整配置]
+ D --> E{Scan 成功?}
+ E -- 否 --> F[ERROR Failed to scan configuration；保留旧快照]
+ F --> B
+ E -- 是 --> G[获取 mu；检查关闭状态]
+ G -- 已关闭 --> G1[释放 mu]
+ G1 --> Z
+ G -- 未关闭 --> H[发布新快照并复制订阅表；释放 mu]
+ H --> I[锁外比较各订阅存在性和值；更新比较基线]
+ I --> J{首次通知或值变化?}
+ J -- 否 --> O
+ J -- 是 --> K[获取 mu；检查取消与关闭；释放 mu]
+ K --> L{可交付?}
+ L -- 否 --> O
+ L -- 是 --> M[锁外按登记顺序解码并执行回调]
+ M -- panic --> N[ERROR Configuration observer panicked；继续其余订阅]
+ M -- 正常或解码错误 --> O[继续其余订阅]
+ N --> O
+ O --> U{还有订阅?}
+ U -- 是 --> I
+ U -- 否 --> B
+ P[并发 Subscribe / cancel / Load] --> Q[获取 mu；登记或移除订阅或读取快照；释放 mu]
+ R[cleanup] --> S[获取 mu；标记关闭并清空订阅；释放 mu]
+ S --> T[锁外取消轮询并停止全部 watcher]
+ T --> Z
 ```
 
-## 错误语义
+## HotReloadValue
 
-使用 `errors.Is` 判断稳定错误：
+`NewHotReloadValue[T](manager, key, defaults...)` 先登记订阅，再初始 Load，避免读取与登记之间遗漏更新。初始值仅通过 CAS 替换构造期占位快照；如果回调已经发布新值，则保留该值。订阅失败不执行 Load，初始 Load 失败会取消订阅并返回错误。它原子保存最近一次成功解码的值；业务解码错误记 WARN 并保留旧值，但无法报告来源健康状态。读取结果是共享只读对象，修改前须自行复制。版本只是成功回调次数，包含首次回放，不能用版本零判断初始化状态；首次回放后未观察到变化时不会增加；提供默认值后可从缺失 key 开始监听，后续新增配置会更新容器。
 
-- `ErrNotFound`：key 不存在且没有提供默认值。
-- `ErrManagerClosed`：cleanup 已经开始或完成。
-- `ErrWatcherStopped`：底层 watcher 永久终止；已有订阅收到终止错误，后续 Load 和 Subscribe 也返回该错误。
-- `ErrObserverOverloaded`：单个订阅队列写满，该订阅已经停止。
-
-更新时 Source 重载失败、JSON/YAML 解析失败或目标类型解码失败，会通过 observer 的 err 报告。可恢复错误不会终止订阅；Manager 保留最后一份有效快照，后续有效更新可以继续发布。
-
-## 占位符
-
-### 环境变量模板
-
-Manager 在每次构建快照时，对每个 `KeyValue.Key` 和 `KeyValue.Value` 原始文本执行一次 `$VAR` / `${VAR}` 替换，再解析 JSON/YAML 并合并配置。因此正文中的配置键和值均可使用模板，整数、布尔值等可以在格式解析前注入。
-
-使用 `github.com/compose-spec/compose-go/v2/template`（固定版本 v2.15.0），以 `os.LookupEnv` 提供环境变量。替换发生在 Source 返回原始 KeyValue 之后、格式解析及目标 Go/protobuf 类型解码之前。配置自身引用已移除，普通变量未设置时替换为空字符串。
-
-例如先在启动进程的环境中设置 `RESOURCE=primary`、`PORT=8080`、`ENABLED=true`，JSON 配置可写为：
-
-```json
-{"${RESOURCE}": {"port": ${PORT}, "enabled": $ENABLED}}
-```
-
-对应 YAML 模板：
-
-```yaml
-${RESOURCE}:
-  port: ${PORT}
-  enabled: $ENABLED
-```
-
-这是预处理模板，替换前不保证是合法 JSON/YAML，也不能直接交给 schema 校验器；替换后 `primary.port` 是整数，`primary.enabled` 是布尔值。字符串应按格式加引号，例如 `"host": "${HOST}"`；数字模板若加引号则仍是字符串，普通 Go 整数字段不会自动转换它。
-
-支持 Compose 的环境模板语法：
-
-| 模板 | 行为 |
-| --- | --- |
-| `$VAR` / `${VAR}` | 读取环境变量；未设置时为空 |
-| `${VAR:-default}` | 未设置或为空时使用 default |
-| `${VAR-default}` | 仅未设置时使用 default |
-| `${VAR:?描述}` | 未设置或为空时返回必填错误 |
-| `${VAR?描述}` | 仅未设置时返回必填错误 |
-| `${VAR:+value}` | 已设置且非空时使用 value，否则为空 |
-| `${VAR+value}` | 已设置时使用 value，否则为空 |
-| `$$` | 输出字面 `$`，例如 `$${VAR}` 输出 `${VAR}` |
-
-默认值可以嵌套，例如 `${PORT:-${DEFAULT_PORT:-8080}}`。必填描述也支持环境模板，应仅填写排障提示，避免引用凭据；它会进入上层错误报告。这里不执行 Shell 命令，不进行配置自身引用；从环境变量读出的值不会递归展开。`${VAR:default}` 不是默认值语法，会返回模板错误。
-
-- 未设置与空环境变量在 `:-` / `:?` 下等价，在 `-` / `?` 下不同；默认值和必填检查均在 JSON/YAML 解析前执行。
-- 原始文本替换不会自动转义或加引号。环境值中的引号、换行等须满足所在 JSON/YAML 位置的语法；注入值可以影响配置结构，只应使用受信任的环境变量。
-- 替换后的内容仍须是合法 JSON/YAML。未设置的 `"value": "${VAR}"` 会得到空字符串；`"value": ${VAR}` 会因 JSON 格式非法而失败。已设置为空的未加引号值也可能导致 JSON 失败或 YAML 解析成 null。原始文本替换避免的是模板被提前按数字等类型校验，并不取消最终类型约束。
-- 未指定 Format 的 KeyValue 在键替换后按点分路径展开，值仍是字符串；指定 Format 时 Key 是源标识，正文中的键决定配置路径。Format 自身不替换。
-- Source 原始键值不会被修改。初始加载与任意源更新构建快照时重新读取环境；单独改变环境不会触发通知，`Load` 只读取已发布快照。默认值对象不进行模板替换。
-- 模板非法、必填检查失败或替换后格式非法会使整个快照构建失败，即使对应值随后可能被高优先级源覆盖。首次失败释放源并返回错误；更新失败沿用 `Rejected configuration update` 日志和订阅错误通知，保留旧快照，后续有效更新可恢复。模板语法错误不携带完整配置正文；必填错误保留变量名和描述。
-
-配置源之间按环境替换后的键名精确合并；默认值与结构体字段合并时会兼容大小写、下划线、连字符和空白差异；业务 map（含 protobuf map）的键始终精确匹配，例如 `order_service` 与 `order-service` 是两个不同资源名。旧配置引用应改为部署时生成的实际值或环境变量，见 [迁移说明](../../MIGRATION_V2.md#移除配置自身引用)。
-
-file 和 Consul 适配器通过 `NewSources` 返回各自的底层源，由应用/Wire 按优先级组合后交给 `NewManager`。配置监听、重载和合并统一由 Manager 驱动。
-
-## 运行状态观测与过载处置
-
-`NewManager` 返回的实例还实现 `config.StatusReader`，不修改已有 Manager 接口，因此自定义
-Manager 不必为编译兼容而实现观测。`Status()` 返回独立副本，不包含配置值或原始错误信息：
-
-```go
-status := manager.(config.StatusReader).Status()
-// WatcherRunning / Closed：配置监听和生命周期状态。
-// Revision / AcceptedUpdates / RejectedUpdates / LastSuccess：快照接受状态。
-// Overloads：生命周期累计过载次数，订阅移除后仍保留。
-// Subscriptions：当前注册订阅的 key、Accepting、Pending、Running、RunningSince。
-```
-
-Revision 是本地快照序号，初始加载计为 1，不是配置中心的版本。LastErrorCode 是最近记录的
-错误类别（source_error、invalid_snapshot、watcher_stopped、observer_overloaded），后续成功发布
-会清空它；历史过载必须看累计 Overloads。Callbacks 和 CallbackDuration 包含首次同步回放和错误
-通知，表示已结束回调的次数及累计耗时，不表示业务应用成功，也不包含仍未结束回调的耗时。
-
-每个订阅最多接受 16 条待处理普通通知；过载时追加一条终止通知，因此 Pending 可达到 17。
-正在执行的回调阻塞时，Status 仍可读取 Accepting=false 和 Running=true，不依赖终止通知送达。
-cancel 或终止交付后订阅会移出列表；已经开始的回调仍需自行返回，列表不是进程 goroutine 清单。
-Manager 与各订阅分别采样，不保证所有字段来自同一个全局原子时刻。
-
-推荐保留现有“有界顺序投递，过载终止”契约：回调只做短时本地应用，避免慢 I/O；接入过载告警，
-必要时停止接入依赖该配置的新请求；确认旧回调已结束或重建受影响组件后再重新订阅，首次回放会拿到当前配置。旧回调仍在运行时
-直接重订阅，可能使旧回调晚到的写入覆盖新配置。不要无限自动
-重订阅来掩盖阻塞，也不要仅扩大队列。只保留最新值会丢弃中间版本，属于另一种契约，本实现不采用。
-
-指标接入见 [bootstrap 配置观测](../bootstrap/README.md#配置观测组装)。关键配置可通过 server 的
-ReadinessCheck 显式检查 WatcherRunning 和所关心订阅状态；框架不把任意可选订阅失败自动升级为
-全服务不可用。订阅已移除时也应按预期订阅数量判断，不能把空列表当作健康。
 
 ```mermaid
 flowchart TD
-    A([配置监听更新]) --> B{快照可接受?}
-    B -- 否 --> C[保留旧快照 记录拒绝类别与次数]
-    C --> D[错误通知或 ERROR Rejected configuration update]
-    B -- 是 --> E[Manager 锁内替换快照 递增序号和成功计数]
-    E --> F[释放 Manager 锁]
-    F --> G[订阅锁内入队]
-    G --> H{待处理队列已满?}
-    H -- 是 --> I[停止接受 追加终止通知 释放订阅锁]
-    I --> J[记录累计过载 ERROR observer.overloaded]
-    H -- 否 --> K[释放订阅锁 顺序执行回调]
-    K --> L{回调返回?}
-    L -- 否 --> M[回调仍运行 状态可独立采样]
-    L -- 是 --> N[锁内记录回调完成和耗时]
-    D --> O([等待后续更新或结束])
-    J --> O
-    M --> O
-    N --> O
-    P([并发 Status 或指标采集]) --> Q[Manager 锁内复制计数和订阅引用]
-    Q --> R[释放 Manager 锁 逐个获取并释放订阅锁]
-    R --> S([返回独立副本 不执行业务回调])
+ A([开始构造 HotReloadValue]) --> B[原子保存构造期占位快照]
+ B --> C{登记订阅成功?}
+ C -- 否 --> X([返回错误])
+ C -- 是 --> D[Load 初始值]
+ D --> E{加载成功?}
+ E -- 否 --> F[取消订阅]
+ F --> X
+ E -- 是 --> G{CAS 占位快照为初值成功?}
+ G -- 是 --> Z([返回容器及取消函数])
+ G -- 否 --> H[保留回调已发布的快照]
+ H --> Z
+ C -- 并发通知 --> I{通知解码成功?}
+ I -- 否 --> J[WARN Failed to update the subscribed configuration value；保留旧值]
+ I -- 是 --> K[原子读取共享快照及版本]
+ K --> L{CAS 发布通知值及递增版本成功?}
+ L -- 否 --> K
+ L -- 是 --> N([本次回调结束])
+ J --> N
 ```
-
-## 可运行的组合用例
-
-参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。

@@ -138,137 +138,6 @@ var _ interface {
 	ErrorName() string
 } = EndpointValidationError{}
 
-// Validate checks the field values on ModuleLog with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *ModuleLog) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on ModuleLog with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in ModuleLogMultiError, or nil
-// if none found.
-func (m *ModuleLog) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *ModuleLog) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Disable != nil {
-		// no validation rules for Disable
-	}
-
-	if m.Level != nil {
-
-		if _, ok := _ModuleLog_Level_InLookup[m.GetLevel()]; !ok {
-			err := ModuleLogValidationError{
-				field:  "Level",
-				reason: "value must be in list [debug DEBUG info INFO warn WARN error ERROR fatal FATAL]",
-			}
-			if !all {
-				return err
-			}
-			errors = append(errors, err)
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return ModuleLogMultiError(errors)
-	}
-
-	return nil
-}
-
-// ModuleLogMultiError is an error wrapping multiple validation errors returned
-// by ModuleLog.ValidateAll() if the designated constraints aren't met.
-type ModuleLogMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ModuleLogMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ModuleLogMultiError) AllErrors() []error { return m }
-
-// ModuleLogValidationError is the validation error returned by
-// ModuleLog.Validate if the designated constraints aren't met.
-type ModuleLogValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ModuleLogValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ModuleLogValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ModuleLogValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ModuleLogValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ModuleLogValidationError) ErrorName() string { return "ModuleLogValidationError" }
-
-// Error satisfies the builtin error interface
-func (e ModuleLogValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sModuleLog.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ModuleLogValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ModuleLogValidationError{}
-
-var _ModuleLog_Level_InLookup = map[string]struct{}{
-	"debug": {},
-	"DEBUG": {},
-	"info":  {},
-	"INFO":  {},
-	"warn":  {},
-	"WARN":  {},
-	"error": {},
-	"ERROR": {},
-	"fatal": {},
-	"FATAL": {},
-}
-
 // Validate checks the field values on Middleware with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -367,6 +236,116 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = MiddlewareValidationError{}
+
+// Validate checks the field values on Middleware_RequestDebug with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_RequestDebug) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_RequestDebug with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_RequestDebugMultiError, or nil if none found.
+func (m *Middleware_RequestDebug) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_RequestDebug) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.AcceptIncoming != nil {
+		// no validation rules for AcceptIncoming
+	}
+
+	if m.Propagate != nil {
+		// no validation rules for Propagate
+	}
+
+	if len(errors) > 0 {
+		return Middleware_RequestDebugMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_RequestDebugMultiError is an error wrapping multiple validation
+// errors returned by Middleware_RequestDebug.ValidateAll() if the designated
+// constraints aren't met.
+type Middleware_RequestDebugMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_RequestDebugMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_RequestDebugMultiError) AllErrors() []error { return m }
+
+// Middleware_RequestDebugValidationError is the validation error returned by
+// Middleware_RequestDebug.Validate if the designated constraints aren't met.
+type Middleware_RequestDebugValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_RequestDebugValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_RequestDebugValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_RequestDebugValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_RequestDebugValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_RequestDebugValidationError) ErrorName() string {
+	return "Middleware_RequestDebugValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Middleware_RequestDebugValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_RequestDebug.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_RequestDebugValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_RequestDebugValidationError{}
 
 // Validate checks the field values on Middleware_Metadata with the rules
 // defined in the proto definition for this message. If any rules are

@@ -1,0 +1,55 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
+package kratos_foundation_pb;
+import "pubg/jsonschema.proto";
+import "validate/validate.proto";
+
+// Logging 集中声明可热更新的模块和输出策略。固定字段通过 LOG_* 在启动期配置。
+// filter_keys 缺失继承 env，显式空列表清空；实际读取使用保留列表存在性的 log.RuntimeConfig。
+message Logging {
+  repeated string filter_keys = 1;
+  optional LogPolicy std = 2;
+  optional LogFilePolicy file = 3;
+  // 按顺序首个命中；过滤字段与根及输出端规则累加。
+  repeated LogModule modules = 4;
+}
+
+// LogPolicy 覆盖标准输出策略；省略字段继承 env。
+message LogPolicy {
+  optional string level = 1;
+  optional bool disable = 2;
+  repeated string filter_keys = 3;
+}
+
+// LogFilePolicy 覆盖文件输出及轮转策略；env 仅提供初始值。
+message LogFilePolicy {
+  optional string level = 1;
+  repeated string filter_keys = 2;
+  optional bool enable = 3;
+  optional string path = 4;
+  optional LogRotatingPolicy rotating = 5;
+}
+
+// LogRotatingPolicy 未指定字段继承 env；启用轮转时 max_size 必须为正。
+message LogRotatingPolicy {
+  optional bool disable = 1;
+  optional int32 max_size = 2;
+  optional int32 max_file_age = 3;
+  optional int32 max_files = 4;
+  optional bool local_time = 5;
+  optional bool compress = 6;
+}
+
+// LogModule 按模块精确匹配或末尾 * 前缀匹配；* 匹配全部模块。
+message LogModule {
+ string module = 1 [(validate.rules).string.min_len = 1];
+ // 高于 WithLevel，低于请求 debug；省略继承实例或 env 级别。
+ optional string level = 2 [
+  (pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}},
+  (validate.rules).string = {in: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}
+ ];
+ // 省略或 false 不额外禁用；true 不能被请求 debug 解除。
+ optional bool disable = 3;
+ // 追加过滤规则；空列表不清除根、实例或输出端规则。
+ repeated string filter_keys = 4;
+}

@@ -61,32 +61,22 @@ func deadlineFields() []any {
 			}
 			return info.Source
 		}),
-		"deadline.remaining_ms", kratoslog.Valuer(func(ctx context.Context) any {
+		"deadline.remaining", kratoslog.Valuer(func(ctx context.Context) any {
 			effective, ok := ctx.Deadline()
 			if !ok {
 				return nil
 			}
-			return time.Until(effective).Milliseconds()
+			return time.Until(effective).String()
 		}),
-		"deadline.fallback_ms", deadlineDuration(func(info deadline.Info) time.Duration {
-			return info.FallbackTimeout
-		}),
-		"deadline.max_ms", deadlineDuration(func(info deadline.Info) time.Duration {
-			return info.MaxTimeout
-		}),
-		"deadline.min_budget_ms", deadlineDuration(func(info deadline.Info) time.Duration {
-			return info.MinBudget
-		}),
-	}
-}
-
-func deadlineDuration(value func(deadline.Info) time.Duration) kratoslog.Valuer {
-	return func(ctx context.Context) any {
-		info, ok := deadline.InfoFromContext(ctx)
-		if !ok {
-			return nil
-		}
-		return value(info).Milliseconds()
+		//"deadline.fallback_ms", deadlineDuration(func(info deadline.Info) time.Duration {
+		//	return info.FallbackTimeout
+		//}),
+		//"deadline.max_ms", deadlineDuration(func(info deadline.Info) time.Duration {
+		//	return info.MaxTimeout
+		//}),
+		//"deadline.min_budget_ms", deadlineDuration(func(info deadline.Info) time.Duration {
+		//	return info.MinBudget
+		//}),
 	}
 }
 
@@ -97,25 +87,24 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 		return func(ctx context.Context, req any) (any, error) {
 			started := time.Now()
 			reply, err := next(ctx, req)
-			kind := "server"
+			component := "server"
 			info, ok := transport.FromServerContext(ctx)
 			if client {
-				kind = "client"
+				component = "client"
 				info, ok = transport.FromClientContext(ctx)
 			}
-			var operation, component string
+			var operation, kind string
 			if ok {
 				operation = info.Operation()
-				component = info.Kind().String()
+				kind = info.Kind().String()
 			}
 			logger.WithContext(ctx).With(
-				"function", "accessLog",
-				"kind", kind,
-				"component", component,
-				"operation", operation,
+				"component", component, // server/client
+				"kind", kind, // grpc/http
+				"operation", operation, // endpoint
 				"code", foundationerrors.Code(foundationerrors.Normalize(err)),
 				"reason", foundationerrors.Reason(err),
-				"latency", time.Since(started).Seconds(),
+				"latency", time.Since(started).String(),
 			).Info("Request completed")
 			return reply, err
 		}

@@ -127,24 +127,6 @@ func (m failingRuntimeMeter) Int64UpDownCounter(
 	return m.Meter.Int64UpDownCounter(jobRunningInstrumentName)
 }
 
-type failingModuleLogger struct {
-	log.Logger
-	failAt int
-	calls  int
-	err    error
-}
-
-func (l *failingModuleLogger) WithModuleConfig(
-	module string,
-	config log.ModuleConfig,
-) (log.Logger, error) {
-	l.calls++
-	if l.calls == l.failAt {
-		return nil, l.err
-	}
-	return l.Logger.WithModuleConfig(module, config)
-}
-
 func (p runtimeTracingProvider) Disabled() bool { return p.disabled }
 
 func (p runtimeTracingProvider) TracerProvider() trace.TracerProvider { return p.provider }
@@ -200,41 +182,6 @@ func TestNewManagerPropagatesMetricsInitializationFailure(t *testing.T) {
 			}
 			if metricsProvider.calls != 1 {
 				t.Fatalf("metrics provider calls = %d, want 1", metricsProvider.calls)
-			}
-		})
-	}
-}
-
-func TestNewManagerPropagatesModuleLoggerConfigurationFailures(t *testing.T) {
-	for _, test := range []struct {
-		name   string
-		failAt int
-		want   string
-	}{
-		{name: "job logger", failAt: 1, want: "configure job logger"},
-		{name: "cron logger", failAt: 2, want: "configure cron logger"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			observability := newRuntimeObservability(t)
-			wantErr := errors.New("invalid module configuration")
-			logger := &failingModuleLogger{
-				Logger: observability.logger,
-				failAt: test.failAt,
-				err:    wantErr,
-			}
-			spec := NewSpec().Option(WithLogging(false)).(*Spec)
-			manager, err := NewManager(
-				logger,
-				spec,
-				observability.tracingProvider,
-				observability.metricsProvider,
-				nil,
-			)
-			if manager != nil || !errors.Is(err, wantErr) || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("NewManager(logger failure) = (%v, %v)", manager, err)
-			}
-			if logger.calls != test.failAt {
-				t.Fatalf("module logger calls = %d, want %d", logger.calls, test.failAt)
 			}
 		})
 	}

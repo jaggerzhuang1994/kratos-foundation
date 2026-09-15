@@ -7,7 +7,7 @@
 # Duration 使用 protobuf 秒字符串（如 10s、0.2s、0s），不能写 10m 或裸数字。
 # 地址、连接名及凭据均为示例，按实际环境替换；仅在应用组装对应组件后生效。
 # 本文件不自动加载；由应用通过 contrib/config/file 或其他配置源显式加载。
-# 热更新范围：app.stop_timeout、server.middleware、client.clients、tracing.sampler、数据库连接池。
+# 热更新范围：log.filter_keys/modules/std/file、app.stop_timeout、server.middleware、client.clients、tracing.sampler、数据库连接池。
 # 其余字段需重启；LOG_*、Consul 连接参数以及 Job/Queue Spec 见 README.md。
 #
 
@@ -15,9 +15,11 @@
 # 应用生命周期配置
 # =============================================================================
 app:
+  # 注册实例；省略或为空时默认 default，必须配置对应实例。
+  registry: default
   # 注册中心超时时间 [默认: 10s]
   registrar_timeout: 10s
-  # 停机超时时间，必须大于 server.stop_delay，支持热更新 [默认: 30s]
+  # 停机超时时间，建议大于 server.stop_delay 并预留清理时间，支持热更新 [默认: 30s]
   stop_timeout: 30s
   # 服务注册端点；省略时使用 Server 导出的业务端点 [需重启]
   # endpoints:
@@ -25,44 +27,9 @@ app:
   #     host: my-service.example.com:8000
   #   - scheme: grpc
   #     host: my-service.example.com:9000
-  # 注册到 Kratos ServiceInstance.Metadata；与 registry.tags 分开配置 [需重启]
+  # 注册到 Kratos ServiceInstance.Metadata；与 registry.instances.<name>.options.registry.tags 分开配置 [需重启]
   # metadata:
   #   version: v1.0.0
-
-# =============================================================================
-# 链路追踪配置
-# =============================================================================
-tracing:
-  # 是否禁用 [默认: local 环境为 true，其他环境为 false；此处显式启用]
-  disable: false
-  # 导出器配置
-  exporter:
-    # OTLP HTTP 端点 [默认: http://localhost:4318/v1/traces]
-    endpoint_url: http://localhost:4318/v1/traces
-    # 压缩方式: NO, GZIP [默认: NO]
-    compression: "NO"
-    # 导出超时时间 [默认: 10s]
-    timeout: 10s
-    # 自定义 Headers
-    # headers:
-    #   Authorization: Bearer xxx
-    # 重试配置
-    retry:
-      # 是否启用重试 [默认: true]
-      enabled: true
-      # 初始重试间隔 [默认: 5s]
-      initial_interval: 5s
-      # 最大重试间隔 [默认: 30s]
-      max_interval: 30s
-      # 最大重试总时长 [默认: 60s]
-      max_elapsed_time: 60s
-  # 采样器配置 [热更新]；构造时禁用 Provider 后，不能仅靠修改采样器启用追踪
-  sampler:
-    # 所有策略都会继承父 Span 的采样决定；此处只控制本服务创建的根 trace
-    # 根 trace 采样策略: RATIO, ALWAYS, NEVER [默认: RATIO]
-    sample: RATIO
-    # RATIO 策略的采样率 (0.0-1.0) [默认: 0.05 = 5%]
-    ratio: 0.05
 
 # =============================================================================
 # 服务器配置
@@ -91,6 +58,9 @@ server:
         - prefix: /api.v1.Upload
           fallback_timeout: 60s
           max_timeout: 60s
+    # 请求 debug：默认接收上游标记，可显式关闭 [默认: true；热更新]
+    request_debug:
+      accept_incoming: true
     # Metadata 中间件
     metadata:
       # 是否禁用 [默认: false]
@@ -191,31 +161,83 @@ server:
     disable_reflection: false
 
 # =============================================================================
-# 服务发现配置（由 contrib/discovery/consul 使用；需重启）
+# 链路追踪配置
 # =============================================================================
-# Consul 地址/认证在配置 Manager 之前通过环境变量或 pkg/consul.Options 提供。
-discovery:
-  # 获取服务的超时，必须为正数 [默认: 10s]
-  timeout: 10s
-  # 数据中心模式: SINGLE, MULTI [默认: SINGLE]
-  dc: SINGLE
+tracing:
+  # 是否禁用 [默认: local 环境为 true，其他环境为 false；此处显式启用]
+  disable: false
+  # 导出器配置
+  exporter:
+    # OTLP HTTP 端点 [默认: http://localhost:4318/v1/traces]
+    endpoint_url: http://localhost:4318/v1/traces
+    # 压缩方式: NO, GZIP [默认: NO]
+    compression: "NO"
+    # 导出超时时间 [默认: 10s]
+    timeout: 10s
+    # 自定义 Headers
+    # headers:
+    #   Authorization: Bearer xxx
+    # 重试配置
+    retry:
+      # 是否启用重试 [默认: true]
+      enabled: true
+      # 初始重试间隔 [默认: 5s]
+      initial_interval: 5s
+      # 最大重试间隔 [默认: 30s]
+      max_interval: 30s
+      # 最大重试总时长 [默认: 60s]
+      max_elapsed_time: 60s
+  # 采样器配置 [热更新]；构造时禁用 Provider 后，不能仅靠修改采样器启用追踪
+  sampler:
+    # 所有策略都会继承父 Span 的采样决定；此处只控制本服务创建的根 trace
+    # 根 trace 采样策略: RATIO, ALWAYS, NEVER [默认: RATIO]
+    sample: RATIO
+    # RATIO 策略的采样率 (0.0-1.0) [默认: 0.05 = 5%]
+    ratio: 0.05
+
+# 日志动态策略：根 level/disable/filter_empty/time_format/msg_key 仅从 LOG_* 启动读取。
+# 动态字段缺失继承 env；filter_keys: [] 清空该层过滤；配置源省略字段可能保留旧值。
+log:
+  filter_keys: [password, token]
+  # 按顺序首个匹配，精确规则通常放在宽泛规则之前。
+  modules:
+    - module: database/gorm
+      level: warn
+      filter_keys: [sql.secret*]
+    - module: "database*"
+      level: info
+      disable: false
+  std:
+    disable: false
+  file:
+    # 默认由 LOG_FILE_ENABLE（默认 false）决定；此处显式关闭。
+    enable: false
+    # 启用后也支持热切换 path 与 rotating；失败保留旧输出。
+    # path: ./app.log
+    # rotating:
+    #   max_size: 100
+    #   max_file_age: 7
+    #   max_files: 10
+    #   compress: true
 
 # =============================================================================
-# 服务注册配置（由 contrib/registry/consul 使用；需重启）
+# 具名注册与发现驱动（需重启；业务需空导入 contrib/registry/consul）
+# 所有 Consul 实例共享由 CONSUL_* env 构造的进程客户端，不接受 options.connection。
 # =============================================================================
 registry:
-  # 禁用 TCP 健康检查 [默认: false]
-  disable_health_check: false
-  # 禁用 TTL 心跳 [默认: false]
-  disable_heartbeat: false
-  # 健康检查间隔；internal 是保留的历史字段拼写，值需为至少一秒的整秒 [默认: 10s]
-  healthcheck_internal: 10s
-  # 持续不健康后的注销等待时间，值需为至少一秒的整秒 [默认: 600s]
-  deregister_critical_service_after: 600s
-  # Consul 服务实例标签，用于 Consul 侧分类、查询和 tag 过滤。
-  # 不会自动成为 Kratos ServiceInstance.Metadata。
-  tags:
-    - region=local
+  instances:
+    default:
+      driver: consul
+      options:
+        registry:
+          disable_health_check: false
+          disable_heartbeat: false
+          healthcheck_internal: 10s
+          deregister_critical_service_after: 600s
+          tags: [region=local]
+        discovery:
+          timeout: 10s
+          dc: SINGLE
 
 # =============================================================================
 # 数据库配置
@@ -331,16 +353,6 @@ database:
       #   - Threads_connected
       #   - Threads_running
 
-  # 模块日志配置
-  # log:
-  #   # 禁用该模块日志 [默认: false]
-  #   disable: false
-  #   # 不填写时继承注入 Logger 的级别
-  #   level: info
-  #   # 过滤键支持尾部 * 前缀匹配
-  #   filter_keys:
-  #     - secret.*
-
 # =============================================================================
 # Redis 配置
 # =============================================================================
@@ -435,16 +447,6 @@ redis:
     # 是否禁用 [默认: false]
     disable: false
 
-  # 模块日志配置
-  # log:
-  #   # 禁用该模块日志 [默认: false]
-  #   disable: false
-  #   # 不填写时继承注入 Logger 的级别
-  #   level: info
-  #   # 过滤键支持尾部 * 前缀匹配
-  #   filter_keys:
-  #     - secret.*
-
 # =============================================================================
 # Kafka 连接配置
 # =============================================================================
@@ -486,14 +488,6 @@ kafka:
         fetch_max_bytes: 52428800
         fetch_max_wait: 5s
 
-  # log:
-  #   # 禁用该模块日志 [默认: false]
-  #   disable: false
-  #   # 不填写时继承注入 Logger 的级别
-  #   level: info
-  #   # 过滤键支持尾部 * 前缀匹配
-  #   filter_keys:
-  #     - secret.*
 
 # =============================================================================
 # OSS 对象存储配置
@@ -531,6 +525,8 @@ client:
       # 支持服务发现: discovery:///service-name
       # 支持直连: host:port
       target: discovery:///user-service
+      # 发现实例；省略或为空时默认 default，直连目标不使用此字段。
+      discovery: default
       # 中间件配置
       middleware:
         # 调用预算配置
@@ -551,6 +547,9 @@ client:
               fallback_timeout: 2s
               max_timeout: 2s
               min_budget: 0.020s
+        # 请求 debug：是否向该下游传播 Context 标记 [默认: true；对外服务可关闭]
+        request_debug:
+          propagate: true
         # Metadata 配置
         metadata:
           # 是否禁用 [默认: false]
@@ -596,13 +595,3 @@ client:
     #       max_timeout: 10s
     #     circuit_breaker:
     #       enable: true
-
-  # 模块日志配置（仅构造时读取；变更记录需重启告警，不阻止 clients 更新）
-  # log:
-  #   # 禁用该模块日志 [默认: false]
-  #   disable: false
-  #   # 不填写时继承注入 Logger 的级别
-  #   level: info
-  #   # 过滤键支持尾部 * 前缀匹配
-  #   filter_keys:
-  #     - secret.*

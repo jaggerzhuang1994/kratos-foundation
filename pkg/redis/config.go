@@ -21,7 +21,6 @@ func defaultConfig() componentConfig {
 	return &config_pb.Redis{
 		Default:     proto.String("default"),
 		Connections: nil,
-		Log:         nil,
 		Tracing: &config_pb.RedisTracing{
 			DbStatement:   proto.Bool(true),
 			CallerEnabled: proto.Bool(true),
@@ -47,9 +46,6 @@ func loadConfig(manager config.Manager) (componentConfig, error) {
 func validateConfig(config componentConfig) error {
 	if config == nil {
 		return fmt.Errorf("config is nil")
-	}
-	if err := config.GetLog().ValidateAll(); err != nil {
-		return fmt.Errorf("module log: %w", err)
 	}
 	defaultName := strings.TrimSpace(config.GetDefault())
 	if defaultName == "" {

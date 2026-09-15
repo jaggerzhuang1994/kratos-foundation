@@ -18,7 +18,7 @@ func New(config Config) (logger log.Logger, cleanup func(), err error) {
 		log.EnvFilterKeys: strings.Join(config.FilterKeys, ","), log.EnvTimeFormat: config.TimeFormat,
 		log.EnvStdDisable: strconv.FormatBool(config.Std.Disable), log.EnvStdLevel: config.Std.Level.String(),
 		log.EnvStdFilterKeys: strings.Join(config.Std.FilterKeys, ","),
-		log.EnvFileDisable:   strconv.FormatBool(config.File.Disable), log.EnvFileLevel: config.File.Level.String(),
+		log.EnvFileEnable:    strconv.FormatBool(!config.File.Disable), log.EnvFileLevel: config.File.Level.String(),
 		log.EnvFileFilterKeys: strings.Join(config.File.FilterKeys, ","), log.EnvFilePath: config.File.Path,
 		log.EnvFileRotatingDisable:    strconv.FormatBool(config.File.Rotating.Disable),
 		log.EnvFileRotatingMaxSize:    strconv.Itoa(config.File.Rotating.MaxSize),

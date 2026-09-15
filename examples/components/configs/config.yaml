@@ -55,3 +55,9 @@ oss:
         region: cn-hangzhou
         access_key_id: local-demo-only
         access_key_secret: local-demo-only
+
+# App 和发现客户端默认选择此实例；本地无 Consul 时禁用驱动。
+registry:
+  instances:
+    default:
+      driver: consul

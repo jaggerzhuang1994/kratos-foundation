@@ -1,10 +1,11 @@
-// Package consul 把共享 Consul 客户端适配为 Kratos 服务注册接口。
+// Package consul 注册同时提供服务注册与发现的 Consul 驱动。
 package consul
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"maps"
 	"net"
 	"net/url"
@@ -13,25 +14,21 @@ import (
 
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/hashicorp/consul/api"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
-	baseconsul "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/consul"
+
+	baseconsul "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// NewRegistry 把共享 Consul 客户端适配为 Kratos 注册实现。
+// newRegistrar 把共享 Consul 客户端适配为 Kratos 注册实现。
 //
-// nil 客户端表示注册功能已禁用，此时不要求配置管理器存在。返回值不拥有客户端。
-func NewRegistry(
+// 客户端由驱动创建并拥有，调用方不单独构造此适配器。
+func newRegistrar(
 	logger log.Logger,
-	config config.Manager,
+	config config.Reader,
 	client baseconsul.Client,
-) (registry.Registrar, error) {
+) (*registrar, error) {
 	logger = logger.WithModule("registry").With("driver", "consul")
 
-	if client == nil {
-		logger.Warn("registry not loaded: consul client not initialized")
-		return nil, nil
-	}
 	componentConfig, err := loadConfig(config)
 	if err != nil {
 		return nil, err

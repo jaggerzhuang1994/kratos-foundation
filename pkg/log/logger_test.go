@@ -17,6 +17,7 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"google.golang.org/protobuf/proto"
 )
 
 type capturedLogRecord struct {
@@ -45,7 +46,7 @@ func TestFilteredLogHelpersDoNotFormatMessages(t *testing.T) {
 		{"Error", func(l Logger, value any) { l.Error(value) }},
 		{"Errorf", func(l Logger, value any) { l.Errorf("%s", value) }},
 	}
-	for _, policy := range []string{"root", "shared", "module", "disabled"} {
+	for _, policy := range []string{"root", "module", "disabled"} {
 		t.Run(policy, func(t *testing.T) {
 			shared := &sharedState{}
 			shared.custom.Store(&customState{})
@@ -54,16 +55,13 @@ func TestFilteredLogHelpersDoNotFormatMessages(t *testing.T) {
 			switch policy {
 			case "root":
 				base.config.level = kratoslog.LevelFatal
-			case "shared":
-				shared.WithLevel(kratoslog.LevelFatal)
 			case "module", "disabled":
-				var err error
 				level := "fatal"
 				if policy == "disabled" {
 					level = "debug"
 				}
-				l, err = base.WithModuleConfig("test", testModuleConfig{level: level, disable: policy == "disabled"})
-				if err != nil {
+				l = base.WithModule("test")
+				if err := shared.applyRuntimeConfig(&RuntimeConfig{Modules: []ModulePolicy{{Module: "test", Level: &level, Disable: proto.Bool(policy == "disabled")}}}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -103,10 +101,10 @@ func TestLoggerHelperMethodsEmitExpectedLevelsAndPayloads(t *testing.T) {
 	base := &configState{
 		level:  kratoslog.LevelDebug,
 		msgKey: defaultMsgKey,
-		output: &outputLogger{output: loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
+		output: loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
 			records = append(records, capturedLogRecord{level: level, keyvals: append([]any(nil), keyvals...)})
 			return nil
-		})},
+		}),
 	}
 	shared.custom.Store(&customState{})
 	logger := &logger{shared: shared, config: base}
@@ -145,7 +143,7 @@ func TestLoggerHelperMethodsEmitExpectedLevelsAndPayloads(t *testing.T) {
 	}
 }
 
-func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
+func TestDerivedLoggerAppliesContextModulePolicyAndFilters(t *testing.T) {
 	var mu sync.Mutex
 	var written []any
 	shared := &sharedState{}
@@ -153,30 +151,27 @@ func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 		level:       kratoslog.LevelInfo,
 		filterEmpty: false,
 		msgKey:      defaultMsgKey,
-		output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, keyvals ...any) error {
+		output: loggerFunc(func(_ kratoslog.Level, keyvals ...any) error {
 			mu.Lock()
 			defer mu.Unlock()
 			written = append([]any(nil), keyvals...)
 			return nil
-		})},
+		}),
 	}
 	shared.custom.Store(&customState{})
-	shared.WithFilterEmpty(true)
+	base.filterEmpty = true
 	shared.WithFilterKeys("global.secret")
 	shared.WithKV("global", "value")
-	shared.WithTimeFormat("2006")
-	shared.WithMsgKey("message")
+	base.timeFormat = "2006"
+	base.msgKey = "message"
 	ctx := WithKv(context.Background(), "request.id", "r1")
 	contextCopy := kvFromCtx(ctx)
 	contextCopy[1] = "mutated"
 	if kvFromCtx(ctx)[1] != "r1" {
 		t.Fatal("kvFromCtx returned aliased state")
 	}
-	derived, err := (&logger{shared: shared, config: base}).WithModuleConfig("orders", testModuleConfig{
-		level:      "debug",
-		filterKeys: []string{"module.secret"},
-	})
-	if err != nil {
+	derived := (&logger{shared: shared, config: base}).WithModule("orders")
+	if err := shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: []string{"global.secret"}, Modules: []ModulePolicy{{Module: "orders", Level: proto.String("debug"), FilterKeys: []string{"module.secret"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	derived = derived.
@@ -205,7 +200,7 @@ func TestDerivedLoggerAppliesContextModuleOverrideAndFilters(t *testing.T) {
 		}
 	}
 	// 派生级别优先于共享级别，提前过滤不能误丢允许输出的消息。
-	shared.WithLevel(kratoslog.LevelFatal)
+	base.level = kratoslog.LevelFatal
 	probe := &formattingProbe{}
 	derived.Debugf("%s", probe)
 	if probe.calls != 1 || !containsLogValue(written, "payload") {
@@ -221,41 +216,6 @@ func containsLogValue(keyvals []any, want any) bool {
 		}
 	}
 	return false
-}
-
-type testModuleConfig struct {
-	disable    bool
-	level      string
-	filterKeys []string
-}
-
-func (c testModuleConfig) GetDisable() bool { return c.disable }
-
-func (c testModuleConfig) GetLevel() string { return c.level }
-
-func (c testModuleConfig) GetFilterKeys() []string { return c.filterKeys }
-
-func TestWithModuleConfigRejectsInvalidInput(t *testing.T) {
-	l := &logger{}
-	tests := []struct {
-		name   string
-		module string
-		config ModuleConfig
-	}{
-		{name: "empty module", module: ""},
-		{name: "module surrounding whitespace", module: " orders "},
-		{name: "invalid level", module: "orders", config: testModuleConfig{level: "verbose"}},
-		{name: "empty filter key", module: "orders", config: testModuleConfig{filterKeys: []string{""}}},
-		{name: "filter key surrounding whitespace", module: "orders", config: testModuleConfig{filterKeys: []string{" token"}}},
-		{name: "duplicate filter key", module: "orders", config: testModuleConfig{filterKeys: []string{"token", "token"}}},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if _, err := l.WithModuleConfig(test.module, test.config); err == nil {
-				t.Fatal("WithModuleConfig() error = nil, want validation error")
-			}
-		})
-	}
 }
 
 func TestWithModulePanicsForInvalidConstant(t *testing.T) {
@@ -298,7 +258,7 @@ func TestPublicLoggerConstructsLogger(t *testing.T) {
 	}
 }
 
-func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
+func TestPublicLoggerAppliesContextModulesAndRuntimeUpdate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "foundation.log")
 	config := envConfig{
 		Level:      kratoslog.LevelInfo,
@@ -325,12 +285,12 @@ func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 	if got := kvFromCtx(ctx); len(got) != 4 || got[1] != "r1" || got[3] != "acme" {
 		t.Fatalf("context fields were not appended and copied: %#v", got)
 	}
-	shared.WithLevel(kratoslog.LevelDebug)
-	shared.WithFilterEmpty(true)
+	rootLogger.(*logger).config.level = kratoslog.LevelDebug
+	rootLogger.(*logger).config.filterEmpty = true
 	shared.WithFilterKeys("secret")
 	shared.WithKV("global", "value")
-	shared.WithTimeFormat("2006-01-02")
-	shared.WithMsgKey("message")
+	rootLogger.(*logger).config.timeFormat = "2006-01-02"
+	rootLogger.(*logger).config.msgKey = "message"
 	logger := rootLogger.
 		WithModule("orders").
 		WithContext(ctx).
@@ -350,7 +310,7 @@ func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 		t.Fatalf("log filters were not applied: %s", line)
 	}
 
-	shared.WithLevel(kratoslog.LevelError)
+	logger = logger.WithLevel(kratoslog.LevelError)
 	before := len(written)
 	logger.Info("filtered")
 	written, err = os.ReadFile(path)
@@ -358,7 +318,7 @@ func TestPublicLoggerAppliesContextOverridesAndRuntimeUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(written) != before {
-		t.Fatalf("runtime level update did not filter info log: %s", written[before:])
+		t.Fatalf("instance level override did not filter info log: %s", written[before:])
 	}
 }
 
@@ -408,16 +368,16 @@ func TestLoggerFatalHelperProcess(t *testing.T) {
 	base := &configState{
 		level:  kratoslog.LevelDebug,
 		msgKey: defaultMsgKey,
-		output: &outputLogger{output: loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
+		output: &outputLogger{preparedOutput: &preparedOutput{output: loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
 			_, err := fmt.Fprintf(os.Stderr, "level=%s keyvals=%v\n", level, keyvals)
 			return err
-		})},
+		})}},
 	}
 	shared.custom.Store(&customState{})
 	logger := &logger{shared: shared, config: base}
 
 	if strings.HasPrefix(mode, "disabled-") {
-		logger.disabled = true
+		base.disabled = true
 		mode = strings.TrimPrefix(mode, "disabled-")
 	}
 	switch mode {
@@ -445,7 +405,7 @@ func setSharedLogEnvironment(t *testing.T, path string) {
 	clearEnvironment(t, logEnvironmentKeys...)
 	t.Setenv(EnvLevel, "info")
 	t.Setenv(EnvStdDisable, "true")
-	t.Setenv(EnvFileDisable, "false")
+	t.Setenv(EnvFileEnable, "true")
 	t.Setenv(EnvFilePath, path)
 	t.Setenv(EnvFileRotatingDisable, "true")
 }
@@ -455,10 +415,10 @@ func TestLoggerDeduplicatesCompleteKeyvalsBeforeOutput(t *testing.T) {
 	config := &configState{
 		level:  kratoslog.LevelDebug,
 		msgKey: defaultMsgKey,
-		output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, keyvals ...any) error {
+		output: &outputLogger{preparedOutput: &preparedOutput{output: loggerFunc(func(_ kratoslog.Level, keyvals ...any) error {
 			writtenKeyvals = append([]any(nil), keyvals...)
 			return nil
-		})},
+		})}},
 	}
 	custom := &customState{kv: []any{"request.id", "custom"}}
 	shared := &sharedState{}
@@ -505,8 +465,8 @@ func TestLoggerInstancesOwnOutputsAndShareSettings(t *testing.T) {
 	}
 	defer releaseSecond()
 	derived := first.WithModule("worker")
-	WithKV("shared_field", "before")
-	WithFilterEmpty(true)
+	processState.WithKV("shared_field", "before")
+
 	first.Infow("msg", "first", "empty_field", "")
 	second.Infow("msg", "second", "empty_field", "")
 	releaseFirst()
@@ -516,9 +476,9 @@ func TestLoggerInstancesOwnOutputsAndShareSettings(t *testing.T) {
 			t.Fatalf("closed instance write = %v, want os.ErrClosed", err)
 		}
 	}
-	WithKV("shared_field", "after")
+	processState.WithKV("shared_field", "after")
 	second.Info("still-open")
-	WithLevel(kratoslog.LevelError)
+	second = second.WithLevel(kratoslog.LevelError)
 	second.Info("filtered")
 	releaseSecond()
 	for path, want := range map[string][]string{
@@ -538,9 +498,7 @@ func TestLoggerInstancesOwnOutputsAndShareSettings(t *testing.T) {
 			t.Fatalf("unexpected write: %s", data)
 		}
 	}
-	if processState.custom.Load().level == nil || *processState.custom.Load().level != kratoslog.LevelError {
-		t.Fatal("instance cleanup reset shared settings")
-	}
+
 	// 创建后续实例不会重新打开已关闭实例的输出，也不清除共享设置。
 	t.Setenv(EnvFilePath, filepath.Join(t.TempDir(), "third.log"))
 	third, cleanup, err := NewLogger()
@@ -596,7 +554,7 @@ func TestLoggerConcurrentWritesAndSharedUpdates(t *testing.T) {
 		defer workers.Done()
 		<-start
 		for i := range 100 {
-			WithKV("revision", i)
+			processState.WithKV("revision", i)
 		}
 	}()
 	close(start)
@@ -649,25 +607,6 @@ func TestLoggerCleanupReleasesRotationWorkers(t *testing.T) {
 	}
 }
 
-func TestBuildCacheDoesNotPublishStaleSharedSettings(t *testing.T) {
-	shared := &sharedState{}
-	old := &customState{version: 1}
-	current := &customState{version: 2}
-	shared.custom.Store(current)
-	l := &logger{shared: shared, config: &configState{
-		output: &outputLogger{output: loggerFunc(func(kratoslog.Level, ...any) error { return nil })},
-	}}
-	if !l.buildCache(current) {
-		t.Fatal("current settings were rejected")
-	}
-	if l.buildCache(old) {
-		t.Fatal("stale settings were accepted")
-	}
-	if l.cache.customVersion != current.version {
-		t.Fatalf("cache version = %d", l.cache.customVersion)
-	}
-}
-
 // TestIntegrationLoggerModulePolicies 经环境构造与真实文件输出，验证两层级别及模块隔离。
 func TestIntegrationLoggerModulePolicies(t *testing.T) {
 	previous := processState.custom.Load()
@@ -693,8 +632,12 @@ func TestIntegrationLoggerModulePolicies(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(cleanup)
-			module, err := root.WithModuleConfig("orders", testModuleConfig{level: test.moduleLevel, disable: test.disabled})
-			if err != nil {
+			module := root.WithModule("orders")
+			var level *string
+			if test.moduleLevel != "" {
+				level = &test.moduleLevel
+			}
+			if err := ApplyRuntimeConfig(&RuntimeConfig{Modules: []ModulePolicy{{Module: "orders", Level: level, Disable: &test.disabled}}}); err != nil {
 				t.Fatal(err)
 			}
 			module.Debug("debug-event")
@@ -738,9 +681,9 @@ func TestIntegrationLoggerRequestFields(t *testing.T) {
 	}
 	t.Cleanup(cleanup)
 	type requestKey struct{}
-	WithKV("request_id", "global")
-	module, err := root.WithModuleConfig("orders", testModuleConfig{filterKeys: []string{"module_secret"}})
-	if err != nil {
+	processState.WithKV("request_id", "global")
+	module := root.WithModule("orders")
+	if err := ApplyRuntimeConfig(&RuntimeConfig{Modules: []ModulePolicy{{Module: "orders", FilterKeys: []string{"module_secret"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	module = module.With("request_id", "fixed").WithFilterKeys("local_secret")
@@ -857,39 +800,39 @@ func TestCallerAcrossLoggingEntrypoints(t *testing.T) {
 			return line + 1
 		}},
 		{"global", func(l Logger) int {
-			kratoslog.SetLogger(l)
+			SetLogger(l)
 			_, _, line, _ := runtime.Caller(0)
 			kratoslog.Info("message")
 			return line + 1
 		}},
 		{"globalContext", func(l Logger) int {
-			kratoslog.SetLogger(l)
+			SetLogger(l)
 			_, _, line, _ := runtime.Caller(0)
 			kratoslog.Context(context.Background()).Info("message")
 			return line + 1
 		}},
 		{"GetLogger", func(l Logger) int {
-			kratoslog.SetLogger(l)
+			SetLogger(l)
 			_, _, line, _ := runtime.Caller(0)
 			_ = kratoslog.GetLogger().Log(kratoslog.LevelInfo, "msg", "message")
 			return line + 1
 		}},
 	} {
 		t.Run(entry.name, func(t *testing.T) {
-			previous := kratoslog.GetLogger()
-			defer kratoslog.SetLogger(previous)
+			previous := GetLogger()
+			defer SetLogger(previous)
 			shared := &sharedState{}
 			shared.custom.Store(&customState{})
 			var caller any
 			l := &logger{shared: shared, config: &configState{msgKey: defaultMsgKey,
-				output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
+				output: &outputLogger{preparedOutput: &preparedOutput{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
 					for i := 0; i+1 < len(kv); i += 2 {
 						if kv[i] == CallerKey {
 							caller = kv[i+1]
 						}
 					}
 					return nil
-				})}}}
+				})}}}}
 			line := entry.write(l)
 			if want := fmt.Sprintf("log/logger_test.go:%d", line); caller != want {
 				t.Fatalf("caller=%v, want %s", caller, want)
@@ -904,14 +847,14 @@ func TestCallerDepthCountsOnlyApplicationFrames(t *testing.T) {
 			shared := &sharedState{}
 			shared.custom.Store(&customState{})
 			var got any
-			root := &logger{shared: shared, config: &configState{msgKey: defaultMsgKey, output: &outputLogger{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
+			root := &logger{shared: shared, config: &configState{msgKey: defaultMsgKey, output: &outputLogger{preparedOutput: &preparedOutput{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
 				for i := 0; i+1 < len(kv); i += 2 {
 					if kv[i] == CallerKey {
 						got = kv[i+1]
 					}
 				}
 				return nil
-			})}}}
+			})}}}}
 			// 后一次设置覆盖前一次，其他派生操作保持选择；根 Logger 不受影响。
 			l := root.WithCallerDepth(9).WithCallerDepth(depth).WithModule("test").WithContext(context.Background())
 			for range 2 {
@@ -1006,5 +949,164 @@ func TestLoggerDisplaysModuleBetweenTimestampAndCaller(t *testing.T) {
 				t.Fatalf("output=%q want=%q", got, want)
 			}
 		})
+	}
+}
+
+func TestInstanceLevelDoesNotChangeSharedPolicy(t *testing.T) {
+	before := processState.custom.Load()
+	WithLevel(kratoslog.LevelWarn)
+	if processState.custom.Load() != before {
+		processState.custom.Store(before)
+		t.Fatal("WithLevel changed process policy instead of deriving an instance")
+	}
+}
+
+// callbackLogValue 验证底层格式化会调用的用户方法可以重入日志和配置发布。
+type callbackLogValue struct{ run func() }
+
+func (v callbackLogValue) String() string {
+	v.run()
+	return "value"
+}
+
+type callbackLogError struct{ run func() }
+
+func (v callbackLogError) Error() string {
+	v.run()
+	return "error value"
+}
+
+type callbackLogFormatter struct{ run func() }
+
+func (v callbackLogFormatter) Format(state fmt.State, _ rune) {
+	v.run()
+	_, _ = state.Write([]byte("formatted"))
+}
+
+func TestLoggerCallbacksCanPublishPolicy(t *testing.T) {
+	for _, kind := range []string{"valuer", "stringer", "error", "formatter", "external logger"} {
+		t.Run(kind, func(t *testing.T) {
+			shared := &sharedState{}
+			shared.custom.Store(&customState{})
+			path := filepath.Join(t.TempDir(), "callback.log")
+			base := runtimeEnvironment(path)
+			base.File.Disable = false
+			base.File.Rotating.Disable = true
+			base.FilterEmpty = true
+			instance, cleanup, err := newLogger(shared, base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			callback := func() {
+				calls++
+				if err := shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: []string{"secret"}}); err != nil {
+					t.Error(err)
+				}
+				instance.Info("nested")
+			}
+			target := instance
+			var field any
+			switch kind {
+			case "valuer":
+				field = kratoslog.Valuer(func(context.Context) any { callback(); return "value" })
+			case "stringer":
+				field = callbackLogValue{run: callback}
+			case "error":
+				field = callbackLogError{run: callback}
+			case "formatter":
+				field = callbackLogFormatter{run: callback}
+			case "external logger":
+				field = 42
+				target = &logger{shared: shared, config: &configState{output: loggerFunc(func(_ kratoslog.Level, fields ...any) error {
+					callback()
+					for i := 0; i+1 < len(fields); i += 2 {
+						if fields[i] == "value" && fields[i+1] != 42 {
+							t.Error("external logger lost original field type")
+						}
+					}
+					return nil
+				})}}
+			}
+			if err := shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: []string{"secret"}}); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan struct{})
+			go func() {
+				target.With("value", field).Infow("msg", "outer", "secret", callbackLogValue{run: func() {
+					t.Error("filtered field was formatted")
+				}})
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Fatal("callback deadlocked while publishing policy")
+			}
+			cleanup()
+			if calls != 1 {
+				t.Fatalf("callback invoked %d times, want once", calls)
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(body), "nested") || strings.Contains(string(body), "hidden") {
+				t.Fatalf("unexpected output: %s", body)
+			}
+		})
+	}
+}
+
+func TestLoggerCallbackInterleavesPolicyUpdateAndNestedLog(t *testing.T) {
+	shared := &sharedState{}
+	shared.custom.Store(&customState{})
+	original := filepath.Join(t.TempDir(), "original.log")
+	next := filepath.Join(t.TempDir(), "next.log")
+	base := runtimeEnvironment(original)
+	base.File.Disable = false
+	base.File.Rotating.Disable = true
+	instance, cleanup, err := newLogger(shared, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, release, logged := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	value := kratoslog.Valuer(func(context.Context) any {
+		close(entered)
+		<-release
+		instance.Info("nested")
+		return "value"
+	})
+	go func() {
+		instance.With("value", value).Infow("msg", "outer", "secret", "hidden")
+		close(logged)
+	}()
+	<-entered
+	updated := make(chan error, 1)
+	go func() {
+		updated <- shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: []string{"secret"}, File: &FilePolicy{Path: &next}})
+	}()
+	// 策略必须能在用户求值尚未返回时完成，否则形成等待嵌套日志的循环。
+	select {
+	case err := <-updated:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("policy update waited for user callback")
+	}
+	close(release)
+	select {
+	case <-logged:
+	case <-time.After(3 * time.Second):
+		t.Fatal("nested logging deadlocked")
+	}
+	cleanup()
+	body, err := os.ReadFile(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "outer") || !strings.Contains(string(body), "nested") || strings.Contains(string(body), "hidden") {
+		t.Fatalf("event did not use current output and filter policy: %s", body)
 	}
 }

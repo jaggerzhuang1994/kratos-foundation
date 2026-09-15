@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -21,6 +22,13 @@ type FileConfig struct {
 func NewFile(config FileConfig) (log.Logger, func(), error) {
 	if strings.TrimSpace(config.Path) == "" {
 		return nil, nil, fmt.Errorf("file logger path is required")
+	}
+
+	// 轮转库在追加失败时可能重命名旧路径；目录不是合法日志文件，必须提前拒绝。
+	if info, err := os.Stat(config.Path); err == nil && info.IsDir() {
+		return nil, nil, fmt.Errorf("file logger path is a directory")
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, nil, fmt.Errorf("stat file logger path: %w", err)
 	}
 
 	var writer io.WriteCloser
@@ -41,10 +49,18 @@ func NewFile(config FileConfig) (log.Logger, func(), error) {
 			Compress:   config.Rotating.Compress,
 			FileMode:   0o600,
 		}
-		if _, err := rotating.Write(nil); err != nil {
-			_ = rotating.Close()
-			return nil, nil, err
+		// 准备阶段只验证可追加，不启动轮转或保留任务；旧代仍可能正在写同一路径。
+		if err := os.MkdirAll(filepath.Dir(config.Path), 0o755); err != nil {
+			return nil, nil, fmt.Errorf("prepare log directory: %w", err)
 		}
+		probe, err := os.OpenFile(config.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			return nil, nil, fmt.Errorf("prepare log file: %w", err)
+		}
+		if err := probe.Close(); err != nil {
+			return nil, nil, fmt.Errorf("close prepared log file: %w", err)
+		}
+
 		writer = rotating
 	}
 	guardedWriter := &fileWriter{writer: writer}

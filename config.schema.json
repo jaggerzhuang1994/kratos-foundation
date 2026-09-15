@@ -2,6 +2,87 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$ref": "#/definitions/.kratos_foundation_pb.Config",
   "definitions": {
+    ".google.protobuf.ListValue": {
+      "properties": {
+        "values": {
+          "$ref": "#/definitions/.google.protobuf.ListValue.values"
+        }
+      },
+      "type": "object",
+      "description": "`ListValue` is a wrapper around a repeated field of values.\n\n The JSON representation for `ListValue` is JSON array."
+    },
+    ".google.protobuf.ListValue.values": {
+      "items": {
+        "$ref": "#/definitions/.google.protobuf.Value",
+        "description": "Repeated field of dynamically typed values."
+      },
+      "type": "array",
+      "description": "Repeated field of dynamically typed values."
+    },
+    ".google.protobuf.Struct": {
+      "properties": {
+        "fields": {
+          "$ref": "#/definitions/.google.protobuf.Struct.fields"
+        }
+      },
+      "type": "object",
+      "description": "`Struct` represents a structured data value, consisting of fields\n which map to dynamically typed values. In some languages, `Struct`\n might be supported by a native representation. For example, in\n scripting languages like JS a struct is represented as an\n object. The details of that representation are described together\n with the proto support for the language.\n\n The JSON representation for `Struct` is JSON object."
+    },
+    ".google.protobuf.Struct.fields": {
+      "additionalProperties": {
+        "$ref": "#/definitions/.google.protobuf.Value"
+      },
+      "type": "object",
+      "description": "Unordered map of dynamically typed values."
+    },
+    ".google.protobuf.Value": {
+      "properties": {
+        "null_value": {
+          "$ref": "#/definitions/.google.protobuf.Value.null_value"
+        },
+        "number_value": {
+          "$ref": "#/definitions/.google.protobuf.Value.number_value"
+        },
+        "string_value": {
+          "$ref": "#/definitions/.google.protobuf.Value.string_value"
+        },
+        "bool_value": {
+          "$ref": "#/definitions/.google.protobuf.Value.bool_value"
+        },
+        "struct_value": {
+          "$ref": "#/definitions/.google.protobuf.Value.struct_value"
+        },
+        "list_value": {
+          "$ref": "#/definitions/.google.protobuf.Value.list_value"
+        }
+      },
+      "type": "object",
+      "description": "`Value` represents a dynamically typed value which can be either\n null, a number, a string, a boolean, a recursive struct value, or a\n list of values. A producer of value is expected to set one of these\n variants. Absence of any variant indicates an error.\n\n The JSON representation for `Value` is JSON value."
+    },
+    ".google.protobuf.Value.bool_value": {
+      "type": "boolean",
+      "description": "Represents a boolean value."
+    },
+    ".google.protobuf.Value.list_value": {
+      "$ref": "#/definitions/.google.protobuf.ListValue",
+      "description": "Represents a repeated `Value`."
+    },
+    ".google.protobuf.Value.null_value": {
+      "type": "null",
+      "description": "Represents a null value."
+    },
+    ".google.protobuf.Value.number_value": {
+      "type": "number",
+      "description": "Represents a double value."
+    },
+    ".google.protobuf.Value.string_value": {
+      "type": "string",
+      "description": "Represents a string value."
+    },
+    ".google.protobuf.Value.struct_value": {
+      "$ref": "#/definitions/.google.protobuf.Struct",
+      "description": "Represents a structured value."
+    },
     ".kratos_foundation_pb.App": {
       "properties": {
         "registrar_timeout": {
@@ -15,9 +96,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/.kratos_foundation_pb.App.metadata"
+        },
+        "registry": {
+          "$ref": "#/definitions/.kratos_foundation_pb.App.registry"
         }
       },
       "type": "object",
+      "required": [
+        "registry"
+      ],
       "description": "App 只有 stop_timeout 支持热更新，其余字段在构造 Kratos App 时固定。"
     },
     ".kratos_foundation_pb.App.endpoints": {
@@ -40,18 +127,19 @@
       "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "注册中心超时时间（默认10s）。[需重启]"
     },
+    ".kratos_foundation_pb.App.registry": {
+      "type": "string",
+      "description": "注册实例名称；省略或空值默认 default，需配置 registry.instances.default。需重启。"
+    },
     ".kratos_foundation_pb.App.stop_timeout": {
       "type": "string",
       "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
-      "description": "stop timeout 必须大于 server.stop_delay （默认30s）。\n [热更新] 下次开始停机时读取；停机一旦开始，取值即冻结。"
+      "description": "stop timeout 必须为正数，建议大于 server.stop_delay 并预留清理时间（默认30s）。\n [热更新] 下次开始停机时读取；停机一旦开始，取值即冻结。"
     },
     ".kratos_foundation_pb.Client": {
       "properties": {
         "clients": {
           "$ref": "#/definitions/.kratos_foundation_pb.Client.clients"
-        },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Client.log"
         },
         "cleanup_timeout": {
           "$ref": "#/definitions/.kratos_foundation_pb.Client.cleanup_timeout"
@@ -72,15 +160,8 @@
       "type": "object",
       "description": "[热更新] 后续调用使用新配置，旧连接等待活跃调用释放。"
     },
-    ".kratos_foundation_pb.Client.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置。[需重启] 只在 Factory 构造时读取。"
-    },
     ".kratos_foundation_pb.ClientMiddleware": {
       "properties": {
-        "deadline": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.deadline"
-        },
         "metadata": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.metadata"
         },
@@ -95,6 +176,12 @@
         },
         "circuit_breaker": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.circuit_breaker"
+        },
+        "deadline": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.deadline"
+        },
+        "request_debug": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.request_debug"
         }
       },
       "type": "object",
@@ -115,6 +202,10 @@
     ".kratos_foundation_pb.ClientMiddleware.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics"
     },
+    ".kratos_foundation_pb.ClientMiddleware.request_debug": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
+      "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
+    },
     ".kratos_foundation_pb.ClientMiddleware.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing"
     },
@@ -128,12 +219,20 @@
         },
         "middleware": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.middleware"
+        },
+        "discovery": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.discovery"
         }
       },
       "type": "object",
       "required": [
-        "target"
+        "target",
+        "discovery"
       ]
+    },
+    ".kratos_foundation_pb.ClientOption.discovery": {
+      "type": "string",
+      "description": "discovery 目标使用的 registry.instances 名称；省略或空值默认 default。"
     },
     ".kratos_foundation_pb.ClientOption.middleware": {
       "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware",
@@ -161,9 +260,6 @@
         "database": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.database"
         },
-        "discovery": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Config.discovery"
-        },
         "redis": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.redis"
         },
@@ -178,10 +274,13 @@
         },
         "oss": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.oss"
+        },
+        "log": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Config.log"
         }
       },
       "type": "object",
-      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n app.stop_timeout、server.middleware、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数。"
+      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n log、app.stop_timeout、server.middleware、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数。"
     },
     ".kratos_foundation_pb.Config.app": {
       "$ref": "#/definitions/.kratos_foundation_pb.App",
@@ -195,13 +294,13 @@
       "$ref": "#/definitions/.kratos_foundation_pb.Database",
       "description": "数据库配置。仅各连接的连接池参数支持热更新。"
     },
-    ".kratos_foundation_pb.Config.discovery": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Discovery",
-      "description": "服务发现。[需重启]"
-    },
     ".kratos_foundation_pb.Config.kafka": {
       "$ref": "#/definitions/.kratos_foundation_pb.Kafka",
       "description": "Kafka 连接配置。[需重启]"
+    },
+    ".kratos_foundation_pb.Config.log": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Logging",
+      "description": "全局输出日志策略。[热更新]。"
     },
     ".kratos_foundation_pb.Config.oss": {
       "$ref": "#/definitions/.kratos_foundation_pb.OSS",
@@ -283,18 +382,11 @@
     },
     ".kratos_foundation_pb.DBConnection.max_idle_conns": {
       "type": "integer",
-      "description": "用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 未配置时默认 2；热更新删除字段也恢复为 2。\n [热更新]"
+      "description": "已移除读写分离与按表隐式路由；连接由 default 或 UseConnection 显式选择。\n 用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 未配置时默认 2；热更新删除字段也恢复为 2。\n [热更新]"
     },
     ".kratos_foundation_pb.DBConnection.max_open_conns": {
       "type": "integer",
       "description": "用于设置数据库最大打开连接数。\n 如果 MaxIdleConns \u003e 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。\n 如果 n ≤ 0，表示不限制打开连接的数量。\n 默认值是 0，也就是无限制。\n [热更新] 连接池打满时可以在线扩容，无需重启。"
-    },
-    ".kratos_foundation_pb.DC": {
-      "type": "string",
-      "enum": [
-        "SINGLE",
-        "MULTI"
-      ]
     },
     ".kratos_foundation_pb.Database": {
       "properties": {
@@ -306,9 +398,6 @@
         },
         "gorm": {
           "$ref": "#/definitions/.kratos_foundation_pb.Database.gorm"
-        },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Database.log"
         },
         "tracing": {
           "$ref": "#/definitions/.kratos_foundation_pb.Database.tracing"
@@ -334,10 +423,6 @@
     ".kratos_foundation_pb.Database.gorm": {
       "$ref": "#/definitions/.kratos_foundation_pb.Gorm",
       "description": "gorm 配置"
-    },
-    ".kratos_foundation_pb.Database.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置"
     },
     ".kratos_foundation_pb.Database.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics",
@@ -373,27 +458,6 @@
     ".kratos_foundation_pb.DatabaseAes.key": {
       "type": "string",
       "description": "Base64 编码的 AES key；解码后长度必须为 16、24 或 32 字节。"
-    },
-    ".kratos_foundation_pb.Discovery": {
-      "properties": {
-        "timeout": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Discovery.timeout"
-        },
-        "dc": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Discovery.dc"
-        }
-      },
-      "type": "object",
-      "description": "服务发现。[需重启] 配置在创建 Consul Discovery 时读取一次。"
-    },
-    ".kratos_foundation_pb.Discovery.dc": {
-      "$ref": "#/definitions/.kratos_foundation_pb.DC",
-      "description": "数据中心【默认 SINGLE】"
-    },
-    ".kratos_foundation_pb.Discovery.timeout": {
-      "type": "string",
-      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
-      "description": "获取服务的超时时间【默认10s】"
     },
     ".kratos_foundation_pb.Endpoint": {
       "properties": {
@@ -958,9 +1022,6 @@
       "properties": {
         "connections": {
           "$ref": "#/definitions/.kratos_foundation_pb.Kafka.connections"
-        },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Kafka.log"
         }
       },
       "type": "object",
@@ -972,10 +1033,6 @@
       },
       "type": "object",
       "description": "按逻辑名索引的连接配置。[需重启]"
-    },
-    ".kratos_foundation_pb.Kafka.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置。[需重启]"
     },
     ".kratos_foundation_pb.KafkaCompression": {
       "type": "string",
@@ -1195,6 +1252,204 @@
     },
     ".kratos_foundation_pb.KafkaTLS.server_name": {
       "type": "string"
+    },
+    ".kratos_foundation_pb.LogFilePolicy": {
+      "properties": {
+        "level": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogFilePolicy.level"
+        },
+        "filter_keys": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogFilePolicy.filter_keys"
+        },
+        "enable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogFilePolicy.enable"
+        },
+        "path": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogFilePolicy.path"
+        },
+        "rotating": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogFilePolicy.rotating"
+        }
+      },
+      "type": "object",
+      "description": "LogFilePolicy 覆盖文件输出及轮转策略；env 仅提供初始值。"
+    },
+    ".kratos_foundation_pb.LogFilePolicy.enable": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.LogFilePolicy.filter_keys": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    ".kratos_foundation_pb.LogFilePolicy.level": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.LogFilePolicy.path": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.LogFilePolicy.rotating": {
+      "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy"
+    },
+    ".kratos_foundation_pb.LogModule": {
+      "properties": {
+        "module": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogModule.module"
+        },
+        "level": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogModule.level"
+        },
+        "disable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogModule.disable"
+        },
+        "filter_keys": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogModule.filter_keys"
+        }
+      },
+      "type": "object",
+      "required": [
+        "module"
+      ],
+      "description": "LogModule 按模块精确匹配或末尾 * 前缀匹配；* 匹配全部模块。"
+    },
+    ".kratos_foundation_pb.LogModule.disable": {
+      "type": "boolean",
+      "description": "省略或 false 不额外禁用；true 不能被请求 debug 解除。"
+    },
+    ".kratos_foundation_pb.LogModule.filter_keys": {
+      "items": {
+        "type": "string",
+        "description": "追加过滤规则；空列表不清除根、实例或输出端规则。"
+      },
+      "type": "array",
+      "description": "追加过滤规则；空列表不清除根、实例或输出端规则。"
+    },
+    ".kratos_foundation_pb.LogModule.level": {
+      "type": "string",
+      "enum": [
+        "debug",
+        "DEBUG",
+        "info",
+        "INFO",
+        "warn",
+        "WARN",
+        "error",
+        "ERROR",
+        "fatal",
+        "FATAL"
+      ],
+      "description": "高于 WithLevel，低于请求 debug；省略继承实例或 env 级别。"
+    },
+    ".kratos_foundation_pb.LogModule.module": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.LogPolicy": {
+      "properties": {
+        "level": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogPolicy.level"
+        },
+        "disable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogPolicy.disable"
+        },
+        "filter_keys": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogPolicy.filter_keys"
+        }
+      },
+      "type": "object",
+      "description": "LogPolicy 覆盖标准输出策略；省略字段继承 env。"
+    },
+    ".kratos_foundation_pb.LogPolicy.disable": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.LogPolicy.filter_keys": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    ".kratos_foundation_pb.LogPolicy.level": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy": {
+      "properties": {
+        "disable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy.disable"
+        },
+        "max_size": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy.max_size"
+        },
+        "max_file_age": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy.max_file_age"
+        },
+        "max_files": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy.max_files"
+        },
+        "local_time": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy.local_time"
+        },
+        "compress": {
+          "$ref": "#/definitions/.kratos_foundation_pb.LogRotatingPolicy.compress"
+        }
+      },
+      "type": "object",
+      "description": "LogRotatingPolicy 未指定字段继承 env；启用轮转时 max_size 必须为正。"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy.compress": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy.disable": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy.local_time": {
+      "type": "boolean"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy.max_file_age": {
+      "type": "integer"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy.max_files": {
+      "type": "integer"
+    },
+    ".kratos_foundation_pb.LogRotatingPolicy.max_size": {
+      "type": "integer"
+    },
+    ".kratos_foundation_pb.Logging": {
+      "properties": {
+        "filter_keys": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Logging.filter_keys"
+        },
+        "std": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Logging.std"
+        },
+        "file": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Logging.file"
+        },
+        "modules": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Logging.modules"
+        }
+      },
+      "type": "object",
+      "description": "Logging 集中声明可热更新的模块和输出策略。固定字段通过 LOG_* 在启动期配置。\n filter_keys 缺失继承 env，显式空列表清空；实际读取使用保留列表存在性的 log.RuntimeConfig。"
+    },
+    ".kratos_foundation_pb.Logging.file": {
+      "$ref": "#/definitions/.kratos_foundation_pb.LogFilePolicy"
+    },
+    ".kratos_foundation_pb.Logging.filter_keys": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    ".kratos_foundation_pb.Logging.modules": {
+      "items": {
+        "$ref": "#/definitions/.kratos_foundation_pb.LogModule",
+        "description": "按顺序首个命中；过滤字段与根及输出端规则累加。"
+      },
+      "type": "array",
+      "description": "按顺序首个命中；过滤字段与根及输出端规则累加。"
+    },
+    ".kratos_foundation_pb.Logging.std": {
+      "$ref": "#/definitions/.kratos_foundation_pb.LogPolicy"
     },
     ".kratos_foundation_pb.Middleware.CircuitBreaker": {
       "properties": {
@@ -1440,6 +1695,26 @@
       "type": "boolean",
       "description": "是否禁用"
     },
+    ".kratos_foundation_pb.Middleware.RequestDebug": {
+      "properties": {
+        "accept_incoming": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug.accept_incoming"
+        },
+        "propagate": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug.propagate"
+        }
+      },
+      "type": "object",
+      "description": "应用级请求 debug 的传播策略，不受通用 metadata 前缀或开关影响。"
+    },
+    ".kratos_foundation_pb.Middleware.RequestDebug.accept_incoming": {
+      "type": "boolean",
+      "description": "仅服务端使用；默认 true，显式 false 关闭上游请求 debug 标记的接收。"
+    },
+    ".kratos_foundation_pb.Middleware.RequestDebug.propagate": {
+      "type": "boolean",
+      "description": "仅客户端使用；默认 true。对不可信或外部服务可显式设为 false。"
+    },
     ".kratos_foundation_pb.Middleware.Tracing": {
       "properties": {
         "disable": {
@@ -1465,49 +1740,6 @@
     ".kratos_foundation_pb.Middleware.Validator.disable": {
       "type": "boolean",
       "description": "是否禁用"
-    },
-    ".kratos_foundation_pb.ModuleLog": {
-      "properties": {
-        "disable": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog.disable"
-        },
-        "level": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog.level"
-        },
-        "filter_keys": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog.filter_keys"
-        }
-      },
-      "type": "object",
-      "description": "模块使用的 log 结构"
-    },
-    ".kratos_foundation_pb.ModuleLog.disable": {
-      "type": "boolean",
-      "description": "是否禁用"
-    },
-    ".kratos_foundation_pb.ModuleLog.filter_keys": {
-      "items": {
-        "type": "string",
-        "description": "打印日志过滤哪些 keys；尾部 * 表示前缀匹配，例如 secret.*"
-      },
-      "type": "array",
-      "description": "打印日志过滤哪些 keys；尾部 * 表示前缀匹配，例如 secret.*"
-    },
-    ".kratos_foundation_pb.ModuleLog.level": {
-      "type": "string",
-      "enum": [
-        "debug",
-        "DEBUG",
-        "info",
-        "INFO",
-        "warn",
-        "WARN",
-        "error",
-        "ERROR",
-        "fatal",
-        "FATAL"
-      ],
-      "description": "最小日志级别 (默认值为log.level)"
     },
     ".kratos_foundation_pb.OSS": {
       "properties": {
@@ -1582,9 +1814,6 @@
         "connections": {
           "$ref": "#/definitions/.kratos_foundation_pb.Redis.connections"
         },
-        "log": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Redis.log"
-        },
         "tracing": {
           "$ref": "#/definitions/.kratos_foundation_pb.Redis.tracing"
         },
@@ -1605,10 +1834,6 @@
     ".kratos_foundation_pb.Redis.default": {
       "type": "string",
       "description": "默认连接。[需重启]"
-    },
-    ".kratos_foundation_pb.Redis.log": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ModuleLog",
-      "description": "logger 配置"
     },
     ".kratos_foundation_pb.Redis.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.RedisMetrics",
@@ -1896,50 +2121,41 @@
     },
     ".kratos_foundation_pb.Registry": {
       "properties": {
-        "disable_health_check": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Registry.disable_health_check"
-        },
-        "disable_heartbeat": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Registry.disable_heartbeat"
-        },
-        "healthcheck_internal": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Registry.healthcheck_internal"
-        },
-        "deregister_critical_service_after": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Registry.deregister_critical_service_after"
-        },
-        "tags": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Registry.tags"
+        "instances": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Registry.instances"
         }
       },
       "type": "object",
-      "description": "服务注册。[需重启] 配置在创建 Consul Registrar 时读取一次；修改后需要重启才会以新\n 参数重新注册。"
+      "description": "Registry 声明启动时构造的具名注册与发现实例。"
     },
-    ".kratos_foundation_pb.Registry.deregister_critical_service_after": {
-      "type": "string",
-      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
-      "description": "deregisterCriticalServiceAfter【默认600s】"
-    },
-    ".kratos_foundation_pb.Registry.disable_health_check": {
-      "type": "boolean",
-      "description": "是否禁用健康检查【默认false】"
-    },
-    ".kratos_foundation_pb.Registry.disable_heartbeat": {
-      "type": "boolean",
-      "description": "是否禁用心跳【默认false】"
-    },
-    ".kratos_foundation_pb.Registry.healthcheck_internal": {
-      "type": "string",
-      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
-      "description": "健康检查间隔【默认10s】"
-    },
-    ".kratos_foundation_pb.Registry.tags": {
-      "items": {
-        "type": "string",
-        "description": "注册到 Consul 服务实例的标签，用于 Consul 侧分类、查询和 tag 过滤。\n 标签不会自动写入 Kratos ServiceInstance.Metadata。"
+    ".kratos_foundation_pb.Registry.instances": {
+      "additionalProperties": {
+        "$ref": "#/definitions/.kratos_foundation_pb.RegistryInstance"
       },
-      "type": "array",
-      "description": "注册到 Consul 服务实例的标签，用于 Consul 侧分类、查询和 tag 过滤。\n 标签不会自动写入 Kratos ServiceInstance.Metadata。"
+      "type": "object",
+      "description": "使用默认注册或发现名称时，必须提供 default 实例及其驱动配置。"
+    },
+    ".kratos_foundation_pb.RegistryInstance": {
+      "properties": {
+        "driver": {
+          "$ref": "#/definitions/.kratos_foundation_pb.RegistryInstance.driver"
+        },
+        "options": {
+          "$ref": "#/definitions/.kratos_foundation_pb.RegistryInstance.options"
+        }
+      },
+      "type": "object",
+      "required": [
+        "driver",
+        "options"
+      ],
+      "description": "RegistryInstance 声明一个驱动及其专属配置。"
+    },
+    ".kratos_foundation_pb.RegistryInstance.driver": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.RegistryInstance.options": {
+      "$ref": "#/definitions/.google.protobuf.Struct"
     },
     ".kratos_foundation_pb.Sampler": {
       "properties": {
@@ -2002,13 +2218,10 @@
     ".kratos_foundation_pb.Server.stop_delay": {
       "type": "string",
       "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
-      "description": "consul 服务发现会有1s左右延迟，所以在kratos生命周期中，\n 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。\n 因此给servers套上一个wrapper用于延迟停止服务。\n [需重启] 该值在构造 Server 时冻结，同时参与 app.stop_timeout 的校验。"
+      "description": "consul 服务发现会有1s左右延迟，所以在kratos生命周期中，\n 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。\n 因此给servers套上一个wrapper用于延迟停止服务。\n [需重启] 该值在构造 Server 时冻结；建议 app.stop_timeout 预留更大的总停机预算，不做硬约束。"
     },
     ".kratos_foundation_pb.ServerMiddleware": {
       "properties": {
-        "deadline": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.deadline"
-        },
         "metadata": {
           "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.metadata"
         },
@@ -2026,6 +2239,12 @@
         },
         "rate_limit": {
           "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.rate_limit"
+        },
+        "deadline": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.deadline"
+        },
+        "request_debug": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.request_debug"
         }
       },
       "type": "object",
@@ -2041,7 +2260,7 @@
     },
     ".kratos_foundation_pb.ServerMiddleware.metadata": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata",
-      "description": "元数据透传。[热更新]"
+      "description": "旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。\n 元数据透传。[热更新]"
     },
     ".kratos_foundation_pb.ServerMiddleware.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics",
@@ -2050,6 +2269,10 @@
     ".kratos_foundation_pb.ServerMiddleware.rate_limit": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RateLimit",
       "description": "自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。"
+    },
+    ".kratos_foundation_pb.ServerMiddleware.request_debug": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
+      "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
     },
     ".kratos_foundation_pb.ServerMiddleware.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",

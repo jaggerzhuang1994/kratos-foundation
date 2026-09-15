@@ -11,7 +11,7 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
-var logEnvironmentKeys = []string{
+var logEnvironmentKeys = []string{EnvDisable, EnvMsgKey,
 	EnvLevel,
 	EnvFilterEmpty,
 	EnvFilterKeys,
@@ -19,7 +19,7 @@ var logEnvironmentKeys = []string{
 	EnvStdDisable,
 	EnvStdLevel,
 	EnvStdFilterKeys,
-	EnvFileDisable,
+	EnvFileEnable,
 	EnvFileLevel,
 	EnvFileFilterKeys,
 	EnvFilePath,
@@ -168,12 +168,13 @@ func TestNewEnvConfigAppliesDocumentedDefaults(t *testing.T) {
 		Level:       kratoslog.LevelInfo,
 		FilterEmpty: true,
 		TimeFormat:  time.RFC3339,
+		MsgKey:      defaultMsgKey,
 		Std: outputConfig{
-			Level:      kratoslog.LevelInfo,
+			Level:      kratoslog.LevelDebug,
 			FilterKeys: []string{"service.id", "service.name", "service.version"},
 		},
 		File: fileConfig{
-			outputConfig: outputConfig{Disable: true, Level: kratoslog.LevelInfo},
+			outputConfig: outputConfig{Disable: true, Level: kratoslog.LevelDebug},
 			Path:         "./app.log",
 			Rotating: rotatingConfig{
 				MaxSize: 100,
@@ -185,22 +186,46 @@ func TestNewEnvConfigAppliesDocumentedDefaults(t *testing.T) {
 	}
 }
 
-func TestNewEnvConfigAllowsExplicitFileOutputInTests(t *testing.T) {
-	clearEnvironment(t, logEnvironmentKeys...)
-	t.Setenv(EnvFileDisable, "false")
-
-	got, err := newEnvConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.File.Disable {
-		t.Fatal("explicit LOG_FILE_DISABLE=false did not enable file output")
+func TestNewEnvConfigRequiresExplicitFileEnable(t *testing.T) {
+	for _, test := range []struct {
+		name, value           string
+		set, enabled, invalid bool
+	}{
+		{name: "unset"},
+		{name: "false", value: "false", set: true},
+		{name: "true", value: "true", set: true, enabled: true},
+		{name: "empty", set: true, invalid: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			clearEnvironment(t, logEnvironmentKeys...)
+			// 旧开关和单独指定路径不能隐式启用文件输出。
+			t.Setenv("LOG_FILE_DISABLE", "false")
+			t.Setenv(EnvFilePath, t.TempDir()+"/app.log")
+			if test.set {
+				t.Setenv(EnvFileEnable, test.value)
+			}
+			got, err := newEnvConfig()
+			if test.invalid {
+				if err == nil || !strings.Contains(err.Error(), EnvFileEnable) {
+					t.Fatalf("invalid enable error = %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.File.Disable == test.enabled {
+				t.Fatalf("file disabled = %v, want enabled = %v", got.File.Disable, test.enabled)
+			}
+		})
 	}
 }
 
 func TestNewEnvConfigLoadsEveryEnvironmentVariable(t *testing.T) {
 	clearEnvironment(t, logEnvironmentKeys...)
 	values := map[string]string{
+		EnvDisable:                "true",
+		EnvMsgKey:                 "message",
 		EnvLevel:                  "warn",
 		EnvFilterEmpty:            "false",
 		EnvFilterKeys:             "token,password,token",
@@ -208,7 +233,7 @@ func TestNewEnvConfigLoadsEveryEnvironmentVariable(t *testing.T) {
 		EnvStdDisable:             "true",
 		EnvStdLevel:               "error",
 		EnvStdFilterKeys:          "request.id",
-		EnvFileDisable:            "true",
+		EnvFileEnable:             "false",
 		EnvFileLevel:              "fatal",
 		EnvFileFilterKeys:         "secret",
 		EnvFilePath:               "",
@@ -232,6 +257,8 @@ func TestNewEnvConfigLoadsEveryEnvironmentVariable(t *testing.T) {
 		FilterEmpty: false,
 		FilterKeys:  []string{"token", "password"},
 		TimeFormat:  "2006",
+		MsgKey:      "message",
+		Disable:     true,
 		Std: outputConfig{
 			Disable:    true,
 			Level:      kratoslog.LevelError,
@@ -265,11 +292,14 @@ func TestNewEnvConfigRejectsMalformedAndOutOfRangeEnvironment(t *testing.T) {
 		key   string
 		value string
 	}{
+		{name: "root disable", key: EnvDisable, value: "sometimes"},
+		{name: "empty msg key", key: EnvMsgKey, value: ""},
+		{name: "reserved msg key", key: EnvMsgKey, value: "module"},
 		{name: "root level", key: EnvLevel, value: "trace"},
 		{name: "filter empty", key: EnvFilterEmpty, value: "sometimes"},
 		{name: "standard disable", key: EnvStdDisable, value: "sometimes"},
 		{name: "standard level", key: EnvStdLevel, value: "trace"},
-		{name: "file disable", key: EnvFileDisable, value: "sometimes"},
+		{name: "file enable", key: EnvFileEnable, value: "sometimes"},
 		{name: "file level", key: EnvFileLevel, value: "trace"},
 		{name: "rotating disable", key: EnvFileRotatingDisable, value: "sometimes"},
 		{name: "max size syntax", key: EnvFileRotatingMaxSize, value: "large"},
@@ -286,7 +316,7 @@ func TestNewEnvConfigRejectsMalformedAndOutOfRangeEnvironment(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			clearEnvironment(t, logEnvironmentKeys...)
-			t.Setenv(EnvFileDisable, "false")
+			t.Setenv(EnvFileEnable, "true")
 			t.Setenv(test.key, test.value)
 			_, err := newEnvConfig()
 			if err == nil || !strings.Contains(err.Error(), test.key) {

@@ -6,7 +6,7 @@ services:
       dockerfile: examples/minimal/Dockerfile
     environment:
       APP_ENV: local
-      LOG_FILE_DISABLE: "true"
+      LOG_FILE_ENABLE: "false"
     ports:
       - "127.0.0.1:18000:8000"
       - "127.0.0.1:19001:9001"

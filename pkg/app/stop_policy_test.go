@@ -87,9 +87,7 @@ func TestNewStopPolicyAppliesValidUpdatesRejectsInvalidSnapshotsAndCancels(t *te
 	policy, cleanup, err := NewStopPolicy(
 		validAppConfig(5*time.Second),
 		manager,
-		logger,
-		time.Second,
-	)
+		logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,18 +107,22 @@ func TestNewStopPolicyAppliesValidUpdatesRejectsInvalidSnapshotsAndCancels(t *te
 		t.Fatalf("unrelated app field prevented timeout update: %s", got)
 	}
 	manager.publish(validAppConfig(time.Second), nil)
-	if got := policy.current(); got != 9*time.Second {
-		t.Fatalf("timeout equal to stop delay changed policy to %s", got)
+	if got := policy.current(); got != time.Second {
+		t.Fatalf("positive timeout was rejected: %s", got)
+	}
+	manager.publish(validAppConfig(0), nil)
+	if got := policy.current(); got != time.Second {
+		t.Fatalf("zero timeout changed policy to %s", got)
 	}
 	manager.publish(validAppConfig(11*time.Second), errors.New("watch failed"))
-	if got := policy.current(); got != 9*time.Second {
+	if got := policy.current(); got != time.Second {
 		t.Fatalf("errored update changed policy to %s", got)
 	}
 
 	cleanup()
 	cleanup()
 	manager.publish(validAppConfig(13*time.Second), nil)
-	if got := policy.current(); got != 9*time.Second {
+	if got := policy.current(); got != time.Second {
 		t.Fatalf("canceled subscription changed policy to %s", got)
 	}
 	manager.mu.Lock()
@@ -135,11 +137,9 @@ func TestNewStopPolicyRejectsInitialPolicyAndSubscriptionFailure(t *testing.T) {
 	logger := kratoslog.NewStdLogger(io.Discard)
 	manager := &stopPolicyConfigManager{initial: validAppConfig(5 * time.Second)}
 	if policy, cleanup, err := NewStopPolicy(
-		validAppConfig(time.Second),
+		validAppConfig(0),
 		manager,
-		logger,
-		time.Second,
-	); err == nil || policy != nil || cleanup != nil {
+		logger); err == nil || policy != nil || cleanup != nil {
 		t.Fatalf("invalid initial timeout returned policy=%v cleanupPresent=%t err=%v", policy, cleanup != nil, err)
 	}
 
@@ -148,32 +148,28 @@ func TestNewStopPolicyRejectsInitialPolicyAndSubscriptionFailure(t *testing.T) {
 	policy, cleanup, err := NewStopPolicy(
 		validAppConfig(5*time.Second),
 		manager,
-		logger,
-		time.Second,
-	)
+		logger)
 	if !errors.Is(err, cause) || policy != nil || cleanup != nil {
 		t.Fatalf("subscription failure returned policy=%v cleanupPresent=%t err=%v", policy, cleanup != nil, err)
 	}
 }
 
-func TestValidateStopTimeoutAcceptsOnlyPositiveBudgetAboveDelay(t *testing.T) {
+func TestValidateStopTimeoutAcceptsOnlyPositiveBudget(t *testing.T) {
 	tests := []struct {
 		name    string
 		timeout time.Duration
-		delay   time.Duration
 		wantErr bool
 	}{
 		{name: "negative", timeout: -time.Second, wantErr: true},
 		{name: "zero", timeout: 0, wantErr: true},
-		{name: "equal delay", timeout: time.Second, delay: time.Second, wantErr: true},
-		{name: "below delay", timeout: time.Second, delay: 2 * time.Second, wantErr: true},
-		{name: "above delay", timeout: 2 * time.Second, delay: time.Second},
+		{name: "small positive", timeout: time.Nanosecond},
+		{name: "positive", timeout: time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateStopTimeout(tt.timeout, tt.delay)
+			err := validateStopTimeout(tt.timeout)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("validateStopTimeout(%s, %s) error = %v", tt.timeout, tt.delay, err)
+				t.Fatalf("validateStopTimeout(%s) error = %v", tt.timeout, err)
 			}
 		})
 	}
@@ -181,7 +177,7 @@ func TestValidateStopTimeoutAcceptsOnlyPositiveBudgetAboveDelay(t *testing.T) {
 
 func TestStopPolicyConcurrentReadsAndUpdates(t *testing.T) {
 	manager := &stopPolicyConfigManager{initial: validAppConfig(5 * time.Second)}
-	policy, cleanup, err := NewStopPolicy(validAppConfig(5*time.Second), manager, kratoslog.NewStdLogger(io.Discard), time.Second)
+	policy, cleanup, err := NewStopPolicy(validAppConfig(5*time.Second), manager, kratoslog.NewStdLogger(io.Discard))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +204,7 @@ func TestStopPolicyConcurrentReadsAndUpdates(t *testing.T) {
 
 func newStaticStopPolicy(timeout time.Duration) *StopPolicy {
 	config := validAppConfig(timeout)
-	policy, _, err := NewStopPolicy(config, &stopPolicyConfigManager{initial: config}, kratoslog.NewStdLogger(io.Discard), 0)
+	policy, _, err := NewStopPolicy(config, &stopPolicyConfigManager{initial: config}, kratoslog.NewStdLogger(io.Discard))
 	if err != nil {
 		panic(err)
 	}

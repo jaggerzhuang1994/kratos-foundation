@@ -8,77 +8,89 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 )
 
-// outputLogger 持有一个 Logger 实例的 file/std 输出栈。
+// preparedOutput 是准备完成的一代输出；发布后只读。
+type preparedOutput struct {
+	output      kratoslog.Logger
+	file        kratoslog.Logger
+	config      envConfig
+	releaseFile func()
+	ready       chan struct{}
+}
+
+// outputLogger 保持实例入口稳定，派生 Logger 不持有即将退役的文件句柄。
 type outputLogger struct {
-	output kratoslog.Logger
+	*preparedOutput
 	mu     sync.RWMutex
 	closed bool
 }
 
-// newOutputLogger 组装一组启用的输出端；根级别和根字段过滤由业务 Logger 应用。
-func newOutputLogger(config envConfig) (*outputLogger, func(), error) {
-	loggers := make([]kratoslog.Logger, 0, 2)
-	releases := make([]func(), 0, 1)
-
-	if !config.File.Disable {
+func prepareOutput(config envConfig, previous *preparedOutput) (*preparedOutput, bool, error) {
+	next := &preparedOutput{config: config, ready: make(chan struct{})}
+	reused := previous != nil && previous.config.File.Disable == config.File.Disable && previous.config.File.Path == config.File.Path && previous.config.File.Rotating == config.File.Rotating
+	if reused {
+		next.file, next.releaseFile = previous.file, previous.releaseFile
+	} else if !config.File.Disable {
 		fileConfig := output.FileConfig{Path: config.File.Path}
 		if !config.File.Rotating.Disable {
-			fileConfig.Rotating = &output.RotatingFileConfig{
-				MaxSize:    config.File.Rotating.MaxSize,
-				MaxFileAge: config.File.Rotating.MaxFileAge,
-				MaxFiles:   config.File.Rotating.MaxFiles,
-				LocalTime:  config.File.Rotating.LocalTime,
-				Compress:   config.File.Rotating.Compress,
-			}
+			r := config.File.Rotating
+			fileConfig.Rotating = &output.RotatingFileConfig{MaxSize: r.MaxSize, MaxFileAge: r.MaxFileAge, MaxFiles: r.MaxFiles, LocalTime: r.LocalTime, Compress: r.Compress}
 		}
-		fileLogger, release, err := output.NewFile(fileConfig)
+		file, release, err := output.NewFile(fileConfig)
 		if err != nil {
-			return nil, nil, err
+			return nil, false, err
 		}
-		releases = append(releases, release)
-		fileLogger = output.NewFilter(
-			fileLogger,
-			false,
-			output.FilterKeysSet(config.File.FilterKeys),
-		)
-		fileLogger = output.NewLevelFilter(fileLogger, config.File.Level)
-		loggers = append(loggers, fileLogger)
+		next.file, next.releaseFile = file, release
 	}
-
+	var sinks []kratoslog.Logger
+	if next.file != nil {
+		sinks = append(sinks, output.NewLevelFilter(output.NewFilter(next.file, false, output.FilterKeysSet(config.File.FilterKeys)), config.File.Level))
+	}
 	if !config.Std.Disable {
-		stdLogger := output.NewStd()
-		stdLogger = output.NewFilter(
-			stdLogger,
-			false,
-			output.FilterKeysSet(config.Std.FilterKeys),
-		)
-		stdLogger = output.NewLevelFilter(stdLogger, config.Std.Level)
-		loggers = append(loggers, stdLogger)
+		sinks = append(sinks, output.NewLevelFilter(output.NewFilter(output.NewStd(), false, output.FilterKeysSet(config.Std.FilterKeys)), config.Std.Level))
 	}
-
-	out := &outputLogger{output: output.NewStack(loggers...)}
-
-	release := func() {
-		// 独占一代输出的入场边界，等待正在写入的读锁退出后永久关闭。
-		out.mu.Lock()
-		defer out.mu.Unlock()
-		if out.closed {
-			return
-		}
-		out.closed = true
-		for index := len(releases) - 1; index >= 0; index-- {
-			releases[index]()
-		}
-	}
-	return out, release, nil
+	next.output = output.NewStack(sinks...)
+	return next, reused, nil
 }
 
-// Log 允许实例内并发写入；实例释放后的写入返回 os.ErrClosed。
+func newOutputLogger(config envConfig) (*outputLogger, func(), error) {
+	prepared, _, err := prepareOutput(config, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	close(prepared.ready)
+	out := &outputLogger{preparedOutput: prepared}
+	return out, out.close, nil
+}
+
+func (l *outputLogger) close() {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	release := l.releaseFile
+	ready := l.ready
+	l.mu.Unlock()
+	if ready != nil {
+		<-ready
+	}
+	// 入场关闭并等到已有写入结束后，锁外等待文件轮转后台任务退出。
+	if release != nil {
+		release()
+	}
+}
+
+// Log 与切换、关闭共享实例入场边界，释放后不再重新打开文件。
 func (l *outputLogger) Log(level kratoslog.Level, keyvals ...any) error {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	if l.closed {
 		return os.ErrClosed
+	}
+	// 等待前代资源退役，避免同路径轮转与旧文件写入并行。
+	if l.ready != nil {
+		<-l.ready
 	}
 	return l.output.Log(level, keyvals...)
 }

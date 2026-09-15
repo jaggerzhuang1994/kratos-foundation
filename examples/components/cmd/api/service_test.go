@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
@@ -20,7 +20,7 @@ import (
 )
 
 func TestDemoHTTP(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
+	t.Setenv("LOG_FILE_ENABLE", "false")
 	logger, closeLog, err := log.NewLogger()
 	if err != nil {
 		t.Fatal(err)
@@ -43,11 +43,11 @@ func TestDemoHTTP(t *testing.T) {
 	if err := os.WriteFile(path, []byte("tracing:\n  disable: true\nclient:\n  clients:\n    greeting:\n      protocol: HTTP\n      target: "+upstream.URL+"\n    components:\n      protocol: HTTP\n      target: http://"+components.Listener.Addr().String()+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	sources, err := newSources(configPath(path))
+	sources, err := newSpec(configPath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg, closeCfg, err := config.NewManager(sources)
+	cfg, closeCfg, err := bootstrap.NewConfigManager(sources)
 	if err != nil {
 		t.Fatal(err)
 	}

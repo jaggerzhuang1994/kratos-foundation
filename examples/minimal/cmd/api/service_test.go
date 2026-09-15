@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
@@ -14,7 +14,7 @@ import (
 )
 
 func TestHTTPExportsDashboardMetrics(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
+	t.Setenv("LOG_FILE_ENABLE", "false")
 	logger, closeLog, err := log.NewLogger()
 	if err != nil {
 		t.Fatal(err)
@@ -25,11 +25,11 @@ func TestHTTPExportsDashboardMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(closeMetrics)
-	sources, err := newSources("../../configs/config.yaml")
+	sources, err := newSpec("../../configs/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager, closeConfig, err := config.NewManager(sources)
+	manager, closeConfig, err := bootstrap.NewConfigManager(sources)
 	if err != nil {
 		t.Fatal(err)
 	}

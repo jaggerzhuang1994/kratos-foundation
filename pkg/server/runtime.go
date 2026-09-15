@@ -86,7 +86,7 @@ func NewRuntime(
 	}, func() { health.stopped.Store(true); cleanup() }, nil
 }
 
-// StopDelay 返回构造时已经校验的停机等待时间，供应用总超时做一致性校验。
+// StopDelay 返回构造时已经校验的停机等待时间，供调用方了解服务器停机策略。
 func (r *Runtime) StopDelay() time.Duration {
 	return r.stopDelay
 }
@@ -175,7 +175,7 @@ func (s *stopRuntime) runBeforeStop(ctx context.Context) error {
 }
 
 // ManagementServers 返回独立监控监听的运行时；不实现 Endpointer，避免注册成业务发现地址。
-// 使用 NewServerBootstrap 时自动登记；手工组装须与 Servers 返回值一起登记。
+// 使用 NewServerBootstrap 时内部自动登记；手工组装须与 Servers 返回值一起登记。
 func (r *Runtime) ManagementServers() []transport.Server {
 	result := make([]transport.Server, 0, len(r.management))
 	for _, srv := range r.management {

@@ -8,16 +8,15 @@ import "config_pb/common.proto";
 
 // App 只有 stop_timeout 支持热更新，其余字段在构造 Kratos App 时固定。
 message App {
-  // 保留 main 的 wire 编号，删除字段不能被新语义复用。
-  reserved 1;
-  reserved "disable_registrar";
   // 注册中心超时时间（默认10s）。[需重启]
-  optional google.protobuf.Duration registrar_timeout = 2;
-  // stop timeout 必须大于 server.stop_delay （默认30s）。
+  optional google.protobuf.Duration registrar_timeout = 1;
+  // stop timeout 必须为正数，建议大于 server.stop_delay 并预留清理时间（默认30s）。
   // [热更新] 下次开始停机时读取；停机一旦开始，取值即冻结。
-  optional google.protobuf.Duration stop_timeout = 3;
+  optional google.protobuf.Duration stop_timeout = 2;
   // app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）。[需重启]
-  repeated Endpoint endpoints = 4;
+  repeated Endpoint endpoints = 3;
   // 注册到服务中心的md。[需重启]
-  map<string, string> metadata = 5;
+  map<string, string> metadata = 4;
+  // 注册实例名称；省略或空值默认 default，需配置 registry.instances.default。需重启。
+  string registry = 5;
 }

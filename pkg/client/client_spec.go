@@ -14,6 +14,7 @@ import (
 
 type clientSpec struct {
 	name       string
+	discovery  string
 	protocol   config_pb.Protocol
 	target     string
 	middleware *config_pb.ClientMiddleware
@@ -23,6 +24,11 @@ func newClientSpec(name string, option *config_pb.ClientOption) clientSpec {
 	target := option.GetTarget()
 	if target == "" {
 		target = fmt.Sprintf("discovery:///%s", name)
+	}
+
+	discovery := option.GetDiscovery()
+	if discovery == "" {
+		discovery = "default"
 	}
 
 	middleware := option.GetMiddleware()
@@ -35,6 +41,7 @@ func newClientSpec(name string, option *config_pb.ClientOption) clientSpec {
 
 	return clientSpec{
 		name:       name,
+		discovery:  discovery,
 		protocol:   option.GetProtocol(),
 		target:     target,
 		middleware: middleware,
@@ -102,6 +109,7 @@ func canonicalizeClientMiddleware(middleware *config_pb.ClientMiddleware) {
 func (s clientSpec) equal(other clientSpec) bool {
 	return s.protocol == other.protocol &&
 		s.target == other.target &&
+		s.discovery == other.discovery &&
 		proto.Equal(s.middleware, other.middleware)
 }
 
@@ -117,6 +125,12 @@ func (b *builder) validateConfig(config *config_pb.Client) error {
 		return fmt.Errorf("validate client config: %w", err)
 	}
 	for name, option := range config.GetClients() {
+		spec := newClientSpec(name, option)
+		if spec.useDiscovery() && (b.discoveries != nil || option.GetDiscovery() != "") {
+			if _, err := b.resolveDiscovery(spec); err != nil {
+				return err
+			}
+		}
 		if option == nil {
 			continue
 		}

@@ -85,13 +85,15 @@ func TestEmptyProvidesNotFoundAndDefaultManagerContracts(t *testing.T) {
 	if err := manager.Load("app", target); !errors.Is(err, config.ErrNotFound) {
 		t.Fatalf("empty manager Load error = %v, want ErrNotFound", err)
 	}
-	if cancel, err := manager.Subscribe(
+	missingCancel, err := manager.Subscribe(
 		"app",
 		new(config_pb.App),
 		func(string, any, error) { t.Fatal("missing value unexpectedly notified observer") },
-	); !errors.Is(err, config.ErrNotFound) || cancel != nil {
-		t.Fatalf("empty manager Subscribe = (cancel nil=%t, %v), want (true, ErrNotFound)", cancel == nil, err)
+	)
+	if err != nil || missingCancel == nil {
+		t.Fatalf("empty manager Subscribe = (cancel nil=%t, %v)", missingCancel == nil, err)
 	}
+	missingCancel()
 
 	defaultApp := &config_pb.App{Metadata: map[string]string{"environment": "test"}}
 	if err := manager.Load("app", target, defaultApp); err != nil {
@@ -122,9 +124,8 @@ func TestEmptyProvidesNotFoundAndDefaultManagerContracts(t *testing.T) {
 	if err != nil || cancel == nil {
 		t.Fatalf("Subscribe with default = (cancel nil=%t, %v)", cancel == nil, err)
 	}
-	if callbackCount != 1 || callbackValue == nil ||
-		callbackValue.GetMetadata()["environment"] != "test" || callbackValue == defaultApp {
-		t.Fatalf("synchronous default replay = count %d, value %#v", callbackCount, callbackValue)
+	if callbackCount != 0 || callbackValue != nil {
+		t.Fatal("Subscribe unexpectedly replayed a value")
 	}
 	cancel()
 	cancel()

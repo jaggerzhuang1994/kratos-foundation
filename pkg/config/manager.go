@@ -1,345 +1,204 @@
-// Package config 提供配置管理、配置源契约和配置源优先级控制。
 package config
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
+	"strings"
 	"sync"
-	"sync/atomic"
-	"time"
 
+	kratosconfig "github.com/go-kratos/kratos/v2/config"
+	kratosenv "github.com/go-kratos/kratos/v2/config/env"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/decoder"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/snapshot"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/source"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/subscription"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb"
 )
 
-type managerWatch struct {
-	nextID        uint64
-	subscriptions map[uint64]*subscription.Subscription
+var (
+	// ErrRemovedField 表示 Foundation 已删除的配置字段仍然存在。
+	ErrRemovedField = decoder.ErrRemovedField
+	// ErrNotFound 表示请求的配置 key 不存在。
+	ErrNotFound = kratosconfig.ErrNotFound
+	// ErrManagerClosed 表示配置 Manager 已进入清理阶段。
+	ErrManagerClosed = errors.New("config manager is closed")
+)
+
+const (
+	// JSONFormat 表示 JSON 配置内容。
+	JSONFormat = "json"
+	// YAMLFormat 表示 YAML 配置内容。
+	YAMLFormat = "yaml"
+)
+
+// Observer 接收按 prototype 解码的值；err 表示解码失败或缺失值无默认值。
+// 来源加载、模板和监听错误由官方 Config 记录日志，不经此接口转发。
+type Observer func(key string, value any, err error)
+
+// Reader 提供配置读取能力，适合仅在构造期读取配置的驱动。
+type Reader interface {
+	Load(key string, target any, defaultValue ...any) error
 }
 
-// manager 持有配置源流和最后一份有效的不可变快照。
+// Manager 是组件读取有效配置的唯一入口。
+// key 使用点分路径，可以指向任意层级，例如 "server.middleware.deadline"。
+type Manager interface {
+	// Load 将最近扫描快照中的 key 写入已分配的非 nil 指针 target。
+	// defaultValue 最多一个，必须与 target 的具体指针类型一致；配置不存在且未提供
+	// 默认值时返回 ErrNotFound。每次写入前都会清空 target，调用方可安全复用对象。
+	Load(key string, target any, defaultValue ...any) error
+
+	// Subscribe 登记独立订阅；下一轮成功 Scan 后异步回放当前值，允许 key 尚不存在或为 null。
+	// Manager 每轮 Scan 后按登记顺序串行通知变化，不保证捕获轮询间的中间状态。
+	// 同 key 可有多个订阅；cancel 幂等移除订阅，不等待已开始的回调。
+	Subscribe(
+		key string,
+		prototype any,
+		observer Observer,
+		defaultValue ...any,
+	) (func(), error)
+}
+
+// Source 保留 Kratos 的配置源契约，便于文件、Consul 等实现直接接入。
+type Source = kratosconfig.Source
+
+// Sources 按顺序进行初始加载；热更新按官方默认 merge 处理，不保证固定来源优先级。
+type Sources []Source
+
+// KeyValue 是 Source 加载和更新时交换的键值单元，别名避免自定义源重复导入 Kratos config。
+type KeyValue = kratosconfig.KeyValue
+
+// Watcher 是 Source 的变更监听器契约，别名使自定义源只依赖本包公开面。
+type Watcher = kratosconfig.Watcher
+
+// SourceLoader 在 Configuration 阶段创建配置源，不启动 watcher。
+// 来源的 Load、Watch 和 Stop 统一由 Manager 管理；失败时构造器自行回滚。
+type SourceLoader func() (Sources, error)
+
+// NewSources 过滤未启用的 nil 配置源，同时保留原始顺序，便于应用组装可选配置源
+// 时显式表达覆盖优先级。
+func NewSources(sources ...Source) Sources {
+	result := make(Sources, 0, len(sources))
+	for _, source := range sources {
+		if source != nil {
+			result = append(result, source)
+		}
+	}
+	return result
+}
+
+// NewManager 以官方 env.NewSource() 为最低优先级，加载应用提供的有序配置源。
+//
+// 使用官方 decoder、merge 和 resolver；业务源先预处理环境模板。
+// CONFIG_POLL_INTERVAL 指定正数 duration（默认 1s），构造时读取一次。
+// 构造失败停止已创建 watcher；成功后由组装层调用幂等 cleanup。
+func NewManager(sources Sources) (Manager, func(), error) {
+	manager, err := newManager(sources)
+	if err != nil {
+		return nil, nil, err
+	}
+	return manager, func() {
+		if closeErr := manager.close(); closeErr != nil {
+			log.WithModule("config").With("error", closeErr).Error("Failed to close the configuration manager")
+		}
+	}, nil
+}
+
+// manager 持有最近一次完整扫描快照；来源加载和合并仍由官方 Config 管理。
 type manager struct {
-	current atomic.Pointer[snapshot.Snapshot]
-
-	// mu 保护生命周期状态和订阅注册表；Source 调用和业务回调必须在释放锁后执行。
-	mu         sync.Mutex
-	closed     bool
-	watchErr   error
-	watches    map[string]*managerWatch
-	stream     *source.Stream
-	streamDone chan struct{}
-	closeOnce  sync.Once
-	closeErr   error
-	status     Status
+	backend   kratosconfig.Config
+	sources   []*preprocessedSource
+	mu        sync.Mutex
+	closed    bool
+	snapshot  map[string]any
+	subs      []*subscription
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+	closeErr  error
 }
-
-var _ Manager = (*manager)(nil)
 
 func newManager(sources Sources) (*manager, error) {
-	values, stream, err := source.Open(sources)
+	interval, err := pollInterval()
 	if err != nil {
 		return nil, err
 	}
-	initial, err := newValidatedSnapshot(values)
-	if err != nil {
-		return nil, errors.Join(
-			fmt.Errorf("load initial config snapshot: %w", err),
-			stream.Close(),
-		)
+	m := &manager{}
+	all := append(Sources{kratosenv.NewSource()}, sources...)
+	wrapped := make([]kratosconfig.Source, 0, len(all))
+	for i, source := range all {
+		if source == nil {
+			return nil, fmt.Errorf("config source %d is nil", i)
+		}
+		next := &preprocessedSource{source: source, expand: i != 0}
+		m.sources = append(m.sources, next)
+		wrapped = append(wrapped, next)
 	}
-	manager := &manager{
-		watches:    make(map[string]*managerWatch),
-		stream:     stream,
-		streamDone: make(chan struct{}),
+	// Source 先展开环境模板，合并后继续使用官方 resolver 解析配置引用。
+	m.backend = kratosconfig.New(kratosconfig.WithSource(wrapped...))
+	if err := m.backend.Load(); err != nil {
+		return nil, errors.Join(err, m.close())
 	}
-	manager.status = Status{Revision: 1, AcceptedUpdates: 1, LastSuccess: time.Now()}
-	manager.current.Store(initial)
-	go manager.watch()
-	return manager, nil
+	if err := m.backend.Scan(&m.snapshot); err != nil {
+		return nil, errors.Join(err, m.close())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	go m.run(ctx, interval)
+	return m, nil
 }
 
-func (m *manager) Load(key string, target any, defaultValue ...any) error {
-	valueDecoder, err := decoder.New(target, defaultValue)
-	if err != nil {
-		return fmt.Errorf("load config %q: %w", key, err)
-	}
-	value, found, err := m.loadValue(key)
-	if err != nil {
-		return err
-	}
-	if err := valueDecoder.Apply(value, found, target); err != nil {
-		return fmt.Errorf("load config %q: %w", key, err)
-	}
-	return nil
-}
-
-func (m *manager) Subscribe(
-	key string,
-	prototype any,
-	callback Observer,
-	defaultValue ...any,
-) (func(), error) {
-	if callback == nil {
-		return nil, errors.New("config observer is nil")
-	}
-	valueDecoder, err := decoder.New(prototype, defaultValue)
-	if err != nil {
-		return nil, fmt.Errorf("subscribe config %q: %w", key, err)
-	}
-
-	// 在读取回放快照的同一临界区注册，避免更新越过首次回放。
+func (m *manager) Load(key string, target any, defaults ...any) error {
 	m.mu.Lock()
-	if err := m.stateErrorLocked(); err != nil {
-		m.mu.Unlock()
-		return nil, err
-	}
-	value, found := m.current.Load().Lookup(key)
-	if !found && !valueDecoder.HasDefault() {
-		m.mu.Unlock()
-		return nil, ErrNotFound
-	}
-	watch := m.watches[key]
-	if watch == nil {
-		watch = &managerWatch{subscriptions: make(map[uint64]*subscription.Subscription)}
-		m.watches[key] = watch
-	}
-	watch.nextID++
-	id := watch.nextID
-	valueSubscription := subscription.New(
-		func(notification subscription.Notification) {
-			defer m.recordCallback(time.Now())
-			if notification.Err != nil {
-				callback(
-					key,
-					valueDecoder.NewTarget(),
-					fmt.Errorf("observe config %q: %w", key, notification.Err),
-				)
-				return
-			}
-			target := valueDecoder.NewTarget()
-			loadErr := valueDecoder.Apply(notification.Value, notification.Found, target)
-			if loadErr != nil {
-				loadErr = fmt.Errorf("load config %q: %w", key, loadErr)
-			}
-			callback(key, target, loadErr)
-		},
-		ErrObserverOverloaded,
-		func() { m.unregister(key, id) },
-	)
-	watch.subscriptions[id] = valueSubscription
+	closed, snapshot := m.closed, m.snapshot
 	m.mu.Unlock()
-
-	valueSubscription.Replay(subscription.Notification{Key: key, Value: value, Found: found})
-	valueSubscription.Open()
-	return valueSubscription.Cancel, nil
-}
-
-func (m *manager) loadValue(key string) (any, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.stateErrorLocked(); err != nil {
-		return nil, false, err
-	}
-	value, found := m.current.Load().Lookup(key)
-	return value, found, nil
-}
-
-func (m *manager) stateErrorLocked() error {
-	if m.closed {
+	if closed {
 		return ErrManagerClosed
 	}
-	if m.watchErr != nil {
-		return m.watchErr
-	}
-	return nil
-}
-
-func (m *manager) unregister(key string, id uint64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	watch := m.watches[key]
-	if watch == nil {
-		return
-	}
-	delete(watch.subscriptions, id)
-	if len(watch.subscriptions) == 0 {
-		delete(m.watches, key)
-	}
-}
-
-func (m *manager) watch() {
-	defer close(m.streamDone)
-	for {
-		update := m.stream.Next()
-		if update.Terminal {
-			m.mu.Lock()
-			closed := m.closed
-			m.mu.Unlock()
-			if closed && errors.Is(update.Err, context.Canceled) {
-				return
-			}
-			m.failWatcher(update.Err)
-			return
-		}
-		if update.Err != nil {
-			m.recordRejected("source_error")
-			m.notifyError(update.Err, false)
-			continue
-		}
-		next, err := newValidatedSnapshot(update.Values)
-		if err != nil {
-			m.recordRejected("invalid_snapshot")
-			log.WithModule("config").With("function", "manager.watch", "error", err).Error("Rejected configuration update; continuing to use the last accepted configuration")
-			m.notifyError(fmt.Errorf("load config update snapshot: %w", err), false)
-			continue
-		}
-		m.publish(next)
-	}
-}
-
-// newValidatedSnapshot 在发布前检查整个 Foundation 配置，避免已删除的顶层字段
-// 因为没有组件读取而静默失效；首次加载和热更新共用同一边界。
-func newValidatedSnapshot(values []*KeyValue) (*snapshot.Snapshot, error) {
-	next, err := snapshot.New(values)
+	valueDecoder, err := decoder.New(target, defaults)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("load config %q: %w", key, err)
 	}
-	root, _ := next.Lookup("")
-	if err := decoder.ValidateReserved(root, new(kratos_foundation_pb.Config).ProtoReflect().Descriptor(), ""); err != nil {
-		return nil, err
-	}
-	return next, nil
+	value, found := lookup(snapshot, key)
+	return valueDecoder.Apply(value, found, target)
 }
 
-type delivery struct {
-	subscription *subscription.Subscription
-	notification subscription.Notification
-}
-
-func (m *manager) publish(next *snapshot.Snapshot) {
-	m.mu.Lock()
-	if m.closed || m.watchErr != nil {
-		m.mu.Unlock()
-		return
-	}
-	previous := m.current.Swap(next)
-	m.status.Revision++
-	m.status.AcceptedUpdates++
-	m.status.LastSuccess = time.Now()
-	m.status.LastErrorCode = ""
-	deliveries := make([]delivery, 0)
-	for key, watch := range m.watches {
-		value, found := next.Lookup(key)
-		previousValue, previousFound := previous.Lookup(key)
-		if previousFound == found && (!found || reflect.DeepEqual(previousValue, value)) {
-			continue
-		}
-		for _, valueSubscription := range watch.subscriptions {
-			deliveries = append(deliveries, delivery{
-				subscription: valueSubscription,
-				notification: subscription.Notification{Key: key, Value: value, Found: found},
-			})
-		}
-	}
-	m.mu.Unlock()
-	m.deliver(deliveries)
-}
-
-func (m *manager) notifyError(err error, terminal bool) {
-	m.mu.Lock()
-	if m.closed {
-		m.mu.Unlock()
-		return
-	}
-	deliveries := make([]delivery, 0)
-	for key, watch := range m.watches {
-		for _, valueSubscription := range watch.subscriptions {
-			deliveries = append(deliveries, delivery{
-				subscription: valueSubscription,
-				notification: subscription.Notification{Key: key, Err: err, Terminal: terminal},
-			})
-		}
-	}
-	m.mu.Unlock()
-	m.deliver(deliveries)
-}
-
-func (m *manager) failWatcher(cause error) {
-	watchErr := ErrWatcherStopped
-	if cause != nil {
-		watchErr = fmt.Errorf("%w: %w", ErrWatcherStopped, cause)
-	}
-	m.mu.Lock()
-	if m.closed || m.watchErr != nil {
-		m.mu.Unlock()
-		return
-	}
-	m.watchErr = watchErr
-	m.status.LastErrorCode = "watcher_stopped"
-	deliveries := make([]delivery, 0)
-	for key, watch := range m.watches {
-		for _, valueSubscription := range watch.subscriptions {
-			deliveries = append(deliveries, delivery{
-				subscription: valueSubscription,
-				notification: subscription.Notification{Key: key, Err: watchErr, Terminal: true},
-			})
-		}
-	}
-	m.mu.Unlock()
-	log.WithModule("config").With("function", "manager.failWatcher", "error", cause).Error("Configuration watcher stopped; configuration is no longer healthy")
-	m.deliver(deliveries)
-}
-
-func (m *manager) deliver(deliveries []delivery) {
-	for _, next := range deliveries {
-		if next.subscription.Enqueue(next.notification) {
-			m.mu.Lock()
-			m.status.Overloads++
-			m.status.LastErrorCode = "observer_overloaded"
-			m.mu.Unlock()
-			log.WithModule("config").With(
-				"function", "manager.deliver",
-				"key", next.notification.Key,
-				"error", ErrObserverOverloaded,
-			).Error("Configuration subscription stopped because its pending update queue is full")
-		}
-	}
-}
-
-// close 幂等关闭 Manager，不等待已经进入业务代码的回调。
 func (m *manager) close() error {
 	m.closeOnce.Do(func() {
-		m.closeErr = m.shutdown()
+		m.mu.Lock()
+		m.closed = true
+		m.subs = nil
+		m.mu.Unlock()
+		if m.cancel != nil {
+			m.cancel()
+		}
+		// 官方 Close 遇首个 Stop 错误即返回；逐个关闭包装源保证后续来源也被释放。
+		var errs []error
+		if err := m.backend.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		for _, source := range m.sources {
+			if err := source.stop(); err != nil && !errors.Is(errors.Join(errs...), err) {
+				errs = append(errs, err)
+			}
+		}
+		m.closeErr = errors.Join(errs...)
 	})
 	return m.closeErr
 }
 
-func (m *manager) shutdown() error {
-	m.mu.Lock()
-	m.closed = true
-	subscriptions := make([]*subscription.Subscription, 0)
-	for _, watch := range m.watches {
-		for _, valueSubscription := range watch.subscriptions {
-			subscriptions = append(subscriptions, valueSubscription)
+// lookup 只读访问不可变快照，存在性与 null 分开比较。
+func lookup(root map[string]any, key string) (any, bool) {
+	if key == "" {
+		return root, true
+	}
+	var value any = root
+	for part := range strings.SplitSeq(key, ".") {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		value, ok = object[part]
+		if !ok {
+			return nil, false
 		}
 	}
-	m.watches = nil
-	stream := m.stream
-	m.mu.Unlock()
-
-	for _, valueSubscription := range subscriptions {
-		valueSubscription.Cancel()
-	}
-	if stream == nil {
-		return nil
-	}
-	err := stream.Close()
-	<-m.streamDone
-	return err
+	return value, true
 }

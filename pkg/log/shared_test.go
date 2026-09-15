@@ -7,36 +7,60 @@ import (
 	"testing"
 )
 
-func TestSharedSettingsMergeWithoutMutatingSnapshots(t *testing.T) {
+func TestRegisteredFieldsPreserveSnapshots(t *testing.T) {
 	shared := &sharedState{}
-	shared.custom.Store(&customState{})
-	shared.WithLevel(kratoslog.LevelWarn)
-	shared.WithFilterEmpty(true)
-	filters := []string{"secret"}
-	shared.WithFilterKeys(filters...)
-	fields := []any{"service", "orders", "scope", "ignored", "scope", "old"}
+	fields := []any{"service", "orders"}
 	shared.WithKV(fields...)
-	shared.WithTimeFormat("2006")
-	shared.WithMsgKey("message")
-	before := shared.custom.Load()
-	filters[0] = "changed"
-	fields[1] = "changed"
-	shared.WithFilterKeys("token")
-	shared.WithFilterKeys()
-	shared.WithKV("trace", "123", "scope", "new")
+	old := shared.custom.Load()
+	fields[1] = "mutated"
+	shared.WithKV("service", "new", "trace", "id")
 	shared.WithKV()
-	got := shared.custom.Load()
-	if got.level == nil || *got.level != kratoslog.LevelWarn || got.filterEmpty == nil || !*got.filterEmpty || got.timeFormat != "2006" || got.msgKey != "message" || !reflect.DeepEqual(got.filterKeys, []string{"secret", "token"}) {
-		t.Fatalf("previous settings lost: %#v", got)
+	if !reflect.DeepEqual(old.kv, []any{"service", "orders"}) {
+		t.Fatal("old metadata mutated")
 	}
-	if !reflect.DeepEqual(got.kv, []any{"service", "orders", "scope", "new", "trace", "123"}) {
-		t.Fatalf("merged fields = %v", got.kv)
+	if !reflect.DeepEqual(shared.custom.Load().kv, []any{"service", "new", "trace", "id"}) {
+		t.Fatal("metadata merge failed")
 	}
-	if !reflect.DeepEqual(before.filterKeys, []string{"secret"}) {
-		t.Fatalf("old filters mutated: %v", before.filterKeys)
-	}
-	if !reflect.DeepEqual(before.kv, []any{"service", "orders", "scope", "old"}) {
-		t.Fatalf("old snapshot mutated: %v", before.kv)
+}
+
+// 登记元数据不得改变省略过滤规则与显式清空规则的区别。
+func TestRegisteredFieldsPreserveFilterOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		keys []string
+		want any
+	}{
+		{name: "inherit env"},
+		{name: "clear env", keys: []string{}, want: "visible"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			shared := &sharedState{}
+			if err := shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: tc.keys}); err != nil {
+				t.Fatal(err)
+			}
+			var got any
+			logger := &logger{shared: shared, config: &configState{
+				filterKeys: []string{"token"},
+				output: loggerFunc(func(_ kratoslog.Level, fields ...any) error {
+					got = nil
+					for i := 0; i+1 < len(fields); i += 2 {
+						if fields[i] == "token" {
+							got = fields[i+1]
+						}
+					}
+					return nil
+				}),
+			}}
+			logger.Infow("token", "visible")
+			if got != tc.want {
+				t.Fatalf("before registration token=%v, want %v", got, tc.want)
+			}
+			shared.WithKV("service", "orders")
+			logger.Infow("token", "visible")
+			if got != tc.want {
+				t.Fatalf("after registration token=%v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -77,16 +101,15 @@ func TestSharedWithKVPreservesConcurrentContributions(t *testing.T) {
 
 func TestGlobalCustomUpdateWarnsAndPreservesState(t *testing.T) {
 	previousState := processState.custom.Load()
-	previousLogger := kratoslog.GetLogger()
+	previousLogger := GetLogger()
 	t.Cleanup(func() {
 		processState.custom.Store(previousState)
-		kratoslog.SetLogger(previousLogger)
+		SetLogger(previousLogger)
 	})
 	processState.custom.Store(&customState{})
-	WithKV("existing", "value")
-	WithFilterKeys("secret")
+	processState.WithKV("existing", "value")
 	var warnings [][]any
-	kratoslog.SetLogger(loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
+	SetLogger(loggerFunc(func(level kratoslog.Level, keyvals ...any) error {
 		if level != kratoslog.LevelWarn {
 			t.Errorf("level = %v, want warn", level)
 		}
@@ -98,18 +121,11 @@ func TestGlobalCustomUpdateWarnsAndPreservesState(t *testing.T) {
 		field string
 		run   func()
 	}{
-		{"level below range", "level", func() { WithLevel(-128) }},
-		{"level above range", "level", func() { WithLevel(127) }},
-		{"partial filters", "filter_keys", func() { WithFilterKeys("valid", " ") }},
-		{"duplicate filters", "filter_keys", func() { WithFilterKeys("valid", "secret") }},
-		{"odd fields", "kv", func() { WithKV("key") }},
-		{"non-string key", "kv", func() { WithKV(1, "value") }},
-		{"empty key", "kv", func() { WithKV("", "value") }},
-		{"blank key", "kv", func() { WithKV(" ", "value") }},
-		{"partial fields", "kv", func() { WithKV("existing", "changed", "", "invalid") }},
-		{"time format", "time_format", func() { WithTimeFormat(" ") }},
-		{"message key", "msg_key", func() { WithMsgKey(" ") }},
-		{"reserved message key", "msg_key", func() { WithMsgKey("module") }},
+		{"odd fields", "kv", func() { processState.WithKV("key") }},
+		{"non-string key", "kv", func() { processState.WithKV(1, "value") }},
+		{"empty key", "kv", func() { processState.WithKV("", "value") }},
+		{"blank key", "kv", func() { processState.WithKV(" ", "value") }},
+		{"partial fields", "kv", func() { processState.WithKV("existing", "changed", "", "invalid") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			warnings = nil
@@ -137,8 +153,8 @@ func TestGlobalCustomUpdateWarnsAndPreservesState(t *testing.T) {
 		})
 	}
 	warnings = nil
-	WithTimeFormat("2006")
-	if len(warnings) != 0 || processState.custom.Load().timeFormat != "2006" {
-		t.Fatal("valid update should apply without warnings")
+	RegisterFields("registered", "yes")
+	if len(warnings) != 0 {
+		t.Fatal("valid metadata emitted warning")
 	}
 }

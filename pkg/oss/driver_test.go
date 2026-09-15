@@ -68,11 +68,11 @@ func TestDriverRegistryConcurrentNames(t *testing.T) {
 
 func TestPublicDriverRegistryFunctions(t *testing.T) {
 	previous := ossDrivers
-	previousLogger := kratoslog.GetLogger()
+	previousLogger := foundationlog.GetLogger()
 	ossDrivers = newDriverRegistry()
 	t.Cleanup(func() {
 		ossDrivers = previous
-		kratoslog.SetLogger(previousLogger)
+		foundationlog.SetLogger(previousLogger)
 	})
 	var buffer bytes.Buffer
 	foundationlog.SetLogger(kratoslog.NewStdLogger(&buffer))

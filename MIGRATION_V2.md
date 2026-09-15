@@ -14,7 +14,7 @@
 
 OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必须并发安全并为外部调用设置超时。同名创建仍合并，cleanup 等待已受理创建完成后关闭实例，业务先停止使用再释放。并发及释放流程见 [OSS 文档](pkg/oss/README.md#构造与释放)。
 
-内置 file、Consul watcher 显式声明完整快照，更新时不再重复 Load。第三方 watcher 无需修改，默认继续重新 Load；仅在满足完整、有序、空结果表示全部删除及缓冲所有权要求时声明 `FullSnapshot() bool`。契约及发布流程见 [配置文档](pkg/config/README.md#watcher-完整快照契约)。Kafka 批量和并发默认值、同步提交语义不变。Broker 重启可能产生的首读 EOF 现在最多额外重建三次，成功提交后重置预算；明确认证/授权失败仍终止，见 [Kafka 恢复说明](pkg/kafka/README.md)。
+配置更新直接使用官方 Watcher.Next 结果和默认 merge，不重新 Load 来源，也不提供 FullSnapshot 扩展或删除回退。Kafka 批量和并发默认值、同步提交语义不变。Broker 重启可能产生的首读 EOF 现在最多额外重建三次，成功提交后重置预算；明确认证/授权失败仍终止，见 [Kafka 恢复说明](pkg/kafka/README.md)。
 
 ## 迁移清单
 
@@ -28,7 +28,7 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 | [ ] 应用身份 | `pkg/app_info`、GetId/GetName 等 | 使用 `pkg/appinfo` 的 ID/Name/Version/Metadata；检查注册信息与日志身份 |
 | [ ] 配置源 | NewConfig 根据环境安排文件/Consul 优先级 | 用 `config.NewSources` 显式排序，后面的源优先；使用 `contrib/config/file/consul/text` |
 | [ ] 配置读取 | Kratos Config/Value/Watch 调用 | 改为 `config.Manager.Load/Subscribe`；回调对象独立，取消订阅不等待正在执行的回调 |
-| [ ] 订阅故障 | 业务可能忽略 watcher 错误 | 处理 `ErrObserverOverloaded`、`ErrWatcherStopped`；记录告警并决定重建组件或重启；终止后不会自动恢复订阅 |
+| [ ] 订阅语义 | 曾提供多订阅、首次回放及队列 | 现在下一轮成功 Scan 后异步回放当前值，之后按变化串行通知；支持缺失 key 和同 key 多订阅 |
 | [ ] 客户端构造 | 旧 Factory 构造及 ResolveClient/MakeGrpcConn/MakeHttpClient | 使用新的 NewFactory 依赖签名；`AcquireClient(ctx, name)` 成功后必须 `defer release()` |
 | [ ] 连接选择 | WithDefaultConnName/WithConnName | 生成客户端用 `NewXxxWithConnName(factory, name)`；手写调用显式传连接名 |
 | [ ] 调用选项 | GrpcCallOptionFromContext/HttpCallOptionFromContext 等 | 改用 WithGRPCCallOptions / WithHTTPCallOptions 后重新生成；按实际协议透传，原生客户端仍可直接使用 |
@@ -44,11 +44,11 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 
 ### 删除或改名的配置
 
-已删除字段即使值是 null 或空对象也会被拒绝，不能留作占位。
+目标 protobuf 配置解码时，已删除字段即使值是 null 或空对象也会被拒绝；Manager 不再全局预检未读取的字段。
 
 | 旧字段 | 迁移方式 |
 |---|---|
-| 顶层 `log` | `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` 设置 |
+| 旧顶层 `log` | 当前版本重新提供 log 运行期策略；旧输出资源字段迁移至 LOG_* |
 | 顶层 `metrics` | 显式构造 Provider，HTTP 指标端点使用 `server.http.metrics` |
 | 顶层 `job`、`queue` | 强类型 Spec/构造配置与显式组装 |
 | `app.disable_registrar` | 由 Wire provider 返回 `registry.Registrar`；返回 nil 禁用服务注册 |
@@ -69,8 +69,8 @@ tracing.sampler 和数据库连接池参数。DSN、驱动、连接集合、服�
 
 此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 和
 `job.Spec.Coordinator`（包括 `job.Builder.Coordinator`）已移除。Registrar 改为
-`app.NewApp` / `bootstrap.NewKratosApp` 的最后一个构造参数；Coordinator 改为
-`job.NewManager` / `bootstrap.NewComponentsBootstrap` 的最后一个构造参数。
+`app.NewApp` 的最后一个构造参数或 `bootstrap.NewKratosApp` 的 registrar 参数；Coordinator 改为
+`job.NewManager` 的最后一个构造参数或 `bootstrap.NewJobBootstrap` 的第二个参数。
 删除 Boot 中的对应登记，给 Wire 增加返回目标接口的 provider，再重新生成 injector。
 禁用时返回 nil interface，启用时选择对应 contrib 实现；分布式 Cron 在协调器为 nil 时仍报构造错误。
 完整示例和构造流程见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)。
@@ -148,7 +148,7 @@ make verify-release  # 顺序执行 verify、lint、test-business，失败立即
 | 错误输入和未知连接 | 返回 400/500，不写入订单、不暴露原始数据库错误 | 同上 invalid input/unknown connection 子用例 |
 | App 与资源所有权 | 父 Context 取消后 Run 退出；数据库直到 Wire cleanup 才关闭，重复 cleanup 安全 | 同上 |
 | 构造失败回滚 | NewApp 失败后恢复全局 Logger | fixture `TestGeneratedAssemblyRollsBackOnAppConstructionFailure` |
-| 旧配置拒绝 | log/metrics/job/timeout/replicas 返回 ErrRemovedField | fixture `TestBusinessRejectsRemovedConfig` |
+| 旧配置拒绝 | 只在实际业务 protobuf 解码时检查保留字段，例如 database replicas | fixture `TestBusinessRejectsRemovedConfig` |
 | 生成客户端契约 | HTTP/gRPC 分支、错误链和租约释放通过 | client-v2 `TestGeneratedClientsCompileAndReleaseLeasesAgainstPublicFactory` |
 
 HTTP fixture 是最小订单场景，不代替真实业务服务的权限、限流、幂等及数据迁移验收。
@@ -209,30 +209,29 @@ flowchart LR
     G -- 是 --> H([进入既有发布审批流程])
 ```
 
-默认 HTTP 现在保留 `/healthz`、`/readyz`，不受业务前缀和鉴权影响；已有同名路由需迁移或显式关闭健康端点。详见 [server README](pkg/server/README.md#默认健康检查)。配置状态及指标接入见 [config README](pkg/config/README.md#运行状态观测与过载处置)。
+默认 HTTP 现在保留 `/healthz`、`/readyz`，不受业务前缀和鉴权影响；已有同名路由需迁移或显式关闭健康端点。详见 [server README](pkg/server/README.md#默认健康检查)。配置订阅边界见 [config README](pkg/config/README.md)。
 
-监控端点地址可通过 `server.http.metrics.addr` 和 `server.http.health.addr` 指定；为空时复用业务 HTTP，相同时共享监听。路径相对于所选监听根路径，不再受业务 PathPrefix/Filter 影响，已有前缀抓取地址需同步调整。独立端口需同步更新部署端口与抓取/探针地址；手工组装需额外登记 `Runtime.ManagementServers()`，ServerBootstrap 自动登记。
+监控端点地址可通过 `server.http.metrics.addr` 和 `server.http.health.addr` 指定；为空时复用业务 HTTP，相同时共享监听。路径相对于所选监听根路径，不再受业务 PathPrefix/Filter 影响，已有前缀抓取地址需同步调整。独立端口需同步更新部署端口与抓取/探针地址；手工组装需额外登记 `Runtime.ManagementServers()`，NewServerBootstrap 自动登记。
 
-## 移除配置自身引用
+## 环境模板与官方配置引用
 
-配置只保留环境变量模板 `$VAR` / `${VAR}`，在 Source 返回原始 KeyValue 后、JSON/YAML 格式解析前执行一次替换；不再解析配置字段之间的引用。旧 `${path}` 不再读取同名配置字段；若名称合法但环境变量未设置，则替换为空。包含点分路径等非法变量语法会报模板错误。`${path:fallback}` 不再合法，需要默认值时改用环境变量 `${VAR:-fallback}`，必填检查使用 `${VAR:?描述}`。配置引用的循环检查同步移除。
+Source 预处理保留环境变量模板 `$VAR` / `${VAR}`、`${VAR:-default}` 和 `${VAR:?描述}`，在 JSON/YAML 解码前替换。合并后继续使用官方默认 resolver，解析 `${key}` / `${key:default}` 配置引用。
 
-迁移时将配置引用改为实际值、部署时生成的配置或环境变量。数字、布尔值环境模板不加引号，字符串按 JSON/YAML 规则加引号和转义。采用 compose-go/template v2.15.0：普通未设置变量和空变量都替换为空；字面 `$` 使用 `$$` 转义；替换后的内容仍须满足格式及目标类型约束。详细边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。
+业务源中的配置引用须写成 `$${database.host}` 或 `$${database.port:5432}`，通过 `$$` 跳过第一阶段。默认 resolver 输出字符串，不启用额外的实际类型转换选项。第一阶段产生的字面 `${...}` 仍会被第二阶段处理。官方不维护引用依赖图，仅更新被引用字段不会重算此前已替换的字符串；来源更新应同时返回引用模板。详细边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。
 
 ```mermaid
 flowchart TD
-    A([配置源返回原始 KeyValue]) --> B[Compose 环境替换 默认值与必填检查]
-    B -- 模板或必填检查失败 --> I
-    B --> E{解析 JSON/YAML 成功?}
-    E -- 是 --> F[按优先级合并 不展开配置自身引用]
-    F --> G{保留字段校验通过?}
-    G -- 是 --> H([发布快照 供 Load 和订阅解码])
-    E -- 否 --> I{热更新?}
-    G -- 否 --> I
-    I -- 是 --> J[ERROR Rejected configuration update 通知订阅 保留旧快照]
-    I -- 否 --> K[释放源 返回构造错误]
-    J --> L([等待下一次源更新])
-    K --> M([结束])
+    A([配置源返回原始 KeyValue]) --> B[非默认 env 源执行环境模板替换]
+    B --> C{官方 decoder 和默认 merge 成功?}
+    B -- 模板失败 --> E
+    C -- 是 --> R[官方 resolver 替换配置引用]
+    R --> D[官方 Config 更新有效值]
+    D --> H([Load 解码或官方 observer 通知])
+    C -- 否 --> E{构造期?}
+    E -- 是 --> F[关闭已打开源 返回构造错误]
+    E -- 否 --> G[官方 ERROR 日志记录错误]
+    G --> I([由官方 watcher 继续处理后续更新])
+    F --> J([结束])
 ```
 
 ## 消费项目迁移经验：auth_service
@@ -273,7 +272,7 @@ go version -m ./tools/protoc-gen-jsonschema
 ### Wire 成功不代表业务服务已登记
 
 本例记录的是旧 `ConsulBaseProviderSet`、单一 `bootstrap.Spec` 和统一组件构造的迁移阶段；
-当前集合已拆为 `BaseProviderSet` + `ConsulProviderSet`，新代码按 [Bootstrap 文档](pkg/bootstrap/README.md) 组装。
+当前仅使用 `DriverProviderSet`，新代码按 [Bootstrap 文档](pkg/bootstrap/README.md) 组装。
 维护者有意将 `cmd/auth_service/bootstrap.go` 的 Auth HTTP、Auth gRPC、RBAC gRPC 注册调用注释用于框架联调，
 对应服务参数也被移除。`wire_gen.go` 因此没有构造 AuthService、RbacService 及其业务依赖。
 ProviderSet 列出了构造函数，并不表示 Wire 一定执行它们。
@@ -310,12 +309,7 @@ Go、gRPC、HTTP、Foundation client/errors、校验和文档产物必须指向�
 
 以下配置示例属于旧版混合来源迁移记录：当时目录转 `file.PathList` 的规则由业务定义，
 根目录 `*.yaml` 后加载 `{APP_ENV}/*.yaml`，local 文件优先、其他环境 Consul 优先。
-当前 `ConsulProviderSet` 已改为 local 仅加载本地文件（支持具体文件、目录直属 `*.yaml` 或 glob），其他环境仅加载远程八层路径，
-不混合来源、不回退本地；默认目录名来自 AppInfo.Name，自定义目录使用对应自定义集合。
-`file.PathList` 的每一项也统一采用目录、文件或 glob 规则；目录在构造时展开直属 `*.yaml`，
-不再动态加入新增文件，已选文件删除时保留旧配置并等待重建。详见 [文件配置源](contrib/config/file/README.md)。
-请按 [当前路径、失败边界与组装流程](pkg/bootstrap/README.md#配置选择和路径约定) 迁移，
-不要沿用旧目录层级与来源优先级的预期。
+当前使用 `spec.Configuration` 显式声明路径与覆盖顺序，移除了按环境选择文件/远程配置的组装逻辑。
 
 本例 `internal/conf/source_test.go` 用临时文件验证顺序和最终覆盖值，并通过 v2 Manager
 读取业务 Duration 与 `server.middleware.deadline.fallback_timeout`。这类测试比单独检查 YAML 语法更有效，
@@ -455,3 +449,45 @@ flowchart LR
 全局及实例消息方法统一应用当前 `msgKey`。调用方改用 `log.WithModule("config/file").With("files", matches).Info("Matched local configuration files")`，其中 `matches` 为已匹配的文件列表，避免通过 `Infow("msg", ...)` 写死消息字段。原始 `Log/*w` 仍保留调用者给定的键值。
 
 模块视图借用获取时的全局输出，持续应用共享设置，但不跟随之后的 SetLogger；在使用处获取。`Context` 返回的 Kratos Helper 捕获构造时消息字段名，长期保存时优先使用模块 Logger 的 WithContext 视图。消息文案改为具体描述，函数、错误和业务上下文保留为独立字段；原先按管道分隔消息字符串检索的规则需同步调整。流程及完整契约见 [消息输出规则](pkg/log/README.md#字段过滤与去重)。
+
+## 日志三层策略与 API 收敛
+
+当前版本重新开放顶层 `log` 作为运行期策略，配置使用 JSON 字段名，不保留旧二进制字段编号。仅支持当前 schema 中的策略字段；根 level/disable/filter_empty/time_format/msg_key 固定于 `LOG_*`；filter_keys/std/file 以 env 为初始值并支持热更新。
+
+- `log.WithLevel(...)`、`log.WithFilterKeys(...)` 改为返回派生 Logger，必须保存或使用返回值；忽略结果不再修改进程状态。
+- `log.WithKV(...)` 改为 `log.With(...)`；AppInfo/Tracing 等组装层共享元数据使用 `log.RegisterFields(...)`。
+- 删除包级 `WithFilterEmpty`、`WithTimeFormat`、`WithMsgKey`；改用 `LOG_FILTER_EMPTY`、`LOG_TIME_FORMAT`、`LOG_MSG_KEY` 启动配置。
+- `Logger` 增加 `WithLevel`，自定义实现必须返回独立派生视图。移除 `WithModuleConfig` 和 `ModuleConfig`；组件使用 WithModule 声明模块，统一通过 `log.modules` 热更新，模块配置级别高于 WithLevel。
+- `bootstrap.NewLogBootstrap` 接收 `(spec, manager, logger)`，其中 `config.Manager` 为必需依赖。更新手动调用和 Wire 生成产物，cleanup 先取消订阅再恢复全局绑定。
+- `request.WithDebug(ctx)`（`pkg/request`）返回请求调试上下文，替代日志包内的请求标记入口；使用 `logger.WithContext(ctx)` 或 `log.WithContext(ctx)` 记录。ctx debug 高于实例级别，但不绕过禁用、过滤或输出端显式限制。
+- 未显式设置输出端级别时不再重复按全局级别过滤；需要硬限制时设置 `log.std.level` / `log.file.level` 或环境输出级别。
+
+完整默认值、继承、热更新失败边界、并发流程图及示例见 [日志文档](pkg/log/README.md#三层策略与公共-api)。
+
+请求 debug 的跨服务传播由独立传输适配层负责。服务端 `server.middleware.request_debug.accept_incoming` 默认 true，显式 false 关闭接收；客户端 `client.clients.<name>.middleware.request_debug.propagate` 默认 true。保留键不能通过通用 metadata 注入。规则与流程见 [request](pkg/request/README.md)。
+
+文件日志现在默认关闭，普通进程与测试进程行为一致。启用时将 `LOG_FILE_DISABLE=false` 替换为 `LOG_FILE_ENABLE=true`；关闭时删除旧变量或设置 `LOG_FILE_ENABLE=false`。旧变量不再读取；运行期可通过 `log.file.enable=true` 启用文件日志。
+
+## 驱动组装入口
+
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。
+
+## Consul env 单例
+
+删除 pkg/consul 公开构造入口及 Consul 驱动的 options.connection。连接参数迁入 CONSUL_* 启动环境；配置源和全部具名 Consul 实例共享同一进程客户端，无法再按实例连接不同集群。Get 返回 (client, disabled, err)，禁用返回 nil、true、nil，真实初始化失败才返回 error。首次使用固定客户端、禁用状态或错误，修改 env 不会触发重建。驱动 cleanup 只停止自身任务，不关闭共享连接。调用链与同步边界见[单例生命周期](internal/consul/README.md)。
+
+配置管理已移除聚合快照、固定覆盖优先级、全局保留字段校验及 StatusReader。默认 decoder/merge/resolver 采用官方行为；Manager 用 CONFIG_POLL_INTERVAL（默认 1s）定期 Scan，比较最近快照并串行通知独立订阅，支持缺失 key。详见 [配置契约](pkg/config/README.md)。
+
+应用停机策略直接注入 `app.NewStopPolicy(config, manager, logger)`，删除 `bootstrap.NewStopPolicy` 包装和第四个 stopDelay 参数。RuntimeBootstrap 仅表示组装完成，不再携带 StopDelay。`stop_timeout > server.stop_delay` 为部署建议，不再阻止构造或热更新；正数及 Duration 合法性校验保留。
+
+删除 `bootstrap.NewBootstrap`，统一使用 `NewRuntimeBootstrap` → `NewApplicationBootstrap` → `NewKratosApp`。业务 Boot 返回 `Bootstrap` 标记；自行构造组件的登记贡献也须作为 Boot 的前置依赖，并共享 `bootstrap.NewSpec` 持有的应用 Spec，避免重复登记。
+
+`NewServerBootstrap` 改为接收统一 Spec、配置及观测依赖和 Bootstrap 标记，在业务 Boot 后构造并登记服务器，返回独立 cleanup。NewRuntimeBootstrap 注入 ServerBootstrap 保证顺序；旧的直接传入 app.Spec 和 Runtime 的登记签名不保留。
+
+`NewJobBootstrap` 现在接收统一 Spec、协调器、日志/观测依赖及 Bootstrap 标记，在 Boot 完成后构造并登记 Job Manager。`NewRuntimeBootstrap(spec, serverBootstrap, jobBootstrap)` 汇合两个组件标记，仅返回 `(RuntimeBootstrap, error)`，删除空 cleanup 及领域构造依赖。
+
+`app.registry` 和 `client.clients.<name>.discovery` 省略或为空时均使用 `default`，须配置 `registry.instances.default` 及驱动；显式名称仍可选择其他实例。删除以空 app.registry 禁用注册的用法，改由驱动禁用状态控制。直连客户端不要求发现实例。
+
+配置 proto 已清除 reserved 声明，消息字段按声明顺序从 1 连续编号，不保证旧 protobuf 二进制兼容。JSON 字段名、枚举数值和生成器扩展编号保持不变。Foundation 旧字段不再因 reserved 被拒绝，应按当前 schema 主动清理；业务自定义消息的 reserved 校验仍有效。
+
+各组件的 `database.log`、`redis.log`、`client.log`、`kafka.log` 及 ModuleLog 协议已删除，迁移到 `log.modules` 列表。模块表达式按顺序首个命中，支持精确、末尾 * 前缀及 * 全匹配；不要沿用旧 log.modules 映射格式。filter_keys 与根、实例、对应输出端取并集；禁用和 level 由首个命中项决定。完整配置与优先级流程见 [日志模块策略](pkg/log/README.md#模块策略)。

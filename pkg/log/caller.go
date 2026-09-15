@@ -50,7 +50,7 @@ func callerWrapper(function string) bool {
 	}
 	switch function {
 	case foundation + "log.globalLogger.Log",
-		foundation + "log.(*kratosBridge).Log",
+		foundation + "log.kratosProxy.Log",
 		foundation + "log/internal/output.(*moduleLogger).Log",
 		foundation + "database.(*gormLoggerWriter).Printf",
 		foundation + "kafka.(*loggerAdapter).Log",

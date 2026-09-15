@@ -153,12 +153,4 @@ func TestLoadConfigReturnsIndependentValidatedSnapshots(t *testing.T) {
 	if got := second.GetConnections()["main"].GetBrokers(); len(got) != 1 || got[0] != "broker:9092" {
 		t.Fatalf("second load brokers = %#v", got)
 	}
-
-	invalidLevel := "verbose"
-	_, err = loadConfig(testconfig.New(t, "kafka", &config_pb.Kafka{
-		Log: &config_pb.ModuleLog{Level: &invalidLevel},
-	}))
-	if err == nil || !strings.Contains(err.Error(), "validate kafka config") {
-		t.Fatalf("invalid config error = %v", err)
-	}
 }

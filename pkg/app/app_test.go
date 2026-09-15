@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"io"
 	"strings"
 	"testing"
@@ -28,9 +29,7 @@ func newAppTestConfigAndPolicy(t testing.TB) (Config, *StopPolicy) {
 	policy, cleanup, err := NewStopPolicy(
 		config,
 		manager,
-		kratoslog.NewStdLogger(io.Discard),
-		0,
-	)
+		kratoslog.NewStdLogger(io.Discard))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,11 +95,11 @@ func TestNewAppConstructsApplicationFromSpec(t *testing.T) {
 }
 
 func TestNewAppRestoresKratosGlobalLoggerAfterConstruction(t *testing.T) {
-	original := kratoslog.GetLogger()
+	original := foundationlog.GetLogger()
 	previous := kratoslog.NewStdLogger(io.Discard)
 	registered := kratoslog.NewStdLogger(io.Discard)
-	kratoslog.SetLogger(previous)
-	t.Cleanup(func() { kratoslog.SetLogger(original) })
+	foundationlog.SetLogger(previous)
+	t.Cleanup(func() { foundationlog.SetLogger(original) })
 
 	config, policy := newAppTestConfigAndPolicy(t)
 	spec := NewSpec()
@@ -111,7 +110,7 @@ func TestNewAppRestoresKratosGlobalLoggerAfterConstruction(t *testing.T) {
 	if _, err := NewApp(context.Background(), spec, config, policy, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := kratoslog.GetLogger(); got != previous {
+	if got := foundationlog.GetLogger(); got != previous {
 		t.Fatalf("global logger after NewApp has type %T, want previous %T", got, previous)
 	}
 }

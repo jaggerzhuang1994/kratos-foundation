@@ -12,7 +12,8 @@ import (
 )
 
 func TestInitializeAndCleanup(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
+	t.Setenv("DISABLE_CONSUL", "true")
+	t.Setenv("LOG_FILE_ENABLE", "false")
 	path, err := filepath.Abs("../../configs/config.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -37,14 +38,14 @@ func TestInitializeAndCleanup(t *testing.T) {
 }
 
 func TestSourcesRejectsDirectory(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
-	if _, err := newSources(configPath(t.TempDir())); err == nil {
+	t.Setenv("LOG_FILE_ENABLE", "false")
+	if _, err := newSpec(configPath(t.TempDir())); err == nil {
 		t.Fatal("directory accepted as configuration")
 	}
 }
 
 func TestRedisJobs(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
+	t.Setenv("LOG_FILE_ENABLE", "false")
 	logger, closeLog, err := log.NewLogger()
 	if err != nil {
 		t.Fatal(err)

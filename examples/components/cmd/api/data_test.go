@@ -19,7 +19,7 @@ import (
 )
 
 func TestDataService(t *testing.T) {
-	t.Setenv("LOG_FILE_DISABLE", "true")
+	t.Setenv("LOG_FILE_ENABLE", "false")
 	logger, closeLog, err := log.NewLogger()
 	if err != nil {
 		t.Fatal(err)

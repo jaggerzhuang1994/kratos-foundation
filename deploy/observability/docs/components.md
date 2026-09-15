@@ -67,6 +67,6 @@ Job 调度跳过/等待与 Kubernetes 专属资源仍需分别接入对应采集
 
 Queue 数量属于共享 Store 快照，推荐单独选择一个采集实例，或对同一 app/queue_destination 使用 max 去重；不同 Store 必须使用不同逻辑队列名。数据库聚合可能扫描队列表，设置采集超时并按规模调整频率。Redis 年龄不可用时不是零等待；不要只看年龄告警而忽略采集成功与年龄可用性。
 
-Go Runtime 新分区展示线程、VMS/RSS、堆/栈、对象与分配速率、GC频率/平均暂停/CPU估计开销、调度P95。Config 分区展示watcher、接受/拒绝、逐实例本地版本与最近接受时间、订阅深度/过载、回调运行数/均值；版本不代表全局版本，接受不保证业务组件应用成功。Config需要组装 bootstrap.NewConfigObservabilityBootstrap，示例Wire已包含；自定义Config Manager需实现StatusReader。
+Go Runtime 新分区展示线程、VMS/RSS、堆/栈、对象与分配速率、GC频率/平均暂停/CPU估计开销、调度P95。配置状态指标及 Config 分区已移除；来源错误查看官方 Config 日志，热更新生效情况通过组件日志与实际参数验证。
 
 本地可复现实测见 [components 示例](../../../examples/components/README.md)。Queue 空轮询产生的 `redis.Nil` 也会计入 SDK 非成功返回，空闲时比例可能接近 100%；应结合 `error_type`、连接超时与 Queue 运行时错误判断，不能据此认定 Redis 服务故障。

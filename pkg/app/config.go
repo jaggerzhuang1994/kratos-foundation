@@ -26,6 +26,9 @@ func NewConfig(manager foundationconfig.Manager) (Config, error) {
 	if err := manager.Load("app", next, defaultConfig); err != nil {
 		return nil, err
 	}
+	if next.Registry == "" {
+		next.Registry = "default"
+	}
 	if err := validateConfig(next); err != nil {
 		return nil, err
 	}

@@ -12,12 +12,9 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
-	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
 )
-
-var kratosNewMu sync.Mutex
 
 // App 持有 Kratos 应用及启动、停止所需的状态；组装阶段由 bootstrap 管理。
 type App struct {
@@ -197,15 +194,10 @@ func newApp(snapshot appSnapshot, stopPolicy *StopPolicy) *App {
 	}
 }
 
-// newKratosApplication 隔离 kratos.New 内部安装全局 Logger 的副作用。全局
-// Logger 的长期所有权属于 Log Bootstrap；这里串行化构造并用 defer 恢复进入
-// 构造前的值，使正常返回或 panic 都不会把 Spec Logger 遗留为进程全局值。
+// newKratosApplication 禁止 kratos.New 重写全局 Logger。框架日志统一通过
+// Foundation 初始化时安装的稳定代理输出，实际绑定由 Log Bootstrap 管理。
 func newKratosApplication(options ...kratos.Option) *kratos.App {
-	kratosNewMu.Lock()
-	defer kratosNewMu.Unlock()
-	previous := kratoslog.GetLogger()
-	defer kratoslog.SetLogger(previous)
-	return kratos.New(options...)
+	return kratos.New(append(options, kratos.Logger(nil))...)
 }
 
 // onceStop 只执行一次底层停止操作，并让并发调用者等待和共享同一个稳定结果。

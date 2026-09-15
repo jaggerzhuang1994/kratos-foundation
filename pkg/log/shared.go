@@ -2,10 +2,10 @@ package log
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
-
-	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
 var processState = func() *sharedState {
@@ -14,80 +14,26 @@ var processState = func() *sharedState {
 	return state
 }()
 
-// WithLevel 修改进程共享最低日志级别。
-func WithLevel(level kratoslog.Level) { processState.WithLevel(level) }
-
-// WithFilterEmpty 修改进程共享空字段过滤策略。
-func WithFilterEmpty(value bool) { processState.WithFilterEmpty(value) }
-
-// WithFilterKeys 修改进程共享字段过滤列表。
-func WithFilterKeys(keys ...string) { processState.WithFilterKeys(keys...) }
-
-// WithKV 合并进程共享日志字段；保留键 module 不参与日志归属。
-func WithKV(values ...any) { processState.WithKV(values...) }
-
-// WithTimeFormat 修改进程共享时间格式。
-func WithTimeFormat(format string) { processState.WithTimeFormat(format) }
-
-// WithMsgKey 修改进程共享消息字段名。
-func WithMsgKey(key string) { processState.WithMsgKey(key) }
+// RegisterFields 登记进程级组件元数据；业务实例字段使用 With。
+// 仅供组装层登记 service、trace 等字段，不改变运行期日志策略。
+func RegisterFields(values ...any) { processState.WithKV(values...) }
 
 // customState 保存一份不可变的进程级自定义配置快照。
 type customState struct {
 	version uint64
+	policy  *RuntimeConfig
 
-	level       *kratoslog.Level
-	filterEmpty *bool
-	filterKeys  []string
-	kv          []any
-	timeFormat  string
-	msgKey      string
+	filterKeys []string
+	kv         []any
 }
 
-// sharedState 仅保存进程共享的非资源配置，不拥有输出、cleanup 或引用计数。
+// sharedState 保存共享策略并借用活动输出，资源仍由每个实例的 cleanup 释放。
 type sharedState struct {
 	custom atomic.Pointer[customState]
-}
-
-// WithLevel 设置进程级最低日志级别。
-func (s *sharedState) WithLevel(level kratoslog.Level) {
-	s.updateCustom("level", func(state *customState) error {
-		if level < kratoslog.LevelDebug || level > kratoslog.LevelFatal {
-			return fmt.Errorf("log level is invalid")
-		}
-		state.level = &level
-		return nil
-	})
-}
-
-// WithFilterEmpty 设置进程级空值过滤策略。
-func (s *sharedState) WithFilterEmpty(filterEmpty bool) {
-	s.updateCustom("filter_empty", func(state *customState) error {
-		state.filterEmpty = &filterEmpty
-		return nil
-	})
-}
-
-// WithFilterKeys 增加进程级敏感字段过滤规则。
-func (s *sharedState) WithFilterKeys(keys ...string) {
-	values := append([]string(nil), keys...)
-	s.updateCustom("filter_keys", func(state *customState) error {
-		seen := make(map[string]struct{}, len(state.filterKeys)+len(values))
-		for _, key := range state.filterKeys {
-			seen[key] = struct{}{}
-		}
-		for _, key := range values {
-			if strings.TrimSpace(key) == "" {
-				return fmt.Errorf("log filter key is empty")
-			}
-			if _, exists := seen[key]; exists {
-				return fmt.Errorf("log filter key %q is duplicated", key)
-			}
-			seen[key] = struct{}{}
-			state.filterKeys = append(state.filterKeys, key)
-		}
-		return nil
-	})
+	// gate 保护输出登记与提交，并让一条日志使用同一代策略和输出。
+	gate   sync.RWMutex
+	owners map[*outputLogger]envConfig
+	epoch  uint64
 }
 
 // WithKV 增加进程级字段；重复字符串 key 使用后声明的值，module 在输出组装时忽略。
@@ -120,31 +66,6 @@ func (s *sharedState) WithKV(keyvals ...any) {
 	})
 }
 
-// WithTimeFormat 设置进程级时间戳格式。
-func (s *sharedState) WithTimeFormat(timeFormat string) {
-	s.updateCustom("time_format", func(state *customState) error {
-		if strings.TrimSpace(timeFormat) == "" {
-			return fmt.Errorf("log time format is empty")
-		}
-		state.timeFormat = timeFormat
-		return nil
-	})
-}
-
-// WithMsgKey 设置消息类 Helper 使用的字段名。
-func (s *sharedState) WithMsgKey(msgKey string) {
-	s.updateCustom("msg_key", func(state *customState) error {
-		if strings.TrimSpace(msgKey) == "" {
-			return fmt.Errorf("log msgKey is empty")
-		}
-		if strings.TrimSpace(msgKey) == moduleKey {
-			return fmt.Errorf("log msgKey must not use reserved key %q", moduleKey)
-		}
-		state.msgKey = strings.TrimSpace(msgKey)
-		return nil
-	})
-}
-
 // updateCustom 仅供本包方法发布快照；校验失败保留原状态，并记录失败项和原因。
 // 回调只操作副本，不执行外部调用；warning 在回调失败后记录。
 func (s *sharedState) updateCustom(field string, update func(*customState) error) {
@@ -156,7 +77,8 @@ func (s *sharedState) updateCustom(field string, update func(*customState) error
 			next.version++
 			// 复制可变切片，校验失败或 CAS 冲突均不影响已发布快照。
 			next.kv = append([]any(nil), old.kv...)
-			next.filterKeys = append([]string(nil), old.filterKeys...)
+			// 空切片代表清空 env 过滤，复制时必须保留其与 nil 的区别。
+			next.filterKeys = slices.Clone(old.filterKeys)
 		}
 		if err := update(next); err != nil {
 			WithModule("log").With("function", "updateCustom", "state", field, "error", err).Warn("Rejected invalid logging settings; retaining the previous settings")

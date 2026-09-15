@@ -31,14 +31,14 @@
 
 | YAML 顶层配置 | 用途 | 支持热更新的范围 |
 | --- | --- | --- |
+| `log` | 根过滤及标准/文件输出策略 | filter_keys、std、file 全部字段；根级别、禁用和格式固定于 env |
 | `app` | 注册端点、metadata、注册与停机期限 | 仅 `stop_timeout`；停机开始后预算固定 |
 | `tracing` | OTLP 导出器与采样器 | 仅 `sampler`；构造时已禁用的 Provider 不能靠热更新启用 |
 | `server` | HTTP/gRPC、中间件、健康与指标端点 | 仅 `middleware`；地址、端点和停机延迟需重启 |
-| `discovery` | Consul 查询超时、单/多数据中心 | 无 |
-| `registry` | Consul 健康检查、心跳、实例标签 | 无；`tags` 与 `app.metadata` 分开配置 |
+| `registry` | 具名注册与发现实例；驱动选项含健康检查、心跳、标签及发现超时 | 无；实例集合与选项需重启 |
 | `database` | 具名连接、GORM、连接池及观测 | 仅各连接的 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime`、`conn_max_idle_time` |
 | `redis` | 具名连接、追踪与指标 | 无 |
-| `client` | 具名服务客户端、调用中间件与清理预算 | 仅 `clients`；`log`、`cleanup_timeout` 需重启 |
+| `client` | 具名服务客户端、调用中间件与清理预算 | 仅 `clients`；`cleanup_timeout` 需重启，日志由 log.modules 管理 |
 | `kafka` | 具名 broker 连接、TLS/SASL、生产/消费参数 | 无 |
 | `oss` | 按逻辑名配置 bucket 和驱动参数 | 无 |
 
@@ -48,7 +48,7 @@
 
 框架不会自动寻找 `config.example.yaml`。应用将需要的配置复制到部署文件，替换地址、连接名和凭据，并通过 [`contrib/config/file`](contrib/config/file/README.md) 的 `NewSources(logger, PathList{...})` 或 [`contrib/config/consul`](contrib/config/consul/README.md) 创建源，再交给 `config.NewManager`。只有应用显式构造的组件才会消费对应配置块；删除数据库或 Redis 配置时，也应调整相应组件的组装。
 
-Sources 按传入顺序合并，后面的源优先级更高；map 递归合并，slice、标量和显式 `null` 整体覆盖。`$VAR` / `${VAR}` 在原始 KeyValue 的 JSON/YAML 解析前通过 Compose 模板替换环境变量，支持默认值和必填检查；普通变量未设置时为空。配置自身引用及其 fallback 已移除；具体边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。凭据应由实际部署配置源或受信任的进程环境提供，示例中的占位值不能用于连接真实服务。
+Manager 默认每秒 Scan 一次完整配置并串行通知变化，可用启动环境变量 `CONFIG_POLL_INTERVAL` 调整；支持缺失 key 与同 key 多订阅。Load 读取最近扫描快照。Sources 初次按传入顺序加载，更新采用 Kratos 默认 merge；不保证删除回退、固定来源优先级或 null 清空。`$VAR` / `${VAR}` 在原始 KeyValue 的 JSON/YAML 解析前通过 Compose 模板替换环境变量，支持默认值和必填检查；普通变量未设置时为空。合并后保留官方 resolver；业务源使用 `$${key:default}` 将配置引用留到第二阶段。具体边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。凭据应由实际部署配置源或受信任的进程环境提供，示例中的占位值不能用于连接真实服务。
 
 ```mermaid
 flowchart TD
@@ -69,12 +69,12 @@ flowchart TD
 | 能力 | 当前配置入口 |
 | --- | --- |
 | 应用环境 | `APP_ENV`，其次 `KRATOS_ENV`，均未设置时为 `local`；见 [`pkg/env`](pkg/env/README.md) |
-| 根日志 | `LOG_*` 环境变量及 `pkg/log` 包级 `WithXXX` 设置；模块级 `database/redis/client/kafka.log` 仍保留 |
-| Consul 地址与认证 | 环境变量（如 `CONSUL_HTTP_ADDR`）或 `pkg/consul.Options`；在 Manager 之前构造共享客户端，见 [`pkg/consul`](pkg/consul/README.md) |
+| 根日志 | `log` 配置动态控制策略，`LOG_*` 提供启动默认值与输出资源配置；模块策略统一集中到 `log.modules` |
+| Consul 地址与认证 | 配置源与注册发现共享 env 驱动的进程单例，见[内部生命周期](internal/consul/README.md) |
 | Metrics Provider | 显式构造和注入；HTTP 暴露位置仍由 `server.http.metrics` 配置 |
 | Job、Queue | 强类型 Spec/构造配置及显式 Bootstrap；Kafka 连接配置仍位于 `kafka` |
 
-旧顶层 `log`、`metrics`、`job`、`queue` 以及其他 reserved 字段即使设为 `null` 或空对象也会被拒绝，详见 [配置迁移表](pkg/config/README.md) 和 [v2 迁移清单](MIGRATION_V2.md)。
+配置协议不保留已删除字段的名称或编号；旧配置不再依赖 reserved 校验拒绝，迁移时应主动清理，详见 [配置迁移表](pkg/config/README.md) 和 [v2 迁移清单](MIGRATION_V2.md)。
 
 ### 健康检查与配置观测
 
@@ -84,7 +84,7 @@ flowchart TD
 
 依赖检查通过 `spec.HTTP().HealthChecks(...)` 追加，地址、路径和总检查期限保留 YAML 配置；`Health(HealthConfig{...})` 则整体覆盖文件中的健康端点配置。
 
-配置监听状态、快照接受/拒绝和订阅过载可通过 `config.StatusReader` 查看。应用可显式组装 `bootstrap.NewConfigObservabilityBootstrap`，通过已有 metrics 端点暴露 `foundation_config_*` 指标；仅填写 YAML 不会自动启用该 collector。接入步骤、指标与流程图见 [配置观测组装](pkg/bootstrap/README.md#配置观测组装)。
+配置来源加载、解析与监听沿用 Kratos 官方日志；Manager 不再提供自定义配置健康状态或配置观测 collector。
 
 ## 构造依赖约定
 
@@ -106,8 +106,7 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-`BaseProviderSet`（或自定义 Job Coordinator 版本）可搭配 `ConsulProviderSet`（或自定义远程目录名版本），
-默认提供注册发现及按环境二选一的配置源；自定义后端可直接提供相同契约。完整的构造、错误处理和 Wire cleanup 示例见 [`bootstrap`](pkg/bootstrap/README.md)。显式组装时，业务提供 `bootstrap.Bootstrap`，由 `bootstrap.NewBootstrap` 返回 `StartupReady`；统一 Spec 入口使用 `bootstrap.NewApplicationBootstrap` 返回相同的最终标记。资源 cleanup 由 Wire 逆序执行。Server、Queue 和 Job Runtime 在应用启动时同时收到 `Start`，不需要等待 `AfterStart` 钩子。App 直接持有启动、停止与服务完成状态；其私有方法按职责分文件，Registrar 适配只依赖 App；应用依赖 [`pkg/app`](pkg/app/README.md) 暴露的契约和构造函数。
+`DriverProviderSet` 统一构造配置源链与具名注册/发现实例；自定义 Job Coordinator 使用 `DriverProviderSetWithCustomJobCoordinator`。
 
 ## 日志
 
@@ -115,8 +114,8 @@ flowchart LR
 
 - 基于 `LOG_*` 环境变量的严格配置解析。
 - stdout/stderr 分流与可轮转文件输出。
-- 进程级全局日志状态：任意位置通过 `log.WithLevel/WithKV/WithMsgKey` 等共享设置方法修改，已有 Logger 和全局日志共享生效。
-- 每次 `NewLogger` 构造独立输出并返回 cleanup；输出配置构造后固定，包级共享设置方法只更新非资源状态；`log.WithModule` 返回借用当前输出的派生视图。
+- 日志级别：请求 debug > log.modules 首项命中级别 > WithLevel > LOG_LEVEL；格式在启动时固定，输出端策略支持热更新。
+- 每次 `NewLogger` 构造独立输出并返回 cleanup；Bootstrap 订阅 log 配置更新过滤与输出资源，根级别和格式固定于 env；`log.WithModule` 返回借用当前输出的派生视图。
 - 不可变的模块、上下文、级别和敏感字段派生。
 - 每条输出保留有效 `module`，缺失时为 `unknown`；通过 Foundation 安装全局绑定后，Kratos SDK 日志归属 `kratos`。
 
@@ -124,7 +123,7 @@ flowchart LR
 
 ## Database 与 OSS 驱动注册
 
-Database 和 OSS 满足“一个 Manager 管理多份具名资源，并按配置选择不同驱动”的条件，因此使用 `init + frozen registry`。业务/Wire 通过空导入明确决定哪些驱动进入最终二进制；驱动的 `init` 只注册 factory，不读取配置或创建外部资源。
+Database、OSS 和 Registry 满足“一个 Manager 管理多份具名资源，并按配置选择不同驱动”的条件，因此使用 `init + frozen registry`。业务/Wire 通过空导入明确决定哪些驱动进入最终二进制；驱动的 `init` 只注册 factory，不读取配置或创建外部资源。
 
 Database 可同时编译 MySQL 与 SQLite3，具体连接由 `database.connections[*].driver` 选择：
 
@@ -167,11 +166,11 @@ flowchart LR
 
 ## Job 并发协调
 
-`pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择并通过 `job.NewManager` 的最后一个构造参数注入。统一 Spec 模式由 `bootstrap.NewComponentsBootstrap` 接收并转交协调器，Spec 仅声明任务与策略。
+`pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择并通过 `job.NewManager` 的最后一个构造参数注入。统一 Spec 模式由 `bootstrap.NewJobBootstrap` 接收并转交协调器，Spec 仅声明任务与策略。
 
 不需要跨进程协调时，业务 provider 返回 nil `job.ConcurrencyCoordinator`；启用时提供 Redis contrib 实现，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。分布式策略缺少协调器会在 Manager 构造时返回错误；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。Delay 默认有界等待，超额触发会跳过；详见 [Job 容量说明](pkg/job/README.md#delay-容量)。
 
-`registry.Registrar` 同样由 Wire 注入 `bootstrap.NewKratosApp`，返回 nil 即禁用服务注册。完整的 nil provider 与 Wire 示例见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)，Redis provider 与租约边界见 [Job 文档](pkg/job/README.md)。
+`app.NewRegistrar` 按 `app.registry` 解析具名实例并注入 `bootstrap.NewKratosApp`，配置省略或为空时使用 `registry.instances.default`；缺少实例返回错误，驱动禁用时跳过注册。完整的 nil provider 与 Wire 示例见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)，Redis provider 与租约边界见 [Job 文档](pkg/job/README.md)。
 
 ## 主要目录
 
@@ -221,3 +220,9 @@ make verify
 ### 旧错误兼容与安全请求日志
 
 默认 Server 请求链与 HTTP 编码器统一归一化旧结构化错误，保留原始 HTTP 状态及业务码，保留服务间 gRPC 堆栈及 cause 诊断，过滤响应头；HTTP 公开输出仍屏蔽堆栈。关闭访问日志仍保留一次服务端故障诊断；访问摘要不包含请求或响应正文。适用边界与流程见 [Server 错误边界](pkg/server/README.md#请求错误边界与安全日志) 和 [错误兼容](pkg/errors/README.md)。
+
+应用级请求 debug 使用 [`request.WithDebug(ctx)`](pkg/request/README.md)，日志消费该状态，HTTP/gRPC 传输层按配置跨服务传播。
+
+## 驱动组装入口
+
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。

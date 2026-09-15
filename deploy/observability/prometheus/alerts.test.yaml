@@ -68,26 +68,6 @@ tests:
       - eval_time: 12m
         alertname: FoundationHighServerErrorRate
         exp_alerts: []
-  - name: 配置拒绝立即可见
-    interval: 1m
-    input_series:
-      - series: foundation_config_updates_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",result="rejected"}
-        values: 0 0 0 1 1 1
-    alert_rule_test:
-      - alertname: FoundationConfigRejected
-        exp_alerts:
-          - exp_labels:
-              env: prod
-              cluster: c1
-              namespace: apps
-              app: orders
-              severity: warning
-              foundation: "true"
-              result: rejected
-            exp_annotations:
-              summary: 配置快照被拒绝
-              runbook: deploy/observability/docs/troubleshooting.md#foundationconfigrejected
-        eval_time: 4m
   - name: 持续长尾延迟在请求门槛后触发
     interval: 1m
     input_series:
@@ -112,25 +92,6 @@ tests:
             exp_annotations:
               summary: 应用 P95 超过 500ms，且最近 5 分钟请求至少 100 次
               runbook: deploy/observability/docs/troubleshooting.md#foundationhighlatency
-  - name: 订阅过载计数增加
-    interval: 1m
-    input_series:
-      - series: foundation_config_subscription_overloads_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders"}
-        values: 0 0 0 1 1 1
-    alert_rule_test:
-      - eval_time: 4m
-        alertname: FoundationConfigSubscriptionOverloaded
-        exp_alerts:
-          - exp_labels:
-              env: prod
-              cluster: c1
-              namespace: apps
-              app: orders
-              severity: warning
-              foundation: "true"
-            exp_annotations:
-              summary: 配置订阅因过载终止
-              runbook: deploy/observability/docs/troubleshooting.md#foundationconfigsubscriptionoverloaded
   - name: 机器告警只关联承载所选应用的节点
     interval: 1m
     input_series:
@@ -202,12 +163,6 @@ tests:
         exp_alerts: []
       - eval_time: 20m
         alertname: FoundationHighLatency
-        exp_alerts: []
-      - eval_time: 20m
-        alertname: FoundationConfigRejected
-        exp_alerts: []
-      - eval_time: 20m
-        alertname: FoundationConfigSubscriptionOverloaded
         exp_alerts: []
       - eval_time: 20m
         alertname: FoundationNodeCPUHigh
@@ -444,25 +399,6 @@ tests:
             exp_annotations:
               summary: "Queue 状态采集失败，积压数量与年龄不可用"
               runbook: deploy/observability/docs/troubleshooting.md#积压与传输指标
-  - name: FoundationConfigWatcherStopped 正常触发
-    interval: 1m
-    input_series:
-      - series: "foundation_config_watcher_up{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\"}"
-        values: "0x20"
-    alert_rule_test:
-      - eval_time: 12m
-        alertname: FoundationConfigWatcherStopped
-        exp_alerts:
-          - exp_labels:
-              env: "prod"
-              cluster: "c1"
-              namespace: "apps"
-              app: "orders"
-              foundation: "true"
-              severity: "warning"
-            exp_annotations:
-              summary: "已接入配置观测的 watcher 停止运行"
-              runbook: deploy/observability/docs/troubleshooting.md#健康探测与配置状态
   - name: FoundationQueueReadyTooOld 正常触发
     interval: 1m
     input_series:
@@ -512,9 +448,6 @@ tests:
         exp_alerts: []
       - eval_time: 12m
         alertname: FoundationQueueStatsFailed
-        exp_alerts: []
-      - eval_time: 12m
-        alertname: FoundationConfigWatcherStopped
         exp_alerts: []
       - eval_time: 12m
         alertname: FoundationQueueReadyTooOld

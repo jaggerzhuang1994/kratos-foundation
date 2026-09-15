@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}"
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/minimal-api /app/minimal-api
 COPY examples/minimal/configs/config.yaml /app/configs/config.yaml
-ENV LOG_FILE_DISABLE=true
+ENV LOG_FILE_ENABLE=false
 EXPOSE 8000 9001
 ENTRYPOINT ["/app/minimal-api"]
 CMD ["-config", "/app/configs/config.yaml"]

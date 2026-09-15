@@ -40,7 +40,7 @@ func TestDefaultConfigReturnsIndependentDocumentedDefaults(t *testing.T) {
 		!first.GetTracing().GetDialFilter() {
 		t.Fatalf("tracing defaults = %#v", first.GetTracing())
 	}
-	if first.GetLog() != nil || first.GetMetrics() != nil || first.GetConnections() != nil {
+	if first.GetMetrics() != nil || first.GetConnections() != nil {
 		t.Fatalf("unexpected optional defaults = %#v", first)
 	}
 
@@ -97,13 +97,6 @@ func TestValidateConfigRejectsInvalidTopLevelStructure(t *testing.T) {
 		wantErr string
 	}{
 		{name: "nil config", wantErr: "config is nil"},
-		{
-			name: "invalid module log",
-			config: &config_pb.Redis{
-				Log: &config_pb.ModuleLog{Level: proto.String("verbose")},
-			},
-			wantErr: "module log",
-		},
 		{
 			name: "empty default",
 			config: &config_pb.Redis{

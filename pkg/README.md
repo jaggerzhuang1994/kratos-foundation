@@ -28,7 +28,8 @@
 | [`config`](config/README.md) | 基础配置服务 + Source 抽象 | M3 资源 + M2 契约 | Manager 构造时加载并监听；cleanup 关闭监听和源；非 Runtime |
 | [`env`](env/README.md) | 基础环境工具 | M1 工具 | 按调用读取环境；依赖进程环境，不是纯函数；无 cleanup |
 | [`errors`](errors/README.md) | 基础错误模型与协议转换 | M1 值对象/工具 | 无常驻资源；包含 Kratos、HTTP/gRPC 等语义，不是仅含接口的抽象包 |
-| [`log`](log/README.md) | 基础日志服务 | M3 资源 | 每次 NewLogger 拥有独立输出及 cleanup；包级设置仅共享非资源状态；组装层 cleanup 恢复全局 Logger 绑定；输出保留 module，缺失时 unknown；非 Runtime |
+| [`request`](request/README.md) | 应用级请求状态 | M1 值对象/工具 | Context 保存 debug；传输层按配置跨服务传播，无 cleanup |
+| [`log`](log/README.md) | 基础日志服务 | M3 资源 | 每次 NewLogger 拥有独立输出及 cleanup；配置热更新共享过滤与输出策略，支持文件资源切换，包级 With 方法返回派生实例；组装层 cleanup 恢复全局 Logger 绑定；输出保留 module，缺失时 unknown；非 Runtime |
 | [`appinfo`](appinfo/README.md) | 应用身份与元数据 | M1 值对象 | 同步采集身份，组装层贡献 AppInfo 和日志字段；非 Runtime |
 | [`metrics`](metrics/README.md) | 指标服务 | M3 Provider | Provider cleanup 关闭资源；组装层注入 ContextDecorator，不启动 Runtime |
 | [`tracing`](tracing/README.md) | 链路追踪服务 | M3 Provider | Provider 管理 exporter/sampler 等资源；组装层贡献日志字段；非 Runtime |
@@ -38,7 +39,7 @@
 | [`gormscope`](gormscope/README.md) | GORM 查询辅助 | M1 工具 | 依赖 GORM，但不拥有数据库连接或事务 |
 | [`lock`](lock/lock.go) | 分布式锁/租约公共抽象 | M2 契约 | 定义 `Locker`、`Lease` 和稳定错误，提供可选 `WithMetrics` 包装；底层实现由 contrib 提供 |
 | [`redis`](redis/README.md) | Redis 连接资源 | M3 Manager | Manager 拥有共享 client，调用方借用；Subscribe 的操作生命周期另行释放 |
-| [`consul`](consul/README.md) | Consul 基础客户端 | M3 Provider | 创建客户端并返回 cleanup；发现、注册、配置适配分别在 contrib |
+| [`registry`](registry/README.md) | 具名注册与发现实例 | M3 Factory + M2 驱动契约 | 驱动提供 Registrar 与 Discovery；Factory 拥有实例，使用者借用 |
 | [`database`](database/README.md) | 数据库连接与事务能力 | M3 Manager + M2 驱动契约 | Manager 管理具名连接；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`oss`](oss/README.md) | 对象存储资源与操作契约 | M3 Manager + M2 契约 | Manager 延迟创建并缓存 bucket；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`client`](client/README.md) | HTTP/gRPC 客户端工厂与共享租用 | M3 Factory + M4 调用租约 | Factory cleanup 管理整体资源；每次 `AcquireClient` 还要调用自己的 release |
@@ -55,7 +56,7 @@
 | --- | --- | --- |
 | 运行时组件 | 被请求、任务、Runtime 或资源所有者调用；生命周期可长可短 | Producer 装饰器、ExecutionGuard、watchdog、客户端租约 |
 | 应用 Runtime | 具有 `Start(context.Context) error` / `Stop(context.Context) error`，并实际登记到 `app.Spec` | Job Manager、Queue ConsumerRuntime、HTTP/gRPC server |
-| Bootstrap | 构造期同步贡献配置、身份、上下文或 Runtime 登记 | `bootstrap.NewMetricsBootstrap`、`bootstrap.NewServerBootstrap` |
+| Bootstrap | 构造期同步贡献配置、身份、上下文或 Runtime 登记 | `bootstrap.NewMetricsBootstrap`、`bootstrap.NewRuntimeBootstrap` |
 | 资源 Provider/Manager/Factory | 创建、借出或持有资源，并明确释放责任 | Redis Manager、Kafka ClientFactory |
 
 Runtime 是组件的一种生命周期角色。是否作为 Runtime 取决于生命周期契约和实际登记方式，与文件名无关。
@@ -100,7 +101,7 @@ flowchart TD
 | consul / kafka / redis | 配置、客户端构造、安全选项、资源管理 | 无 |
 | database / oss | 驱动契约、注册表、资源缓存、事务或对象操作 | 无 |
 | client | Factory、连接构造、配置、版本租约池 | circuitbreaker 中间件 |
-| log | Logger、共享状态、配置、派生缓存、Override | output 输出端 |
+| log | Logger、共享状态、配置热更新、派生缓存、请求 debug | output 输出端 |
 | metrics / tracing | Provider、配置、Exporter/Sampler、上下文 | 无 |
 | queue | 任务契约、持久化投递、Worker生命周期和执行 | telemetry |
 | kafka | 连接工厂、消息生产、消费运行时、offset提交和恢复 | telemetry |
@@ -114,3 +115,7 @@ flowchart TD
 只用于定时任务时，先复用 [`job.NewLockCoordinator`](job/coordinator.go)。需要跨 Job、请求、消费者复用时，建议新增公共 `pkg/lock/watchdog`，依赖现有 `lock.Locker/Lease`，按 **M4 操作级组件**开发。
 
 完整的选择依据、建议 API、并发边界、释放流程和测试场景见[watchdog 开发示例](DEVELOPMENT.md#watchdog-开发示例)。
+
+## 驱动组装入口
+
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](registry/README.md)。

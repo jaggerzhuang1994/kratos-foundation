@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/hashicorp/consul/api"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -152,7 +151,7 @@ func newTestRegistrar(t *testing.T, handler http.HandlerFunc, timeout time.Durat
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	reg, err := NewRegistry(shared, testconfig.New(t, "registry", &config_pb.Registry{HealthcheckInternal: durationpb.New(time.Second)}), client)
+	reg, err := newRegistrar(shared, testPolicyConfig(t, "registry", &config_pb.RegistrarOptions{HealthcheckInternal: durationpb.New(time.Second)}), client)
 	if err != nil {
 		t.Fatal(err)
 	}

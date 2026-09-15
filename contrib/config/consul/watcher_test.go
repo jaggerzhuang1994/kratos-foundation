@@ -23,7 +23,7 @@ func consulTestSource(t *testing.T, handler http.HandlerFunc) (kratosconfig.Sour
 	if err != nil {
 		t.Fatal(err)
 	}
-	sources, err := NewSources(client, PathList{"settings/*"})
+	sources, err := newSources(client, PathList{"settings/*"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,9 +70,6 @@ func TestWatcherIncludesPureDeletionAndEmptySnapshot(t *testing.T) {
 	watcher, err := input.Watch()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if full, ok := watcher.(interface{ FullSnapshot() bool }); !ok || !full.FullSnapshot() {
-		t.Fatal("built-in watcher must declare full snapshots")
 	}
 	t.Cleanup(func() { _ = watcher.Stop() })
 	for _, count := range []int{2, 1, 0} {

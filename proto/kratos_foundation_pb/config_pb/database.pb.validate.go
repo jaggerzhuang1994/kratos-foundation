@@ -140,39 +140,6 @@ func (m *Database) validate(all bool) error {
 
 	}
 
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, DatabaseValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, DatabaseValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return DatabaseValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
 	if m.Tracing != nil {
 
 		if all {

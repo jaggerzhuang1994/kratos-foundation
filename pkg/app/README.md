@@ -29,16 +29,16 @@ flowchart TD
 
 ## 贡献和所有权
 
-- `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并通过 `log.WithKV` 加入进程共享的 service ID、name、version 字段。
-- `bootstrap.NewTracingBootstrap` 通过 `log.WithKV` 加入进程共享的 `trace.id` 和 `span.id` 动态字段。
+- `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并通过 `log.RegisterFields` 加入进程共享的 service ID、name、version 字段。
+- `bootstrap.NewTracingBootstrap` 通过 `log.RegisterFields` 加入进程共享的 `trace.id` 和 `span.id` 动态字段。
 - `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
 - `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
-- 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 表示禁用服务注册，具体实现可使用 `contrib/registry/consul.NewRegistry`。
+- 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 表示禁用服务注册，组装层由 `app.NewRegistrar` 从具名 Registry Factory 解析实例；`app.registry` 省略或为空时使用 default，必须配置 `registry.instances.default`，缺失即报错。空名称不表示禁用，驱动禁用时返回 nil。
 
 `Spec.RegisterLogger` 为 Kratos App 派生带 `module=kratos` 的 Logger，
 原 Logger 不被修改，派生视图共用原输出且不增加 cleanup。StopPolicy 自身日志归属 `app`。
-`NewApp` 恢复 `kratos.New` 临时设置前的完整全局绑定。经 Foundation `log.SetLogger` / Bootstrap 安装后，Kratos 全局日志适配器仍然保留，HTTP/gRPC 启停日志归属 `kratos`；入口与覆盖规则见 [日志文档](../log/README.md#字段过滤与去重)。
+`NewApp` 禁用 `kratos.New` 的全局 Logger 安装副作用，不再临时设置或恢复全局绑定。经 Foundation `log.SetLogger` / Bootstrap 安装后，Kratos 全局日志适配器仍然保留，HTTP/gRPC 启停日志归属 `kratos`；入口与覆盖规则见 [日志文档](../log/README.md#字段过滤与去重)。
 
 构造函数拥有资源创建，Wire 接收并逆序调用其 cleanup。Bootstrap 本身通常没有 cleanup；例外是 `bootstrap.NewLogBootstrap` 的全局 Logger 恢复函数。Runtime 的 `Start`/`Stop`、Hook、Registrar 补偿和停机预算由 App 直接管理。
 
@@ -109,14 +109,16 @@ flowchart TD
 
 ### 停机超时热更新
 
-`NewStopPolicy` 使用 `config.HotReloadValue[durationpb.Duration]` 订阅 `app.stop_timeout`，只校验该字段的合法 Duration、正数和严格大于 `server.stop_delay` 的约束；其他 app 字段不会阻止该字段更新。字段删除后恢复配置默认值 30s，仍须满足停机约束。启动期完整配置校验仍由 `NewConfig` 负责。
+`NewStopPolicy` 使用 `config.HotReloadValue[durationpb.Duration]` 订阅 `app.stop_timeout`，只校验该字段的合法 Duration 和正数；其他 app 字段不会阻止该字段更新。初始缺失时使用默认值 30s；运行时从源中省略字段遵循官方 merge，不保证恢复默认值。启动期完整配置校验仍由 `NewConfig` 负责。
+
+`app.NewStopPolicy(config, manager, logger)` 不依赖 Server 或 RuntimeBootstrap。建议 `app.stop_timeout` 大于 `server.stop_delay` 并预留资源清理时间，但不做跨组件硬校验；预算不足时可能在服务器等待或清理完成前耗尽。
 
 每次读取只在版本变化时校验，并用 CAS 保存读取时校验通过的预算；非法版本保留此前已校验的值，同一版本不重复记录错误。连续更新可能只读取最新版本。订阅解码失败由 HotReloadValue 记录 WARN 并保留原配置，合法更新和校验失败分别记录 `StopPolicy.current` INFO / ERROR。首次请求停机时冻结所读预算，后续更新不影响本次停机。Wire cleanup 幂等取消订阅。
 
 ```mermaid
 flowchart TD
     A([NewStopPolicy]) --> B[HotReloadValue 加载并订阅 app.stop_timeout]
-    B --> C{初始超时合法且大于 stop_delay?}
+    B --> C{初始超时合法且为正数?}
     C -- 否 --> D([取消已创建订阅，返回错误])
     C -- 是 --> E[保存初始预算与版本]
     U[配置更新] --> V{解码成功?}
@@ -204,3 +206,7 @@ Context，使用支持取消的数据库/网络 API，为连接和读写配置�
 能力的阻塞 SDK，应使用其受支持的关闭机制或进程隔离；不要通过额外 goroutine 超时返回来冒充
 任务已经停止。AfterStop 与无参数 Wire cleanup 不能视为整个进程的硬退出期限。
 最终进程期限由部署平台执行；强制终止可能打断未完成工作，因此业务需支持幂等与恢复。
+
+## 驱动组装入口
+
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。

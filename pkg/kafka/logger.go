@@ -1,41 +1,22 @@
 package kafka
 
 import (
-	"strings"
-
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 type loggerAdapter struct {
-	log   log.Logger
-	level kgo.LogLevel
+	log log.Logger
 }
 
-// newKafkaLogger 把模块日志开关和级别转换为 franz-go 日志适配器。
-func newKafkaLogger(logger log.Logger, config *config_pb.ModuleLog) kgo.Logger {
-	level := kgo.LogLevelInfo
-	if config != nil {
-		if config.GetDisable() {
-			level = kgo.LogLevelNone
-		} else {
-			switch strings.ToLower(config.GetLevel()) {
-			case "debug":
-				level = kgo.LogLevelDebug
-			case "warn":
-				level = kgo.LogLevelWarn
-			case "error":
-				level = kgo.LogLevelError
-			}
-		}
-	}
-	return &loggerAdapter{log: logger, level: level}
+// newKafkaLogger 将全部 franz-go 日志交给共享 Logger，由运行时模块配置决定过滤。
+func newKafkaLogger(logger log.Logger) kgo.Logger {
+	return &loggerAdapter{log: logger}
 }
 
-// Level 返回适配器接受的最低 franz-go 日志级别。
+// Level 接受所有级别，避免 SDK 在热更新前永久过滤 Debug 日志。
 func (l *loggerAdapter) Level() kgo.LogLevel {
-	return l.level
+	return kgo.LogLevelDebug
 }
 
 // Log 把 franz-go 结构化日志转发到 Foundation Logger。

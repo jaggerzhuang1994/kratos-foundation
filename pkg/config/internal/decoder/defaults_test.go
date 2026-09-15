@@ -13,18 +13,15 @@ import (
 func TestApplyDefaultsAppliesNormalizedDefaultsAndReplacesSlices(t *testing.T) {
 	t.Parallel()
 
-	defaults := &config_pb.Registry{
+	defaults := &config_pb.RegistrarOptions{
 		DisableHeartbeat:    proto.Bool(true),
 		HealthcheckInternal: durationpb.New(10 * time.Second),
 		Tags:                []string{"default"},
 	}
-	target := new(config_pb.Registry)
+	target := new(config_pb.RegistrarOptions)
 	valueDecoder, err := New(target, []any{defaults})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !valueDecoder.HasDefault() {
-		t.Fatal("Decoder lost explicit default")
 	}
 	if err := valueDecoder.Apply(map[string]any{
 		"disableHeartbeat":     false,

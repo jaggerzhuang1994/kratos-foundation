@@ -4,15 +4,12 @@ option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/krat
 package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
-import "config_pb/common.proto";
 
 // Kafka [需重启]：连接配置在启动期完成校验与索引，client 按该快照创建，修改后需要
 // 重启进程。
 message Kafka {
   // 按逻辑名索引的连接配置。[需重启]
   map<string, KafkaConnection> connections = 1;
-  // logger 配置。[需重启]
-  optional ModuleLog log = 2;
 }
 
 message KafkaConnection {

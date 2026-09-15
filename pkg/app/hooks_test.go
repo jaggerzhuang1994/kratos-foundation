@@ -123,7 +123,7 @@ func TestAppHooksFinalErrorAndFallbackShutdownContext(t *testing.T) {
 
 func TestAppHooksFreezesStopTimeoutOnFirstRequest(t *testing.T) {
 	manager := &stopPolicyConfigManager{initial: validAppConfig(time.Second)}
-	policy, cleanup, err := NewStopPolicy(validAppConfig(time.Second), manager, kratoslog.NewStdLogger(io.Discard), 0)
+	policy, cleanup, err := NewStopPolicy(validAppConfig(time.Second), manager, kratoslog.NewStdLogger(io.Discard))
 	if err != nil {
 		t.Fatal(err)
 	}

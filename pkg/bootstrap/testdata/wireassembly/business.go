@@ -19,49 +19,56 @@ type order struct {
 var errInvalidAmount = errors.New("order amount must be positive")
 
 // 业务 fixture 只使用公开契约，Wire 必须先构造数据库才能注册端点。
-func newServerSpec(manager database.Manager) *server.Spec {
-	spec := server.NewSpec()
-	spec.GRPC().Disable()
-	spec.HTTP().Register(func(srv server.HTTPServer) error {
-		srv.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
+type businessServer struct {
+	manager database.Manager
+	http    server.HTTPServer
+}
+
+func newBusinessServer(manager database.Manager) *businessServer {
+	return &businessServer{manager: manager}
+}
+
+func (b *businessServer) register(srv server.HTTPServer) error {
+	b.http = srv
+	manager := b.manager
+	srv.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var request struct {
+			order
+			Connection string `json:"connection"`
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, "invalid order", http.StatusBadRequest)
+			return
+		}
+		ctx := r.Context()
+		if request.Connection != "" {
+			ctx = database.UseConnection(ctx, request.Connection)
+		}
+		err := manager.Transaction(ctx, func(txCtx context.Context) error {
+			if err := manager.Connection(txCtx).Create(&request.order).Error; err != nil {
+				return err
 			}
-			var request struct {
-				order
-				Connection string `json:"connection"`
+			// 模拟写入后的业务拒绝，验证错误能够回滚已经执行的 SQL。
+			if request.Amount <= 0 {
+				return errInvalidAmount
 			}
-			r.Body = http.MaxBytesReader(w, r.Body, 1024)
-			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-				http.Error(w, "invalid order", http.StatusBadRequest)
-				return
-			}
-			ctx := r.Context()
-			if request.Connection != "" {
-				ctx = database.UseConnection(ctx, request.Connection)
-			}
-			err := manager.Transaction(ctx, func(txCtx context.Context) error {
-				if err := manager.Connection(txCtx).Create(&request.order).Error; err != nil {
-					return err
-				}
-				// 模拟写入后的业务拒绝，验证错误能够回滚已经执行的 SQL。
-				if request.Amount <= 0 {
-					return errInvalidAmount
-				}
-				return nil
-			})
-			if errors.Is(err, errInvalidAmount) {
-				http.Error(w, "invalid amount", http.StatusUnprocessableEntity)
-				return
-			}
-			if err != nil {
-				http.Error(w, "order failed", http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusCreated)
+			return nil
 		})
-		return nil
+		if errors.Is(err, errInvalidAmount) {
+			http.Error(w, "invalid amount", http.StatusUnprocessableEntity)
+			return
+		}
+		if err != nil {
+			http.Error(w, "order failed", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
 	})
-	return spec
+	return nil
+
 }

@@ -1,6 +1,6 @@
 # Job
 
-`pkg/job` 是业务与 Wire 声明、构造和注册后台任务的公共入口。业务使用 `Spec` 注册 Cron、Once 或 Daemon 任务，再通过 `NewManager` 构造运行时并交给 `bootstrap.NewJobBootstrap`；不应导入 `pkg/job/internal/*`。
+`pkg/job` 是业务与 Wire 声明、构造和注册后台任务的公共入口。业务使用 `bootstrap.Spec.Job()` 声明 Cron、Once 或 Daemon 任务，再由 `bootstrap.NewJobBootstrap` 在 Boot 后构造并登记运行时；不应导入 `pkg/job/internal/*`。
 
 并发策略只作用于 Cron：默认 `AllowOverlap` 允许重叠，`SkipIfRunning` / `DelayIfRunning` 只约束当前进程；跨进程控制必须同时注入 `ConcurrencyCoordinator` 并为任务选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。仅注入协调器不会改变任务策略。`NewManager(logger, spec, tracing, metrics, coordinator)` 的最后一个参数允许 nil，此时仅可使用进程内策略；分布式策略缺少协调器会在构造时返回错误，不会静默退化为无锁执行。所有声明必须在 `NewManager` 之前完成，之后修改 Spec 不会重配已创建的 Manager。
 
@@ -81,13 +81,9 @@ package assembly
 import (
 	jobredis "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/job/redis"
 	lockredis "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/lock/redis"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/redis"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
 func newJobCoordinator(redisManager redis.Manager) (job.ConcurrencyCoordinator, error) {
@@ -98,26 +94,14 @@ func newJobCoordinator(redisManager redis.Manager) (job.ConcurrencyCoordinator, 
 	)
 }
 
-func newJobs(
-	logger log.Logger,
-	coordinator job.ConcurrencyCoordinator,
-	tracingProvider tracing.Provider,
-	metricsProvider metrics.Provider,
-	appSpec *app.Spec,
-	cleanupTask job.Task,
-) (bootstrap.JobBootstrap, error) {
-	spec := job.NewSpec()
-	spec.RegisterCron("cleanup", "@every 1m", cleanupTask,
-		job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
-	manager, err := job.NewManager(logger, spec, tracingProvider, metricsProvider, coordinator)
-	if err != nil {
-		return bootstrap.JobBootstrap{}, err
-	}
-	return bootstrap.NewJobBootstrap(appSpec, manager)
+func Boot(spec *bootstrap.Spec, cleanupTask job.Task) bootstrap.Bootstrap {
+    spec.Job().RegisterCron("cleanup", "@every 1m", cleanupTask,
+        job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
+    return bootstrap.Bootstrap{}
 }
 ```
 
-将 `newJobCoordinator` 和 `newJobs` 加入业务 Wire provider 集合，协调器由 Wire 注入。统一 Spec 模式中则注入 `bootstrap.NewComponentsBootstrap`，由它传给 `job.NewManager`；禁用能力的 provider 示例见 [Bootstrap 文档](../bootstrap/README.md#可选依赖由-wire-构造注入)。
+将 `newJobCoordinator`、`Boot`、`bootstrap.NewJobBootstrap` 加入业务 Wire provider 集合，协调器由 Wire 注入 NewJobBootstrap，再传给 `job.NewManager`。NewRuntimeBootstrap 接收 JobBootstrap 保证登记完成；禁用能力的 provider 示例见 [Bootstrap 文档](../bootstrap/README.md#可选依赖由-wire-构造注入)。
 
 `KeyPrefix` 应替换成自己的应用和环境标识；需要互斥的副本使用相同前缀与任务名。任务结束后由协调器释放租约；共享 Redis 连接仍由 Redis Manager cleanup 释放。
 
@@ -178,7 +162,7 @@ flowchart TD
     F --> G
 ```
 
-`bootstrap.NewJobBootstrap` 仅在 Manager 包含任务时，同步追加 Runtime；空 Manager 不作登记。它不创建资源也不返回 cleanup，Manager 的 Start/Stop 由 `app.NewApp` 创建的应用生命周期监督层拥有。
+`bootstrap.NewJobBootstrap` 在 Boot 完成后构造 Manager，仅在包含任务时登记 Runtime；未选择 Job 时跳过构造，空 Job 声明不登记。它不启动任务、不返回 cleanup；Manager 的 Start/Stop 由 App 生命周期监督层拥有。重复组装返回错误，构造或登记失败后应丢弃 Spec。
 
 Job 不使用全局驱动注册表，也不会读取 `job.lock.driver` 自动选择实现。任务与协调器公共契约、调度、并发策略和观测逻辑直接定义在 `pkg/job`。`manager.go` 负责构造与任务组装，`manager_lifecycle.go` 负责运行和收敛；`cron.go` 集中调度与表达式解析，`log.go` 集中任务及 cron 日志适配；`lock_coordinator.go` 负责锁获取与配置校验，`lock_guard.go` 负责租约续租释放。
 

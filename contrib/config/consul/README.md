@@ -4,60 +4,57 @@
 
 `contrib/config/consul` 把有序 Consul KV 路径转换成 Kratos 配置源。后面的路径优先级更高，路径不能为空、包含首尾空白或重复。
 
-使用 `NewSources`，将每个 Consul 路径对应的底层 Source 直接交给 `pkg/config`：
+在提供 Spec 的业务构造函数中普通导入本包，客户端由内部 env 单例提供：
 
 ```go
-consulSources, err := consul.NewSources(client, consul.PathList{
-	"services/example/base/*.yaml",
-	"services/example/custom/*.yaml",
-})
-if err != nil {
-	return err
+spec := bootstrap.NewSpec()
+if err := spec.Configuration(consul.AddConfigSource("configs/app.yaml")); err != nil {
+    return nil, err
 }
-
-sources := config.NewSources()
-sources = append(sources, consulSources...)
-manager, cleanup, err := config.NewManager(sources)
-if err != nil {
-	return err
-}
-defer cleanup()
+return spec, nil
 ```
 
-`NewSources(client, paths)` 使用 `pkg/log` 全局日志记录禁用和构造事件，不要求 Logger 参数。
+Wire 通过 `bootstrap.NewConfigManager` 执行配置阶段。路径在声明时复制，实际连接和路径解析延迟到该阶段；没有 init 注册表或进程默认路径。Manager 默认先加载官方 env source，后声明的源优先级更高。返回 cleanup 统一停止 watcher，不关闭共享客户端。完整组装见 [Configuration](../../../pkg/bootstrap/README.md#configuration-配置阶段)。
+
+驱动使用 `pkg/log` 全局日志记录构造事件，不要求 Logger 参数。
 应用 Logger 安装前使用默认标准输出，安装后使用当前应用输出。
 
-空路径列表或 nil 客户端表示 Consul 配置被禁用，返回 nil 且不报错。构造函数只借用客户端，不负责关闭它。
+显式空路径列表禁用该来源，不初始化单例；非空路径在单例初始化失败时返回错误，已禁用则返回空来源且不报错。驱动不负责关闭共享客户端。
 
 ```mermaid
 flowchart TD
-    A([开始]) --> B{PathList 是否为空?}
-    B -- 是 --> C[全局 WARN: Remote configuration is disabled]
-    B -- 否 --> D{Consul client 是否可用?}
-    D -- 否 --> C
-    D -- 是 --> E{路径是否合法且无重复?}
-    E -- 否 --> F[返回错误]
-    E -- 是 --> R[全局 INFO: Preparing Consul configuration sources]
-    R --> G[按顺序创建 Consul Source]
-    G --> I[返回全部底层 Sources 交给 Manager]
-    C --> K([返回 nil 并结束])
-    F --> L([结束])
-    I --> L
+ A([驱动构造开始]) --> B{显式路径为空?}
+ B -- 是 --> C([返回空源链，不初始化客户端])
+ B -- 否 --> D[Get 获取 env 进程单例；首次探测限时10秒]
+ D --> E{初始化结果可用?}
+ E -- 否 --> F([返回缓存错误，启动失败])
+ E -- 是 --> Z{disabled?}
+ Z -- 是 --> C
+ Z -- 否 --> G{路径合法且无重复?}
+ G -- 否 --> H([返回路径错误；保留共享客户端])
+ G -- 是 --> I[INFO Preparing Consul configuration sources]
+ I --> J[按顺序创建 Source，Manager 执行 Load/Watch]
+ J --> K{初始快照有效?}
+ K -- 否 --> L[停止已创建的 watcher 并返回错误]
+ K -- 是 --> M[运行期监听配置]
+ M --> N[Manager cleanup 停止自有 watcher]
+ N --> O([共享客户端保留至进程退出])
+ L --> O
 ```
 
 ## 热更新与断线恢复
 
-KV 监听由本包通过 Consul blocking query 实现。每次通知包含完整前缀，包括仅删除键或前缀变空；Watcher 显式声明 `FullSnapshot() bool` 为 true，配置管理器直接复制通知快照、不重复 Load，并按原顺序合并，因此删除高优先级覆盖后可以恢复低优先级值。
+KV 监听由本包通过 Consul blocking query 实现。每次通知包含完整前缀，包括仅删除键或前缀变空。官方 Config 直接合并通知结果，不再重复 Load；空结果或字段删除不会撤销旧缓存，也不会恢复低优先级值。
 
-网络错误、HTTP 429 和 5xx 使用可取消退避恢复：100ms 基数逐次翻倍、5s 封顶，并加入 80%–100% 抖动。恢复时清除旧查询索引并拉取完整状态；Consul 索引回退也会重新建立查询基线。认证和授权等永久 HTTP 错误直接返回，使 Manager 明确报告 watcher 终止。
+网络错误、HTTP 429 和 5xx 使用可取消退避恢复：100ms 基数逐次翻倍、5s 封顶，并加入 80%–100% 抖动。恢复时清除旧查询索引并拉取完整状态；Consul 索引回退也会重新建立查询基线。认证和授权等永久 HTTP 错误直接返回，交由官方 watcher 循环记录及重试，不再提供 Manager 终止状态。
 
 `Load` 的请求与有限重试共用 10 秒预算；监听长轮询等待最多 30 秒，单次 HTTP 请求另有 10 秒余量。Watcher 不创建后台发送协程，`Stop` 可以取消在途监听请求和退避，且不同 Watcher 独立。Manager 清理过程中已经开始的普通 `Load` 最迟在自己的预算结束时返回。
 
-暂时失败期间保留最后有效配置。Stream 会主动重试暂时的全量重载失败，无需等待另一次变更通知；`HotReloadValue` 在恢复后继续更新，不需要重建应用或 Wire 依赖。
+暂时失败期间保留最后有效配置。Source 内部负责上述网络重试；`HotReloadValue` 在恢复后继续更新，不需要重建应用或 Wire 依赖。
 
 ## 路径边界
 
-`PathList` 与 `bootstrap.LocalConfigPath` 都支持目录、具体文件和 glob：
+Consul `PathList` 与文件源 `AddConfigSource` 的路径参数 都支持目录、具体文件和 glob：
 
 | 输入 | 读取规则 |
 | --- | --- |
@@ -114,3 +111,7 @@ flowchart TD
 ```
 
 显式文件或 glob 的扩展名不受路径解析限制，但最终必须有对应的 Kratos codec；匹配成功不代表内容可解码。
+
+## 驱动组装入口
+
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../../../pkg/registry/README.md)。

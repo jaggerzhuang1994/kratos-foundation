@@ -11,6 +11,7 @@ import (
 	serverlogging "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/logging"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metadata"
 	servermetrics "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
 	servertracing "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/tracing"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -27,14 +28,15 @@ import (
 // 订阅、但该字段实际不生效」这种只看日志无法察觉的情况；具体某次更新只重建其中
 // 确实发生变化的项。
 type middlewarePolicies struct {
-	logger    log.Logger
-	deadline  *deadline.Store
-	metadata  *dynamicMiddleware
-	tracing   *dynamicMiddleware
-	metrics   *dynamicMiddleware
-	logging   *dynamicMiddleware
-	validator *dynamicMiddleware
-	rateLimit *dynamicMiddleware
+	logger       log.Logger
+	deadline     *deadline.Store
+	metadata     *dynamicMiddleware
+	requestDebug *dynamicMiddleware
+	tracing      *dynamicMiddleware
+	metrics      *dynamicMiddleware
+	logging      *dynamicMiddleware
+	validator    *dynamicMiddleware
+	rateLimit    *dynamicMiddleware
 
 	// current 保存最近一次生效的配置，用于判断哪些中间件真正需要重建。
 	current *config_pb.ServerMiddleware
@@ -42,12 +44,13 @@ type middlewarePolicies struct {
 
 // dynamicMiddlewares 汇总一次配置对应的全部中间件实现；字段为 nil 表示该项禁用。
 type dynamicMiddlewares struct {
-	metadata  middleware.Middleware
-	tracing   middleware.Middleware
-	metrics   middleware.Middleware
-	logging   middleware.Middleware
-	validator middleware.Middleware
-	rateLimit middleware.Middleware
+	metadata     middleware.Middleware
+	requestDebug middleware.Middleware
+	tracing      middleware.Middleware
+	metrics      middleware.Middleware
+	logging      middleware.Middleware
+	validator    middleware.Middleware
+	rateLimit    middleware.Middleware
 }
 
 // newMiddlewarePolicies 构造全部中间件策略，并订阅 server 段以支持运行期更新。
@@ -72,15 +75,16 @@ func newMiddlewarePolicies(
 		return nil, nil, err
 	}
 	policies := &middlewarePolicies{
-		logger:    logger,
-		deadline:  deadlineStore,
-		metadata:  newDynamicMiddleware(built.metadata),
-		tracing:   newDynamicMiddleware(built.tracing),
-		metrics:   newDynamicMiddleware(built.metrics),
-		logging:   newDynamicMiddleware(built.logging),
-		validator: newDynamicMiddleware(built.validator),
-		rateLimit: newDynamicMiddleware(built.rateLimit),
-		current:   proto.CloneOf(config.GetMiddleware()),
+		logger:       logger,
+		deadline:     deadlineStore,
+		metadata:     newDynamicMiddleware(built.metadata),
+		requestDebug: newDynamicMiddleware(built.requestDebug),
+		tracing:      newDynamicMiddleware(built.tracing),
+		metrics:      newDynamicMiddleware(built.metrics),
+		logging:      newDynamicMiddleware(built.logging),
+		validator:    newDynamicMiddleware(built.validator),
+		rateLimit:    newDynamicMiddleware(built.rateLimit),
+		current:      proto.CloneOf(config.GetMiddleware()),
 	}
 
 	// 只订阅 middleware 子树：监听整个 server 段会让修改监听地址之类的字段也触发
@@ -146,6 +150,7 @@ func (p *middlewarePolicies) update(
 	previous := p.current
 	// 先构造所有变化项，包含 Aegis 限流器；任何构造失败都不能留下部分新状态。
 	var built dynamicMiddlewares
+	debugChanged := !proto.Equal(previous.GetRequestDebug(), config.GetRequestDebug())
 	metadataChanged := !proto.Equal(previous.GetMetadata(), config.GetMetadata())
 	tracingChanged := !proto.Equal(previous.GetTracing(), config.GetTracing())
 	metricsChanged := !proto.Equal(previous.GetMetrics(), config.GetMetrics())
@@ -158,6 +163,9 @@ func (p *middlewarePolicies) update(
 			return fmt.Errorf("create server metrics middleware: %w", err)
 		}
 		built.metrics = metricsMiddleware
+	}
+	if debugChanged {
+		built.requestDebug = requestdebug.Server(config.GetRequestDebug())
 	}
 	if metadataChanged {
 		built.metadata = metadata.Server(config.GetMetadata())
@@ -178,6 +186,9 @@ func (p *middlewarePolicies) update(
 		if err := p.deadline.Update(config.GetDeadline()); err != nil {
 			return err
 		}
+	}
+	if debugChanged {
+		p.requestDebug.Set(built.requestDebug)
 	}
 	if metadataChanged {
 		p.metadata.Set(built.metadata)
@@ -214,12 +225,13 @@ func buildDynamicMiddlewares(
 		return dynamicMiddlewares{}, fmt.Errorf("create server metrics middleware: %w", err)
 	}
 	return dynamicMiddlewares{
-		metadata:  metadata.Server(conf.GetMetadata()),
-		tracing:   servertracing.Server(tracingProvider, conf.GetTracing()),
-		metrics:   metricsMiddleware,
-		logging:   serverlogging.Server(logger, conf.GetLogging()),
-		validator: validator.Validator(conf.GetValidator()),
-		rateLimit: ratelimit.Server(conf.GetRateLimit()),
+		metadata:     metadata.Server(conf.GetMetadata()),
+		requestDebug: requestdebug.Server(conf.GetRequestDebug()),
+		tracing:      servertracing.Server(tracingProvider, conf.GetTracing()),
+		metrics:      metricsMiddleware,
+		logging:      serverlogging.Server(logger, conf.GetLogging()),
+		validator:    validator.Validator(conf.GetValidator()),
+		rateLimit:    ratelimit.Server(conf.GetRateLimit()),
 	}, nil
 }
 

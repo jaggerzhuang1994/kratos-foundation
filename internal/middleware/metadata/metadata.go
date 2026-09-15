@@ -7,6 +7,7 @@ import (
 	metadata2 "github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
 	deadlinemiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/deadline"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
@@ -85,7 +86,9 @@ func mergeConstantsMd(constantsList ...map[string]string) metadata2.Metadata {
 
 	for _, constants := range constantsList {
 		for k, v := range constants {
-			md.Set(k, v)
+			if !isReservedMetadataKey(k) {
+				md.Set(k, v)
+			}
 		}
 	}
 
@@ -121,7 +124,8 @@ func (o *options) hasPrefix(key string) bool {
 
 // isReservedMetadataKey 判断键是否由其他中间件拥有，避免职责重叠。
 func isReservedMetadataKey(key string) bool {
-	return strings.EqualFold(strings.TrimSpace(key), deadlinemiddleware.HTTPTimeoutHeader)
+	return strings.EqualFold(strings.TrimSpace(key), deadlinemiddleware.HTTPTimeoutHeader) ||
+		strings.EqualFold(strings.TrimSpace(key), requestdebug.Header)
 }
 
 // withConstants 设置每个请求都携带的常量元数据。

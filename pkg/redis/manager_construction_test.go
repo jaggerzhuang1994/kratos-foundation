@@ -199,8 +199,6 @@ func TestNewKeepsRestartOnlyStartupSnapshotAcrossConfigUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(cancelObserver)
-	receiveRedisConfig(t, updates)
-
 	logger, tracingProvider, metricsProvider := localRedisDependencies(t)
 	manager, cleanup, err := NewManager(
 		logger,
@@ -248,38 +246,6 @@ func TestNewPreservesConfigLoadFailureWithoutReturningResources(t *testing.T) {
 	if manager != nil || cleanup != nil {
 		t.Fatalf(
 			"New returned resources after config load failure: manager=%v cleanupPresent=%t",
-			manager,
-			cleanup != nil,
-		)
-	}
-}
-
-func TestNewRejectsLoggerPolicyBeforeReturningResources(t *testing.T) {
-	config := validRedisConfig()
-	config.Log = &config_pb.ModuleLog{FilterKeys: []string{""}}
-	configManager := testconfig.New(t, "redis", config)
-	logger, tracingProvider, metricsProvider := localRedisDependencies(t)
-
-	manager, cleanup, err := NewManager(
-		logger,
-		configManager,
-		tracingProvider,
-		metricsProvider,
-	)
-	if err == nil || !strings.Contains(err.Error(), "configure redis logger") {
-		if cleanup != nil {
-			cleanup()
-		}
-		t.Fatalf(
-			"New invalid logger policy: err=%v manager=%v cleanupPresent=%t",
-			err,
-			manager,
-			cleanup != nil,
-		)
-	}
-	if manager != nil || cleanup != nil {
-		t.Fatalf(
-			"New returned resources after logger failure: manager=%v cleanupPresent=%t",
 			manager,
 			cleanup != nil,
 		)

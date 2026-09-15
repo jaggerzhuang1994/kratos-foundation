@@ -36,7 +36,7 @@ if err != nil {
 // 使用 client 执行 Redis 操作，并处理各命令返回的错误。
 ```
 
-连接参数、日志与遥测配置在 `NewManager` 构造时固定为启动快照，不订阅热更新；修改地址、凭据或连接集合后需要重启应用。之后首次解析的具名连接也使用这份旧快照。默认 client 在构造时创建，其他具名 client 按需创建；创建 client 不等于服务端连接验证成功。
+连接参数与遥测配置在 `NewManager` 构造时固定为启动快照，不订阅热更新；修改地址、凭据或连接集合后需要重启应用。之后首次解析的具名连接也使用这份旧快照。默认 client 在构造时创建，其他具名 client 按需创建；创建 client 不等于服务端连接验证成功。
 
 配置解析位于同包 `config.go`，连接延迟创建、遥测安装、缓存和幂等关闭状态由 `manager.go` 的非导出实现持有。业务只能借用 `Default` 或 `Connection` 返回的 client，不应单独关闭；统一由 cleanup 释放。
 
@@ -84,3 +84,5 @@ flowchart LR
 ## 集成测试与边界用法
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+
+日志通过 `WithModule("redis")` 声明归属，使用 `log.modules` 热更新级别、禁用和追加过滤；`redis.log` 已移除。规则见 [log](../log/README.md#模块策略)。

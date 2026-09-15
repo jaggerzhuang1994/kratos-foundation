@@ -112,9 +112,9 @@ func TestDecoderSupportsGoAndProtobufTargets(t *testing.T) {
 				"tags":                 []any{"blue"},
 				"healthcheck_internal": "2s",
 			},
-			target: new(config_pb.Registry),
+			target: new(config_pb.RegistrarOptions),
 			check: func(t testing.TB, target any) {
-				got := target.(*config_pb.Registry)
+				got := target.(*config_pb.RegistrarOptions)
 				if len(got.GetTags()) != 1 || got.GetTags()[0] != "blue" ||
 					got.GetHealthcheckInternal().AsDuration() != 2*time.Second {
 					t.Fatalf("protobuf = %v", got)

@@ -4,8 +4,6 @@ option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/krat
 package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
-import "pubg/jsonschema.proto";
-import "validate/validate.proto";
 
 // 端点配置
 message Endpoint {
@@ -13,24 +11,19 @@ message Endpoint {
   string host = 2;
 }
 
-// 模块使用的 log 结构
-message ModuleLog {
-  // 是否禁用
-  optional bool disable = 1;
-  // 最小日志级别 (默认值为log.level)
-  optional string level = 2 [
-    (pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}},
-    (validate.rules).string = {in: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}
-  ];
-  // 打印日志过滤哪些 keys；尾部 * 表示前缀匹配，例如 secret.*
-  repeated string filter_keys = 3;
-}
-
 // Middleware 是服务端与客户端共用的中间件配置。
 //
 // 热更新语义取决于引用它的位置：在 server.middleware 下全部支持热更新并逐项原子替换，不保证整条调用链同时切换；
 // 在 client.clients 的 middleware 下则随所属客户端一起生效，代价是旧连接会退役重建。
 message Middleware {
+  // 应用级请求 debug 的传播策略，不受通用 metadata 前缀或开关影响。
+  message RequestDebug {
+    // 仅服务端使用；默认 true，显式 false 关闭上游请求 debug 标记的接收。
+    optional bool accept_incoming = 1;
+    // 仅客户端使用；默认 true。对不可信或外部服务可显式设为 false。
+    optional bool propagate = 2;
+  }
+
   // metadata 中间件配置
   message Metadata {
     // 是否启用
@@ -116,10 +109,8 @@ message Middleware {
     // 无上游截止时间时的回退超时，缺失时默认 10s；显式 0s 关闭回退超时。
     optional google.protobuf.Duration fallback_timeout = 1;
     optional google.protobuf.Duration max_timeout = 2;
-    reserved 3, 5;
-    reserved "response_reserve", "accept_incoming_timeout";
-    optional google.protobuf.Duration min_budget = 4;
-    repeated RouteRule routes = 6;
+    optional google.protobuf.Duration min_budget = 3;
+    repeated RouteRule routes = 4;
 
     message RouteRule {
       oneof rule {
@@ -129,9 +120,7 @@ message Middleware {
       // 缺失时继承全局回退超时；显式 0s 关闭该路由的回退超时。
       optional google.protobuf.Duration fallback_timeout = 3;
       optional google.protobuf.Duration max_timeout = 4;
-      reserved 5;
-      reserved "response_reserve";
-      optional google.protobuf.Duration min_budget = 6;
+      optional google.protobuf.Duration min_budget = 5;
     }
   }
 }

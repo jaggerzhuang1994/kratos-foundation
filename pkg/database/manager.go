@@ -55,14 +55,8 @@ func newManagerWithDrivers(
 	if err != nil {
 		return nil, nil, err
 	}
-	databaseLogger, err := log.WithModuleConfig("database", config.GetLog())
-	if err != nil {
-		return nil, nil, fmt.Errorf("configure database logger: %w", err)
-	}
-	gormModuleLogger, err := log.WithModuleConfig("database/gorm", config.GetLog())
-	if err != nil {
-		return nil, nil, fmt.Errorf("configure database GORM logger: %w", err)
-	}
+	databaseLogger := log.WithModule("database")
+	gormModuleLogger := log.WithModule("database/gorm")
 	connectionFactory := newConnectionFactory(drivers)
 	fail := func(err error) (*manager, func(), error) {
 		return nil, nil, closeConnectionFactoryAfterError(connectionFactory, err)

@@ -23,7 +23,7 @@ var poolFieldNames = []protoreflect.Name{
 //
 // 这四个参数对应 *sql.DB 的 SetMaxIdleConns 等 setter，可在任意时刻并发安全地调用，
 // 调整它们不需要重连数据库，因此连接池打满时可以在线扩容。dsn、driver、连接集合
-// 以及 GORM、AES、日志等配置决定连接与会话本身，无法在不重建 Manager 的情况下切换，
+// 以及 GORM、AES 等配置决定连接与会话本身，无法在不重建 Manager 的情况下切换，
 // 所以这里只在检测到这类改动时告警，不做部分应用。
 func subscribeConnectionPools(
 	configManager foundationconfig.Manager,

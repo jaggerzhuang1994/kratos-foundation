@@ -4,7 +4,6 @@ option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/krat
 package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
-import "config_pb/common.proto";
 
 // Redis [需重启]：Manager 拥有它创建的全部 client，连接参数、日志与遥测配置都在构造时
 // 固定，修改后需要重启进程。
@@ -13,17 +12,13 @@ message Redis {
   optional string default = 1;
   // 连接配置
   map<string, RedisOption> connections = 2;
-  // logger 配置
-  optional ModuleLog log = 3;
   // tracing
-  optional RedisTracing tracing = 4;
+  optional RedisTracing tracing = 3;
   // Metrics
-  optional RedisMetrics metrics = 5;
+  optional RedisMetrics metrics = 4;
 }
 
 message RedisOption {
-  reserved 28, 29;
-  reserved "read_only", "disable_indentity";
 
   // Network type, either tcp or unix.
   //
@@ -131,15 +126,15 @@ message RedisOption {
   // default: 0
   optional google.protobuf.Duration conn_max_lifetime = 27;
   // DisableIdentity is used to disable CLIENT SETINFO command on connect.
-  optional bool disable_identity = 30;
+  optional bool disable_identity = 28;
   // Add suffix to client name. Default is empty.
-  optional string identity_suffix = 31;
+  optional string identity_suffix = 29;
   // UnstableResp3 enables Unstable mode for Redis Search module with RESP3.
-  optional bool unstable_resp3 = 32;
+  optional bool unstable_resp3 = 30;
   // FailingTimeoutSeconds is the timeout in seconds for marking a cluster node as failing.
   //
   // default: 15
-  optional int32 failing_timeout_seconds = 33;
+  optional int32 failing_timeout_seconds = 31;
 }
 
 message RedisTracing {

@@ -35,7 +35,7 @@ defer cleanup()
 
 显式文件或 glob 不限制扩展名，但内容需要有对应的 Kratos codec 才能解码。
 空列表返回 nil；空路径项、非法模式、文件状态或目录读取错误返回错误。
-空目录和未匹配项会记录警告并跳过，全部未匹配时返回 nil。Bootstrap 在 local 下额外要求最终结果非空。
+空目录和未匹配项会记录警告并跳过，全部未匹配时返回 nil。示例应用显式检查配置文件存在；框架不按环境附加非空限制。
 
 文件监听绑定父目录，文件被原子替换后仍能接收后续变更；普通父目录被移走重建时会重新绑定监听。已选中的文件暂时不存在时保留最后有效配置，使用 100ms 至 5s 的指数退避与抖动等待重建，`Stop` 会取消等待。文件删除不会发布空快照或撤销旧配置，而是等待原路径恢复。
 
@@ -73,7 +73,16 @@ flowchart TD
     G --> L
 ```
 
-Watcher 显式声明 `FullSnapshot() bool` 为 true，配置管理器复制通知结果后直接更新本源缓存，不再重复读取文件；初始 Load 保留。文件暂时缺失时不会发布空结果；缓冲所有权与第三方兼容规则见 [配置契约](../../../pkg/config/README.md#watcher-完整快照契约)。
+Watcher 返回文件内容，由官方 Config 直接处理，不额外重新 Load，也不解释 FullSnapshot 扩展。文件暂时缺失仍等待原路径恢复；合并边界见 [配置契约](../../../pkg/config/README.md#来源与合并)。
 
-`bootstrap.LocalConfigPath` 直接委托此实现，仅额外负责环境选择和 local 结果非空检查，
-详见 [Bootstrap 路径约定](../../../pkg/bootstrap/README.md#配置选择和路径约定)。
+## Configuration 声明入口
+
+普通导入本包后，在提供 Spec 的业务构造函数中调用：
+
+```go
+if err := spec.Configuration(file.AddConfigSource("config/base.yaml", "config/custom/*.yaml")); err != nil {
+    return nil, err
+}
+```
+
+前置条件：`spec := bootstrap.NewSpec()`，由该业务 provider 返回给 Wire；不要在依赖 Manager 的 Boot 中调用。路径会复制，声明时不执行 I/O；`bootstrap.NewConfigManager` 执行来源构造，Manager 默认先加载官方 env source，再加载这些文件。空路径列表不添加来源，不存在进程级默认路径或 init 注册表。路径集合在构造期确定，内容可热更新，cleanup 统一停止 watcher。完整示例见 [Configuration](../../../pkg/bootstrap/README.md#configuration-配置阶段)。

@@ -74,19 +74,10 @@ def expectations():
 def verify_reload():
     path = Path(__file__).parent / '.runtime' / 'config.yaml'
     original = path.read_text()
-    before = snapshot()
     def publish(text):
         temporary = path.with_suffix('.next')
         temporary.write_text(text)
         temporary.replace(path)
-    def wait_for(result, baseline):
-        deadline = time.monotonic() + 45
-        while time.monotonic() < deadline:
-            value = total(snapshot(), 'foundation_config_updates_total', {'result':result})
-            if value > baseline:
-                return value-baseline
-            time.sleep(2)
-        raise RuntimeError('config update not observed: '+result)
     def wait_pool(expected):
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
@@ -96,14 +87,11 @@ def verify_reload():
         raise RuntimeError('database pool hot update not applied: '+str(expected))
     try:
         publish(original.replace('max_open_conns: 8', 'max_open_conns: 9'))
-        accepted = wait_for('accepted', total(before,'foundation_config_updates_total',{'result':'accepted'}))
         wait_pool(9)
-        publish(original.replace('stop_delay: 3s', 'stop_delay: [invalid-yaml'))
-        rejected = wait_for('rejected', total(before,'foundation_config_updates_total',{'result':'rejected'}))
     finally:
         publish(original)
     wait_pool(8)
-    return {'accepted_delta':accepted,'rejected_delta':rejected,'pool_max_applied':9,'pool_max_restored':8}
+    return {'pool_max_applied':9,'pool_max_restored':8}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -152,7 +140,7 @@ def main():
     for name in ['go_goroutines','go_memstats_heap_alloc_bytes','process_resident_memory_bytes','process_virtual_memory_bytes',
                  'go_gc_duration_seconds_count','go_sched_latencies_seconds_count',
                  'db_client_connections_usage','db_client_connections_use_time_milliseconds_count',
-                 'foundation_config_watcher_up','job_runs_total','queue_oldest_ready_age_seconds']:
+                 'job_runs_total','queue_oldest_ready_age_seconds']:
         values = [float(s['value'][1]) for s in after if s['metric'].get('__name__') == name]
         if not values or any(not math.isfinite(v) or v < 0 for v in values):
             raise RuntimeError('missing or invalid runtime metric: '+name)

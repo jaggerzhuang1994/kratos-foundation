@@ -13,9 +13,9 @@ import (
 
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
 	consulapi "github.com/hashicorp/consul/api"
+	baseconsul "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/reconnect"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
-	baseconsul "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
@@ -25,12 +25,12 @@ type PathList []string
 // Sources 是供 Wire 区分 Consul 配置源集合的独立类型。
 type Sources []config.Source
 
-// NewSources 返回按 paths 顺序排列的全部底层 Consul 配置源。
+// newSources 返回按 paths 顺序排列的全部底层 Consul 配置源。
 //
 // 构造事件使用全局日志，无需注入应用 Logger。
 // 空路径列表或 nil 客户端表示禁用，返回 nil 且不报错。
 // 结果借用客户端，由应用交给 config.NewManager 管理配置监听。
-func NewSources(client baseconsul.Client, paths PathList) (Sources, error) {
+func newSources(client baseconsul.Client, paths PathList) (Sources, error) {
 	logger := log.WithModule("config/consul").With("function", "NewSources")
 	if len(paths) == 0 {
 		logger.With("reason", "empty paths").Warn("Remote configuration is disabled")

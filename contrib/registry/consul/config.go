@@ -3,10 +3,10 @@ package consul
 import (
 	"errors"
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"strings"
 	"time"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -21,14 +21,14 @@ type registryConfig struct {
 }
 
 // loadConfig 一次完成注册配置的默认值合并、protobuf 校验和运行时归一化。
-func loadConfig(config config.Manager) (registryConfig, error) {
-	defaults := &config_pb.Registry{
+func loadConfig(config config.Reader) (registryConfig, error) {
+	defaults := &config_pb.RegistrarOptions{
 		DisableHealthCheck:             proto.Bool(false),
 		DisableHeartbeat:               proto.Bool(false),
 		HealthcheckInternal:            durationpb.New(10 * time.Second),
 		DeregisterCriticalServiceAfter: durationpb.New(10 * time.Minute),
 	}
-	effective := new(config_pb.Registry)
+	effective := new(config_pb.RegistrarOptions)
 	if err := config.Load("registry", effective, defaults); err != nil {
 		return registryConfig{}, fmt.Errorf("load Consul registry config: %w", err)
 	}

@@ -7,8 +7,6 @@
 | FoundationTargetDown | 已发现应用目标 up=0 | 2m | 抓取端口、进程、网络、Targets 错误 |
 | FoundationHighServerErrorRate | App 5xx >5%，5m 请求至少 100 | 5m | 发布变更、错误分布、依赖 |
 | FoundationHighLatency | App P95 >500ms，5m 请求至少 100 | 10m | 慢接口、资源、外部调用 |
-| FoundationConfigRejected | 5m 内 Manager 拒绝快照 | 无额外 for | 配置发布、校验错误 |
-| FoundationConfigSubscriptionOverloaded | 5m 内订阅过载计数增加 | 无额外 for | 慢回调、订阅终止 |
 | FoundationNodeCPUHigh | 应用所在机器 CPU >90% | 15m | 机器进程分布、竞争 |
 | FoundationNodeMemoryHigh | 应用所在机器内存使用 >90% | 10m | 可用内存、OOM、进程 RSS |
 | FoundationNodeDiskLow | 应用所在机器根分区可用 <10% | 15m | 磁盘、日志及保留策略 |

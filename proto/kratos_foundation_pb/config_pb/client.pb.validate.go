@@ -102,39 +102,6 @@ func (m *Client) validate(all bool) error {
 		}
 	}
 
-	if m.Log != nil {
-
-		if all {
-			switch v := interface{}(m.GetLog()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientValidationError{
-						field:  "Log",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLog()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ClientValidationError{
-					field:  "Log",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
 	if m.CleanupTimeout != nil {
 
 		if d := m.GetCleanupTimeout(); d != nil {
@@ -269,6 +236,8 @@ func (m *ClientOption) validate(all bool) error {
 	var errors []error
 
 	// no validation rules for Target
+
+	// no validation rules for Discovery
 
 	if m.Protocol != nil {
 		// no validation rules for Protocol
@@ -405,39 +374,6 @@ func (m *ClientMiddleware) validate(all bool) error {
 	}
 
 	var errors []error
-
-	if m.Deadline != nil {
-
-		if all {
-			switch v := interface{}(m.GetDeadline()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ClientMiddlewareValidationError{
-						field:  "Deadline",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ClientMiddlewareValidationError{
-						field:  "Deadline",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ClientMiddlewareValidationError{
-					field:  "Deadline",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
 
 	if m.Metadata != nil {
 
@@ -596,6 +532,72 @@ func (m *ClientMiddleware) validate(all bool) error {
 			if err := v.Validate(); err != nil {
 				return ClientMiddlewareValidationError{
 					field:  "CircuitBreaker",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Deadline != nil {
+
+		if all {
+			switch v := interface{}(m.GetDeadline()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientMiddlewareValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientMiddlewareValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientMiddlewareValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.RequestDebug != nil {
+
+		if all {
+			switch v := interface{}(m.GetRequestDebug()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientMiddlewareValidationError{
+						field:  "RequestDebug",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientMiddlewareValidationError{
+						field:  "RequestDebug",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRequestDebug()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientMiddlewareValidationError{
+					field:  "RequestDebug",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}

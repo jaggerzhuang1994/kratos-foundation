@@ -12,10 +12,10 @@ info := appinfo.New(version)
 
 主机名与可执行文件名在包初始化时采集：主机名读取失败使用 `unknown-host`；可执行文件路径读取失败时使用 `os.Args[0]` 的 basename，无参数时使用 `unknown-executable`。后续环境变化不会改变已有 AppInfo；应用应构造一次并共享同一实例。
 
-组装时，`bootstrap.NewAppInfoBootstrap(info, appSpec)` 会同步向 `app.Spec` 登记唯一 AppInfo，并通过包级 `log.WithKV` 添加 `service.id`、`service.name` 与 `service.version` 字段。以下片段放在返回 error 的业务 provider 内，`appSpec` 由组装层提供：
+组装时，`bootstrap.NewAppInfoBootstrap(appSpec, info)` 会同步向 `app.Spec` 登记唯一 AppInfo，并通过包级 `log.RegisterFields` 添加 `service.id`、`service.name` 与 `service.version` 字段。以下片段放在返回 error 的业务 provider 内，`appSpec` 由组装层提供：
 
 ```go
-contribution, err := bootstrap.NewAppInfoBootstrap(info, appSpec)
+contribution, err := bootstrap.NewAppInfoBootstrap(appSpec, info)
 if err != nil {
     return err
 }
@@ -32,7 +32,7 @@ flowchart TD
     E --> F[NewAppInfoBootstrap 登记 AppInfo]
     F --> G{Spec 接受登记?}
     G -- 否 --> H([返回错误 由组装层处理])
-    G -- 是 --> I[log.WithKV 发布进程共享身份字段]
+    G -- 是 --> I[log.RegisterFields 发布进程共享身份字段]
     I --> J([返回完成标记])
 ```
 
