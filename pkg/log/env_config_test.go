@@ -170,8 +170,7 @@ func TestNewEnvConfigAppliesDocumentedDefaults(t *testing.T) {
 		TimeFormat:  time.RFC3339,
 		MsgKey:      defaultMsgKey,
 		Std: outputConfig{
-			Level:      kratoslog.LevelDebug,
-			FilterKeys: []string{"service.id", "service.name", "service.version"},
+			Level: kratoslog.LevelDebug,
 		},
 		File: fileConfig{
 			outputConfig: outputConfig{Disable: true, Level: kratoslog.LevelDebug},

@@ -116,11 +116,7 @@ func newEnvConfig() (envConfig, error) {
 	if err != nil {
 		return envConfig{}, err
 	}
-	stdFilterKeys := envCSV(EnvStdFilterKeys, []string{
-		ServiceIDKey,
-		ServiceNameKey,
-		ServiceVersionKey,
-	})
+	stdFilterKeys := envCSV(EnvStdFilterKeys, nil)
 
 	// 文件输出必须显式启用，普通进程与测试进程采用同一默认值。
 	fileEnable, err := envBool(EnvFileEnable, false)

@@ -312,7 +312,7 @@ flowchart TD
 | `LOG_TIME_FORMAT` | `time.RFC3339` | 时间戳格式 |
 | `LOG_STD_DISABLE` | `false` | 禁用标准输出端 |
 | `LOG_STD_LEVEL` | 无独立限制 | 标准输出端显式最低级别 |
-| `LOG_STD_FILTER_KEYS` | `service.id,service.name,service.version` | 标准输出端过滤键 |
+| `LOG_STD_FILTER_KEYS` | 空 | 标准输出端过滤键，默认保留 service 字段 |
 | `LOG_FILE_ENABLE` | `false` | 显式启用文件输出端 |
 | `LOG_FILE_LEVEL` | 无独立限制 | 文件输出端显式最低级别 |
 | `LOG_FILE_FILTER_KEYS` | 空 | 文件输出端过滤键 |
