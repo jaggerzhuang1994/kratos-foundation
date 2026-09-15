@@ -77,7 +77,7 @@ flowchart TD
 
 基础组装使用 `BaseProviderSet`，具体后端由具名驱动配置选择。
 
-采用 local 文件、其他环境 Consul 的默认约定时，额外提供 [`contrib/bootstrap/consul.NewSpec`](../../contrib/bootstrap/consul/README.md)。应用传入 `AppInfo`、`localConfigPath bootstrap.LocalConfigPath` 和业务定义的 `bootstrap.RemoteConfigPathsProvider`，即可省去自定义配置 Spec provider；该可选约定不包含在 BaseProviderSet 中。
+采用 local 文件、其他环境 Consul 的默认约定时，额外提供 [`contrib/bootstrap/consul.NewSpec`](../../contrib/bootstrap/consul/README.md)。使用该包的 `ProviderSet` 时，应用只需传入 `AppInfo` 和 `localConfigPath bootstrap.LocalConfigPath`；默认提供八层远程路径。自定义路径时单独使用 `NewSpec` 并提供 `bootstrap.RemoteConfigPathsProvider`。该可选约定不包含在 BaseProviderSet 中。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |

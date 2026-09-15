@@ -99,10 +99,7 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	info := appinfo.New("drivers")
-	application, cleanup, err := initializeDrivers(info, bootstrap.LocalConfigPath(path), func(string, string) []string {
-		t.Fatal("local assembly called remote paths provider")
-		return nil
-	})
+	application, cleanup, err := initializeDrivers(info, bootstrap.LocalConfigPath(path))
 	if err != nil {
 		t.Fatal(err)
 	}

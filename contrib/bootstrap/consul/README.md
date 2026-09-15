@@ -1,18 +1,33 @@
 # 默认配置 Spec
 
-`NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, remoteConfigPaths bootstrap.RemoteConfigPathsProvider)` 是与 `bootstrap.BaseProviderSet` 配合的可选 Wire provider，应用无需重复编写环境分支，远程路径规则由业务提供。仅构造并声明 Spec，不执行配置 I/O；配置加载和 cleanup 仍由 `bootstrap.NewConfigManager` 负责。
+`NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, remoteConfigPaths bootstrap.RemoteConfigPathsProvider)` 是与 `bootstrap.BaseProviderSet` 配合的可选 Wire provider，应用无需重复编写环境分支，远程路径可采用 ProviderSet 的默认规则或由业务提供。仅构造并声明 Spec，不执行配置 I/O；配置加载和 cleanup 仍由 `bootstrap.NewConfigManager` 负责。
 
 ```go
 // 放入带 wireinject 标签的应用 injector 文件；业务提供 Bootstrap 和业务 provider。
 import consulbootstrap "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consul"
 
-func wireApp(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, remoteConfigPaths bootstrap.RemoteConfigPathsProvider) (*kratos.App, func(), error) {
-    wire.Build(bootstrap.BaseProviderSet, consulbootstrap.NewSpec, internal.ProviderSet, Bootstrap)
+func wireApp(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*kratos.App, func(), error) {
+    wire.Build(bootstrap.BaseProviderSet, consulbootstrap.ProviderSet, internal.ProviderSet, Bootstrap)
     return nil, nil, nil
 }
 ```
 
 `bootstrap.LocalConfigPath` 是定义在 `pkg/bootstrap` 的独立字符串类型，避免与版本号等普通 `string` 依赖混淆。应用入口将路径转换为 `bootstrap.LocalConfigPath(path)` 后传入 injector。
+
+`ProviderSet` 包含 `NewSpec` 和 `NewRemoteConfigPathsProvider`，默认按以下八层顺序加载；每次生成独立的路径列表，调用方可修改：
+
+```text
+configs/common*.yaml
+configs/{environment}/common*.yaml
+secrets/common*.yaml
+secrets/{environment}/common*.yaml
+configs/{name}/*.yaml
+configs/{name}/{environment}/*.yaml
+secrets/{name}/*.yaml
+secrets/{name}/{environment}/*.yaml
+```
+
+需要自定义路径时，将示例的 `consulbootstrap.ProviderSet` 替换为 `consulbootstrap.NewSpec`，再提供自己的路径函数；不要同时添加默认 ProviderSet，以免 Wire 出现重复依赖。
 
 `bootstrap.RemoteConfigPathsProvider` 定义为 `func(name, environment string) []string`，必须通过 Wire 提供函数值（例如 injector 参数或 `wire.Value(bootstrap.RemoteConfigPathsProvider(remotePaths))`）。业务函数示例：
 
@@ -37,7 +52,7 @@ func remotePaths(name, environment string) []string {
 flowchart TD
  A([NewSpec]) --> B{APP_ENV 为 local?}
  B -- 是 --> C[登记本地路径 loader]
- B -- 否 --> D[调用业务 RemoteConfigPathsProvider]
+ B -- 否 --> D[调用默认或业务 RemoteConfigPathsProvider]
  D --> E[按返回路径顺序登记 Consul loader]
  C --> F([返回 Spec])
  E --> F
