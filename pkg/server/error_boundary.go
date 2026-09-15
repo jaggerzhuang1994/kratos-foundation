@@ -19,7 +19,6 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 			err = foundationerrors.Normalize(err)
 			if err != nil && foundationerrors.Code(err) >= 500 {
 				logger.WithContext(ctx).With(
-					"function", "normalizeErrors",
 					"operation", requestOperation(ctx),
 					"code", foundationerrors.Code(err),
 					"reason", foundationerrors.Reason(err),
@@ -40,7 +39,6 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 				if recovered := recover(); recovered != nil {
 					stack := string(debug.Stack())
 					logger.WithContext(ctx).With(
-						"function", "recoverRequests",
 						"operation", requestOperation(ctx),
 						"panic_type", fmt.Sprintf("%T", recovered),
 						"stack", stack,

@@ -154,8 +154,8 @@ func TestProcessFetchesPreservesFetchContextAndCommitErrors(t *testing.T) {
 
 func TestConsumerLogsRecoverableKafkaProtocolEvents(t *testing.T) {
 	logger, logPath := newQueueKafkaFileLogger(t)
-	value := newConsumer(ConsumerConfig{}, logger, nil).(*consumer)
-	value.logFetchEvents(kgo.Fetches{{Topics: []kgo.FetchTopic{{
+	value := newConsumer(ConsumerConfig{Connection: "main", Group: "billing"}, logger, nil).(*consumer)
+	value.logFetchEvents("worker-1", kgo.Fetches{{Topics: []kgo.FetchTopic{{
 		Topic: "orders",
 		Partitions: []kgo.FetchPartition{
 			{Partition: 1, Err: &kgo.ErrDataLoss{Topic: "orders", Partition: 1, ConsumedTo: 10, ResetTo: 8}},
@@ -169,7 +169,7 @@ func TestConsumerLogsRecoverableKafkaProtocolEvents(t *testing.T) {
 	}
 	logs := string(written)
 	for _, fragment := range []string{
-		"module=kafka",
+		"module=kafka", "connection=main", "group=billing", "consumer=worker-1", "topic=orders", "partition=1",
 		"Kafka reported data loss while fetching records",
 		"Kafka consumer group session was lost",
 		"orders[1]",

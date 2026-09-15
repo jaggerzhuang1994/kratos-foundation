@@ -119,7 +119,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	err := group.Wait()
 	if err != nil {
 		w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
-		w.log.WithContext(ctx).Errorw("function", "Worker", "event", "storage.failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
+		w.log.WithContext(ctx).Errorw("event", "storage.failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
 		return err
 	}
 	return nil
@@ -167,7 +167,7 @@ func (w *Worker) run(ctx context.Context) error {
 		}
 		if err := w.execute(ctx, reservation, now); err != nil {
 			if errorOnly(err, ErrLeaseLost) {
-				w.log.WithContext(ctx).Warnw("function", "Worker", "event", "lease.lost", "queue", w.config.Queue, "task.id", reservation.Task.ID)
+				w.log.WithContext(ctx).Warnw("event", "lease.lost", "queue", w.config.Queue, "task.id", reservation.Task.ID)
 				continue
 			}
 			if ctx.Err() != nil && errorOnly(err, ctx.Err()) {

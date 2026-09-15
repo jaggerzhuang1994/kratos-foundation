@@ -66,7 +66,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, task *Task) (string, error) {
 	if err != nil {
 		result = "error"
 		span.SetStatus(codes.Error, "enqueue failed")
-		d.log.WithContext(spanCtx).Errorw("function", "Dispatch", "event", "enqueue.failed", "queue", d.name, "task.id", prepared.ID)
+		d.log.WithContext(spanCtx).Errorw("event", "enqueue.failed", "queue", d.name, "task.id", prepared.ID)
 	}
 	d.telemetry.RecordProducer(spanCtx, d.name, "dispatch", result, 1, time.Since(started))
 	if err != nil {

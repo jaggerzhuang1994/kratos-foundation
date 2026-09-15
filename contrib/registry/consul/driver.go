@@ -47,7 +47,7 @@ func newDriver(settings registry.DriverConfig, logger log.Logger) (registry.Reso
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := r.acquire(ctx); err != nil {
-			logger.With("function", "newDriver.cleanup", "error", err).Error("acquire registrar cleanup failed")
+			logger.With("error", err).Error("acquire registrar cleanup failed")
 		} else {
 			for _, active := range r.services {
 				active.cancel()

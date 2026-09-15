@@ -74,6 +74,10 @@ func TestManagerOfficialMergeAndIndependentObservers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancel()
+	// 首次回放与源更新由不同任务调度；先确认初值，再验证变更通知。
+	if got := receive(t, first); got != 1 {
+		t.Fatalf("initial value = %d, want 1", got)
+	}
 	source.watcher.events <- jsonValues(`{"feature":{"value":2}}`)
 	if receive(t, first) != 2 {
 		t.Fatal("update missing")
@@ -93,6 +97,9 @@ func TestManagerOfficialMergeAndIndependentObservers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancelSecond()
+	if got := receive(t, second); got != 2 {
+		t.Fatalf("second observer initial value = %d, want 2", got)
+	}
 	source.watcher.events <- jsonValues(`{"feature":{"value":3}}`)
 	if receive(t, second) != 3 {
 		t.Fatal("replacement observer missing")
@@ -218,6 +225,15 @@ func TestManagerTemplateAndOfficialResolver(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancel()
+	// 先消费首次回放，避免将合法初值误判为 resolver 未更新。
+	select {
+	case got := <-updates:
+		if got != "postgres://localhost:5432/app" {
+			t.Fatalf("initial dsn = %q", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("initial resolver value not delivered")
+	}
 	source.watcher.events <- jsonValues(`{"database":{"host":"remote"},"dsn":"postgres://$${database.host}:$${database.port:5432}/app"}`)
 	select {
 	case got := <-updates:

@@ -25,7 +25,7 @@ type PathList []string
 // 未匹配路径（包括空目录）只记录警告，不创建配置源。
 // 由应用把结果交给 config.NewManager；后解析的文件覆盖先解析的文件。
 func NewSources(paths PathList) (Sources, error) {
-	logger := log.WithModule("config/file").With("function", "NewSources")
+	logger := log.WithModule("config/file")
 	if len(paths) == 0 {
 		return nil, nil
 	}

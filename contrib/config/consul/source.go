@@ -31,7 +31,7 @@ type Sources []config.Source
 // 空路径列表或 nil 客户端表示禁用，返回 nil 且不报错。
 // 结果借用客户端，由应用交给 config.NewManager 管理配置监听。
 func newSources(client baseconsul.Client, paths PathList) (Sources, error) {
-	logger := log.WithModule("config/consul").With("function", "NewSources")
+	logger := log.WithModule("config/consul")
 	if len(paths) == 0 {
 		logger.With("reason", "empty paths").Warn("Remote configuration is disabled")
 		return nil, nil

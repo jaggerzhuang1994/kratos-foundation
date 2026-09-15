@@ -35,7 +35,6 @@ func NewHotReloadValue[T any](config Manager, key string, optionalDefault ...*T)
 	cancel, err := config.Subscribe(key, new(T), func(_ string, value any, err error) {
 		if err != nil {
 			log.WithModule("config").With(
-				"function", "NewHotReloadValue",
 				"key", key,
 				"error", err,
 			).Warn("Failed to update the subscribed configuration value; retaining the previous value")

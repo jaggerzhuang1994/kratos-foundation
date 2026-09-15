@@ -80,7 +80,7 @@ func limitPendingRuns(
 				defer func() { <-slots }()
 				return execute(ctx)
 			default:
-				warnConcurrent(log, ctx, "Skipped job trigger because the pending-run queue is full", "function", "limitPendingRuns", "max_pending_runs", maxPendingRuns)
+				warnConcurrent(log, ctx, "Skipped job trigger because the pending-run queue is full", "max_pending_runs", maxPendingRuns)
 				if overflowHandler != nil {
 					return handleDelayOverflow(ctx, event, overflowHandler)
 				}

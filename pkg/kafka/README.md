@@ -1,5 +1,7 @@
 # Kafka
 
+协议级数据丢失及消费组会话故障日志包含 connection、group、consumer、topic 和 partition，用于定位具体消费实例。
+
 SDK 适配器、消费者，以及独立 NewManagedProducer / NewConsumerRuntime 的运行日志均归属 `module=kafka`。策略统一通过 `log.modules` 热更新，`kafka.log` 已移除。SDK 适配器接收全部级别并交给 Foundation 过滤，避免启动时丢弃 debug 后无法动态开启。
 
 `pkg/kafka` 提供业务与 Wire 使用的 `ClientFactory`，按具名配置创建 franz-go 客户端。工厂只保存连接配置，不持有或共享创建出的客户端，因此不使用 Driver Registry，也不返回资源 cleanup。

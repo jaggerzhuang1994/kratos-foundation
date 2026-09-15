@@ -94,8 +94,8 @@ func newManager(
 	coordinator ConcurrencyCoordinator,
 ) (*Manager, error) {
 	if options.ErrorHandler == nil {
-		options.ErrorHandler = func(_ context.Context, name string, err error) {
-			log.With("job", name, "error", err).Error("job failed")
+		options.ErrorHandler = func(ctx context.Context, name string, err error) {
+			log.WithContext(ctx).With("job", name, "error", err).Error("job failed")
 		}
 	}
 

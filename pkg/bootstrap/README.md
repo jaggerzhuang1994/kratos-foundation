@@ -75,7 +75,9 @@ flowchart TD
     X --> Y([返回错误])
 ```
 
-基础组装使用 `DriverProviderSet`，具体后端由具名驱动配置选择。
+基础组装使用 `BaseProviderSet`，具体后端由具名驱动配置选择。
+
+采用 local 文件、其他环境 Consul 的默认约定时，额外提供 [`contrib/bootstrap/consul.NewSpec`](../../contrib/bootstrap/consul/README.md)。应用传入 `AppInfo`、`localConfigPath bootstrap.LocalConfigPath` 和业务定义的 `bootstrap.RemoteConfigPathsProvider`，即可省去自定义配置 Spec provider；该可选约定不包含在 BaseProviderSet 中。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |
@@ -233,12 +235,12 @@ app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo�
 
 ## 驱动组装
 
-使用 `DriverProviderSet`，业务提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot。需要自定义 Job Coordinator 时改用 `DriverProviderSetWithCustomJobCoordinator`，并提供 `job.ConcurrencyCoordinator`；两个集合二选一。
+使用 `BaseProviderSet`，业务提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot。需要自定义 Job Coordinator 时改用 `BaseProviderSetWithCustomJobCoordinator`，并提供 `job.ConcurrencyCoordinator`；两个集合二选一。
 
 ```go
 // wireinject 文件中的业务 provider：Boot 已声明应用组件。
 func wireApp(info appinfo.AppInfo, spec *bootstrap.Spec) (*kratos.App, func(), error) {
-    wire.Build(bootstrap.DriverProviderSet, Boot)
+    wire.Build(bootstrap.BaseProviderSet, Boot)
     return nil, nil, nil
 }
 ```
@@ -282,7 +284,7 @@ func newSpec() (*bootstrap.Spec, error) {
 }
 ```
 
-以上使用普通导入的 `contrib/config/file` 和 `contrib/config/consul`。`AddConfigSource` 复制路径并返回 `config.SourceLoader`，声明时不执行 I/O。Wire 使用 `newSpec` 提供唯一 Spec，`DriverProviderSet` 内的 `NewConfigManager` 先按声明顺序创建来源，再构造包含官方 env source 的 Manager；配置完整后才提供给其他组件。该 provider set 不再包含 `NewSpec`，不要重复提供它。
+以上使用普通导入的 `contrib/config/file` 和 `contrib/config/consul`。`AddConfigSource` 复制路径并返回 `config.SourceLoader`，声明时不执行 I/O。Wire 使用 `newSpec` 提供唯一 Spec，`BaseProviderSet` 内的 `NewConfigManager` 先按声明顺序创建来源，再构造包含官方 env source 的 Manager；配置完整后才提供给其他组件。该 provider set 不再包含 `NewSpec`，不要重复提供它。
 
 不使用 provider set 时，可显式组合 `newSpec`、`bootstrap.NewConfigManager`、`bootstrap.ApplicationSpec` 与所需组件。没有额外来源时由 `bootstrap.NewSpec` 提供空声明即可。来源集合在构造阶段确定，运行中监听来源内容；没有全局配置源注册表，也不提供运行时增删来源接口。Configuration 消费后拒绝追加或重复构造，失败后应丢弃 Spec。返回 cleanup 由 Wire 逆序调用，取消 Manager 轮询并停止 watcher；不等待已开始的订阅回调，共享 Consul 客户端不释放。
 

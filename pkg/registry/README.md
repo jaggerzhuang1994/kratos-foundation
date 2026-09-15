@@ -27,7 +27,7 @@ Consul 客户端由 `CONSUL_*` 环境变量驱动，配置源和所有具名实�
 
 ## Wire 组装
 
-应用提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot，使用 `bootstrap.DriverProviderSet`。旧基础/Consul 组装集合已删除。配置文件源和 Consul 源显式排列，后者覆盖前者；远程配置连接来自启动环境，不从最终 Manager 反向读取。
+应用提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot，使用 `bootstrap.BaseProviderSet`。旧基础/Consul 组装集合已删除。配置文件源和 Consul 源显式排列，后者覆盖前者；远程配置连接来自启动环境，不从最终 Manager 反向读取。
 
 配置源使用普通导入，通过 `spec.Configuration(file.AddConfigSource(...), consul.AddConfigSource(...))` 显式声明；env 默认在首位。配置阶段的可编译组装示例和执行顺序见 [Bootstrap Configuration](../bootstrap/README.md#configuration-配置阶段)。不再提供配置源驱动注册表或进程级默认路径。
 
@@ -74,7 +74,7 @@ Consul 连接构造使用 `newClient` 的初始化日志及 10 秒 leader 探测
 1. 将注册/发现设置迁入每个实例的 `options.registry` / `options.discovery`。
 2. 配置 `registry.instances.default`，或显式设置 `app.registry` 与发现目标的 `client.clients.<name>.discovery` 选择其他已配置实例。
 3. 用有序 Configuration 声明替代旧的本地/远程环境选择 provider；远程连接先配置启动环境。
-4. Wire 使用 DriverProviderSet 后重新生成，按依赖逆序 cleanup。
+4. Wire 使用 BaseProviderSet 后重新生成，按依赖逆序 cleanup。
 
 注册/发现旧显式构造函数与旧 Discovery 包已经删除；客户端统一使用 `client.NewFactory` 接收 `DiscoveryResolver`。可执行的组装与 cleanup 用例位于 `pkg/bootstrap/testdata/wireassembly`，由根 `make test-business` 在临时模块生成并运行。
 

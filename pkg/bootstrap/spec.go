@@ -11,6 +11,13 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
+// LocalConfigPath 是本地配置路径，用于区分 Wire 中的其他字符串依赖。
+type LocalConfigPath string
+
+// RemoteConfigPathsProvider 根据应用名和环境生成有序远程配置路径，由业务提供。
+// 配置源组装方按返回顺序加载路径，具体路径语法由对应配置源约束。
+type RemoteConfigPathsProvider func(name, environment string) []string
+
 // Spec 按领域收集应用声明。使用 NewSpec 构造，仅在组装前串行修改。
 type Spec struct {
 	configuration      []config.SourceLoader

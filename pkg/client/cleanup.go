@@ -90,7 +90,7 @@ func (f *factory) cleanup(cancelSubscription func()) func() {
 		if pending == 0 {
 			return
 		}
-		f.logger.With("function", "factory.cleanup", "timeout", f.cleanupTimeout, "pending", pending, "connections", len(retired)).Warn("Timed out waiting for client leases to be released; force-closing connections")
+		f.logger.With("timeout", f.cleanupTimeout, "pending", pending, "connections", len(retired)).Warn("Timed out waiting for client leases to be released; force-closing connections")
 		for _, client := range retired {
 			f.closeAndLog(client)
 		}

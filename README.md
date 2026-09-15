@@ -106,7 +106,7 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-`DriverProviderSet` 统一构造配置源链与具名注册/发现实例；自定义 Job Coordinator 使用 `DriverProviderSetWithCustomJobCoordinator`。
+`BaseProviderSet` 统一构造配置源链与具名注册/发现实例；自定义 Job Coordinator 使用 `BaseProviderSetWithCustomJobCoordinator`。 默认 local/Consul 配置选择可直接使用 [consulbootstrap.NewSpec](contrib/bootstrap/consul/README.md)，应用提供 AppInfo 和本地配置路径。
 
 ## 日志
 
@@ -225,4 +225,4 @@ make verify
 
 ## 驱动组装入口
 
-应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。

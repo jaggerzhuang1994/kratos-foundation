@@ -3,9 +3,7 @@ package wireassembly
 import (
 	"context"
 	"errors"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/registry/consul"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"os"
@@ -16,6 +14,7 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
@@ -100,11 +99,10 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	info := appinfo.New("drivers")
-	spec := bootstrap.NewSpec()
-	if err := spec.Configuration(file.AddConfigSource(path)); err != nil {
-		t.Fatal(err)
-	}
-	application, cleanup, err := initializeDrivers(info, spec)
+	application, cleanup, err := initializeDrivers(info, bootstrap.LocalConfigPath(path), func(string, string) []string {
+		t.Fatal("local assembly called remote paths provider")
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

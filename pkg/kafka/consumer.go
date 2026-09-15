@@ -101,7 +101,7 @@ func (c *consumer) consume(ctx context.Context, instance string, handler Deliver
 			firstReadRetries++
 		}
 		if c.logger != nil {
-			c.logger.With("function", "consume", "consumer", instance, "attempt", attempt+1, "error", err).Warn("Reconnecting the Kafka consumer after a connection failure")
+			c.logger.With("consumer", instance, "attempt", attempt+1, "error", err).Warn("Reconnecting the Kafka consumer after a connection failure")
 		}
 		if err := backoff.Wait(ctx, attempt); err != nil {
 			return err
@@ -139,16 +139,16 @@ func (c *consumer) consumeClient(
 		cancel()
 		client.CloseAllowingRebalance()
 		if leaveErr != nil && c.logger != nil {
-			c.logger.With("function", "consumeClient", "consumer", instance, "error", leaveErr).Warn("Failed to leave the Kafka consumer group")
+			c.logger.With("consumer", instance, "error", leaveErr).Warn("Failed to leave the Kafka consumer group")
 		}
 	}()
 
 	if c.logger != nil {
-		c.logger.With("function", "consumeClient", "destination", c.config.Topic, "group", c.config.Group, "consumer", instance).Debug("Kafka consumer is ready")
+		c.logger.With("destination", c.config.Topic, "group", c.config.Group, "consumer", instance).Debug("Kafka consumer is ready")
 	}
 	for {
 		fetches := client.PollRecords(ctx, c.config.MaxPollRecords)
-		c.logFetchEvents(fetches)
+		c.logFetchEvents(instance, fetches)
 		err := processFetches(ctx, client, fetches, handler)
 		client.AllowRebalance()
 		if err != nil {

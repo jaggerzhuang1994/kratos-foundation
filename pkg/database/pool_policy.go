@@ -52,12 +52,12 @@ func subscribeConnectionPools(
 				updateErr = validateDatabaseConfig(next, drivers)
 			}
 			if updateErr != nil {
-				logger.With("function", "subscribeConnectionPools", "error", updateErr).Error("Rejected database configuration update")
+				logger.With("error", updateErr).Error("Rejected database configuration update")
 				return
 			}
 			if !poolOnlyChange(startupConfig, next) {
 				// 连接身份变化后不可把新池参数写回启动时的另一份资源。
-				logger.With("function", "subscribeConnectionPools").Warn(
+				logger.Warn(
 					"Skipped database hot update: changes to dsn, driver or " +
 						"plugin config require a restart, and only connection pool sizing " +
 						"can be applied at runtime",
@@ -70,7 +70,7 @@ func subscribeConnectionPools(
 			applied := applyConnectionPools(factory, next)
 			appliedConfig = proto.CloneOf(next)
 			if applied > 0 {
-				logger.With("function", "subscribeConnectionPools", "connections", applied).Info(
+				logger.With("connections", applied).Info(
 					"Updated database connection pool settings",
 				)
 			}

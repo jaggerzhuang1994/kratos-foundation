@@ -50,9 +50,9 @@ func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger
 	}
 	var policyLogger stopPolicyLogger
 	if base, ok := logger.(foundationlog.Logger); ok {
-		policyLogger = base.WithModule("app").With("function", "StopPolicy.current")
+		policyLogger = base.WithModule("app")
 	} else {
-		policyLogger = kratoslog.NewHelper(kratoslog.With(logger, "module", "app", "function", "StopPolicy.current"))
+		policyLogger = kratoslog.NewHelper(kratoslog.With(logger, "module", "app"))
 	}
 	policy := &StopPolicy{value: value, logger: policyLogger}
 	policy.currentValue.Store(&stopTimeoutSnapshot{version: version, timeout: initial.AsDuration()})

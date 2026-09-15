@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -43,6 +44,13 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 			}
 			if outcome != tc.want || string(r.Task.Payload) != "data" {
 				t.Fatalf("outcome %s snapshot %s", outcome, r.Task.Payload)
+			}
+			if tc.name != "success" {
+				logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+				cause := map[string]string{"retry": "handler_error", "exhausted": "handler_error", "crashed repeatedly": "attempts_exhausted", "permanent": "handler_error", "unknown type": "handler_missing", "panic": "panic"}[tc.name]
+				if !strings.Contains(logs, "cause"+cause) || !strings.Contains(logs, "task.typeemail") || strings.Contains(logs, "private panic data") {
+					t.Fatalf("unsafe or incomplete failure log: %s", logs)
+				}
 			}
 			if outcome == "release" && at.Before(before.Add(500*time.Millisecond)) {
 				t.Fatal("retry was not delayed")

@@ -182,3 +182,18 @@ Release 先取消旧执行和续租，再最多等待 `OperationTimeout` 让在�
 ## 集成测试与边界用法
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+
+任务中间件记录开始、成功和正常取消；错误与 panic 仅交给最终 ErrorHandler。默认处理器携带 Context 记录一次最终错误；自定义 `WithErrorHandler` 时由业务负责最终错误日志。
+
+```mermaid
+flowchart TD
+ A([执行任务]) --> B[INFO job execution started]
+ B --> C{执行结果}
+ C -- 成功 --> D[INFO job execution done]
+ C -- 正常取消 --> E[INFO job execution stopped]
+ C -- 错误或恢复后的 panic --> F[调用最终 ErrorHandler]
+ F --> G[默认 ERROR job failed 或 cron job failed；自定义由业务处理]
+ D --> H([结束])
+ E --> H
+ G --> H
+```

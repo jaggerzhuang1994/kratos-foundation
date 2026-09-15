@@ -81,7 +81,7 @@ func TestPublicDriverRegistryFunctions(t *testing.T) {
 		t.Fatal(err)
 	}
 	MustRegisterDriver("alpha", stubOSSDriver)
-	for _, want := range []string{"INFO", "module=oss", "function=RegisterDriver", "driver=zeta", "driver=alpha"} {
+	for _, want := range []string{"INFO", "module=oss", "driver=zeta", "driver=alpha"} {
 		if !strings.Contains(buffer.String(), want) {
 			t.Fatalf("missing %q in %s", want, buffer.String())
 		}

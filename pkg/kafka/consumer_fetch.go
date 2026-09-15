@@ -9,7 +9,7 @@ import (
 )
 
 // logFetchEvents 只记录 Kafka 协议级的数据丢失与 Group Session 事件。
-func (c *consumer) logFetchEvents(fetches kgo.Fetches) {
+func (c *consumer) logFetchEvents(instance string, fetches kgo.Fetches) {
 	if c.logger == nil {
 		return
 	}
@@ -24,9 +24,9 @@ func (c *consumer) logFetchEvents(fetches kgo.Fetches) {
 		var groupSession *kgo.ErrGroupSession
 		switch {
 		case errors.As(fetchError.Err, &dataLoss):
-			c.logger.With("function", "logFetchEvents", "error", err).Error("Kafka reported data loss while fetching records")
+			c.logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Error("Kafka reported data loss while fetching records")
 		case errors.As(fetchError.Err, &groupSession):
-			c.logger.With("function", "logFetchEvents", "error", err).Warn("Kafka consumer group session was lost")
+			c.logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Warn("Kafka consumer group session was lost")
 		}
 	}
 }

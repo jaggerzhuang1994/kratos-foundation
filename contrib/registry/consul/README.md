@@ -29,10 +29,13 @@ flowchart TD
  Z -- 否 --> D[创建 Registrar 和 Discovery]
  D --> E[App 注册；客户端启动发现 watcher]
  E --> F{查询或心跳失败?}
- F -- 临时错误 --> G[按退避重试]
+ F -- 临时错误 --> G[WARN 失败及重试次数，按退避重试]
  G --> E
  F -- 权限错误 --> H[停止对应后台任务]
- F -- 否 --> E
+ F -- 否 --> R{此前有重试?}
+ R -- 是 --> S[INFO heartbeat 或 discovery query recovered]
+ S --> E
+ R -- 否 --> E
  E --> I[应用停止：注销与停止 watcher]
  H --> I
  I --> J[驱动 cleanup 取消残留心跳，保留共享连接]

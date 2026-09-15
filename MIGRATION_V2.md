@@ -272,7 +272,7 @@ go version -m ./tools/protoc-gen-jsonschema
 ### Wire 成功不代表业务服务已登记
 
 本例记录的是旧 `ConsulBaseProviderSet`、单一 `bootstrap.Spec` 和统一组件构造的迁移阶段；
-当前仅使用 `DriverProviderSet`，新代码按 [Bootstrap 文档](pkg/bootstrap/README.md) 组装。
+当前仅使用 `BaseProviderSet`，新代码按 [Bootstrap 文档](pkg/bootstrap/README.md) 组装。
 维护者有意将 `cmd/auth_service/bootstrap.go` 的 Auth HTTP、Auth gRPC、RBAC gRPC 注册调用注释用于框架联调，
 对应服务参数也被移除。`wire_gen.go` 因此没有构造 AuthService、RbacService 及其业务依赖。
 ProviderSet 列出了构造函数，并不表示 Wire 一定执行它们。
@@ -470,7 +470,7 @@ flowchart LR
 
 ## 驱动组装入口
 
-应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。
 
 ## Consul env 单例
 
@@ -491,3 +491,7 @@ flowchart LR
 配置 proto 已清除 reserved 声明，消息字段按声明顺序从 1 连续编号，不保证旧 protobuf 二进制兼容。JSON 字段名、枚举数值和生成器扩展编号保持不变。Foundation 旧字段不再因 reserved 被拒绝，应按当前 schema 主动清理；业务自定义消息的 reserved 校验仍有效。
 
 各组件的 `database.log`、`redis.log`、`client.log`、`kafka.log` 及 ModuleLog 协议已删除，迁移到 `log.modules` 列表。模块表达式按顺序首个命中，支持精确、末尾 * 前缀及 * 全匹配；不要沿用旧 log.modules 映射格式。filter_keys 与根、实例、对应输出端取并集；禁用和 level 由首个命中项决定。完整配置与优先级流程见 [日志模块策略](pkg/log/README.md#模块策略)。
+
+## 基础 ProviderSet 命名与默认 Spec
+
+`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consul.NewSpec`](contrib/bootstrap/consul/README.md)，Wire 传入 AppInfo、LocalConfigPath 和业务定义的 RemoteConfigPathsProvider；远程路径规则不再内置。环境分支、路径顺序与失败流程见该 provider 文档。

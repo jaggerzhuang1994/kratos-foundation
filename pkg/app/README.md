@@ -209,4 +209,4 @@ Context，使用支持取消的数据库/网络 API，为连接和读写配置�
 
 ## 驱动组装入口
 
-应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。

@@ -225,6 +225,6 @@ flowchart TD
 
 ## 驱动组装入口
 
-应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.DriverProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。
 
 `NewFactory` 接收 `DiscoveryResolver`，按每个 `client.clients.<name>.discovery` 选择实例。发现目标必须指定有效实例，错误在构造或配置更新校验时返回；更新被拒绝时保留原客户端。切换实例名称会重建连接。直连目标不使用发现配置。单个 Discovery 注入入口已删除。

@@ -16,12 +16,12 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-// DriverProviderSet 按注册驱动组装配置、注册和发现；业务提供已声明 Configuration 的 *Spec、AppInfo 和 Boot。
+// BaseProviderSet 按注册驱动组装配置、注册和发现；业务提供已声明 Configuration 的 *Spec、AppInfo 和 Boot。
 // 所有注册与发现均通过具名驱动解析。
-var DriverProviderSet = wire.NewSet(DriverProviderSetWithCustomJobCoordinator, job.DefaultCoordinator)
+var BaseProviderSet = wire.NewSet(BaseProviderSetWithCustomJobCoordinator, job.DefaultCoordinator)
 
-// DriverProviderSetWithCustomJobCoordinator 由应用显式提供 Job Coordinator。
-var DriverProviderSetWithCustomJobCoordinator = wire.NewSet(
+// BaseProviderSetWithCustomJobCoordinator 由应用显式提供 Job Coordinator。
+var BaseProviderSetWithCustomJobCoordinator = wire.NewSet(
 	NewConfigManager, registry.NewFactory, app.NewRegistrar,
 	wire.Bind(new(client.DiscoveryResolver), new(*registry.Factory)), client.NewFactory,
 	log.NewLogger, wire.Bind(new(kratoslog.Logger), new(log.Logger)),

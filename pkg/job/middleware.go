@@ -73,7 +73,7 @@ func newMiddlewares(
 	if options.LoggingEnabled {
 		middlewares = append(middlewares, loggingMiddleware(log))
 	}
-	middlewares = append(middlewares, recoveryMiddleware(log))
+	middlewares = append(middlewares, recoveryMiddleware())
 	return middlewares, nil
 }
 
@@ -84,13 +84,12 @@ func loggingMiddleware(log moduleLog) Middleware {
 			logger := log.WithContext(ctx)
 			logger.Info("job execution started")
 			defer func() {
+				// 失败统一交给最终 ErrorHandler，避免重复输出错误和堆栈。
 				switch {
 				case err == nil:
 					logger.With("duration", time.Since(started)).Info("job execution done")
 				case ctx.Err() != nil && errors.Is(err, ctx.Err()):
 					logger.With("duration", time.Since(started), "cause", ctx.Err()).Info("job execution stopped")
-				default:
-					logger.With("duration", time.Since(started), "error", err).Error("job execution failed")
 				}
 			}()
 			return next(ctx)
@@ -98,14 +97,12 @@ func loggingMiddleware(log moduleLog) Middleware {
 	}
 }
 
-func recoveryMiddleware(log moduleLog) Middleware {
+func recoveryMiddleware() Middleware {
 	return func(next Handler) Handler {
 		return func(ctx context.Context) (err error) {
-			started := time.Now()
 			defer func() {
 				if recovered := recover(); recovered != nil {
 					err = fmt.Errorf("job panic: %v\n%s", recovered, debug.Stack())
-					log.WithContext(ctx).With("duration", time.Since(started)).Error("job panic: ", err)
 				}
 			}()
 			return next(ctx)

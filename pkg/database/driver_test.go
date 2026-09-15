@@ -75,7 +75,7 @@ func TestRegisterDriverLogsSuccessfulRegistration(t *testing.T) {
 	if err := RegisterDriver(" SQLite3 ", stubDriver); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"module=database", "function=RegisterDriver", "driver=sqlite3", "Registered database driver"} {
+	for _, want := range []string{"module=database", "driver=sqlite3", "Registered database driver"} {
 		if !strings.Contains(buffer.String(), want) {
 			t.Fatalf("missing %q in %s", want, buffer.String())
 		}

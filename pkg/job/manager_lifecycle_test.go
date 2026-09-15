@@ -372,7 +372,7 @@ func TestManagerDefaultErrorHandlerLogsOnceFailure(t *testing.T) {
 	})).(*Spec)
 	manager, err := newManager(
 		log,
-		nil,
+		middlewareChain{loggingMiddleware(log), recoveryMiddleware()},
 		spec,
 		newManagerOptions(spec),
 		&testScheduler{},
@@ -399,6 +399,9 @@ func TestManagerDefaultErrorHandlerLogsOnceFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := string(written)
+	if strings.Count(logs, "job failed") != 1 || strings.Contains(logs, "job execution failed") {
+		t.Fatalf("duplicated final failure: %s", logs)
+	}
 	for _, fragment := range []string{"job=once", "migration: migration failed", "job failed"} {
 		if !strings.Contains(logs, fragment) {
 			t.Errorf("default job error log lacks %q: %s", fragment, logs)

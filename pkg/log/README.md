@@ -242,7 +242,7 @@ flowchart TD
 
 ```go
 log.WithModule("config/file").
-    With("function", "NewSources", "files", matches).
+    With("files", matches).
     Info("Matched local configuration files")
 ```
 

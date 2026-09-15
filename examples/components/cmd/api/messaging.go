@@ -117,7 +117,7 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 		}
 		releases = append(releases, func() {
 			if releaseErr := unregister(); releaseErr != nil {
-				logger.Errorw("function", "messaging.cleanup", "queue", name, "error", releaseErr)
+				logger.With("queue", name, "error", releaseErr).Error("Failed to unregister queue statistics")
 			}
 		})
 		if name == backlogQueue {
@@ -195,7 +195,7 @@ func (m *messaging) Run(ctx context.Context, runID string) error {
 			return fmt.Errorf("dispatch %s task: %w", business.name, err)
 		}
 	}
-	m.logger.WithContext(ctx).Infow("function", "messaging.Run", "event", "messages.dispatched", "run_id", runID)
+	m.logger.WithContext(ctx).Infow("event", "messages.dispatched", "run_id", runID)
 	return nil
 }
 
@@ -239,7 +239,7 @@ func (m *messaging) handleEmail(ctx context.Context, task *queue.Task) error {
 		return queue.Permanent(errors.New("unsupported email template"))
 	}
 	body := fmt.Sprintf("Welcome! Your request %s is ready.", task.ID)
-	m.logger.WithContext(ctx).Infow("function", "messaging.handleEmail", "event", "email.rendered", "task_id", task.ID, "bytes", len(body))
+	m.logger.WithContext(ctx).Infow("event", "email.rendered", "task_id", task.ID, "bytes", len(body))
 	return nil
 }
 
@@ -252,6 +252,6 @@ func (m *messaging) handleReport(ctx context.Context, task *queue.Task) error {
 	for _, amount := range []int{120, 80, 200} {
 		total += amount
 	}
-	m.logger.WithContext(ctx).Infow("function", "messaging.handleReport", "event", "report.summarized", "task_id", task.ID, "total", total)
+	m.logger.WithContext(ctx).Infow("event", "report.summarized", "task_id", task.ID, "total", total)
 	return nil
 }

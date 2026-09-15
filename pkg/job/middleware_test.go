@@ -175,12 +175,13 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := string(written)
+	if strings.Contains("\n"+logs, "\nERROR ") || strings.Contains(logs, "job panic:") {
+		t.Fatalf("middleware duplicated final error logging: %s", logs)
+	}
 	for _, fragment := range []string{
 		"job execution started",
 		"job execution done",
-		"job execution failed",
 		"job execution stopped",
-		"job panic: broken invariant",
 		"job=success",
 		"job=failure",
 		"job=canceled",

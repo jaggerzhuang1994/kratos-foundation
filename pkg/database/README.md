@@ -146,7 +146,7 @@ flowchart TD
 
 新增 PostgreSQL 等实现时，应在独立公共 `contrib/database/<driver>` 包中调用 `database.MustRegisterDriver`，业务只需选择性空导入该包。
 
-驱动注册成功时使用全局日志记录 `module=database`、`function=RegisterDriver` 和规范化的 `driver` 名称，消息为 `Registered database driver`。MySQL、SQLite 的空导入注册均适用；不记录 DSN 或密钥，注册失败只返回错误。
+驱动注册成功时使用全局日志记录 `module=database` 和规范化的 `driver` 名称，消息为 `Registered database driver`。MySQL、SQLite 的空导入注册均适用；不记录 DSN 或密钥，注册失败只返回错误。
 
 ```mermaid
 flowchart TD
