@@ -1,4 +1,4 @@
-package consul
+package consulconfig
 
 import (
 	"os"

@@ -496,4 +496,4 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consul.NewSpec`](contrib/bootstrap/consul/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consul.ProviderSet` 使用默认八层路径；自定义路径时改用 `NewSpec` 和业务定义的 RemoteConfigPathsProvider。环境分支、路径顺序与失败流程见该 provider 文档。
+`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consulconfig.NewSpec`](contrib/bootstrap/consulconfig/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consulconfig.ProviderSet` 使用默认八层路径；自定义路径时改用 `NewSpec` 和业务定义的 RemoteConfigPathsProvider。环境分支、路径顺序与失败流程见该 provider 文档。

@@ -7,7 +7,7 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/google/wire"
-	consulbootstrap "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consul"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consulconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -69,6 +69,6 @@ func initializeComponents(sources config.Sources, version string) (*kratos.App, 
 func newRegistrar() registry.Registrar { return nil }
 
 func initializeDrivers(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
-	wire.Build(bootstrap.BaseProviderSet, consulbootstrap.ProviderSet, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }

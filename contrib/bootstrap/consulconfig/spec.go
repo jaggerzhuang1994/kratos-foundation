@@ -1,8 +1,8 @@
-// Package consul 提供 local 文件、其他环境 Consul 的可选应用组装约定。
-package consul
+// Package consulconfig 提供 local 文件、其他环境 Consul 的可选应用组装约定。
+package consulconfig
 
 import (
-	consulconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/consul"
+	consulsource "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/consul"
 	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -21,7 +21,7 @@ func NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, re
 		loader = fileconfig.AddConfigSource(string(localConfigPath))
 	} else {
 		paths := remoteConfigPaths(info.Name(), environment)
-		loader = consulconfig.AddConfigSource(paths...)
+		loader = consulsource.AddConfigSource(paths...)
 	}
 	spec := bootstrap.NewSpec()
 	if err := spec.Configuration(func() (config.Sources, error) {
@@ -31,7 +31,7 @@ func NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, re
 		}
 		// 无额外来源时允许使用 env 启动，并在配置加载前提示降级。
 		if len(sources) == 0 {
-			log.WithModule("bootstrap/consul").With(
+			log.WithModule("bootstrap/consulconfig").With(
 				"environment", environment, "app", info.Name(),
 			).Warn("No configuration sources available from default spec; continuing with env and any additional sources")
 		}
