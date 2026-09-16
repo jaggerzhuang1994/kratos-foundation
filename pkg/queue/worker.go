@@ -43,6 +43,8 @@ type Worker struct {
 	stop      chan struct{}
 	done      chan struct{}
 	stopOnce  sync.Once
+	disabled  bool
+	onFailed  func(context.Context, FailureEvent) error
 }
 
 // NewWorker 复制 Handler 表并校验执行窗口，构造阶段不调用 Store。
@@ -111,6 +113,12 @@ func (w *Worker) Start(ctx context.Context) error {
 	case <-w.stop:
 		return nil
 	default:
+	}
+	if w.disabled {
+		// 复用已有停止信号和协调 goroutine，禁用消费不构造伪 Store，也不进入领取循环。
+		w.log.WithContext(ctx).Debugw("function", "Start", "event", "consumer.disabled", "queue", w.config.Queue)
+		<-runCtx.Done()
+		return nil
 	}
 	group, groupCtx := errgroup.WithContext(runCtx)
 	for range w.config.Concurrency {

@@ -1,8 +1,29 @@
 # GORM 任务仓储
 
-本包是可选的 `database.Repo` 实现，支持 SQLite 与 MySQL；不导入数据库驱动，不注册连接、不迁移表、不拥有连接生命周期。其他方言在构造期拒绝。业务使用 `pkg/database.Manager` 或实现 `ConnectionProvider`，按 Context 返回 GORM 会话。
+本包是可选的 `database.Repo` 实现，支持 SQLite 与 MySQL；不导入数据库驱动，不注册连接、不自动迁移表、不拥有连接生命周期。其他方言在构造期拒绝。业务使用 `pkg/database.Manager` 或实现 `ConnectionProvider`，按 Context 返回 GORM 会话。
 
-## 模型与构造
+## 简单模式
+
+仅保存队列任务时，应用入口调用 `NewSimpleRepo(ctx, provider, SimpleConfig{Table: "email_tasks"})`，再调用 `databasequeue.NewStore(repo)`。业务无需定义 Model、Factory 或 Repo；`provider` 与扩展模式相同，已初始化且支持 Context 中的事务。构造只校验表名和方言，不建表，不启动后台任务。
+
+部署迁移命令显式调用 `repo.Migrate(ctx)` 并检查错误。它使用框架模型补齐该表和索引，重复执行可复用；不应在业务启动或消费时调用。生产 DDL 的审批、锁等待、超时、权限与版本管理由部署流程负责。该工具支持当前 SQLite/MySQL 方言；没有自动回滚迁移或自动修复历史损坏数据。
+
+每个实例固定绑定独立物理表，表名仍须为简单标识符；多个简单队列可使用同一 Go 模型而不会混用表。任务字段、ID 编码、事务、并发、统计及失败管理完全复用下述 Repo 契约。需要按业务身份建立索引或查询状态时使用扩展模式，不往简单表手工添加业务映射。
+
+```mermaid
+flowchart TD
+    A([部署构造 SimpleRepo]) --> B{表名及方言有效?}
+    B -- 否 --> E([返回错误])
+    B -- 是 --> C[部署显式调用 Migrate 外部数据库 DDL]
+    C -- 错误或超时 --> E
+    C -- 成功 --> D([表和索引就绪])
+    F([应用入口构造 SimpleRepo]) --> G[NewStore 注入类型化 Endpoint]
+    G --> H([登记 Runtime 由应用启停])
+```
+
+迁移工具返回错误供部署命令处理，本包不虚构额外日志节点。示例调用必须分别检查 NewSimpleRepo 与 Migrate 的错误；构造成功不代表表已存在。简单模式借用连接，不增加 cleanup。
+
+## 扩展模式：模型与构造
 
 下面是完整的组装示例；`manager` 已初始化，迁移由业务在启动 Worker 前完成，连接最终由原拥有者 cleanup。
 

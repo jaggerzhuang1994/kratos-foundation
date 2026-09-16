@@ -1,5 +1,7 @@
 # Database 任务队列
 
+仅保存队列字段可使用 [GORM 简单模式](gorm/README.md#简单模式)，无需业务 Model/Factory；自定义字段、索引与事务映射保留扩展模式。类型化发布与消费见 [接入文档](../../../pkg/queue/typed.md)。
+
 本包提供面向**单个队列**的 `Repo` 契约、任务状态模型 `TaskRecord` 和实现 `queue.Store` 的适配器。业务自行实现 Repo，决定使用 GORM、database/sql 或其他访问方式，并为不同队列选择不同表或其他隔离方式。本包不依赖 ORM/数据库驱动，不执行 SQL，不提供迁移入口。
 
 **一个 Repo 实例绑定一个队列。** Store 不再接收队列配置，Repo 方法没有 queue 参数，TaskRecord 没有 Queue 字段，也没有 TableName 方法。Worker、Dispatcher 的逻辑队列名仅用于观测，不决定 Repo 的表名或路由。

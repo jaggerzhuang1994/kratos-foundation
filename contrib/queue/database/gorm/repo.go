@@ -31,12 +31,18 @@ type Repo[T Entity] struct {
 	provider   ConnectionProvider
 	factory    Factory[T]
 	table      string
+	modelTable string
 	entityType reflect.Type
 }
 
 // NewRepo 校验模型和方言，不查询或迁移表，不启动后台任务。
 // T 必须为按值匿名嵌入 Model 的结构体指针；目前支持 SQLite 和 MySQL。
 func NewRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory Factory[T]) (*Repo[T], error) {
+	return newRepo(ctx, provider, factory, "")
+}
+
+// table 仅供框架简单模式选择物理表；扩展模式始终使用业务模型的固定 TableName。
+func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory Factory[T], table string) (*Repo[T], error) {
 	typ := reflect.TypeFor[T]()
 	if typ.Kind() != reflect.Pointer || typ.Elem().Kind() != reflect.Struct || factory == nil {
 		return nil, errors.New("queue model must be a struct pointer with a factory")
@@ -49,7 +55,10 @@ func NewRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 	if entity.QueueModel() != reflect.ValueOf(entity).Elem().FieldByName("Model").Addr().Interface().(*Model) {
 		return nil, errors.New("QueueModel must return the embedded Model")
 	}
-	table := entity.TableName()
+	modelTable := entity.TableName()
+	if table == "" {
+		table = modelTable
+	}
 	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(table) {
 		return nil, errors.New("queue table must be a fixed simple identifier")
 	}
@@ -82,7 +91,7 @@ func NewRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 	if len(statement.Schema.PrimaryFields) != 1 || statement.Schema.PrimaryFields[0].Name != "ID" || len(statement.Schema.QueryClauses) != 0 || len(statement.Schema.DeleteClauses) != 0 {
 		return nil, errors.New("queue model cannot change primary key or use soft delete")
 	}
-	return &Repo[T]{provider: provider, factory: factory, table: table, entityType: typ.Elem()}, nil
+	return &Repo[T]{provider: provider, factory: factory, table: table, modelTable: modelTable, entityType: typ.Elem()}, nil
 }
 
 func (r *Repo[T]) entity() T { return reflect.New(r.entityType).Interface().(T) }
@@ -119,7 +128,7 @@ func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) 
 	if err != nil {
 		return fmt.Errorf("create queue model: %w", err)
 	}
-	if reflect.ValueOf(entity).IsNil() || entity.QueueModel() == nil || entity.TableName() != r.table {
+	if reflect.ValueOf(entity).IsNil() || entity.QueueModel() == nil || entity.TableName() != r.modelTable {
 		return errors.New("factory returned an invalid queue model")
 	}
 	model := Model{ID: taskKey(record.Task.ID), Identity: uuid.NewString(), Data: data, AvailableAt: deadlineMillis(record.Task.AvailableAt), Attempts: record.Attempts, Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason}

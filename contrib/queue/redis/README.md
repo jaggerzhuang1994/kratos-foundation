@@ -1,5 +1,7 @@
 # Redis 持久化任务队列
 
+本 Store 可直接注入 [类型化 Publisher/Consumer/Endpoint](../../../pkg/queue/typed.md)，业务无需编写 JSON 编解码或启停转发；物理 key 前缀仍由应用入口配置。
+
 本包实现 `pkg/queue.Store`，支持立即或延迟执行、租约回收、失败记录和人工重试。旧 Redis Streams Producer/Consumer API 已移除；本包不提供 Consumer Group、广播或 Kafka 兼容接口。
 
 ## 构造与所有权

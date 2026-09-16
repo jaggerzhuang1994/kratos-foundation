@@ -33,6 +33,7 @@ func (w *Worker) execute(ctx context.Context, reservation *Reservation, claimedA
 	default:
 		handlerCtx, cancel := context.WithDeadline(spanCtx, claimedAt.Add(w.config.Timeout))
 		if handlerCtx.Err() == nil {
+			handlerCtx = context.WithValue(handlerCtx, deliveryMetadataKey{}, deliveryMetadata{attempt: reservation.Attempts, maxAttempts: w.retry.MaxAttempts})
 			handlerErr = invokeHandler(handlerCtx, handler, task)
 		}
 		if handlerCtx.Err() != nil {
@@ -45,6 +46,10 @@ func (w *Worker) execute(ctx context.Context, reservation *Reservation, claimedA
 		cause = "timeout"
 	} else if errors.Is(handlerErr, errHandlerPanic) {
 		cause = "panic"
+	} else if errors.Is(handlerErr, errMessageDecode) {
+		cause = "decode_error"
+	} else if errors.Is(handlerErr, errMessageValidation) {
+		cause = "validation_error"
 	}
 	w.telemetry.RecordAttempt(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts, handlerErr, time.Since(started))
 	// 应用停止时不使用取消的上下文改写租约；由持久化租约超时恢复。
@@ -67,7 +72,8 @@ func (w *Worker) execute(ctx context.Context, reservation *Reservation, claimedA
 		if IsPermanent(handlerErr) {
 			reason = "permanent"
 		}
-		err = w.store.Fail(operationCtx, reservation, reason, time.Now().UTC())
+		failedAt := time.Now().UTC()
+		err = w.store.Fail(operationCtx, reservation, reason, failedAt)
 		w.telemetry.RecordFinalClassification(span, reason, reservation.Attempts)
 		failureResult := "success"
 		if err != nil {
@@ -76,6 +82,7 @@ func (w *Worker) execute(ctx context.Context, reservation *Reservation, claimedA
 		w.telemetry.RecordFailure(spanCtx, span, w.config.Queue, w.config.Name, failureResult)
 		if err == nil {
 			w.log.WithContext(spanCtx).Errorw("event", "task.failed", "queue", w.config.Queue, "task.id", task.ID, "reason", reason, "cause", cause, "task.type", task.Type, "attempts", reservation.Attempts)
+			w.notifyFailure(spanCtx, FailureEvent{Queue: w.config.Queue, FailedTask: FailedTask{Task: task.Clone(), Attempts: reservation.Attempts, Reason: reason, FailedAt: failedAt}, Cause: cause, MaxAttempts: w.retry.MaxAttempts})
 		}
 	default:
 		result = "retry"

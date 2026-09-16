@@ -1,5 +1,7 @@
 # Queue
 
+新业务优先使用[类型化接入](typed.md)：业务仅定义消息、发送小接口和处理方法，应用入口用 `NewEndpoint` 一次构造发布与消费；纯发布进程使用 `NewPublisher`。以下保留底层 Store/Dispatcher/Worker 契约与高级用法。
+
 Worker 和 Dispatcher 在构造时从注入 Logger 派生 `module=queue`，业务 handler 的日志由业务自行声明模块。
 
 `pkg/queue` 是持久化后台任务队列，提供 `Task`、`Store`、`Dispatcher` 和 `Worker`。业务显式选择 [Redis Store](../../contrib/queue/redis/README.md) 或 [Database Repo 适配器](../../contrib/queue/database/README.md)，通过构造参数注入业务 Handler 和观测依赖。Kafka 消息生产、消费组、重试/死信位于独立的 [pkg/kafka](../kafka/README.md)，不作为任务 Store。`pkg/job` 保留 Cron、Once、Daemon；`job.DelayIfRunning` 不是持久化延迟队列。
@@ -121,7 +123,7 @@ flowchart TD
     U --> V([取消同实例循环 等待退出 返回错误])
 ```
 
-日志记录队列、任务 ID、任务类型、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
+日志记录队列、任务 ID、任务类型、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
 
 Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Dispatch 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
 

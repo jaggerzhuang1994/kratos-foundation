@@ -150,14 +150,14 @@ import _ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/oss/aliyun"
 
 ## 任务队列与 Kafka 消息
 
-`pkg/queue` 提供持久化任务契约、Dispatcher 与 Worker，Redis 后端由 `contrib/queue/redis` 构造，Database 后端由 `contrib/queue/database` 适配业务提供的 Repo（使用 TaskRecord 交换任务及执行状态，可选 GORM 泛型 Repo，支持与业务数据在同一本地事务中写入任务）。支持即时/延迟投递、租约恢复、持久化重试、失败查询与人工重试；业务 Handler 仍须幂等。业务将 Worker 登记到同一个 `app.Spec`，由应用统一启停，随后释放存储连接。完整配置、运行示例和失败边界见 [Queue 文档](pkg/queue/README.md)。
+`pkg/queue` 提供类型化 Publisher、Consumer 和一次接入的 Endpoint，业务只依赖消息及自身发送接口；底层保留持久化任务契约、Dispatcher 与 Worker，Redis 后端由 `contrib/queue/redis` 构造，Database 后端由 `contrib/queue/database` 适配业务提供的 Repo（使用 TaskRecord 交换任务及执行状态，可选 GORM 简单模式或自定义模型 Repo，支持与业务数据在同一本地事务中写入任务）。支持即时/延迟投递、租约恢复、持久化重试、失败查询与人工重试；业务 Handler 仍须幂等。应用入口将 Consumer/Endpoint 或底层 Worker 登记到同一个 `app.Spec`，由应用统一启停，随后释放存储连接。完整配置、运行示例和失败边界见 [Queue 文档](pkg/queue/README.md)。
 
 `pkg/kafka` 独立提供客户端工厂、消息生产者、消费者及消费运行时，适合事件传播与消费组处理；不作为任务队列后端。构造、批量发送、offset 提交、重试/死信和资源所有权见 [Kafka 文档](pkg/kafka/README.md)。两者使用显式注入，不进入全局 Driver Registry。
 
 ```mermaid
 flowchart LR
     A([业务组装]) --> B{运行能力}
-    B -->|持久化任务| C[queue Worker + Redis或Database Store]
+    B -->|持久化任务| C[queue Consumer或Worker + Redis或Database Store]
     B -->|Kafka消息| D[kafka ConsumerRuntime]
     C --> E[显式登记到app.Spec]
     D --> E
