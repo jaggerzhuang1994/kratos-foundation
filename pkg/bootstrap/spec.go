@@ -1,13 +1,14 @@
 package bootstrap
 
 import (
-	"fmt"
 	"net/url"
 	"os"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
@@ -18,131 +19,116 @@ type LocalConfigPath string
 // 配置源组装方按返回顺序加载路径，具体路径语法由对应配置源约束。
 type RemoteConfigPathsProvider func(name, environment string) []string
 
-// Spec 按领域收集应用声明。使用 NewSpec 构造，仅在组装前串行修改。
+// Spec 按领域收集应用声明。使用 NewSpec 构造，仅支持串行组装，不支持并发调用。
+// 配置源在 Manager 构造前声明；业务在提供 Bootstrap 的函数中描述蓝图，由 Wire 保证先声明后构造。
 type Spec struct {
-	configuration      []config.SourceLoader
-	configurationBuilt bool
-	application        *app.Spec
-	server             *server.Spec
-	serverBuilt        bool
-	http, grpc         bool
-	jobs               *job.Spec
-	jobsBuilt          bool
-	runtimes           []app.Runtime
-	assembled          bool
+	configuration []config.SourceLoader
+	application   *app.Spec
+	server        *server.Spec
+	jobs          *job.Spec
 }
 
-// NewSpec 创建应用组件及生命周期声明。
-func NewSpec() *Spec {
-	return &Spec{application: app.NewSpec()}
+// NewSpec 借用 Wire 注入的共享声明，不创建或复制领域 Spec。
+// 三个参数均为必需依赖；同一组装链应注入同一组实例。
+func NewSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec) *Spec {
+	return &Spec{application: application, server: servers, jobs: jobs}
 }
-
-// ApplicationSpec 向 Foundation provider 暴露同一应用状态，不应同时提供 app.NewSpec。
-func ApplicationSpec(spec *Spec) *app.Spec { return spec.application }
 
 // Configuration 按顺序声明额外配置源；声明阶段不执行 I/O。
 // 必须在提供 Spec 的构造函数中调用，不能放进依赖 Manager 的业务 Boot。
-func (s *Spec) Configuration(loaders ...config.SourceLoader) error {
-	if s.configurationBuilt {
-		return fmt.Errorf("configuration is already assembled")
-	}
+func (s *Spec) Configuration(loaders ...config.SourceLoader) *Spec {
 	for _, loader := range loaders {
 		if loader == nil {
-			return fmt.Errorf("config source loader is nil")
+			panic("bootstrap: config source loader is nil")
 		}
 	}
 	s.configuration = append(s.configuration, loaders...)
-	return nil
+	return s
 }
 
-// NewConfigManager 执行 Configuration 阶段，再向 Wire 提供完整的应用配置。
-// 配置声明串行执行且仅能消费一次；失败后丢弃 Spec。cleanup 归组装层所有。
-func NewConfigManager(spec *Spec) (config.Manager, func(), error) {
-	if spec.configurationBuilt {
-		return nil, nil, fmt.Errorf("configuration is already assembled")
-	}
-	spec.configurationBuilt = true
-	var sources config.Sources
-	for index, loader := range spec.configuration {
-		next, err := loader()
-		if err != nil {
-			return nil, nil, fmt.Errorf("create config source %d: %w", index, err)
-		}
-		sources = append(sources, next...)
-	}
-	return config.NewManager(sources)
-}
-
-// Http 选择 HTTP 并返回端点声明；默认遵循配置中的 disable。
+// Http 返回业务 HTTP 声明；默认启用，配置 disable=true 可关闭业务监听。
 func (s *Spec) Http() server.HTTPBuilder {
-	s.http = true
-	return s.serverSpec().HTTP()
+	return s.server.HTTP()
 }
 
-// Grpc 选择 gRPC 并返回服务声明；未选择的协议不会创建。
+// Grpc 返回业务 gRPC 声明；有效服务注册默认启用，显式配置优先。
 func (s *Spec) Grpc() server.GRPCBuilder {
-	s.grpc = true
-	return s.serverSpec().GRPC()
+	return s.server.GRPC()
 }
 
-func (s *Spec) serverSpec() *server.Spec {
-	if s.server == nil {
-		s.server = server.NewSpec()
-	}
-	return s.server
+// Health 返回独立的健康检查声明，不改变业务 HTTP 或 gRPC 的启用状态。
+func (s *Spec) Health() *server.HealthBuilder {
+	return s.server.Health()
 }
 
 // Job 返回任务声明，支持 Cron、Once 和 Daemon。
 func (s *Spec) Job() job.Builder {
-	if s.jobs == nil {
-		s.jobs = job.NewSpec()
-	}
 	return s.jobs
 }
 
 // RegisterRuntime 登记 Wire 构造的通用运行时，包括 queue.Worker、kafka.ConsumerRuntime 和自定义 worker。
-// App 管理 Start/Stop，资源 cleanup 仍归构造该运行时的 provider 所有。
+// 立即写入共享 app.Spec；冻结后写入会 panic。App 管理 Start/Stop，cleanup 仍归该运行时的 provider。
 func (s *Spec) RegisterRuntime(runtime app.Runtime) *Spec {
-	s.runtimes = append(s.runtimes, runtime)
+	s.application.RegisterRuntime(runtime)
 	return s
 }
 
+// RegisterQueueWorker 登记已构造的非 nil Queue Worker，返回同一 Spec 以支持链式调用。
+// 复用 RegisterRuntime 的登记逻辑；App 管理 Start/Stop，cleanup 仍归原 provider。
+func (s *Spec) RegisterQueueWorker(worker *queue.Worker) *Spec {
+	return s.RegisterRuntime(worker)
+}
+
+// RegisterKafkaConsumer 登记已构造的非 nil Kafka ConsumerRuntime，返回同一 Spec 以支持链式调用。
+// 复用 RegisterRuntime 的登记逻辑；App 管理 Start/Stop，cleanup 仍归原 provider。
+func (s *Spec) RegisterKafkaConsumer(consumer *kafka.ConsumerRuntime) *Spec {
+	return s.RegisterRuntime(consumer)
+}
+
 // AddContext 追加应用启动上下文的装饰函数。
-func (s *Spec) AddContext(decorate app.ContextDecorator) error {
-	return s.application.AddContext(decorate)
+func (s *Spec) AddContext(decorate app.ContextDecorator) *Spec {
+	s.application.AddContext(decorate)
+	return s
 }
 
 // AddMetadata 追加应用元数据。
-func (s *Spec) AddMetadata(metadata map[string]string) error {
-	return s.application.AddMetadata(metadata)
+func (s *Spec) AddMetadata(metadata map[string]string) *Spec {
+	s.application.AddMetadata(metadata)
+	return s
 }
 
 // AddEndpoints 追加对外公布的端点地址。
-func (s *Spec) AddEndpoints(endpoints ...*url.URL) error {
-	return s.application.AddEndpoints(endpoints...)
+func (s *Spec) AddEndpoints(endpoints ...*url.URL) *Spec {
+	s.application.AddEndpoints(endpoints...)
+	return s
 }
 
 // AddSignals 指定触发应用退出的系统信号。
-func (s *Spec) AddSignals(signals ...os.Signal) error {
-	return s.application.AddSignals(signals...)
+func (s *Spec) AddSignals(signals ...os.Signal) *Spec {
+	s.application.AddSignals(signals...)
+	return s
 }
 
 // BeforeStart 登记运行时启动前执行的业务钩子。
-func (s *Spec) BeforeStart(hooks ...app.HookFunc) error {
-	return s.application.BeforeStart(hooks...)
+func (s *Spec) BeforeStart(hooks ...app.HookFunc) *Spec {
+	s.application.BeforeStart(hooks...)
+	return s
 }
 
 // AfterStart 登记所有运行时启动后执行的业务钩子。
-func (s *Spec) AfterStart(hooks ...app.HookFunc) error {
-	return s.application.AfterStart(hooks...)
+func (s *Spec) AfterStart(hooks ...app.HookFunc) *Spec {
+	s.application.AfterStart(hooks...)
+	return s
 }
 
 // BeforeStop 登记运行时停止前执行的业务钩子。
-func (s *Spec) BeforeStop(hooks ...app.HookFunc) error {
-	return s.application.BeforeStop(hooks...)
+func (s *Spec) BeforeStop(hooks ...app.HookFunc) *Spec {
+	s.application.BeforeStop(hooks...)
+	return s
 }
 
 // AfterStop 登记所有运行时停止后执行的业务钩子。
-func (s *Spec) AfterStop(hooks ...app.HookFunc) error {
-	return s.application.AfterStop(hooks...)
+func (s *Spec) AfterStop(hooks ...app.HookFunc) *Spec {
+	s.application.AfterStop(hooks...)
+	return s
 }

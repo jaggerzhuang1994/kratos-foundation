@@ -102,7 +102,7 @@ server:
         # 容器环境 CPU 配额，设置后使用新的 CPU 计算方式
         # cpu_quota: 2.0
 
-  # HTTP 服务器配置
+  # 业务 HTTP 服务器配置；disable 只控制业务监听，独立管理监听另行配置
   http:
     # 是否禁用 [默认: false]
     disable: false
@@ -138,15 +138,15 @@ server:
       # 就绪探针路径 [默认: /readyz]；GET/HEAD 在应用完成启动、依赖检查通过且未停机时返回 200，否则返回 503
       # 未绑定应用就绪状态时始终返回 503；NewServerBootstrap 自动绑定
       readiness_path: /readyz
-      # 全部就绪检查共用总期限 [默认: 1s]；检查函数由 Spec.HTTP().HealthChecks 注入
+      # 全部就绪检查共用总期限 [默认: 1s]；检查函数由 Spec.Health().Checks 注入
       timeout: 1s
     # 业务 HTTP 禁用时，只有显式指定 addr 的管理端点才会启动。
     # 独立管理监听使用普通 HTTP，不继承业务 TLS，且不发布到服务发现。
 
-  # gRPC 服务器配置
+  # gRPC 服务器配置 [需重启]
   grpc:
-    # 是否禁用 [默认: false]
-    disable: false
+    # 省略 disable 时仅注册非 nil gRPC 服务回调才开启；false 显式开启，true 显式关闭
+    # disable: false
     # 网络类型 [默认: tcp]
     network: tcp
     # 监听地址 [默认: 0.0.0.0:9000]

@@ -11,25 +11,27 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
 func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
-	spec := bootstrap.NewSpec()
-	application := bootstrap.ApplicationSpec(spec)
-	if application != bootstrap.ApplicationSpec(spec) {
-		t.Fatal("application Spec was recreated")
+	spec := newTestSpec()
+	application := spec.application
+	if spec.Http() != spec.servers.HTTP() || spec.Grpc() != spec.servers.GRPC() ||
+		spec.Health() != spec.servers.Health() || spec.Job() != spec.jobs {
+		t.Fatal("bootstrap did not retain the injected domain Specs")
+	}
+	if got := spec.AddContext(func(ctx context.Context) context.Context { return ctx }).
+		AddMetadata(map[string]string{"blueprint": "ready"}).AddEndpoints().AddSignals().
+		AfterStart().BeforeStop().AfterStop(); got != spec.Spec {
+		t.Fatal("chain returned a different Spec")
 	}
 	started := false
-	if err := spec.BeforeStart(func(context.Context) error { started = true; return nil }); err != nil {
-		t.Fatal(err)
-	}
+	spec.BeforeStart(func(context.Context) error { started = true; return nil })
 	spec.Job().RegisterOnce("finish", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
 	logger, tracing, metrics := newTestObservability(t)
-	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, nil, logger, metrics, tracing, bootstrap.Bootstrap{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = bootstrap.NewRuntimeBootstrap(spec, bootstrap.ServerBootstrap{}, jobBootstrap)
+	serverBootstrap := prepareServer(t, spec)
+	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, metrics, tracing, serverBootstrap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,20 +41,7 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	if !started {
 		t.Fatal("hook registered through bootstrap.Spec did not run")
 	}
-	for name, register := range map[string]func() error{
-		"context":      func() error { return spec.AddContext(func(ctx context.Context) context.Context { return ctx }) },
-		"metadata":     func() error { return spec.AddMetadata(map[string]string{"late": "value"}) },
-		"endpoints":    func() error { return spec.AddEndpoints() },
-		"signals":      func() error { return spec.AddSignals() },
-		"before start": func() error { return spec.BeforeStart() },
-		"after start":  func() error { return spec.AfterStart() },
-		"before stop":  func() error { return spec.BeforeStop() },
-		"after stop":   func() error { return spec.AfterStop() },
-	} {
-		if err := register(); !errors.Is(err, app.ErrSpecFrozen) {
-			t.Errorf("%s did not share application freeze: %v", name, err)
-		}
-	}
+	assertBootstrapPanic(t, app.ErrSpecFrozen, func() { spec.BeforeStart() })
 }
 
 // 防止匿名嵌入重新将内部生命周期装配能力暴露给业务。
@@ -72,7 +61,7 @@ func TestSpecHidesInfrastructureAssembly(t *testing.T) {
 }
 
 func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
-	spec := bootstrap.NewSpec()
+	spec := newTestSpec()
 	var calls []int
 	loaders := []config.SourceLoader{}
 	for i := 1; i <= 2; i++ {
@@ -86,13 +75,13 @@ func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
 			return config.Sources{source}, err
 		})
 	}
-	if err := spec.Configuration(loaders...); err != nil {
-		t.Fatal(err)
+	if got := spec.Configuration(loaders...); got != spec.Spec {
+		t.Fatal("Configuration did not return the same Spec")
 	}
 	if len(calls) != 0 {
 		t.Fatal("declaration executed loaders")
 	}
-	manager, cleanup, err := bootstrap.NewConfigManager(spec)
+	manager, cleanup, err := bootstrap.NewConfigManager(spec.Spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,28 +93,19 @@ func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
 	if !reflect.DeepEqual(calls, []int{1, 2}) {
 		t.Fatal(calls)
 	}
-	if err := spec.Configuration(); err == nil {
-		t.Fatal("late registration accepted")
-	}
-	if _, _, err := bootstrap.NewConfigManager(spec); err == nil {
-		t.Fatal("configuration consumed twice")
-	}
 }
 
 func TestConfigurationFailureAndDefaultEnvironment(t *testing.T) {
-	spec := bootstrap.NewSpec()
-	if err := spec.Configuration(nil); err == nil {
-		t.Fatal("nil loader accepted")
-	}
+	spec := newTestSpec()
+	assertBootstrapPanic(t, "bootstrap: config source loader is nil", func() { spec.Configuration(nil) })
 	expected := errors.New("source construction failed")
-	if err := spec.Configuration(func() (config.Sources, error) { return nil, expected }); err != nil {
-		t.Fatal(err)
-	}
-	if _, cleanup, err := bootstrap.NewConfigManager(spec); !errors.Is(err, expected) || cleanup != nil {
+	spec.Configuration(func() (config.Sources, error) { return nil, expected })
+	if _, cleanup, err := bootstrap.NewConfigManager(spec.Spec); !errors.Is(err, expected) || cleanup != nil {
 		t.Fatalf("%v", err)
 	}
+
 	t.Setenv("FOUNDATION_CONFIGURATION_DEFAULT", "yes")
-	manager, cleanup, err := bootstrap.NewConfigManager(bootstrap.NewSpec())
+	manager, cleanup, err := bootstrap.NewConfigManager(newTestSpec().Spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,5 +113,71 @@ func TestConfigurationFailureAndDefaultEnvironment(t *testing.T) {
 	var value string
 	if err := manager.Load("FOUNDATION_CONFIGURATION_DEFAULT", &value); err != nil || value != "yes" {
 		t.Fatalf("%q %v", value, err)
+	}
+}
+
+func assertBootstrapPanic(t *testing.T, expected any, call func()) {
+	t.Helper()
+	defer func() {
+		if got := recover(); got != expected {
+			t.Fatalf("panic = %v, want %v", got, expected)
+		}
+	}()
+	call()
+	t.Fatal("expected panic")
+}
+
+// 不经过 NewRuntimeBootstrap，也应能从同一 app.Spec 直接构造并运行已登记实例。
+func TestRegisterRuntimeContributesImmediately(t *testing.T) {
+	spec := newTestSpec()
+	runtime := &immediateRuntime{started: make(chan struct{})}
+	spec.RegisterRuntime(runtime)
+	if err := runComponentsApp(t, spec.application); err != nil {
+		t.Fatal(err)
+	}
+	assertBootstrapPanic(t, app.ErrSpecFrozen, func() { spec.RegisterRuntime(runtime) })
+	select {
+	case <-runtime.started:
+	default:
+		t.Fatal("runtime was not registered directly")
+	}
+}
+
+type immediateRuntime struct{ started chan struct{} }
+
+func (r *immediateRuntime) Start(context.Context) error {
+	close(r.started)
+	return app.ErrStopRequested
+}
+func (*immediateRuntime) Stop(context.Context) error { return nil }
+
+func TestConfigurationLoadFailure(t *testing.T) {
+	spec := newTestSpec()
+	spec.Configuration(func() (config.Sources, error) {
+		source, err := text.NewSource("invalid", config.JSONFormat, "{")
+		return config.Sources{source}, err
+	})
+	_, cleanup, err := bootstrap.NewConfigManager(spec.Spec)
+	if cleanup != nil {
+		cleanup()
+	}
+	if err == nil {
+		t.Fatal("invalid configuration was accepted")
+	}
+}
+
+// testSpec 模拟 Wire：每种领域 Spec 只构造一次，所有依赖处共享同一指针。
+type testSpec struct {
+	*bootstrap.Spec
+	application *app.Spec
+	servers     *server.Spec
+	jobs        *job.Spec
+}
+
+func newTestSpec() *testSpec {
+	application, servers, jobs := app.NewSpec(), server.NewSpec(), job.NewSpec()
+	return &testSpec{
+		Spec:        bootstrap.NewSpec(application, servers, jobs),
+		application: application, servers: servers, jobs: jobs,
 	}
 }

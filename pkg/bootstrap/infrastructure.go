@@ -1,11 +1,30 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
+
+	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 )
+
+// AppInfoBootstrap 标记 appinfo 的组装贡献已完成。
+type AppInfoBootstrap struct{}
+
+// NewAppInfoBootstrap 将已有组件接入应用组装，不启动运行时。
+func NewAppInfoBootstrap(spec *app.Spec, info appinfo.AppInfo) AppInfoBootstrap {
+	spec.RegisterAppInfo(info)
+	log.RegisterFields(
+		log.ServiceIDKey, info.ID(),
+		log.ServiceNameKey, info.Name(),
+		log.ServiceVersionKey, info.Version(),
+	)
+	return AppInfoBootstrap{}
+}
 
 // LogBootstrap 标记 log 的组装贡献已完成。
 type LogBootstrap struct{}
@@ -21,9 +40,7 @@ func NewLogBootstrap(spec *app.Spec, manager config.Manager, logger log.Logger) 
 		return LogBootstrap{}, nil, fmt.Errorf("log bootstrap: validate policy: %w", err)
 	}
 	global := logger
-	if err := spec.RegisterLogger(global); err != nil {
-		return LogBootstrap{}, nil, fmt.Errorf("log bootstrap: register app logger: %w", err)
-	}
+	spec.RegisterLogger(global)
 	if err := log.ApplyRuntimeConfig(initial); err != nil {
 		return LogBootstrap{}, nil, fmt.Errorf("log bootstrap: apply initial policy: %w", err)
 	}
@@ -47,4 +64,27 @@ func NewLogBootstrap(spec *app.Spec, manager config.Manager, logger log.Logger) 
 		restore()
 	}
 	return LogBootstrap{}, cleanup, nil
+}
+
+// TracingBootstrap 标记 tracing 的组装贡献已完成。
+type TracingBootstrap struct{}
+
+// NewTracingBootstrap 将已有组件接入应用组装，不启动运行时。
+func NewTracingBootstrap() (TracingBootstrap, error) {
+	log.RegisterFields(
+		log.TraceIDKey, tracing.TraceID(),
+		log.SpanIDKey, tracing.SpanID(),
+	)
+	return TracingBootstrap{}, nil
+}
+
+// MetricsBootstrap 标记 metrics 的组装贡献已完成。
+type MetricsBootstrap struct{}
+
+// NewMetricsBootstrap 将已有组件接入应用组装，不启动运行时。
+func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics) MetricsBootstrap {
+	spec.AddContext(func(ctx context.Context) context.Context {
+		return metrics.WithMetrics(ctx, meter)
+	})
+	return MetricsBootstrap{}
 }

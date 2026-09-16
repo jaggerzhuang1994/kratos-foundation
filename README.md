@@ -82,7 +82,7 @@ flowchart TD
 
 设置 `server.http.metrics.addr` 和 `server.http.health.addr` 可独立监听，例如同时设为 `127.0.0.1:9001` 会共享一个管理监听。空地址复用业务 HTTP；业务 HTTP 禁用时，管理端点只有显式设置地址才会启动。管理端点独立于业务路由前缀、Filter 和鉴权；独立监听使用普通 HTTP，不继承业务 TLS，也不进入业务服务发现。完整地址规则、探针流程及停机边界见 [`pkg/server`](pkg/server/README.md)。
 
-依赖检查通过 `spec.HTTP().HealthChecks(...)` 追加，地址、路径和总检查期限保留 YAML 配置；`Health(HealthConfig{...})` 则整体覆盖文件中的健康端点配置。
+业务 HTTP 默认开启，gRPC 按有效服务注册默认开启；显式 `server.http.disable` / `server.grpc.disable` 优先，修改需要重启。`spec.Http()` 仅声明业务 HTTP，不控制独立管理监听。依赖检查通过 `spec.Health().Checks(...)` 追加；健康端点地址、路径、开关和总检查期限统一由配置管理，不提供代码覆盖入口。
 
 配置来源加载、解析与监听沿用 Kratos 官方日志；Manager 不再提供自定义配置健康状态或配置观测 collector。
 
@@ -92,12 +92,14 @@ Wire 或手工组装层负责提供非空的必需组件依赖（如 Config Mana
 
 ## 核心组装流程
 
+Wire 通过 `app.NewSpec`、`server.NewSpec`、`job.NewSpec` 构造共享声明并注入各依赖处；`bootstrap.NewSpec` 接收这三个实例。`bootstrap.Spec` 作为业务蓝图，声明方法返回同一 Spec，可链式调用；组装顺序由 Wire 的依赖链保证。`RegisterRuntime` 直接写入共享的 `app.Spec`，不等待后续阶段重放。底层 app.Spec 登记方法无返回值，冻结后写入直接 panic；契约见 [bootstrap](pkg/bootstrap/README.md) 和 [app](pkg/app/README.md)。
+
 ```mermaid
 flowchart LR
-    A[Wire: app.NewSpec / app.NewConfig] --> B[构造组件]
+    A[Wire: app/server/job NewSpec 注入 bootstrap.NewSpec；app.NewConfig] --> B[构造组件]
     B --> C[bootstrap.NewXXXBootstrap 同步贡献]
     C --> D[bootstrap.InfrastructureBootstrap]
-    D --> U[业务提供 bootstrap.Bootstrap]
+    D --> U[业务立即登记 Runtime 并提供 bootstrap.Bootstrap]
     U --> V[bootstrap.StartupReady]
     V --> E[bootstrap.NewKratosApp 调用 app.NewApp 冻结 Spec]
     E --> F[application.Run 启动 Runtime]

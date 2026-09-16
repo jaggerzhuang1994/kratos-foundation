@@ -18,9 +18,7 @@ func TestApplicationRunPreservesRuntimeFailureJoinedWithCancellation(t *testing.
 		failure := errors.New("runtime failed")
 		release := make(chan struct{})
 		spec := newApplicationTestSpec(t)
-		if err := spec.AddSignals(syscall.SIGUSR2); err != nil {
-			t.Fatal(err)
-		}
+		spec.AddSignals(syscall.SIGUSR2)
 		runtime := &cancellationFailureRuntime{release: release, startErr: errors.Join(context.Canceled, failure)}
 		registerApplicationRuntime(t, spec, runtime)
 		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
@@ -45,9 +43,7 @@ func TestApplicationRunPreservesStopFailureJoinedWithCancellation(t *testing.T) 
 		failure := errors.New("runtime stop failed")
 		release := make(chan struct{})
 		spec := newApplicationTestSpec(t)
-		if err := spec.AddSignals(syscall.SIGUSR2); err != nil {
-			t.Fatal(err)
-		}
+		spec.AddSignals(syscall.SIGUSR2)
 		runtime := &cancellationFailureRuntime{release: release, startErr: ErrStopRequested, stopErr: errors.Join(context.Canceled, failure)}
 		registerApplicationRuntime(t, spec, runtime)
 		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
@@ -106,9 +102,7 @@ func TestApplicationRunTreatsCancellationOnlyAsCleanShutdown(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				release := make(chan struct{})
 				spec := newApplicationTestSpec(t)
-				if err := spec.AddSignals(syscall.SIGUSR2); err != nil {
-					t.Fatal(err)
-				}
+				spec.AddSignals(syscall.SIGUSR2)
 				registerApplicationRuntime(t, spec, &cancellationFailureRuntime{release: release, startErr: test.startErr, stopErr: test.stopErr})
 				application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
 				if err != nil {

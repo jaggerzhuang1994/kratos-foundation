@@ -4,6 +4,38 @@
 
 `pkg/server` 是业务与 Wire 声明 HTTP、gRPC 和 WebSocket 服务并构造服务器运行时的公共入口。业务只依赖 `Spec`、Builder、协议契约、`NewRuntime`；服务器构造和应用登记由 `bootstrap.NewServerBootstrap` 完成；不应导入 `pkg/server/internal/*`。
 
+业务 HTTP 默认开启，`server.http.disable: true` 仅关闭业务监听，不是所有 HTTP 监听的总开关。
+gRPC 未注册业务服务时默认关闭；至少一个非 nil `GRPC().Register(...)` 回调触发默认开启。
+`server.grpc.disable` 省略时采用该默认规则，显式 `false` 强制开启（允许没有业务服务），显式 `true` 关闭。
+仅获取 Builder、设置 Middleware/Option 或 Register(nil) 不启用 gRPC。bootstrap 与直接 NewRuntime 使用相同规则。
+HTTPBuilder/GRPCBuilder 不提供 Enable/Disable；端口开关和管理端点配置在构造时读取，需要重启生效。
+
+```mermaid
+flowchart TD
+    A([开始 NewRuntime]) --> B[校验 Spec 并读取 server 配置快照]
+    B --> C{校验及中间件构造成功?}
+    C -- 否 --> X([返回错误 已分配资源执行 cleanup])
+    C -- 是 --> D{http.disable 为 true?}
+    D -- 是 --> E[跳过业务 HTTP]
+    D -- 否 --> F[构造 HTTP 并执行业务路由注册]
+    E --> G{grpc.disable 显式指定?}
+    F -- 注册失败 --> X
+    F -- 成功 --> G
+    G -- 是 --> H{disable 为 false?}
+    G -- 否 --> I{存在非 nil 服务注册?}
+    H -- 是 --> J[构造 gRPC 并执行服务注册]
+    I -- 是 --> J
+    H -- 否 --> K[跳过 gRPC]
+    I -- 否 --> K
+    J -- 注册失败 --> X
+    J -- 成功 --> L[按配置地址挂载监控端点 复用或独立监听]
+    K --> L
+    L --> M{地址与监控路径有效?}
+    M -- 否 --> X
+    M -- 是 --> N[INFO NewRuntime server.assembled 记录协议开关和管理监听数量]
+    N --> O([返回 Runtime 和 cleanup 由 App 启停及 Wire 释放])
+```
+
 业务通过统一 Spec 声明协议，下面假设 registerHTTP/registerGRPC 是业务提供的注册回调：
 
 ```go
@@ -14,19 +46,24 @@ func Boot(spec *bootstrap.Spec) bootstrap.Bootstrap {
 }
 ```
 
-Wire 提供 `bootstrap.NewSpec` 并将 Boot 纳入组装链。`NewServerBootstrap` 在 Boot 完成后构造服务器，内部登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；不启动服务。成功返回的 cleanup 由 Wire 在应用停止后逆序执行，构造失败会回滚。完整示例见 [bootstrap](../bootstrap/README.md)。它返回的 ServerBootstrap 标记注入 NewRuntimeBootstrap，保证服务器登记先完成。
+Wire 通过 `app.NewSpec`、`server.NewSpec`、`job.NewSpec` 创建共享声明，注入 `bootstrap.NewSpec`；`NewServerBootstrap` 直接接收同一 app.Spec/server.Spec，并将 Boot 纳入前置依赖。`NewServerBootstrap` 在 Boot 完成后构造服务器，内部登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；不启动服务。成功返回的 cleanup 由 Wire 在应用停止后逆序执行，构造失败会回滚。完整示例见 [bootstrap](../bootstrap/README.md)。它返回的 ServerBootstrap 标记注入 NewRuntimeBootstrap，保证服务器登记先完成。
 
 ```mermaid
 flowchart LR
- A([业务 Boot 声明协议]) --> B[NewServerBootstrap 构造并登记 Runtime]
+ A([Wire 注入共享 app/server/job Spec]) --> A1[业务 Boot 声明协议]
+ A1 --> B[NewServerBootstrap 构造并登记 Runtime]
  B --> C{构造和内部登记成功?}
  C -- 否 --> D([释放资源 返回错误])
- C -- 是 --> G[NewRuntimeBootstrap 接收 ServerBootstrap]
+ C -- 是 --> J[NewJobBootstrap 构造并登记任务]
+ J -- 构造失败 --> D
+ J --> G[NewRuntimeBootstrap 接收 ServerBootstrap 和 JobBootstrap]
+ B -- 冻结后登记等契约违规 --> P([panic 编程错误])
+ J -- 冻结后登记等契约违规 --> P
  G --> E[NewApplicationBootstrap 返回 StartupReady]
  E --> F([NewKratosApp 构造应用])
 ```
 
-手工调用 `server.NewRuntime` 时，调用方负责 `SetReadinessSource`，将 `Servers()` 中的非 nil 业务 Runtime 和 `ManagementServers()` 登记到应用 Spec，并处理登记错误；Runtime 的 Start/Stop 由 App 监督，构造 cleanup 由调用方在应用停止后释放。
+手工调用 `server.NewRuntime` 时，调用方负责 `SetReadinessSource`，将 `Servers()` 中的非 nil 业务 Runtime 和 `ManagementServers()` 登记到应用 Spec；冻结后登记会 panic；Runtime 的 Start/Stop 由 App 监督，构造 cleanup 由调用方在应用停止后释放。
 
 协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、requestdebug、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
 
@@ -168,17 +205,11 @@ flowchart TD
 也会关闭就绪状态。`/healthz` 仅证明 HTTP 处理路径仍能响应，不代表所有后台任务正常。
 
 ```go
-spec.HTTP().Health(server.HealthConfig{
-    LivenessPath: "/healthz",
-    ReadinessPath: "/readyz",
-    Timeout: time.Second,
-    Checks: []server.ReadinessCheck{
-        {Name: "database", Check: sqlDB.PingContext},
-    },
-})
+// 前置条件：spec 来自 bootstrap.NewSpec 或 server.NewSpec，sqlDB 由业务存储层提供。
+spec.Health().Checks(server.ReadinessCheck{Name: "database", Check: sqlDB.PingContext})
 ```
 
-零值配置启用默认路径和一秒总检查期限；`HealthConfig{Disable: true}` 关闭端点。Checks 按顺序
+省略部署配置时使用默认路径和一秒总检查期限；`server.http.health.disable: true` 关闭端点。Checks 按顺序
 执行，只注册接收业务流量必需的依赖。检查函数必须支持 Context、可并发调用、无写入副作用；
 超时通知不能强杀不合作的检查函数，框架不另起可能泄漏的 goroutine 包装检查。
 配置在组装后固定；不得并发修改 Spec 或 SetReadinessSource。普通探针不逐次记录日志，readiness
@@ -252,17 +283,9 @@ IP 表示及 `0.0.0.0`/空 host；不通过 DNS 推断 localhost 与 IP 等价�
 路由、WebSocket、TLS 或全局 DefaultServeMux，默认使用普通 HTTP；通过绑定地址控制监听范围。
 同一监听上的 metrics 和健康路径不能冲突，不同监听可以使用相同路径。
 
-业务通过代码添加检查函数时，推荐只设置 Checks，保留文件中的部署配置：
-
-```go
-spec.HTTP().HealthChecks(server.ReadinessCheck{
-    Name: "database",
-    Check: sqlDB.PingContext,
-})
-```
-
-前文的 `Health(HealthConfig{...})` 是显式代码覆盖，会整体替换文件中的健康端点配置；
-`HealthChecks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
+`Health().Checks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
+声明时复制检查切片，运行时再次保存独立切片快照；函数及其捕获的依赖仍由业务持有，必须支持并发探针和 Context 取消。
+HTTPBuilder 不再提供 Health/HealthChecks，HealthConfig 不再作为公共 API 暴露，部署参数统一由配置管理。
 
 `NewServerBootstrap` 自动登记全部监听。手工组装保留 `Runtime.Servers()` 的业务 HTTP/gRPC
 返回值，并额外登记 `Runtime.ManagementServers()` 中的运行时。管理运行时不实现 Endpointer，
@@ -278,7 +301,8 @@ flowchart TD
     D -- 否 --> Z
     D -- 是 --> E[挂载业务 HTTP]
     C -- 否 --> F[校验并规范化 host:port]
-    F --> G{与启用的业务地址相同?}
+    F -- 地址非法 --> J
+    F -- 合法 --> G{与启用的业务地址相同?}
     G -- 是 --> E
     G -- 否 --> H[按地址合并独立监听 仅挂载管理处理器]
     E --> I{同一监听路径冲突?}

@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"errors"
 	"net/url"
 	"os"
 	"strings"
@@ -30,14 +29,10 @@ func TestFreezeAppliesContextOutsideLockAndPreservesBase(t *testing.T) {
 	const key contextKey = "base"
 
 	spec := NewSpec()
-	if err := spec.AddContext(func(ctx context.Context) context.Context {
-		if err := spec.AddMetadata(map[string]string{"late": "value"}); !errors.Is(err, ErrSpecFrozen) {
-			t.Fatalf("AddMetadata error = %v, want ErrSpecFrozen", err)
-		}
+	spec.AddContext(func(ctx context.Context) context.Context {
+		assertSpecPanic(t, ErrSpecFrozen, func() { spec.AddMetadata(map[string]string{"late": "value"}) })
 		return context.WithValue(ctx, contextKey("decorated"), "value")
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	snapshot, err := spec.freeze(context.WithValue(context.Background(), key, "preserved"))
 	if err != nil {
@@ -56,9 +51,7 @@ func TestFreezeAppliesContextOutsideLockAndPreservesBase(t *testing.T) {
 
 func TestFreezeReportsNilContextContributionIndex(t *testing.T) {
 	spec := NewSpec()
-	if err := spec.AddContext(func(context.Context) context.Context { return nil }); err != nil {
-		t.Fatal(err)
-	}
+	spec.AddContext(func(context.Context) context.Context { return nil })
 
 	_, err := spec.freeze(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "context contribution 1 returned nil") {
@@ -72,21 +65,17 @@ func TestFreezeChainsContextContributionsInRegistrationOrder(t *testing.T) {
 
 	spec := NewSpec()
 	var calls []string
-	if err := spec.AddContext(func(ctx context.Context) context.Context {
+	spec.AddContext(func(ctx context.Context) context.Context {
 		calls = append(calls, "first")
 		return context.WithValue(ctx, key, "first")
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AddContext(func(ctx context.Context) context.Context {
+	})
+	spec.AddContext(func(ctx context.Context) context.Context {
 		calls = append(calls, "second")
 		if got := ctx.Value(key); got != "first" {
 			t.Fatalf("second context input = %v, want first", got)
 		}
 		return context.WithValue(ctx, key, "second")
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	snapshot, err := spec.freeze(context.Background())
 	if err != nil {
@@ -103,12 +92,9 @@ func TestFreezeChainsContextContributionsInRegistrationOrder(t *testing.T) {
 func TestFreezeMergesAppInfoMetadataBeforeExplicitMetadata(t *testing.T) {
 	info := testAppInfo{}
 	spec := NewSpec()
-	if err := spec.RegisterAppInfo(info); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AddMetadata(map[string]string{"source": "explicit", "extra": "value"}); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterAppInfo(info)
+	assertSpecPanic(t, "app info is already registered", func() { spec.RegisterAppInfo(info) })
+	spec.AddMetadata(map[string]string{"source": "explicit", "extra": "value"})
 
 	snapshot, err := spec.freeze(context.Background())
 	if err != nil {
@@ -136,15 +122,9 @@ func TestFreezeSnapshotIsolatedFromRegistrationInputs(t *testing.T) {
 	signals := []os.Signal{syscall.SIGTERM}
 
 	spec := NewSpec()
-	if err := spec.AddMetadata(metadata); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AddEndpoints(endpoints...); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AddSignals(signals...); err != nil {
-		t.Fatal(err)
-	}
+	spec.AddMetadata(metadata)
+	spec.AddEndpoints(endpoints...)
+	spec.AddSignals(signals...)
 
 	metadata["key"] = "changed"
 	endpoints[0] = secondEndpoint
@@ -177,27 +157,25 @@ func TestSpecRejectsContributionsAfterFreeze(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		call func() error
+		call func()
 	}{
-		{name: "runtime", call: func() error { return spec.RegisterRuntime(&testRuntime{}) }},
-		{name: "app info", call: func() error { return spec.RegisterAppInfo(testAppInfo{}) }},
-		{name: "logger", call: func() error { return spec.RegisterLogger(kratoslog.NewStdLogger(nil)) }},
-		{name: "context", call: func() error {
-			return spec.AddContext(func(ctx context.Context) context.Context { return ctx })
+		{name: "runtime", call: func() { spec.RegisterRuntime(&testRuntime{}) }},
+		{name: "app info", call: func() { spec.RegisterAppInfo(testAppInfo{}) }},
+		{name: "logger", call: func() { spec.RegisterLogger(kratoslog.NewStdLogger(nil)) }},
+		{name: "context", call: func() {
+			spec.AddContext(func(ctx context.Context) context.Context { return ctx })
 		}},
-		{name: "metadata", call: func() error { return spec.AddMetadata(map[string]string{"key": "value"}) }},
-		{name: "endpoints", call: func() error { return spec.AddEndpoints(endpoint) }},
-		{name: "signals", call: func() error { return spec.AddSignals() }},
-		{name: "before start", call: func() error { return spec.BeforeStart(func(context.Context) error { return nil }) }},
-		{name: "after start", call: func() error { return spec.AfterStart(func(context.Context) error { return nil }) }},
-		{name: "before stop", call: func() error { return spec.BeforeStop(func(context.Context) error { return nil }) }},
-		{name: "after stop", call: func() error { return spec.AfterStop(func(context.Context) error { return nil }) }},
+		{name: "metadata", call: func() { spec.AddMetadata(map[string]string{"key": "value"}) }},
+		{name: "endpoints", call: func() { spec.AddEndpoints(endpoint) }},
+		{name: "signals", call: func() { spec.AddSignals() }},
+		{name: "before start", call: func() { spec.BeforeStart(func(context.Context) error { return nil }) }},
+		{name: "after start", call: func() { spec.AfterStart(func(context.Context) error { return nil }) }},
+		{name: "before stop", call: func() { spec.BeforeStop(func(context.Context) error { return nil }) }},
+		{name: "after stop", call: func() { spec.AfterStop(func(context.Context) error { return nil }) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.call(); !errors.Is(err, ErrSpecFrozen) {
-				t.Fatalf("error = %v, want ErrSpecFrozen", err)
-			}
+			assertSpecPanic(t, ErrSpecFrozen, tt.call)
 		})
 	}
 }
@@ -210,9 +188,7 @@ func TestAddContextRetainsRepeatedDecorator(t *testing.T) {
 		return context.WithValue(ctx, key{}, value+1)
 	}
 	for range 2 {
-		if err := spec.AddContext(decorate); err != nil {
-			t.Fatal(err)
-		}
+		spec.AddContext(decorate)
 	}
 	snapshot, err := spec.freeze(context.Background())
 	if err != nil {
@@ -227,9 +203,7 @@ func TestRegisterRuntimePreservesOrderAndRepeatedInstances(t *testing.T) {
 	spec := NewSpec()
 	first, second := &orderedTestRuntime{id: 1}, &orderedTestRuntime{id: 2}
 	for _, runtime := range []Runtime{first, second, first} {
-		if err := spec.RegisterRuntime(runtime); err != nil {
-			t.Fatal(err)
-		}
+		spec.RegisterRuntime(runtime)
 	}
 	snapshot, err := spec.freeze(context.Background())
 	if err != nil {
@@ -249,9 +223,8 @@ func TestRegisteredAppLoggerAddsKratosModuleWithoutChangingInput(t *testing.T) {
 	var output bytes.Buffer
 	logger := kratoslog.NewStdLogger(&output)
 	spec := NewSpec()
-	if err := spec.RegisterLogger(logger); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterLogger(logger)
+	assertSpecPanic(t, "app logger is already registered", func() { spec.RegisterLogger(logger) })
 	snapshot, err := spec.freeze(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -269,4 +242,15 @@ func TestRegisteredAppLoggerAddsKratosModuleWithoutChangingInput(t *testing.T) {
 	if strings.Contains(output.String(), "module=kratos") {
 		t.Fatalf("input logger changed: %s", output.String())
 	}
+}
+
+func assertSpecPanic(t *testing.T, expected any, call func()) {
+	t.Helper()
+	defer func() {
+		if got := recover(); got != expected {
+			t.Fatalf("panic = %v, want %v", got, expected)
+		}
+	}()
+	call()
+	t.Fatal("expected panic")
 }

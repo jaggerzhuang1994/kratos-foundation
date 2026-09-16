@@ -21,7 +21,7 @@ spec.RegisterCron("refresh", "@every 10s", task,
 通过 `job.WithDelayOverflowHandler` 为单个 Cron 注入业务告警：
 
 ```go
-// 前置条件：spec 为 bootstrap.NewSpec()；task 为业务 job.Task。
+// 前置条件：spec 为已完成配置加载的 bootstrap.Spec，内部共享 Wire 注入的 job.Spec；task 为业务 job.Task。
 // notify 由业务注入，签名为 func(context.Context, job.DelayOverflow) error。
 spec.Job().RegisterCron("refresh", "@every 10s", task,
     job.WithConcurrentPolicy(job.DelayIfRunning),
@@ -73,7 +73,7 @@ flowchart TD
 
 ## 构造示例
 
-以下 Wire provider 分别构造 Redis 协调器和 Job 运行时。`redisManager` 已按 [Redis 配置](../redis/README.md) 声明 `locks` 连接；其他依赖由业务 Wire 提供。`appSpec` 必须是最终创建应用使用的同一个 Spec；返回的 `JobBootstrap` 要加入 [Bootstrap 聚合](../bootstrap/README.md)，确保应用构造前完成登记。`cleanupTask` 是实现 `job.Task` 的业务任务。
+以下 Wire provider 构造 Redis 协调器并声明任务。`redisManager` 已按 [Redis 配置](../redis/README.md) 声明 `locks` 连接；其他依赖由业务 Wire 提供。各领域 Spec 由 Wire 构造并共享；Boot 返回的标记纳入 [Bootstrap 聚合](../bootstrap/README.md)，由 Server → Job 阶段在应用构造前完成登记。`cleanupTask` 是实现 `job.Task` 的业务任务。
 
 ```go
 package assembly
@@ -94,7 +94,7 @@ func newJobCoordinator(redisManager redis.Manager) (job.ConcurrencyCoordinator, 
 	)
 }
 
-func Boot(spec *bootstrap.Spec, cleanupTask job.Task) bootstrap.Bootstrap {
+func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, cleanupTask job.Task) bootstrap.Bootstrap {
     spec.Job().RegisterCron("cleanup", "@every 1m", cleanupTask,
         job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
     return bootstrap.Bootstrap{}
@@ -162,7 +162,7 @@ flowchart TD
     F --> G
 ```
 
-`bootstrap.NewJobBootstrap` 在 Boot 完成后构造 Manager，仅在包含任务时登记 Runtime；未选择 Job 时跳过构造，空 Job 声明不登记。它不启动任务、不返回 cleanup；Manager 的 Start/Stop 由 App 生命周期监督层拥有。重复组装返回错误，构造或登记失败后应丢弃 Spec。
+`bootstrap.NewJobBootstrap` 在 Server 完成后，从 Wire 注入的共享 job.Spec 构造 Manager，仅在包含任务时登记 Runtime；空 Job 声明不登记。它不启动任务、不返回 cleanup；Manager 的 Start/Stop 由 App 生命周期监督层拥有。单次、有序组装由 Wire 依赖链保证；底层 app.Spec 冻结后登记仍会 panic，构造失败后应放弃本次组装。
 
 Job 不使用全局驱动注册表，也不会读取 `job.lock.driver` 自动选择实现。任务与协调器公共契约、调度、并发策略和观测逻辑直接定义在 `pkg/job`。`manager.go` 负责构造与任务组装，`manager_lifecycle.go` 负责运行和收敛；`cron.go` 集中调度与表达式解析，`log.go` 集中任务及 cron 日志适配；`lock_coordinator.go` 负责锁获取与配置校验，`lock_guard.go` 负责租约续租释放。
 

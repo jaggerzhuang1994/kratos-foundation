@@ -17,10 +17,10 @@ meter := metrics.NewMetrics(provider, appInfo)
 组装期调用 `bootstrap.NewMetricsBootstrap(appSpec, meter)`，向 `app.Spec` 追加 ContextDecorator。`app.NewApp` 会在锁外基于调用方 Context 应用它，因此业务 Runtime 可通过 Metrics Context 辅助函数取得同一个 Meter：
 
 ```go
-contribution, err := bootstrap.NewMetricsBootstrap(appSpec, meter)
+contribution := bootstrap.NewMetricsBootstrap(appSpec, meter)
 ```
 
-该 Bootstrap 不启动 Runtime，也不拥有 Provider 的关闭；`NewProvider` 返回的 cleanup 仍由调用方/Wire 负责。
+该 Bootstrap 只返回完成标记，Spec 冻结后调用会 panic(app.ErrSpecFrozen)。它不启动 Runtime，也不拥有 Provider 的关闭；`NewProvider` 返回的 cleanup 仍由调用方/Wire 负责。
 
 ## 记录与暴露指标
 
@@ -43,7 +43,13 @@ Provider 创建实例私有 Registry，默认包含 Go 和进程 collector；不
 flowchart TD
     A([构造 Provider]) --> B{Resource 与 Registry 构造成功?}
     B -- 否 --> C([返回错误 由调用方处理])
-    B -- 是 --> D[创建业务 Meter 并注入 Context]
+    B -- 是 --> D1[创建业务 Meter]
+    D1 --> D2{通过 Bootstrap 注入?}
+    D2 -- 否 --> D[直接通过 WithMetrics 注入 Context]
+    D2 -- 是 --> D4{Spec 未冻结?}
+    D4 -- 否 --> D3([panic ErrSpecFrozen])
+    D4 -- 是 --> D5[登记 ContextDecorator 在 NewApp 冻结后注入 Context]
+    D5 --> E
     D --> E{Context 含 Meter?}
     E -- 否 --> F([helper 返回 ErrMetricsNotFound])
     E -- 是 --> G[创建 instrument]

@@ -76,6 +76,9 @@ func NewRuntime(
 	if err != nil {
 		return fail(err)
 	}
+	logger.With("event", "server.assembled",
+		"http_enabled", httpServer != nil, "grpc_enabled", grpcServer != nil,
+		"management_listeners", len(management)).Info("NewRuntime | server.assembled")
 	return &Runtime{
 		health:     health,
 		management: management,

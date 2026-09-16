@@ -1,6 +1,9 @@
 package consulconfig
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,7 +22,7 @@ func TestNewSpecLocalConfiguration(t *testing.T) {
 			if kind == "invalid pattern" {
 				path = "["
 			}
-			spec, err := NewSpec(bootstrap.LocalConfigPath(path), "unused-remote", func(string, string) []string {
+			spec, err := NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.LocalConfigPath(path), "unused-remote", func(string, string) []string {
 				t.Fatal("local configuration called remote paths provider")
 				return nil
 			})
@@ -66,7 +69,7 @@ func TestNewSpecAllowsDisabledConsul(t *testing.T) {
 	t.Setenv("BOOTSTRAP_TEST_VALUE", "from-env")
 	configName := RemoteConfigName("shared-orders")
 	called := false
-	spec, err := NewSpec("unused-local.yaml", configName, func(name, environment string) []string {
+	spec, err := NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), "unused-local.yaml", configName, func(name, environment string) []string {
 		called = true
 		if name != string(configName) || environment != "prod" {
 			t.Fatalf("unexpected provider arguments: %q, %q", name, environment)

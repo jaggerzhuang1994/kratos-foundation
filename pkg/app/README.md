@@ -44,7 +44,9 @@ flowchart TD
 
 ## Spec 约束
 
-`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会返回错误。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会返回错误。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。AppInfo 和 Logger 是单例贡献；Registrar 是独立的构造依赖，不保存在 Spec 中。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。
+`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会 panic(app.ErrSpecFrozen)。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会 panic(app.ErrSpecFrozen)。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。所有公开登记方法均无返回值；AppInfo 和 Logger 是单例贡献，重复登记会 panic；Registrar 是独立的构造依赖，不保存在 Spec 中。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。冻结后的空参数写入同样会 panic，Ready 仍可正常读取。
+
+登记与冻结继续使用同一互斥锁保护共享状态；发生 panic 时 defer 释放锁，不留下半次登记。ContextDecorator 仍在锁外执行。`NewApp` 继续返回构造错误，包括重复消费 Spec 的 ErrSpecFrozen、缺失依赖和装饰函数返回 nil Context；这与公开登记方法的 panic 契约不同。
 
 ## 运行时故障与停止结果
 
@@ -78,11 +80,11 @@ flowchart TD
 flowchart TD
     A([并发 AddContext]) --> B[获取 Spec 锁]
     B --> C{Spec 已冻结?}
-    C -- 是 --> D[释放锁，返回错误]
+    C -- 是 --> D([defer 释放锁并传播 panic ErrSpecFrozen])
     C -- 否 --> E[按锁内登记顺序追加函数]
     E --> F([释放锁，登记完成])
     G([NewApp 冻结 Spec]) --> H[获取 Spec 锁，检查并标记冻结，复制装饰函数列表]
-    H -- 已冻结 --> D
+    H -- 已冻结 --> Q([释放锁 返回 ErrSpecFrozen])
     H --> I[释放锁]
     I --> J[按登记顺序在锁外执行装饰函数]
     J --> K{返回 Context 为 nil?}
@@ -91,7 +93,7 @@ flowchart TD
     K -- 否且全部完成 --> M([保存最终 Context])
 ```
 
-错误由调用方处理，此处不重复记录日志；锁不覆盖装饰函数调用。
+构造错误由调用方处理；冻结后的登记属于编程错误，panic 不转换为 error，此处不重复记录日志。锁不覆盖装饰函数调用。
 
 ### Runtime 登记
 
@@ -99,13 +101,13 @@ flowchart TD
 flowchart TD
     A([并发 RegisterRuntime]) --> B[获取 Spec 锁]
     B --> C{Spec 已冻结?}
-    C -- 是 --> D[返回 ErrSpecFrozen]
+    C -- 是 --> D[panic ErrSpecFrozen]
     C -- 否 --> G[追加 Runtime，保留登记顺序]
-    D --> H([释放锁，结束])
-    G --> H
+    D --> P([defer 释放锁并传播 panic])
+    G --> H([释放锁，登记完成])
 ```
 
-登记不调用 Runtime，也不启动后台工作；错误交给调用方处理，不在此重复记录日志。冻结时在同一锁内复制 Runtime 列表，后续生命周期消费该快照。
+登记不调用 Runtime，也不启动后台工作；冻结后的写入直接 panic，不在此重复记录日志。冻结时在同一锁内复制 Runtime 列表，后续生命周期消费该快照。
 
 ### 停机超时热更新
 

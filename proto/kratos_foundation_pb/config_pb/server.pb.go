@@ -30,7 +30,7 @@ type Server struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// http 服务器配置。[需重启]
+	// 业务 HTTP 与管理端点配置；业务监听和独立管理监听分别控制。[需重启]
 	Http *HttpServerOption `protobuf:"bytes,1,opt,name=http,proto3,oneof" json:"http,omitempty"`
 	// grpc 服务器配置。[需重启]
 	Grpc *GrpcServerOption `protobuf:"bytes,2,opt,name=grpc,proto3,oneof" json:"grpc,omitempty"`
@@ -108,6 +108,7 @@ type HttpServerOption struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// 仅关闭业务 HTTP，默认 false；显式配置地址的管理端点仍可启动。[需重启]
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// 一般不需要指定，默认(tcp) 可选值: "tcp", "tcp4", "tcp6", "unix" or "unixpacket"
 	Network *string `protobuf:"bytes,2,opt,name=network,proto3,oneof" json:"network,omitempty"`
@@ -218,6 +219,7 @@ type GrpcServerOption struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// 省略时仅非 nil 业务服务注册触发开启；false 显式开启，true 显式关闭。[需重启]
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// 一般不需要指定，默认(tcp)
 	Network *string `protobuf:"bytes,2,opt,name=network,proto3,oneof" json:"network,omitempty"`
@@ -434,7 +436,7 @@ type HttpServerOption_Metrics struct {
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// metrics 路由，默认 /metrics
 	Path *string `protobuf:"bytes,2,opt,name=path,proto3,oneof" json:"path,omitempty"`
-	// 监听地址 host:port；空值或与 http.addr 相同复用业务 HTTP，否则独立监听。[需重启]
+	// 监听地址 host:port；空值复用业务 HTTP（业务关闭则不启动）；显式地址与已启用的业务地址相同时复用，否则独立监听。[需重启]
 	Addr *string `protobuf:"bytes,3,opt,name=addr,proto3,oneof" json:"addr,omitempty"`
 }
 
@@ -497,7 +499,7 @@ type HttpServerOption_Health struct {
 	unknownFields protoimpl.UnknownFields
 
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
-	// 空值或与 http.addr 相同复用业务 HTTP；与 metrics.addr 相同共享独立监听。[需重启]
+	// 空值复用业务 HTTP（业务关闭则不启动）；显式地址与已启用的业务地址相同时复用，否则独立监听；与 metrics.addr 相同则共享。[需重启]
 	Addr *string `protobuf:"bytes,2,opt,name=addr,proto3,oneof" json:"addr,omitempty"`
 	// 存活探针路径，默认 /healthz。[需重启]
 	// GET/HEAD 返回 200，仅表示 HTTP 可响应，不检查依赖或应用就绪状态。

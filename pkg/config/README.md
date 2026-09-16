@@ -5,13 +5,11 @@ Manager 内部持有 Kratos 官方 `config.Config`，使用其默认 decoder、�
 ## 组装
 
 ```go
-spec := bootstrap.NewSpec()
-if err := spec.Configuration(
+spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec())
+spec.Configuration(
     file.AddConfigSource("configs/app.yaml"),
     consul.AddConfigSource("configs/production/app.yaml"),
-); err != nil {
-    return err
-}
+)
 manager, cleanup, err := bootstrap.NewConfigManager(spec)
 if err != nil {
     return err
@@ -19,7 +17,7 @@ if err != nil {
 defer cleanup()
 ```
 
-片段使用 `pkg/bootstrap` 和普通导入的 `contrib/config/file`、`contrib/config/consul`；完整可运行示例见 [minimal](../../examples/minimal/README.md)。Wire 场景由业务 provider 返回已声明的 Spec，`bootstrap.NewConfigManager` 在依赖 Manager 的组件之前执行。来源集合只在构造阶段确定，内容按各 Source 的 Watch 能力更新。默认总是先添加官方 `config/env.NewSource()`，无前缀筛选，不改变键名。
+手工组装片段使用 `pkg/app`、`pkg/server`、`pkg/job`、`pkg/bootstrap` 和普通导入的 `contrib/config/file`、`contrib/config/consul`；完整可运行示例见 [minimal](../../examples/minimal/README.md)。Wire 场景由业务 provider 接收同一组领域 Spec 并返回已声明的 bootstrap.Spec，`bootstrap.NewConfigManager` 在依赖 Manager 的组件之前执行。来源集合只在构造阶段确定，内容按各 Source 的 Watch 能力更新。默认总是先添加官方 `config/env.NewSource()`，无前缀筛选，不改变键名。
 
 也可直接调用 `config.NewManager(config.Sources{source1, source2})`，适配官方或自定义 Source；`config.NewSources(...)` 仅过滤 nil。构造失败停止已经创建的 watcher；成功后 cleanup 幂等取消轮询、清空订阅并停止全部 watcher，包括某个 Stop 返回错误时的其他来源。已获准执行的回调不等待、不强制中断；它返回后轮询退出，因此回调也可调用 cleanup。业务回调必须能自行返回，否则会阻塞本 Manager 的通知任务。官方 Close 不等待最后的监听日志协程结束。共享 Consul 客户端不归 Manager 释放。
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	queueredis "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/redis"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
@@ -151,20 +151,12 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 	return m, cleanup, nil
 }
 
-// Register 在 app.Spec 冻结前登记，启动与停止由 app supervisor 统一负责。
-func (m *messaging) Register(spec *app.Spec) error {
-	if err := spec.RegisterRuntime(m.consumer); err != nil {
-		return err
-	}
-	if err := spec.RegisterRuntime(m.worker); err != nil {
-		return err
-	}
+// Register 在业务声明阶段登记，启动与停止由 app supervisor 统一负责。
+func (m *messaging) Register(spec *bootstrap.Spec) {
+	spec.RegisterKafkaConsumer(m.consumer).RegisterQueueWorker(m.worker)
 	for _, business := range m.business {
-		if err := spec.RegisterRuntime(business.worker); err != nil {
-			return err
-		}
+		spec.RegisterQueueWorker(business.worker)
 	}
-	return nil
 }
 
 // Run 每轮投递三种消费场景、两项无 Worker 的积压任务，以及邮件和报表各一项任务；ID 由调用方生成的 UUID 隔离。

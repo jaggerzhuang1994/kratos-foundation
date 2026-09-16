@@ -49,7 +49,7 @@ Buffers、接口契约及相关文档时，应遵循本规范，并优先保持�
 - 类型及其紧密关联的方法尽量放在一起；同一职责的短小辅助实现优先留在同一文件，不按每个类型或函数机械拆文件。测试跟随职责组织，避免维护超大测试文件。
 - 保留显式构造函数与 Wire 依赖注入模式；由构造返回 cleanup 的资源继续由组装层负责逆序释放。
 - Bootstrap 统一位于 `pkg/bootstrap`，在构造期同步向 `app.Spec` 登记贡献；业务 Wire 层聚合 `bootstrap.StartupReady` 后通过 `bootstrap.NewKratosApp` 调用 `app.NewApp`。领域包只声明自身依赖并提供普通构造函数，不导入 app、bootstrap 或 Wire 参与组装，也不自行启动应用运行时或管理全局容器。
-- 推荐的统一 Spec 模式由 `bootstrap.NewSpec` 持有唯一的 `app.Spec`，通过 `ApplicationSpec` 共享；业务 Boot 声明后由 `NewServerBootstrap` 和 `NewJobBootstrap` 分别构造登记服务器与任务，`NewRuntimeBootstrap` 依赖二者的完成标记后登记自定义 Runtime，`NewApplicationBootstrap` 返回 `StartupReady`。不要同时提供 `app.NewSpec` 或为同一组件重复调用独立 Bootstrap。`NewApplicationBootstrap` 是唯一的 `StartupReady` 构造入口；自行登记的 Runtime 贡献也须通过业务 Boot 纳入依赖链，完整用法见 [Bootstrap 文档](pkg/bootstrap/README.md)。
+- 推荐的统一 Spec 模式由 Wire 通过 `app.NewSpec`、`server.NewSpec`、`job.NewSpec` 分别构造唯一实例，注入 `bootstrap.NewSpec` 及各依赖处共享；业务 Boot 声明后由 `NewServerBootstrap` → `NewJobBootstrap` 依次构造登记服务器与任务，自定义 Runtime 由业务 Boot 通过 `bootstrap.Spec.RegisterRuntime` 直接登记到共享 `app.Spec`，`NewRuntimeBootstrap` 依赖服务器和任务的完成标记后仅汇合组装阶段，`NewApplicationBootstrap` 返回 `StartupReady`。`BaseProviderSet` 已包含三个领域 Spec provider，使用时不得重复提供，也不要为同一组件重复调用独立 Bootstrap。`NewApplicationBootstrap` 是唯一的 `StartupReady` 构造入口；自行登记的 Runtime 贡献也须通过业务 Boot 纳入依赖链，完整用法见 [Bootstrap 文档](pkg/bootstrap/README.md)。
 
 ### Driver Registry 适用条件
 
@@ -122,7 +122,7 @@ contrib/config/consul
 - 判断错误类型或原因时使用 `errors.Is` 和 `errors.As`，不要依赖错误字符串。
 - 错误信息使用小写开头，通常不以句号结尾。
 - 不要在多个层级重复记录并返回同一个错误；日志应集中在能够决定重试、降级、回退或对外响应的处理边界。
-- 仅对程序无法继续运行的启动错误使用 `panic`；正常业务失败必须返回错误。
+- 仅对程序无法继续运行的启动错误使用 `panic`；正常业务失败必须返回错误。`app.Spec` 的公开登记方法无返回值，冻结后写入及重复登记 AppInfo/Logger 属于组装编程错误，直接 panic；不要恢复为 error 返回或静默忽略。
 - 哨兵错误应保持稳定，并仅在调用方确实需要区分错误语义时导出。
 - 返回给外部调用方的错误不得泄漏内部路径、凭据、SQL 或敏感实现细节。
 

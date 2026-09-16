@@ -8,7 +8,7 @@
 
 Kubernetes 可复用既有 blackbox，或审阅 [blackbox.yaml](../../kubernetes/blackbox.yaml) 后部署；将 [health-values.yaml](../../kubernetes/health-values.yaml) 的两个 additionalScrapeConfigs 合并到现有 kube-prometheus-stack。示例只发现 foundation-demo 的 minimal-api Service management 端口，探测各 Pod 地址；按实际修改 namespace、服务标签、端口和集群名。Prometheus 需有发现 Endpoints/Pod/Service 的权限，blackbox 需能访问管理端口；探测接口不能暴露给不可信网络任意访问内部地址。
 
-面板将 ready、healthz、探测采集状态分开；按 App 聚合时取最差值，有一个实例失败就显示0。探测器故障时 `up=0`，不会伪造应用健康。应用健康不等于完整外部用户链路健康；readiness依赖哪些组件取决于业务注册的 HealthConfig.Checks。
+面板将 ready、healthz、探测采集状态分开；按 App 聚合时取最差值，有一个实例失败就显示0。探测器故障时 `up=0`，不会伪造应用健康。应用健康不等于完整外部用户链路健康；readiness依赖哪些组件取决于业务注册的 spec.Health().Checks(...)。
 
 ```mermaid
 flowchart TD

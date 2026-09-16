@@ -13,7 +13,7 @@ import (
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// Spec 保存 Bootstrap 阶段的可变组装状态。
+// Spec 保存 Bootstrap 阶段的可变组装状态；公开登记方法在冻结后调用会 panic(ErrSpecFrozen)。
 type Spec struct {
 	application atomic.Pointer[App]
 	mu          sync.Mutex
@@ -51,6 +51,7 @@ type appSnapshot struct {
 	afterStop   []HookFunc
 }
 
+// NewSpec 创建可登记的应用组装状态。
 func NewSpec() *Spec {
 	return &Spec{
 		metadata: make(map[string]string),
@@ -58,39 +59,32 @@ func NewSpec() *Spec {
 }
 
 // RegisterRuntime 按登记顺序追加 Runtime，不对实例去重。
-func (s *Spec) RegisterRuntime(runtime Runtime) error {
+func (s *Spec) RegisterRuntime(runtime Runtime) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	s.runtimes = append(s.runtimes, runtime)
-	return nil
 }
 
-func (s *Spec) RegisterAppInfo(info AppInfo) error {
+// RegisterAppInfo 登记唯一的应用身份；重复登记非 nil 身份会 panic。
+func (s *Spec) RegisterAppInfo(info AppInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	if s.appInfo != nil {
-		return fmt.Errorf("app info is already registered")
+		panic("app info is already registered")
 	}
 	s.appInfo = info
-	return nil
 }
 
-// RegisterLogger 登记仅供 Kratos App 使用的带 module=kratos 的派生 Logger。
+// RegisterLogger 登记仅供 Kratos App 使用的带 module=kratos 的派生 Logger；重复登记会 panic。
 // 派生视图借用原输出，不修改输入 Logger 或全局绑定。
-func (s *Spec) RegisterLogger(logger kratoslog.Logger) error {
+func (s *Spec) RegisterLogger(logger kratoslog.Logger) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	if s.logger != nil {
-		return fmt.Errorf("app logger is already registered")
+		panic("app logger is already registered")
 	}
 	s.logger = logger
 	// nil 仍表示未登记，由 NewApp 保持原有缺失依赖错误。
@@ -101,74 +95,65 @@ func (s *Spec) RegisterLogger(logger kratoslog.Logger) error {
 			s.logger = kratoslog.With(logger, "module", "kratos")
 		}
 	}
-	return nil
 }
 
 // AddContext 按登记顺序追加上下文装饰函数；重复登记的函数会重复执行。
-func (s *Spec) AddContext(decorate ContextDecorator) error {
+func (s *Spec) AddContext(decorate ContextDecorator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	s.decorators = append(s.decorators, decorate)
-	return nil
 }
 
-func (s *Spec) AddMetadata(metadata map[string]string) error {
+// AddMetadata 复制并合并应用元数据，同名键以后登记的值为准。
+func (s *Spec) AddMetadata(metadata map[string]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	maps.Copy(s.metadata, metadata)
-	return nil
 }
 
-func (s *Spec) AddEndpoints(endpoints ...*url.URL) error {
+// AddEndpoints 追加对外端点，调用方须保持 URL 对象只读。
+func (s *Spec) AddEndpoints(endpoints ...*url.URL) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	s.endpoints = append(s.endpoints, endpoints...)
-	return nil
 }
 
-func (s *Spec) AddSignals(signals ...os.Signal) error {
+// AddSignals 追加触发应用停止的信号。
+func (s *Spec) AddSignals(signals ...os.Signal) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	s.signals = append(s.signals, signals...)
-	return nil
 }
 
-func (s *Spec) BeforeStart(hooks ...HookFunc) error {
-	return s.addHooks(&s.beforeStart, hooks)
+// BeforeStart 追加启动前钩子。
+func (s *Spec) BeforeStart(hooks ...HookFunc) {
+	s.addHooks(&s.beforeStart, hooks)
 }
 
-func (s *Spec) AfterStart(hooks ...HookFunc) error {
-	return s.addHooks(&s.afterStart, hooks)
+// AfterStart 追加启动后钩子。
+func (s *Spec) AfterStart(hooks ...HookFunc) {
+	s.addHooks(&s.afterStart, hooks)
 }
 
-func (s *Spec) BeforeStop(hooks ...HookFunc) error {
-	return s.addHooks(&s.beforeStop, hooks)
+// BeforeStop 追加停止前钩子。
+func (s *Spec) BeforeStop(hooks ...HookFunc) {
+	s.addHooks(&s.beforeStop, hooks)
 }
 
-func (s *Spec) AfterStop(hooks ...HookFunc) error {
-	return s.addHooks(&s.afterStop, hooks)
+// AfterStop 追加停止后钩子。
+func (s *Spec) AfterStop(hooks ...HookFunc) {
+	s.addHooks(&s.afterStop, hooks)
 }
 
-func (s *Spec) addHooks(destination *[]HookFunc, hooks []HookFunc) error {
+func (s *Spec) addHooks(destination *[]HookFunc, hooks []HookFunc) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.checkMutable(); err != nil {
-		return err
-	}
+	s.checkMutable()
 	*destination = append(*destination, hooks...)
-	return nil
 }
 
 // freeze 关闭后续注册，并在锁外执行所有外部贡献。
@@ -216,11 +201,11 @@ func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
 	return snapshot, nil
 }
 
-func (s *Spec) checkMutable() error {
+// checkMutable 必须持有 mu 调用；冻结后写入属于组装错误，panic 时由调用方 defer 解锁。
+func (s *Spec) checkMutable() {
 	if s.frozen {
-		return ErrSpecFrozen
+		panic(ErrSpecFrozen)
 	}
-	return nil
 }
 
 // Ready 在全部启动后钩子成功且尚未请求停机时返回 true，可并发用于就绪探针。

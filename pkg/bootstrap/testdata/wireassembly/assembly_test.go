@@ -32,9 +32,15 @@ func TestGeneratedAssemblyAndCleanup(t *testing.T) {
 	if built.App.ID() != built.Info.ID() || built.App.Name() != built.Info.Name() || built.App.Version() != "wire-test" {
 		t.Fatal("appinfo Bootstrap did not contribute application identity")
 	}
-	if err := built.Spec.AddMetadata(nil); !errors.Is(err, app.ErrSpecFrozen) {
-		t.Fatalf("Spec must be frozen after all Bootstraps: %v", err)
-	}
+	func() {
+		defer func() {
+			if got := recover(); got != app.ErrSpecFrozen {
+				t.Fatalf("Spec freeze panic = %v", got)
+			}
+		}()
+		built.Spec.AddMetadata(nil)
+		t.Fatal("expected frozen Spec panic")
+	}()
 	if foundationlog.GetLogger() == previous {
 		t.Fatal("log Bootstrap did not install application logger")
 	}

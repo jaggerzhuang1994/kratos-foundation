@@ -1,16 +1,16 @@
 # bootstrap
 
-日志 Bootstrap 安装 Kratos 模块适配器并借用实例输出；cleanup 恢复之前完整的全局绑定。配置源选择日志归属各 contrib 包。
+AppInfo、Log、Tracing、Metrics Bootstrap 及其基础设施汇合入口集中在 `infrastructure.go`；Server、Job Bootstrap 及 Runtime 汇合入口集中在 `runtime.go`。日志 Bootstrap 安装 Kratos 模块适配器并借用实例输出；cleanup 恢复之前完整的全局绑定。配置源选择日志归属各 contrib 包。
 
 `pkg/bootstrap` 负责跨组件集成与应用登记。领域包只声明自身依赖，提供普通 Go 构造函数；不导入 `app`、`bootstrap` 或 Wire 来参与应用组装。组件内部创建自身 SDK、配置解析与资源管理仍留在领域包中。
 
 ## 按应用选择组件（推荐）
 
 `internal` 保存 service、biz、data、job 和 consumer 的实现；`cmd/<app>` 是唯一的应用组件组装点。
-Wire 构造当前 provider 实际依赖的实现，业务 Boot provider 接收并填充 `*bootstrap.Spec`，无需提供 `*server.Spec` 或 `*job.Spec`。
+Wire 构造当前 provider 实际依赖的实现，业务 Boot provider 接收并填充 `*bootstrap.Spec`，也可在业务 provider 中直接注入同一份 `*server.Spec` 或 `*job.Spec`。
 
 ```go
-// cmd/api/bootstrap.go：只选择 HTTP，未选择的 gRPC 即使配置默认开启也不会创建。
+// cmd/api/bootstrap.go：声明业务 HTTP；未注册 gRPC 服务时默认不创建 gRPC。
 func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *service.AuthService) (bootstrap.Bootstrap, error) {
     spec.Http().Register(func(srv server.HTTPServer) error {
         auth_service_pb.RegisterAuthServiceHTTPServer(srv, service)
@@ -25,54 +25,96 @@ worker 的 provider 则可以选择任务和消费者：
 ```go
 func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *jobimpl.Reconcile, worker *queue.Worker) (bootstrap.Bootstrap, error) {
     spec.Job().RegisterCron("reconcile", "@every 1m", task)
-    spec.RegisterRuntime(worker)
+    spec.RegisterQueueWorker(worker)
     return bootstrap.Bootstrap{}, nil
 }
 ```
 
 以上业务类型由消费项目定义。Queue Worker 由 Wire 调用 queue.NewWorker 构造，Kafka 消息消费则使用 kafka.NewConsumerRuntime，
-与自定义 worker 一样通过 spec.RegisterRuntime(runtime) 登记；Spec 不再提供专用 Consumer 方法。
-未调用 Http() 或 Grpc() 时不会创建服务器。
-`Http()`、`Grpc()` 仅选择协议，默认仍遵循配置的 disable；显式 `.Enable()` 可以覆盖配置。
-未调用 `Http()`、`Grpc()` 的 worker 不构造服务器，也不读取服务器配置；未调用 `Job()` 不构造任务管理器。
-空 Spec 可用于不需要这些组件的应用；基础设施仍由 Wire 显式选择，本入口不会自动创建数据库、Redis 或消息客户端。
+分别通过 `spec.RegisterQueueWorker(worker)` 和 `spec.RegisterKafkaConsumer(consumer)` 登记；两个入口接收已构造的非 nil 具体实例，内部调用 `RegisterRuntime`，复用其登记逻辑并返回同一 Spec。自定义 Runtime 继续使用 `RegisterRuntime(runtime)`。三个入口均立即写入共享 app.Spec，不负责构造、配置或释放资源，cleanup 仍归原 provider，Start/Stop 由 App 管理。
+`Http()` 只声明业务 HTTP 路由、WebSocket 和业务选项，不是全部 HTTP 监听的总开关。
+业务 HTTP 即使未调用 `Http()` 也默认开启，只有 `server.http.disable: true` 关闭业务监听。
+gRPC 仅在 `Grpc().Register(...)` 注册了至少一个非 nil 回调时默认开启；单独获取 Builder、配置中间件或 Option 不会开启。
+`server.grpc.disable: false` 显式开启 gRPC（即使没有业务服务），`true` 显式关闭；省略时按服务注册决定。
+两个协议的 Builder 均不提供 `Enable/Disable`，代码不能覆盖配置开关。以上配置构造时读取，修改需要重启。
 
-Wire 使用 `bootstrap.NewSpec, bootstrap.ApplicationSpec, Boot, bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap, bootstrap.NewApplicationBootstrap`。
-bootstrap.NewSpec 创建组件声明及其持有的 app.Spec；ApplicationSpec 向基础设施 provider 暴露同一实例。
-统一模式不要再提供 app.NewSpec，避免生成第二份状态或出现重复 provider。
-Boot 返回 `Bootstrap`，NewServerBootstrap 和 NewJobBootstrap 都依赖该标记，保证先声明后构造；NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
+`spec.Health().Checks(...)` 独立声明就绪检查；metrics/health 的地址、路径和开关由 `server.http.metrics/health` 配置决定。
+省略监控地址时复用业务 HTTP；业务 HTTP 关闭后，显式指定地址的管理端点仍可独立启动。
+地址归并、隔离和错误处理规则见 [server 文档](../server/README.md#监控端点监听地址)。
+不需要业务 HTTP 的 worker 须配置 `server.http.disable: true`；若仍需探针或 metrics，显式配置对应管理地址。
+Job Spec 始终由 Wire 提供；NewJobBootstrap 构造 Manager，任务为空时不登记 Runtime；空 Spec 仍默认创建业务 HTTP，但不会自动创建数据库、Redis 或消息客户端。
+
+Wire 注册 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`，分别构造唯一的领域声明；`bootstrap.NewSpec(application, servers, jobs)` 借用这些指针，不创建副本。`BaseProviderSet` 已包含三个领域构造函数，使用它时不要重复注册；业务仍提供 bootstrap.Spec 的配置声明 provider。
+
+不用 BaseProviderSet 时，在现有 injector 中显式添加：
+
+```go
+wire.Build(
+    app.NewSpec, server.NewSpec, job.NewSpec,
+    newSpec, // 接收三个领域 Spec 并声明配置源，示例见下方 Configuration
+    bootstrap.NewConfigManager,
+    // 其余基础设施、业务 Boot 和 Bootstrap provider 同完整示例。
+)
+```
+
+`NewServerBootstrap` 注入 `*app.Spec` 和 `*server.Spec`；`NewJobBootstrap` 注入 `*app.Spec` 和 `*job.Spec`；其他应用贡献 provider 与 `NewKratosApp` 直接注入 `*app.Spec`。手动组装同样必须复用传给 bootstrap.NewSpec 的实例，不能在各依赖处重新 NewSpec。原 `ApplicationSpec` 转发 provider 已删除。
+
+领域 Spec 是共享可变声明，不拥有运行时资源，也没有 cleanup。直接注入领域 Spec 不会绕过 Wire 的组装顺序要求：业务声明 provider 仍应依赖 `InfrastructureBootstrap`，在 Boot 返回前完成修改；调用方应在组件构造开始前完成声明。
+
+Boot 返回 `Bootstrap`，NewServerBootstrap 依赖该标记；NewJobBootstrap 显式依赖 ServerBootstrap，保证配置加载 → 业务声明 → Server → Job 的单向顺序；NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
 NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；这是唯一的 StartupReady 构造入口。
 Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则形成循环；Boot 只接收 *bootstrap.Spec，直接调用 BeforeStart 等方法登记应用贡献。
 停机策略直接使用 `app.NewStopPolicy(config, manager, logger)`，不依赖组件标记或服务器等待时间。建议总停机预算为服务器等待和资源清理预留足够时间，不做跨组件硬校验。
 业务无需提供 time.Duration 适配函数；各 provider 的 cleanup 由 Wire 按实际依赖逆序释放。
 不要为同一组件同时使用统一入口与独立 Bootstrap，否则会重复登记。
 
-`bootstrap.Spec` 在构造期串行填充，只能组装一次；组装开始后不可再修改 Spec 或保留的 Builder。
-`NewRuntimeBootstrap(spec, serverBootstrap, jobBootstrap)` 仅登记自定义 Runtime，返回 `(RuntimeBootstrap, error)`，不再返回空 cleanup。服务器资源由 NewServerBootstrap 的 cleanup 释放；后续组装失败时 Wire 会逆序回滚，失败的 app.Spec 应丢弃。
+`bootstrap.Spec` 是业务蓝图，不维护阶段状态或检查调用顺序，仅支持串行声明。业务提供返回 `bootstrap.Bootstrap` 的构造函数，在其中注入 `*bootstrap.Spec` 并完成端点、任务和应用贡献的声明。Wire 通过完成标记保证先声明、再构造组件、最后创建 App；手动组装遵守同样的依赖顺序。
+
+配置源应在提供 Spec 的构造函数中声明，供 NewConfigManager 使用。领域 Builder 是共享可变声明，应在 Boot 返回前完成修改；组件构造后修改蓝图不会重建已有资源。
+
+`Configuration`、`RegisterRuntime`、`RegisterQueueWorker`、`RegisterKafkaConsumer`、`AddContext`、`AddMetadata`、`AddEndpoints`、`AddSignals` 和全部 Hook 方法返回同一个 `*bootstrap.Spec`，可链式调用；Http/Grpc/Health/Job 仍返回对应领域 Builder。保留 nil 配置 loader 校验和底层 app.Spec 冻结后的写入保护。配置加载和资源构造的实际失败继续返回 error，由 Wire 逆序释放已成功构造的资源。
+
+`NewRuntimeBootstrap(serverBootstrap, jobBootstrap)` 仅返回 `RuntimeBootstrap`，汇合组件完成标记；它不暂存、登记或重放 Runtime。`spec.RegisterRuntime` 直接调用共享 `app.Spec.RegisterRuntime`，因此自定义 Runtime 在业务调用当下登记，早于后续构造的服务器和任务。App 仍并发启动 Runtime，登记顺序不表示启动完成顺序。服务器资源由 NewServerBootstrap 的 cleanup 释放。
+
+业务 Boot 可以这样链式登记（业务 Runtime 已由 provider 构造）：
+
+```go
+spec.RegisterQueueWorker(worker).
+    AddMetadata(map[string]string{"component": "worker"}).
+    BeforeStart(beforeStart).
+    AfterStop(afterStop)
+```
+
 底层数据库、消息客户端和消费者资源的 cleanup 仍归各自 provider；运行时 Start/Stop 由 app 生命周期管理。
-bootstrap.Spec 按模块提供 Http()、Grpc()、Job()；业务无需接收第二个 Spec。
+bootstrap.Spec 按模块提供 Http()、Grpc()、Health()、Job()；业务无需接收第二个 Spec。
 生命周期方法直接挂在 spec 上；日志运行期策略来自 log 配置热更新，代码通过返回派生实例的 WithLevel 等方法定制，不提供 spec.Log()。
-最终 app.NewApp 冻结的正是这份由私有字段持有的状态；冻结后直接调用 BeforeStart、AddMetadata 等方法会返回 app.ErrSpecFrozen。
+最终 app.NewApp 冻结 Wire 注入的同一份 app.Spec；基础设施 provider 直接登记该实例，受其冻结契约保护。
 请使用 bootstrap.NewSpec 创建统一声明，不能使用其零值；app 包仍然不依赖 server、job、queue。
 
 ```mermaid
 flowchart TD
-    A([Wire 构造统一 Spec 及基础设施]) --> B[业务 Boot 声明组件]
-    B --> C{Boot 成功?}
-    C -- 否 --> X[Wire 逆序释放已有资源]
-    C -- 是 --> D[NewServerBootstrap 与 NewJobBootstrap 分别构造登记]
-    D --> E{成功或未选择对应组件?}
+    A([Wire 构造 app/server/job Spec]) --> A1[NewSpec 注入共享指针并声明配置]
+    A1 --> B[NewConfigManager 加载配置]
+    B --> C{来源创建和配置加载成功?}
+    C -- 否 --> X[返回 error；Wire 逆序释放已有资源]
+    C -- 是 --> D[基础设施登记贡献；Boot 描述蓝图并登记 Runtime]
+    D --> E{Boot 成功?}
     E -- 否 --> X
-    E -- 是 --> F[NewRuntimeBootstrap 接收 ServerBootstrap 和 JobBootstrap]
-    F --> G[登记自定义 Runtime]
-    G --> H{成功?}
-    H -- 否 --> X
-    H -- 是 --> I[NewApplicationBootstrap 返回 StartupReady]
-    I --> J[NewKratosApp 冻结应用 Spec]
-    J --> K{成功?}
-    K -- 否 --> X
-    K -- 是 --> L([返回应用及 Wire cleanup])
-    X --> Y([返回错误])
+    E -- 是 --> F[NewServerBootstrap 构造服务器]
+    F --> G{构造及登记成功?}
+    G -- 否 --> X
+    G -- 是 --> H[INFO server.assembled；Server 完成]
+    H --> I[NewJobBootstrap 构造任务]
+    I --> J{构造及登记成功 或无需任务?}
+    J -- 否 --> X
+    J -- 是 --> K[Job 完成]
+    K --> L[NewRuntimeBootstrap 汇合完成标记]
+    L --> M[NewApplicationBootstrap 返回 StartupReady]
+    M --> N[NewKratosApp 冻结应用 Spec]
+    N --> O{应用构造成功?}
+    O -- 否 --> X
+    O -- 是 --> R([返回应用和 cleanup])
+    X --> Y([丢弃 Spec，返回错误])
 ```
 
 基础组装使用 `BaseProviderSet`，具体后端由具名驱动配置选择。
@@ -85,14 +127,14 @@ flowchart TD
 | `NewLogBootstrap(spec, manager, logger)` | `LogBootstrap` | 订阅 log 配置、登记 Logger，安装全局 Logger；cleanup 取消订阅并恢复绑定 |
 | `NewTracingBootstrap()` | `TracingBootstrap` | 设置日志中的 trace/span 动态字段 |
 | `NewMetricsBootstrap(spec, meter)` | `MetricsBootstrap` | 将默认 Meter 注入 App Context |
-| `NewServerBootstrap(spec, manager, logger, metrics, tracing, boot)` | `ServerBootstrap` | 按统一 Spec 构造和登记服务器，返回 cleanup |
-| `NewJobBootstrap(spec, coordinator, logger, metrics, tracing, boot)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
+| `NewServerBootstrap(application, servers, manager, logger, metrics, tracing, boot)` | `ServerBootstrap` | 按统一 Spec 构造和登记服务器，返回 cleanup |
+| `NewJobBootstrap(application, jobs, coordinator, logger, metrics, tracing, serverBootstrap)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
 
 构造参数统一按 Spec、配置依赖、组件专属依赖、观测依赖（Logger、Metrics、Tracing）、阶段完成标记排列；不存在的类别直接省略。纯阶段聚合函数按阶段顺序接收标记。参数位置只用于阅读，Wire 仍按类型解析依赖；组装顺序由完成标记建立，见下方流程图。
 
-这些构造函数都返回 error，登记失败时保留错误链；LogBootstrap 和 ServerBootstrap 额外返回 `func()` cleanup。其他资源的 cleanup 来自领域构造函数，由 Wire 在构造失败或调用方退出时逆序执行。Bootstrap 不启动 Runtime。ServerBootstrap 由 NewServerBootstrap 在业务 Boot 后构造并登记服务器，再注入 NewRuntimeBootstrap 作为前置依赖；服务器 cleanup 独立归 Wire 所有。
+AppInfoBootstrap 和 MetricsBootstrap 只返回完成标记；LogBootstrap、ServerBootstrap、JobBootstrap 仍返回真实配置/构造错误，LogBootstrap 和 ServerBootstrap 额外返回 `func()` cleanup。冻结后登记及重复 AppInfo/Logger 登记会直接 panic；ServerBootstrap 在自身登记 panic 时释放刚构造的资源，但 Wire 只为 error 返回生成回滚分支，不保证 panic 时释放整条依赖链。其他资源的 cleanup 来自领域构造函数，由 Wire 在构造返回 error 或调用方退出时逆序执行。Bootstrap 不启动 Runtime。ServerBootstrap 由 NewServerBootstrap 在业务 Boot 后构造并登记服务器，再注入 NewRuntimeBootstrap 作为前置依赖；服务器 cleanup 独立归 Wire 所有。
 
-`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap 与 NewJobBootstrap 分别构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后登记自定义 Runtime，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `NewKratosApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 `bootstrap.NewSpec` 持有的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
+`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap → NewJobBootstrap 按顺序构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后标记组装完成，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `NewKratosApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 Wire 提供的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
 
 Wire 只执行最终返回值的依赖链。仅把构造函数放进 set 不保证执行；业务必须让每项贡献被最终标记引用。阶段内只保留实际依赖：仅在最终业务 provider 接收基础设施标记，不会推迟其所有参数的构造。
 
@@ -102,11 +144,12 @@ flowchart TD
     B --> C{构造成功?}
     C -- 否 --> X[Wire 逆序 cleanup]
     C -- 是 --> D[NewXXXBootstrap 同步登记贡献]
-    D --> E{登记成功?}
-    E -- 否 --> X
-    E -- 是 --> F[业务 Boot 返回 Bootstrap]
-    F --> S[NewServerBootstrap 与 NewJobBootstrap 构造登记]
-    S --> F1[NewRuntimeBootstrap 登记自定义 Runtime]
+    D -- 违规登记 --> P([panic 编程错误])
+    D --> F[业务 Boot 立即登记自定义 Runtime 并返回 Bootstrap]
+    F --> S[NewServerBootstrap → NewJobBootstrap 依次构造登记]
+    S -- 违规登记 --> P
+    S -- 构造返回 error --> X
+    S --> F1[NewRuntimeBootstrap 标记组装完成]
     F1 --> G[NewApplicationBootstrap 汇合基础设施并返回 StartupReady]
     G --> H[NewKratosApp 调用 app.NewApp 冻结 Spec]
     H --> I{App 构造成功?}
@@ -142,7 +185,7 @@ flowchart TD
 ## 可选依赖由 Wire 构造注入
 
 `registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`；
-`job.ConcurrencyCoordinator` 注入 `NewJobBootstrap(spec, coordinator, logger, metrics, tracing, boot)`，
+`job.ConcurrencyCoordinator` 注入 `NewJobBootstrap(application, jobs, coordinator, logger, metrics, tracing, serverBootstrap)`，
 再传给 `job.NewManager`。它们不属于 Spec 声明，不需要 Boot 登记。
 
 下面是完整的最小 Wire 示例，两个文件放在消费项目的同一个组装包中，并执行该项目的 Wire 生成命令。
@@ -229,7 +272,7 @@ NewServerBootstrap 同时登记业务监听与 `Runtime.ManagementServers()` 返
 
 业务 Spec 显式开放组件声明、AddContext、AddMetadata、AddEndpoints、AddSignals 和四个生命周期钩子。
 app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo、RegisterLogger 或 Ready；
-运行时使用 RegisterRuntime() 声明。ApplicationSpec 仅作为 Wire 组装桥接函数供 Foundation provider 使用，业务 Boot 不应调用它。
+Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterQueueWorker()、RegisterKafkaConsumer() 声明，其他运行时使用 RegisterRuntime()。各 provider 按需直接注入相同的领域 Spec。
 
 日志 Wire provider 使用 log.NewLogger 创建输出；NewLogBootstrap 注入 config.Manager 订阅 log，日志包校验并原子发布完整策略。策略优先级与 API 边界见 [日志文档](../log/README.md#三层策略与公共-api)。
 
@@ -274,31 +317,29 @@ flowchart TD
 业务提供 Spec 的构造函数应先完成配置声明，不能在依赖基础设施或业务服务的 Boot 中添加来源，避免配置依赖循环：
 
 ```go
-func newSpec() (*bootstrap.Spec, error) {
-    spec := bootstrap.NewSpec()
-    if err := spec.Configuration(
+func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec) *bootstrap.Spec {
+    return bootstrap.NewSpec(application, servers, jobs).Configuration(
         file.AddConfigSource("configs/app.yaml"),
         consul.AddConfigSource("configs/production/app.yaml"),
-    ); err != nil { return nil, err }
-    return spec, nil
+    )
 }
 ```
 
-以上使用普通导入的 `contrib/config/file` 和 `contrib/config/consul`。`AddConfigSource` 复制路径并返回 `config.SourceLoader`，声明时不执行 I/O。Wire 使用 `newSpec` 提供唯一 Spec，`BaseProviderSet` 内的 `NewConfigManager` 先按声明顺序创建来源，再构造包含官方 env source 的 Manager；配置完整后才提供给其他组件。该 provider set 不再包含 `NewSpec`，不要重复提供它。
+以上使用普通导入的 `contrib/config/file` 和 `contrib/config/consul`。`AddConfigSource` 复制路径并返回 `config.SourceLoader`，声明时不执行 I/O。Wire 使用 `newSpec` 提供唯一 Spec，`BaseProviderSet` 内的 `NewConfigManager` 先按声明顺序创建来源，再构造包含官方 env source 的 Manager；配置完整后才提供给其他组件。该 provider set 包含三个领域 NewSpec，但不包含 `bootstrap.NewSpec`；业务的 newSpec 是 bootstrap.Spec 的唯一 provider。
 
-不使用 provider set 时，可显式组合 `newSpec`、`bootstrap.NewConfigManager`、`bootstrap.ApplicationSpec` 与所需组件。没有额外来源时由 `bootstrap.NewSpec` 提供空声明即可。来源集合在构造阶段确定，运行中监听来源内容；没有全局配置源注册表，也不提供运行时增删来源接口。Configuration 消费后拒绝追加或重复构造，失败后应丢弃 Spec。返回 cleanup 由 Wire 逆序调用，取消 Manager 轮询并停止 watcher；不等待已开始的订阅回调，共享 Consul 客户端不释放。
+不使用 provider set 时，可显式组合 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`、`newSpec`、`bootstrap.NewConfigManager` 与所需组件。没有额外来源时由 `bootstrap.NewSpec` 提供空声明即可。来源集合在构造阶段确定，运行中监听来源内容；没有全局配置源注册表，也不提供运行时增删来源接口。NewConfigManager 使用调用时已声明的来源，后续追加来源不会改变已有 Manager；正常 Wire 依赖链只构造一次 Manager。构造失败后应释放已有资源并放弃本次组装。返回 cleanup 由 Wire 逆序调用，取消 Manager 轮询并停止 watcher；不等待已开始的订阅回调，共享 Consul 客户端不释放。
 
 ```mermaid
 flowchart TD
- A([业务构造 Spec]) --> B[Configuration 收集 SourceLoader，不执行 I/O]
- B --> C[NewConfigManager 标记声明已消费，串行创建来源]
+ A([业务 provider 接收三个领域 Spec 并构造 bootstrap.Spec]) --> B[Configuration 收集 SourceLoader，不执行 I/O]
+ B --> C[NewConfigManager 加载配置，串行创建来源]
  C --> D{来源创建成功?}
  D -- 否 --> X([返回构造错误，丢弃 Spec])
  D -- 是 --> E[NewManager：env 加上有序来源]
  E --> F{加载与校验成功?}
  F -- 否 --> G[停止全部已创建 watcher]
  G --> X
- F -- 是 --> H[Wire 向其他组件提供 Manager]
+ F -- 是 --> H[提供配置 Manager，Wire 向其他组件提供 Manager]
  H --> I([配置阶段完成])
 ```
 

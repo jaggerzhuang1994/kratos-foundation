@@ -17,7 +17,9 @@ func newGRPCServer(
 	opts grpcServerOptions,
 	spec *Spec,
 ) (GRPCServer, error) {
-	if spec.grpcDisabled(config.GetGrpc().GetDisable()) {
+	// 显式配置优先；省略开关时仅有效的业务服务注册触发默认启用。
+	conf := config.GetGrpc()
+	if conf.GetDisable() || ((conf == nil || conf.Disable == nil) && len(spec.grpc.services) == 0) {
 		return nil, nil
 	}
 

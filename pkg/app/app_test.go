@@ -39,16 +39,12 @@ func newAppTestConfigAndPolicy(t testing.TB) (Config, *StopPolicy) {
 
 func registerNewAppTestInfo(t testing.TB, spec *Spec) {
 	t.Helper()
-	if err := spec.RegisterAppInfo(newAppTestInfo{}); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterAppInfo(newAppTestInfo{})
 }
 
 func registerNewAppTestLogger(t testing.TB, spec *Spec) {
 	t.Helper()
-	if err := spec.RegisterLogger(kratoslog.NewStdLogger(io.Discard)); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterLogger(kratoslog.NewStdLogger(io.Discard))
 }
 
 func TestNewAppRejectsMissingAppInfo(t *testing.T) {
@@ -89,9 +85,7 @@ func TestNewAppConstructsApplicationFromSpec(t *testing.T) {
 	if application.ID() != "test-id" || application.Name() != "test-name" {
 		t.Fatalf("application identity = %q/%q", application.ID(), application.Name())
 	}
-	if err := spec.AddMetadata(map[string]string{"late": "value"}); !errors.Is(err, ErrSpecFrozen) {
-		t.Fatalf("post-NewApp registration error = %v, want ErrSpecFrozen", err)
-	}
+	assertSpecPanic(t, ErrSpecFrozen, func() { spec.AddMetadata(map[string]string{"late": "value"}) })
 }
 
 func TestNewAppRestoresKratosGlobalLoggerAfterConstruction(t *testing.T) {
@@ -104,9 +98,7 @@ func TestNewAppRestoresKratosGlobalLoggerAfterConstruction(t *testing.T) {
 	config, policy := newAppTestConfigAndPolicy(t)
 	spec := NewSpec()
 	registerNewAppTestInfo(t, spec)
-	if err := spec.RegisterLogger(registered); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterLogger(registered)
 	if _, err := NewApp(context.Background(), spec, config, policy, nil); err != nil {
 		t.Fatal(err)
 	}

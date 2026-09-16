@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -43,7 +45,7 @@ func TestDemoHTTP(t *testing.T) {
 	if err := os.WriteFile(path, []byte("tracing:\n  disable: true\nclient:\n  clients:\n    greeting:\n      protocol: HTTP\n      target: "+upstream.URL+"\n    components:\n      protocol: HTTP\n      target: http://"+components.Listener.Addr().String()+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	sources, err := newSpec(configPath(path))
+	sources, err := newSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), configPath(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,9 +78,8 @@ func TestDemoHTTP(t *testing.T) {
 	ids := []string{}
 	svc.steps = []demoStep{{"record", func(ctx context.Context, id string) error { ids = append(ids, id); return nil }}}
 	spec := server.NewSpec()
-	spec.GRPC().Disable()
 	var handler server.HTTPServer
-	spec.HTTP().Health(server.HealthConfig{Disable: true}).Register(func(s server.HTTPServer) error { handler = s; svc.register(s); return nil })
+	spec.HTTP().Register(func(s server.HTTPServer) error { handler = s; svc.register(s); return nil })
 	_, closeServer, err := server.NewRuntime(cfg, logger, provider, tracingProvider, spec)
 	if err != nil {
 		t.Fatal(err)

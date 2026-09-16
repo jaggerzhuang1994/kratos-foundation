@@ -334,7 +334,7 @@ flowchart TD
 - `output.go`、`preset.go`、`context.go`、`kratos.go`、`validation.go` 分别提供输出组装、默认字段、上下文字段、Kratos 全局适配与校验辅助能力。
 - `env_config.go` 收拢私有配置类型与环境变量解析，供 Logger 实例构造使用。
 - `runtime_config.go` 定义动态契约与 env 合并；`runtime_output.go` 协调输出提交；`output.go` 管理实例输出生命周期，`internal/output` 实现 file/std/filter/dedupe/stack 等独立底层组件。
-- 构造、并发和状态测试跟随实现放在同一包内；`pkg/bootstrap/log.go` 负责日志配置订阅、登记 Logger 和恢复全局 Logger。
+- 构造、并发和状态测试跟随实现放在同一包内；`pkg/bootstrap/infrastructure.go` 负责日志配置订阅、登记 Logger 和恢复全局 Logger。
 
 ## 设计边界
 

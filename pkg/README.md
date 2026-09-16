@@ -56,7 +56,7 @@
 | --- | --- | --- |
 | 运行时组件 | 被请求、任务、Runtime 或资源所有者调用；生命周期可长可短 | Producer 装饰器、ExecutionGuard、watchdog、客户端租约 |
 | 应用 Runtime | 具有 `Start(context.Context) error` / `Stop(context.Context) error`，并实际登记到 `app.Spec` | Job Manager、Queue ConsumerRuntime、HTTP/gRPC server |
-| Bootstrap | 构造期同步贡献配置、身份、上下文或 Runtime 登记 | `bootstrap.NewMetricsBootstrap`、`bootstrap.NewRuntimeBootstrap` |
+| Bootstrap | 借用 Wire 注入的 app/server/job Spec；Runtime 立即登记到共享 app.Spec | `bootstrap.NewMetricsBootstrap`、`bootstrap.NewRuntimeBootstrap` |
 | 资源 Provider/Manager/Factory | 创建、借出或持有资源，并明确释放责任 | Redis Manager、Kafka ClientFactory |
 
 Runtime 是组件的一种生命周期角色。是否作为 Runtime 取决于生命周期契约和实际登记方式，与文件名无关。
@@ -117,5 +117,7 @@ flowchart TD
 完整的选择依据、建议 API、并发边界、释放流程和测试场景见[watchdog 开发示例](DEVELOPMENT.md#watchdog-开发示例)。
 
 ## 驱动组装入口
+
+业务 HTTP 默认开启，gRPC 按有效服务注册默认开启，显式配置开关优先；健康检查通过 `spec.Health().Checks(...)` 独立声明。管理端点可复用业务 HTTP 或独立监听，详见 [server](server/README.md)。
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](registry/README.md)。

@@ -63,18 +63,12 @@ func TestWireAssemblyGeneratesAndRunsCleanup(t *testing.T) {
 			}
 			// 检查真实依赖图形成阶段链，不约束各阶段内部 provider 的排序。
 			previous := -1
-			for _, call := range []string{"bootstrap.NewInfrastructureBootstrap(", "newBootstrap(", "bootstrap.NewServerBootstrap(", "bootstrap.NewRuntimeBootstrap(", "bootstrap.NewApplicationBootstrap(", "bootstrap.NewKratosApp("} {
+			for _, call := range []string{"bootstrap.NewConfigManager(", "bootstrap.NewInfrastructureBootstrap(", "newBootstrap(", "bootstrap.NewServerBootstrap(", "bootstrap.NewJobBootstrap(", "bootstrap.NewRuntimeBootstrap(", "bootstrap.NewApplicationBootstrap(", "bootstrap.NewKratosApp("} {
 				position := strings.Index(string(generated), call)
 				if position <= previous {
 					t.Fatalf("generated stage %s is missing or out of order", call)
 				}
 				previous = position
-			}
-			jobPosition := strings.Index(string(generated), "bootstrap.NewJobBootstrap(")
-			bootPosition := strings.Index(string(generated), "newBootstrap(")
-			runtimePosition := strings.Index(string(generated), "bootstrap.NewRuntimeBootstrap(")
-			if jobPosition <= bootPosition || jobPosition >= runtimePosition {
-				t.Fatal("JobBootstrap must run after Boot and before RuntimeBootstrap")
 			}
 		}
 	}

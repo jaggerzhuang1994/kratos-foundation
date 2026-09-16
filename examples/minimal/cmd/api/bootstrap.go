@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"os"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
@@ -12,7 +14,7 @@ import (
 
 type configPath string
 
-func newSpec(path configPath) (*bootstrap.Spec, error) {
+func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, path configPath) (*bootstrap.Spec, error) {
 	// 模板要求一个存在的文件，避免文件源未匹配时仅告警并使用默认配置启动。
 	info, err := os.Stat(string(path))
 	if err != nil {
@@ -21,10 +23,8 @@ func newSpec(path configPath) (*bootstrap.Spec, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("configuration must be a regular file")
 	}
-	spec := bootstrap.NewSpec()
-	if err := spec.Configuration(file.AddConfigSource(string(path))); err != nil {
-		return nil, err
-	}
+	spec := bootstrap.NewSpec(application, servers, jobs)
+	spec.Configuration(file.AddConfigSource(string(path)))
 	return spec, nil
 }
 

@@ -15,12 +15,8 @@ type HTTPEndpoint func(HTTPServer) error
 // GRPCService 在 GRPCServer 上注册一个应用服务。
 type GRPCService func(GRPCServer) error
 
-// HTTPBuilder 在启动配置阶段记录 HTTP 运行选项；所有方法修改同一个 Spec，不能并发调用。
+// HTTPBuilder 在启动配置阶段记录业务 HTTP 运行选项；所有方法修改同一个 Spec，不能并发调用。
 type HTTPBuilder interface {
-	// Enable 强制启用 HTTP，覆盖配置文件中的 disable。
-	Enable() HTTPBuilder
-	// Disable 强制关闭 HTTP，覆盖配置文件中的 disable。
-	Disable() HTTPBuilder
 	// Middleware 以默认业务优先级追加中间件。
 	Middleware(...middleware.Middleware) HTTPBuilder
 	// MiddlewareSpec 追加带名称或显式优先级的中间件。
@@ -29,10 +25,6 @@ type HTTPBuilder interface {
 	Option(...http.ServerOption) HTTPBuilder
 	// Register 追加应用路由注册回调。
 	Register(...HTTPEndpoint) HTTPBuilder
-	// Health 配置默认健康端点及关键依赖检查。
-	Health(HealthConfig) HTTPBuilder
-	// HealthChecks 追加关键依赖检查，不覆盖配置文件中的监听地址、路径或开关。
-	HealthChecks(...ReadinessCheck) HTTPBuilder
 	// WebSocket 注册一条 WebSocket 路径及事件处理器，默认消息上限 1 MiB。
 	WebSocket(path string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder
 	// WebSocketWithConfig 注册带消息上限和握手设置的 WebSocket 端点。
@@ -41,10 +33,6 @@ type HTTPBuilder interface {
 
 // GRPCBuilder 在启动配置阶段记录 gRPC 运行选项；所有方法修改同一个 Spec，不能并发调用。
 type GRPCBuilder interface {
-	// Enable 强制启用 gRPC，覆盖配置文件中的 disable。
-	Enable() GRPCBuilder
-	// Disable 强制关闭 gRPC，覆盖配置文件中的 disable。
-	Disable() GRPCBuilder
 	// Middleware 以默认业务优先级追加中间件。
 	Middleware(...middleware.Middleware) GRPCBuilder
 	// MiddlewareSpec 追加带名称或显式优先级的中间件。
@@ -55,24 +43,21 @@ type GRPCBuilder interface {
 	Register(...GRPCService) GRPCBuilder
 }
 
-// Spec 是 HTTP 与 gRPC 构建器共享的服务定义。
+// Spec 保存业务 HTTP、gRPC 和独立健康检查声明，仅在组装前串行修改。
 type Spec struct {
-	http httpSpec
-	grpc grpcSpec
+	http   httpSpec
+	grpc   grpcSpec
+	health HealthBuilder
 }
 
 type httpSpec struct {
-	health       *HealthConfig
-	healthChecks []ReadinessCheck
-	enabled      *bool
-	middlewares  []MiddlewareSpec
-	options      []http.ServerOption
-	endpoints    []HTTPEndpoint
-	websockets   []websocketEndpoint
+	middlewares []MiddlewareSpec
+	options     []http.ServerOption
+	endpoints   []HTTPEndpoint
+	websockets  []websocketEndpoint
 }
 
 type grpcSpec struct {
-	enabled     *bool
 	middlewares []MiddlewareSpec
 	options     []grpc.ServerOption
 	services    []GRPCService
@@ -98,12 +83,12 @@ func NewSpec() *Spec {
 	return &Spec{}
 }
 
-// HTTP 返回 Spec 中的 HTTP 构建器。
+// HTTP 返回业务 HTTP 构建器；默认开启，配置 disable=true 可关闭业务监听。
 func (s *Spec) HTTP() HTTPBuilder {
 	return &s.http
 }
 
-// GRPC 返回 Spec 中的 gRPC 构建器。
+// GRPC 返回业务 gRPC 构建器；有效服务注册默认开启，显式配置优先。
 func (s *Spec) GRPC() GRPCBuilder {
 	return &s.grpc
 }
@@ -158,20 +143,6 @@ func isWebSocketHandler(handler any) bool {
 	}
 	_, ok := handler.(OnCloseHandler)
 	return ok
-}
-
-// Enable 强制启用 HTTP。
-func (s *httpSpec) Enable() HTTPBuilder {
-	enabled := true
-	s.enabled = &enabled
-	return s
-}
-
-// Disable 强制关闭 HTTP。
-func (s *httpSpec) Disable() HTTPBuilder {
-	enabled := false
-	s.enabled = &enabled
-	return s
 }
 
 // Middleware 追加非 nil 的默认优先级业务中间件。
@@ -231,20 +202,6 @@ func (s *httpSpec) WebSocketWithConfig(path string, handler any, config WebSocke
 	return s
 }
 
-// Enable 强制启用 gRPC。
-func (s *grpcSpec) Enable() GRPCBuilder {
-	enabled := true
-	s.enabled = &enabled
-	return s
-}
-
-// Disable 强制关闭 gRPC。
-func (s *grpcSpec) Disable() GRPCBuilder {
-	enabled := false
-	s.enabled = &enabled
-	return s
-}
-
 // Middleware 追加非 nil 的默认优先级业务中间件。
 func (s *grpcSpec) Middleware(middlewares ...middleware.Middleware) GRPCBuilder {
 	for _, middleware := range middlewares {
@@ -284,31 +241,16 @@ func (s *grpcSpec) Register(services ...GRPCService) GRPCBuilder {
 	return s
 }
 
-// httpDisabled 合并 Spec 的显式覆盖与配置文件开关。
-func (s *Spec) httpDisabled(configDisabled bool) bool {
-	if s.http.enabled == nil {
-		return configDisabled
-	}
-	return !*s.http.enabled
+// Health 返回独立的健康检查声明；监听地址、路径与开关由配置决定。
+func (s *Spec) Health() *HealthBuilder { return &s.health }
+
+// HealthBuilder 在组装阶段串行声明关键依赖检查，不配置业务 HTTP。
+type HealthBuilder struct {
+	checks []ReadinessCheck
 }
 
-// grpcDisabled 合并 Spec 的显式覆盖与配置文件开关。
-func (s *Spec) grpcDisabled(configDisabled bool) bool {
-	if s.grpc.enabled == nil {
-		return configDisabled
-	}
-	return !*s.grpc.enabled
-}
-
-// Health 保存健康检查配置副本；仅可在组装阶段修改。
-func (s *httpSpec) Health(config HealthConfig) HTTPBuilder {
-	config.Checks = append([]ReadinessCheck(nil), config.Checks...)
-	s.health = &config
-	return s
-}
-
-// HealthChecks 只保存代码检查函数，保留 server.http.health 的部署配置。
-func (s *httpSpec) HealthChecks(checks ...ReadinessCheck) HTTPBuilder {
-	s.healthChecks = append(s.healthChecks, checks...)
+// Checks 追加关键依赖检查并复制切片；检查函数必须支持 Context 且可被探针并发调用。
+func (s *HealthBuilder) Checks(checks ...ReadinessCheck) *HealthBuilder {
+	s.checks = append(s.checks, checks...)
 	return s
 }

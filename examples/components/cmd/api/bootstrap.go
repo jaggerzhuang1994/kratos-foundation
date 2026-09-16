@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"os"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 
 type configPath string
 
-func newSpec(path configPath) (*bootstrap.Spec, error) {
+func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, path configPath) (*bootstrap.Spec, error) {
 	// 模板要求一个存在的文件，避免文件源未匹配时仅告警并使用默认配置启动。
 	info, err := os.Stat(string(path))
 	if err != nil {
@@ -26,16 +27,14 @@ func newSpec(path configPath) (*bootstrap.Spec, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("configuration must be a regular file")
 	}
-	spec := bootstrap.NewSpec()
-	if err := spec.Configuration(file.AddConfigSource(string(path))); err != nil {
-		return nil, err
-	}
+	spec := bootstrap.NewSpec(application, servers, jobs)
+	spec.Configuration(file.AddConfigSource(string(path)))
 	return spec, nil
 }
 
 func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *demoService, messages *messaging, redisManager redis.Manager) (bootstrap.Bootstrap, error) {
 	spec.Http().Register(func(srv server.HTTPServer) error { service.register(srv); return nil })
-	spec.Http().HealthChecks(server.ReadinessCheck{Name: "redis", Check: func(ctx context.Context) error { return redisManager.Default().Ping(ctx).Err() }})
+	spec.Health().Checks(server.ReadinessCheck{Name: "redis", Check: func(ctx context.Context) error { return redisManager.Default().Ping(ctx).Err() }})
 	// 任务只读 Redis，沿用调度器的超时和释放顺序，不创建额外后台状态。
 	for _, name := range []string{"redis-heartbeat", "cache-size", "cache-ttl"} {
 		spec.Job().RegisterCron(name, "@every 10s", job.TaskFunc(func(ctx context.Context) error {
@@ -43,9 +42,7 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *de
 		}))
 	}
 
-	if err := messages.Register(bootstrap.ApplicationSpec(spec)); err != nil {
-		return bootstrap.Bootstrap{}, err
-	}
+	messages.Register(spec)
 	return bootstrap.Bootstrap{}, nil
 }
 

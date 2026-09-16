@@ -14,6 +14,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	foundationregistry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
@@ -31,20 +32,20 @@ type assembly struct {
 }
 
 // 业务阶段显式依赖基础设施完成标记，阶段内部不规定额外顺序。
-func newBootstrap(_ bootstrap.InfrastructureBootstrap, routes *businessServer, spec *bootstrap.Spec, decorate app.ContextDecorator) (bootstrap.Bootstrap, error) {
-	spec.Http().Register(routes.register)
+func newBootstrap(_ bootstrap.InfrastructureBootstrap, routes *businessServer, spec *bootstrap.Spec, servers *server.Spec, decorate app.ContextDecorator) (bootstrap.Bootstrap, error) {
+	servers.HTTP().Register(routes.register)
 	if decorate != nil {
-		if err := spec.AddContext(decorate); err != nil {
-			return bootstrap.Bootstrap{}, err
-		}
+		spec.AddContext(decorate)
 	}
-	return bootstrap.Bootstrap{}, spec.AddMetadata(map[string]string{"business": "ready"})
+	spec.AddMetadata(map[string]string{"business": "ready"})
+	return bootstrap.Bootstrap{}, nil
 }
 
 // componentsBoot 同时声明任务和应用贡献，任务必须在 Boot 返回后才被组装。
-func componentsBoot(_ bootstrap.InfrastructureBootstrap, components *bootstrap.Spec) (bootstrap.Bootstrap, error) {
-	components.Job().RegisterOnce("complete", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
-	return bootstrap.Bootstrap{}, components.AddMetadata(map[string]string{"boot": "declared"})
+func componentsBoot(_ bootstrap.InfrastructureBootstrap, components *bootstrap.Spec, jobs *job.Spec) (bootstrap.Bootstrap, error) {
+	jobs.RegisterOnce("complete", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
+	components.AddMetadata(map[string]string{"boot": "declared"})
+	return bootstrap.Bootstrap{}, nil
 }
 
 type driverAssembly struct {

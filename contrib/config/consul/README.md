@@ -4,13 +4,11 @@
 
 `contrib/config/consul` 把有序 Consul KV 路径转换成 Kratos 配置源。后面的路径优先级更高，路径不能为空、包含首尾空白或重复。
 
-在提供 Spec 的业务构造函数中普通导入本包，客户端由内部 env 单例提供：
+手工组装时普通导入本包及 `pkg/app`、`pkg/server`、`pkg/job`、`pkg/bootstrap`，客户端由内部 env 单例提供。Wire 场景应注入同一组领域 Spec，再由业务 provider 转交 bootstrap.NewSpec：
 
 ```go
-spec := bootstrap.NewSpec()
-if err := spec.Configuration(consul.AddConfigSource("configs/app.yaml")); err != nil {
-    return nil, err
-}
+spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec())
+spec.Configuration(consul.AddConfigSource("configs/app.yaml"))
 return spec, nil
 ```
 

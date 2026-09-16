@@ -106,13 +106,18 @@ func TestHealthChecksPreserveListenerConfiguration(t *testing.T) {
 	config.Http.Health.Addr = proto.String("127.0.0.1:9001")
 	config.Http.Health.ReadinessPath = proto.String("/ready")
 	spec := NewSpec()
-	spec.HTTP().HealthChecks(ReadinessCheck{Name: "database", Check: func(context.Context) error { return nil }})
+	spec.Health().Checks(ReadinessCheck{Name: "database", Check: func(context.Context) error { return nil }})
 	health := configuredHealth(config, spec)
 	if health.config.Addr != "127.0.0.1:9001" || health.config.ReadinessPath != "/ready" || len(health.config.Checks) != 1 {
 		t.Fatalf("health=%+v", health.config)
 	}
-	spec.HTTP().Health(HealthConfig{Addr: "127.0.0.1:9002"})
-	if configuredHealth(config, spec).config.Addr != "127.0.0.1:9002" {
-		t.Fatal("explicit Spec did not override config")
+	config.Http.Health.Disable = proto.Bool(true)
+	if !configuredHealth(config, spec).config.Disable {
+		t.Fatal("code checks overrode deployment disable")
+	}
+	// 构造后的运行时持有检查切片副本，后续声明不会污染已构造快照。
+	spec.Health().Checks(ReadinessCheck{Name: "cache", Check: func(context.Context) error { return nil }})
+	if len(health.config.Checks) != 1 || len(configuredHealth(config, spec).config.Checks) != 2 {
+		t.Fatal("health checks do not have independent snapshot ownership")
 	}
 }

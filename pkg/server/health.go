@@ -18,9 +18,9 @@ type ReadinessCheck struct {
 	Check func(context.Context) error
 }
 
-// HealthConfig 配置默认健康端点。零值启用 /healthz、/readyz，检查总超时为一秒。
+// healthConfig 配置默认健康端点。零值启用 /healthz、/readyz，检查总超时为一秒。
 // 路径独立于业务 PathPrefix，属于保留路径；Disable 可将路径交还业务路由。
-type HealthConfig struct {
+type healthConfig struct {
 	Disable       bool
 	Addr          string
 	LivenessPath  string
@@ -30,13 +30,13 @@ type HealthConfig struct {
 }
 
 type healthState struct {
-	config           HealthConfig
+	config           healthConfig
 	applicationReady func() bool
 	stopped          atomic.Bool
 	lastStatus       atomic.Int32
 }
 
-func newHealthState(config HealthConfig) *healthState {
+func newHealthState(config healthConfig) *healthState {
 	if config.LivenessPath == "" {
 		config.LivenessPath = "/healthz"
 	}

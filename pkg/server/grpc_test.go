@@ -3,18 +3,19 @@ package server
 import (
 	"context"
 	"errors"
-	kratoserrors "github.com/go-kratos/kratos/v2/errors"
-	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"net"
 	"net/url"
 	"strings"
 	"testing"
 
+	kratoserrors "github.com/go-kratos/kratos/v2/errors"
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -36,7 +37,6 @@ func TestIntegrationGRPCServices(t *testing.T) {
 	service.SetServingStatus("orders", healthpb.HealthCheckResponse_SERVING)
 	service.SetServingStatus("maintenance", healthpb.HealthCheckResponse_NOT_SERVING)
 	spec := NewSpec()
-	spec.HTTP().Disable()
 	// 自定义健康服务须关闭 Kratos 自动注册，避免重复服务名。
 	// 内存 listener 没有 TCP 端口，显式 endpoint 避免运行时尝试推导地址。
 	spec.GRPC().Option(kratosgrpc.Listener(listener), kratosgrpc.CustomHealth(),
@@ -44,7 +44,7 @@ func TestIntegrationGRPCServices(t *testing.T) {
 		healthpb.RegisterHealthServer(srv, &legacyHealthServer{Server: service})
 		return nil
 	})
-	runtime, cleanup, err := NewRuntime(testconfig.Empty(t), newRuntimeTestLogger(t),
+	runtime, cleanup, err := NewRuntime(testconfig.New(t, "server", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: boolp(true)}}), newRuntimeTestLogger(t),
 		testMetricsProvider{registry: prometheus.NewRegistry()},
 		runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()}, spec)
 	if err != nil {
@@ -157,4 +157,18 @@ func (e *legacyRPCError) GRPCStatus() *status.Status {
 		panic(err)
 	}
 	return result
+}
+
+// 显式 grpc: null 可覆盖配置模板，缺失子消息仍按有效服务注册决定启用。
+func TestGRPCNullConfigUsesServiceRegistration(t *testing.T) {
+	for _, registered := range []bool{false, true} {
+		spec := NewSpec()
+		if registered {
+			spec.GRPC().Register(func(GRPCServer) error { return nil })
+		}
+		srv, err := newGRPCServer(&config_pb.Server{}, nil, spec)
+		if err != nil || (srv != nil) != registered {
+			t.Fatalf("registered=%t server=%v err=%v", registered, srv, err)
+		}
+	}
 }

@@ -12,16 +12,13 @@ info := appinfo.New(version)
 
 主机名与可执行文件名在包初始化时采集：主机名读取失败使用 `unknown-host`；可执行文件路径读取失败时使用 `os.Args[0]` 的 basename，无参数时使用 `unknown-executable`。后续环境变化不会改变已有 AppInfo；应用应构造一次并共享同一实例。
 
-组装时，`bootstrap.NewAppInfoBootstrap(appSpec, info)` 会同步向 `app.Spec` 登记唯一 AppInfo，并通过包级 `log.RegisterFields` 添加 `service.id`、`service.name` 与 `service.version` 字段。以下片段放在返回 error 的业务 provider 内，`appSpec` 由组装层提供：
+组装时，`bootstrap.NewAppInfoBootstrap(appSpec, info)` 会同步向 `app.Spec` 登记唯一 AppInfo，并通过包级 `log.RegisterFields` 添加 `service.id`、`service.name` 与 `service.version` 字段。该函数只返回完成标记，`appSpec` 由组装层提供：
 
 ```go
-contribution, err := bootstrap.NewAppInfoBootstrap(appSpec, info)
-if err != nil {
-    return err
-}
+contribution := bootstrap.NewAppInfoBootstrap(appSpec, info)
 ```
 
-该 Bootstrap 不创建资源也不返回 cleanup；进程身份由 `New` 创建后一直由调用方/Wire 持有。
+Spec 冻结或已有 AppInfo 时会 panic，且不会覆盖现有日志身份字段。该 Bootstrap 不创建资源也不返回 cleanup；进程身份由 `New` 创建后一直由调用方/Wire 持有。
 
 ```mermaid
 flowchart TD
@@ -31,7 +28,7 @@ flowchart TD
     C -- 是 --> E[返回 AppInfo]
     E --> F[NewAppInfoBootstrap 登记 AppInfo]
     F --> G{Spec 接受登记?}
-    G -- 否 --> H([返回错误 由组装层处理])
+    G -- 否 --> H([panic 编程错误 不覆盖日志身份])
     G -- 是 --> I[log.RegisterFields 发布进程共享身份字段]
     I --> J([返回完成标记])
 ```

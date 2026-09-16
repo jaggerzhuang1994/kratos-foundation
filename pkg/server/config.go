@@ -38,7 +38,8 @@ var defaultConfig = &config_pb.Server{
 		},
 	},
 	Grpc: &config_pb.GrpcServerOption{
-		Disable:           proto.Bool(false),
+		// 保留省略状态，才能区分按服务注册启用与配置显式开启。
+		Disable:           nil,
 		Network:           proto.String("tcp"),
 		Addr:              proto.String("0.0.0.0:9000"),
 		Endpoint:          nil,
@@ -95,13 +96,16 @@ func validateMiddlewareConfig(config *config_pb.ServerMiddleware) error {
 	return nil
 }
 
-// configuredHealth 读取配置文件；显式 Spec.Health 整体覆盖端点设置，检查函数仅由代码注入。
+// configuredHealth 读取部署配置并复制代码声明的检查函数；代码不能覆盖端点开关。
 func configuredHealth(config componentConfig, spec *Spec) *healthState {
 	source := config.GetHttp().GetHealth()
-	next := HealthConfig{Disable: source.GetDisable(), Addr: source.GetAddr(), LivenessPath: source.GetLivenessPath(), ReadinessPath: source.GetReadinessPath(), Timeout: source.GetTimeout().AsDuration()}
-	if spec.http.health != nil {
-		next = *spec.http.health
+	next := healthConfig{
+		Disable:       source.GetDisable(),
+		Addr:          source.GetAddr(),
+		LivenessPath:  source.GetLivenessPath(),
+		ReadinessPath: source.GetReadinessPath(),
+		Timeout:       source.GetTimeout().AsDuration(),
+		Checks:        spec.health.checks,
 	}
-	next.Checks = append(append([]ReadinessCheck(nil), next.Checks...), spec.http.healthChecks...)
 	return newHealthState(next)
 }

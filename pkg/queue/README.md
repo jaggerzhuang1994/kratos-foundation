@@ -45,9 +45,7 @@ func NewMailQueue(
     if err != nil {
         return nil, err
     }
-    if err := appSpec.RegisterRuntime(worker); err != nil {
-        return nil, err
-    }
+    appSpec.RegisterRuntime(worker)
     return dispatcher, nil
 }
 
@@ -61,7 +59,7 @@ func SendLater(ctx context.Context, dispatcher *queue.Dispatcher) (string, error
 }
 ```
 
-Wire 层须将上述登记过程纳入最终 Bootstrap 构造屏障，确保在 app.Spec 冻结前完成。Store 不新增资源，函数无 cleanup；业务 Repo 及数据库依赖的 cleanup 由应用组装层保留。完整生命周期组装见 [Bootstrap 文档](../bootstrap/README.md)。
+RegisterRuntime 无返回值，冻结后调用直接 panic。登记及冻结流程见 [app](../app/README.md#runtime-登记)。Wire 层须将上述登记过程纳入最终 Bootstrap 构造屏障，确保在 app.Spec 冻结前完成。Store 不新增资源，函数无 cleanup；业务 Repo 及数据库依赖的 cleanup 由应用组装层保留。完整生命周期组装见 [Bootstrap 文档](../bootstrap/README.md)。
 
 Redis 使用 `redisqueue.NewStore(redisManager, redisqueue.Config{Connection: "main", KeyPrefix: "app:queue:mail"})` 替换 Store 构造，其余 Dispatcher/Worker 不变。Redis 连接必须已在 Manager 中声明；示例与键结构见 [Redis Store](../../contrib/queue/redis/README.md)。
 

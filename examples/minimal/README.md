@@ -53,7 +53,7 @@ go build -o ./bin/orders-api ./cmd/api
 - 手写 Kratos HTTP 路由显式调用 `ctx.Middleware`，并设置稳定 operation。直接 `HandleFunc` 不自动经过方法中间件，不能假定会产生请求指标；生成的 HTTP 服务则沿用其生成入口。
 - 配置源先由 `newSources` 确认文件存在，再交给 Manager；Manager 管理监听和源关闭。
 - 业务只借用注入的 Logger/Provider；资源 cleanup 由 Wire 持有。组件由 `application.Run()` 启动。
-- 当前示例只选择 HTTP。数据库、Redis、Queue、Kafka、Job 按 [Bootstrap 文档](../../pkg/bootstrap/README.md) 增加相应 provider；不为未使用的组件引入外部依赖。
+- 当前示例只注册业务 HTTP，并通过配置关闭 gRPC。数据库、Redis、Queue、Kafka、Job 按 [Bootstrap 文档](../../pkg/bootstrap/README.md) 增加相应 provider；不为未使用的组件引入外部依赖。
 
 ```mermaid
 flowchart TD

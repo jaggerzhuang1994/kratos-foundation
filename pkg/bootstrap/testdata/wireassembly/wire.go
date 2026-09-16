@@ -16,15 +16,16 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
 func initialize(sources config.Sources, version string, decorate app.ContextDecorator) (*assembly, func(), error) {
 	wire.Build(
 		newRegistrar,
-		config.NewManager,
-		bootstrap.NewSpec,
-		bootstrap.ApplicationSpec,
+		bootstrap.NewConfigManager,
+		newSpec,
+		app.NewSpec, server.NewSpec, job.NewSpec,
 		app.NewConfig,
 		app.NewStopPolicy,
 		appinfo.New,
@@ -53,13 +54,13 @@ func initialize(sources config.Sources, version string, decorate app.ContextDeco
 
 func initializeComponents(sources config.Sources, version string) (*kratos.App, func(), error) {
 	wire.Build(
-		newRegistrar, job.DefaultCoordinator, config.NewManager, bootstrap.ApplicationSpec, app.NewConfig, app.NewStopPolicy,
+		newRegistrar, job.DefaultCoordinator, bootstrap.NewConfigManager, app.NewSpec, server.NewSpec, job.NewSpec, app.NewConfig, app.NewStopPolicy,
 		appinfo.New, log.NewLogger,
 		wire.Bind(new(kratoslog.Logger), new(log.Logger)),
 		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,
 		bootstrap.NewAppInfoBootstrap, bootstrap.NewLogBootstrap,
 		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,
-		bootstrap.NewInfrastructureBootstrap, bootstrap.NewSpec,
+		bootstrap.NewInfrastructureBootstrap, newSpec,
 		componentsBoot, bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
 		bootstrap.NewApplicationBootstrap, bootstrap.NewKratosApp,
 	)
@@ -76,4 +77,8 @@ func initializeDrivers(info appinfo.AppInfo, localConfigPath bootstrap.LocalConf
 func initializeDriversWithCustomName(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
 	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSetWithCustomRemoteConfigName, customRemoteConfigName, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
+}
+
+func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, sources config.Sources) *bootstrap.Spec {
+	return bootstrap.NewSpec(application, servers, jobs).Configuration(func() (config.Sources, error) { return sources, nil })
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
@@ -28,7 +29,7 @@ func initialize(path configPath, version string) (*kratos.App, func(), error) {
 		log.NewLogger, wire.Bind(new(kratoslog.Logger), new(log.Logger)),
 		bootstrap.NewConfigManager, appinfo.New, app.NewConfig,
 		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,
-		bootstrap.ApplicationSpec,
+		app.NewSpec, server.NewSpec, job.NewSpec,
 		bootstrap.NewAppInfoBootstrap, bootstrap.NewLogBootstrap,
 		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,
 		bootstrap.NewInfrastructureBootstrap,

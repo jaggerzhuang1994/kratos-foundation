@@ -20,7 +20,7 @@ func newHTTPServer(
 	logger log.Logger,
 	websockets *websocketHub,
 ) (HTTPServer, error) {
-	if spec.httpDisabled(config.GetHttp().GetDisable()) {
+	if config.GetHttp().GetDisable() {
 		return nil, nil
 	}
 

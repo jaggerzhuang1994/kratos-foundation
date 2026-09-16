@@ -4,11 +4,14 @@ package consulconfig
 import (
 	consulsource "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/consul"
 	fileconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
 // RemoteConfigName 是远程配置所属名称，可独立于应用名由业务 provider 提供。
@@ -39,7 +42,14 @@ func NewDefaultRemoteConfigPathsProvider() bootstrap.RemoteConfigPathsProvider {
 // NewSpec 声明默认配置源，供 Wire 与 bootstrap.BaseProviderSet 配合使用。
 // local 使用 localConfigPath；其他环境使用业务提供的远程路径函数。
 // 构造期只登记声明；配置源加载错误在 NewConfigManager 执行 Configuration 时返回。
-func NewSpec(localConfigPath bootstrap.LocalConfigPath, remoteConfigName RemoteConfigName, remoteConfigPaths bootstrap.RemoteConfigPathsProvider) (*bootstrap.Spec, error) {
+func NewSpec(
+	application *app.Spec,
+	servers *server.Spec,
+	jobs *job.Spec,
+	localConfigPath bootstrap.LocalConfigPath,
+	remoteConfigName RemoteConfigName,
+	remoteConfigPaths bootstrap.RemoteConfigPathsProvider,
+) (*bootstrap.Spec, error) {
 	environment := env.AppEnv()
 	var loader config.SourceLoader
 	if environment == env.Local {
@@ -48,8 +58,8 @@ func NewSpec(localConfigPath bootstrap.LocalConfigPath, remoteConfigName RemoteC
 		paths := remoteConfigPaths(string(remoteConfigName), environment)
 		loader = consulsource.AddConfigSource(paths...)
 	}
-	spec := bootstrap.NewSpec()
-	if err := spec.Configuration(func() (config.Sources, error) {
+	spec := bootstrap.NewSpec(application, servers, jobs)
+	spec.Configuration(func() (config.Sources, error) {
 		sources, err := loader()
 		if err != nil {
 			return nil, err
@@ -61,8 +71,6 @@ func NewSpec(localConfigPath bootstrap.LocalConfigPath, remoteConfigName RemoteC
 			).Warn("No configuration sources available from default spec; continuing with env and any additional sources")
 		}
 		return sources, nil
-	}); err != nil {
-		return nil, err
-	}
+	})
 	return spec, nil
 }

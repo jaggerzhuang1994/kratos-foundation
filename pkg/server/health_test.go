@@ -15,9 +15,9 @@ import (
 func TestHealthEndpointsAndReadiness(t *testing.T) {
 	checks := []ReadinessCheck{{Name: "database", Check: func(context.Context) error { return errors.New("secret database address") }}}
 	spec := NewSpec()
-	spec.HTTP().Health(HealthConfig{Checks: checks})
+	spec.Health().Checks(checks...)
 	checks[0].Check = nil
-	health := newHealthState(*spec.http.health)
+	health := configuredHealth(defaultConfig, spec)
 	if err := health.validate("/metrics"); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestHealthEndpointsAndReadiness(t *testing.T) {
 }
 
 func TestHealthValidationAndCancellation(t *testing.T) {
-	for _, config := range []HealthConfig{
+	for _, config := range []healthConfig{
 		{LivenessPath: "bad"}, {LivenessPath: "/bad?query=x"}, {LivenessPath: "/%zz"},
 		{LivenessPath: "/metrics"}, {ReadinessPath: "/healthz"}, {Timeout: -time.Second},
 		{Checks: []ReadinessCheck{{Name: "db"}}},
@@ -63,7 +63,7 @@ func TestHealthValidationAndCancellation(t *testing.T) {
 			t.Fatalf("accepted invalid config: %+v", config)
 		}
 	}
-	disabled := newHealthState(HealthConfig{Disable: true})
+	disabled := newHealthState(healthConfig{Disable: true})
 	if err := disabled.validate("/healthz"); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestHealthValidationAndCancellation(t *testing.T) {
 	if recorder.Code != 204 {
 		t.Fatal("disabled health intercepted route")
 	}
-	health := newHealthState(HealthConfig{Timeout: time.Millisecond, Checks: []ReadinessCheck{{Name: "wait", Check: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }}}})
+	health := newHealthState(healthConfig{Timeout: time.Millisecond, Checks: []ReadinessCheck{{Name: "wait", Check: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }}}})
 	health.applicationReady = func() bool { return true }
 	if health.ready(context.Background()) {
 		t.Fatal("timed out dependency accepted")
@@ -83,7 +83,7 @@ func TestHealthValidationAndCancellation(t *testing.T) {
 	if health.ready(ctx) {
 		t.Fatal("canceled probe accepted")
 	}
-	if newHealthState(HealthConfig{}).ready(context.Background()) {
+	if newHealthState(healthConfig{}).ready(context.Background()) {
 		t.Fatal("unbound readiness accepted")
 	}
 }

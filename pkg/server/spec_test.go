@@ -18,7 +18,7 @@ type testSocketHandler struct{}
 
 func (testSocketHandler) OnClose(WebSocketConn) {}
 
-func TestSpecBuildersValidateAndOverrideProtocolConfig(t *testing.T) {
+func TestSpecBuildersIgnoreNilDeclarations(t *testing.T) {
 	spec := NewSpec()
 	spec.HTTP().Middleware(nil).Register(nil).Option(nil).WebSocket("/ws", testSocketHandler{})
 	spec.GRPC().Middleware(nil).Register(nil).Option(nil)
@@ -28,14 +28,7 @@ func TestSpecBuildersValidateAndOverrideProtocolConfig(t *testing.T) {
 	if len(spec.http.middlewares) != 0 || len(spec.http.endpoints) != 0 || len(spec.http.options) != 0 || len(spec.grpc.middlewares) != 0 || len(spec.grpc.services) != 0 || len(spec.grpc.options) != 0 {
 		t.Fatal("nil builder arguments must be ignored")
 	}
-	if !spec.httpDisabled(true) || !spec.grpcDisabled(true) || spec.httpDisabled(false) || spec.grpcDisabled(false) {
-		t.Fatal("unset spec should obey config")
-	}
-	spec.HTTP().Enable().Disable().Enable()
-	spec.GRPC().Enable().Disable()
-	if spec.httpDisabled(true) || !spec.grpcDisabled(false) {
-		t.Fatal("last explicit protocol setting must override config")
-	}
+
 }
 
 func TestSpecMiddlewareBuildersKeepProtocolSpecificDefinitions(t *testing.T) {

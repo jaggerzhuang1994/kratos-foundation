@@ -42,6 +42,24 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 | [ ] 错误消息 | 可变参数依赖旧格式化行为 | 单字符串原样保留；多个参数且首参数为 string 时格式化。建议先 Sprintf/Sprint 再传一个字符串 |
 | [ ] 可选新能力 | 无统一 Queue/Kafka/OSS 接入 | 仅按业务需要接入；Queue 持久化重试、失败管理和 Kafka 消费均不提供业务 exactly-once，仍需业务幂等 |
 
+### 应用 Spec 登记迁移
+
+`bootstrap.NewSpec(application, servers, jobs)` 改为注入三个共享领域 Spec，不再自行创建。Wire 添加 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`（BaseProviderSet 已包含），删除 `ApplicationSpec` provider；需要 Spec 的构造函数直接接收对应类型。配置声明 provider 也须接收并转交这三个依赖，更新后重新生成 Wire。
+
+`app.Spec` 的 RegisterRuntime、RegisterAppInfo、RegisterLogger、AddContext、AddMetadata、AddEndpoints、AddSignals 及 Hook 登记方法不再返回 error；删除调用方的错误分支，直接调用即可。冻结后写入会 panic(app.ErrSpecFrozen)，重复登记非 nil AppInfo/Logger 也会 panic。NewApp 的配置、依赖、Context 构造失败及重复冻结仍返回 error。
+`bootstrap.Spec` 的声明和转发方法返回同一 `*bootstrap.Spec`，支持链式调用；RegisterRuntime 立即调用共享 application.RegisterRuntime，移除暂存列表和延后重放。移除 bootstrap 阶段状态和调用顺序检查；配置源在 Spec provider 中声明，业务在返回 Bootstrap 的 provider 中描述蓝图，由 Wire 依赖链保证先声明后构造。自定义 Runtime 的登记顺序现在取决于实际调用顺序，App 的并发启动策略不变。流程见 [app](pkg/app/README.md#runtime-登记)。
+`NewAppInfoBootstrap`、`NewMetricsBootstrap` 只返回完成标记；修改 provider set 的消费代码后通过实际 Wire 入口重新生成。Wire 对 error 返回执行回滚，不保证 panic 时回滚整条依赖链。
+
+### 服务器声明入口迁移
+
+当前版本移除 HTTPBuilder/GRPCBuilder 的 `Enable/Disable`，部署开关改用 `server.http.disable` 和 `server.grpc.disable`。
+业务 HTTP 默认开启；worker 如需保持没有业务监听，必须显式配置 `server.http.disable: true`。
+gRPC 省略 disable 时，仅非 nil 服务注册回调触发开启；显式 false 开启，true 关闭。
+原来依赖 `Grpc()`、Middleware 或 Option 启用的调用方，须注册服务或在配置中显式开启。
+原 `HTTP().HealthChecks(...)`、`HTTP().Health(HealthConfig{Checks: ...})` 改为 `Health().Checks(...)`，
+HealthConfig 中的地址、路径、开关和检查期限迁移至 `server.http.health`。
+这些字段构造期读取，修改需重启；不提供监听热启停。完整流程图及监控地址归并见 [server](pkg/server/README.md)。
+
 ### 删除或改名的配置
 
 目标 protobuf 配置解码时，已删除字段即使值是 null 或空对象也会被拒绝；Manager 不再全局预检未读取的字段。
@@ -70,7 +88,7 @@ tracing.sampler 和数据库连接池参数。DSN、驱动、连接集合、服�
 此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 和
 `job.Spec.Coordinator`（包括 `job.Builder.Coordinator`）已移除。Registrar 改为
 `app.NewApp` 的最后一个构造参数或 `bootstrap.NewKratosApp` 的 registrar 参数；Coordinator 改为
-`job.NewManager` 的最后一个构造参数或 `bootstrap.NewJobBootstrap` 的第二个参数。
+`job.NewManager` 的最后一个构造参数或 `bootstrap.NewJobBootstrap` 的 coordinator 参数。
 删除 Boot 中的对应登记，给 Wire 增加返回目标接口的 provider，再重新生成 injector。
 禁用时返回 nil interface，启用时选择对应 contrib 实现；分布式 Cron 在协调器为 nil 时仍报构造错误。
 完整示例和构造流程见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)。
@@ -480,11 +498,11 @@ flowchart LR
 
 应用停机策略直接注入 `app.NewStopPolicy(config, manager, logger)`，删除 `bootstrap.NewStopPolicy` 包装和第四个 stopDelay 参数。RuntimeBootstrap 仅表示组装完成，不再携带 StopDelay。`stop_timeout > server.stop_delay` 为部署建议，不再阻止构造或热更新；正数及 Duration 合法性校验保留。
 
-删除 `bootstrap.NewBootstrap`，统一使用 `NewRuntimeBootstrap` → `NewApplicationBootstrap` → `NewKratosApp`。业务 Boot 返回 `Bootstrap` 标记；自行构造组件的登记贡献也须作为 Boot 的前置依赖，并共享 `bootstrap.NewSpec` 持有的应用 Spec，避免重复登记。
+删除 `bootstrap.NewBootstrap`，统一使用 `NewRuntimeBootstrap` → `NewApplicationBootstrap` → `NewKratosApp`。业务 Boot 返回 `Bootstrap` 标记；自行构造组件的登记贡献也须作为 Boot 的前置依赖，并共享 Wire 注入的应用 Spec，避免重复登记。
 
-`NewServerBootstrap` 改为接收统一 Spec、配置及观测依赖和 Bootstrap 标记，在业务 Boot 后构造并登记服务器，返回独立 cleanup。NewRuntimeBootstrap 注入 ServerBootstrap 保证顺序；旧的直接传入 app.Spec 和 Runtime 的登记签名不保留。
+`NewServerBootstrap` 改为接收共享 app.Spec/server.Spec、配置及观测依赖和 Bootstrap 标记，在业务 Boot 后构造并登记服务器，返回独立 cleanup。NewRuntimeBootstrap 注入 ServerBootstrap 保证顺序；旧的直接传入 app.Spec 和 Runtime 的登记签名不保留。
 
-`NewJobBootstrap` 现在接收统一 Spec、协调器、日志/观测依赖及 Bootstrap 标记，在 Boot 完成后构造并登记 Job Manager。`NewRuntimeBootstrap(spec, serverBootstrap, jobBootstrap)` 汇合两个组件标记，仅返回 `(RuntimeBootstrap, error)`，删除空 cleanup 及领域构造依赖。
+`NewJobBootstrap` 现在接收共享 app.Spec/job.Spec、协调器、日志/观测依赖及 ServerBootstrap 标记，在 Server 完成后构造并登记 Job Manager。`NewRuntimeBootstrap(serverBootstrap, jobBootstrap)` 汇合两个组件标记并标记组装完成，仅返回 `RuntimeBootstrap`，不登记或重放自定义 Runtime；业务调用 RegisterRuntime 时已直接登记到共享 app.Spec。
 
 `app.registry` 省略或为空时使用 `default`；`client.clients.<name>.discovery` 省略或为空时继承 `client.discovery`，根级也省略或为空时使用 `default`。须配置所选 registry 实例及驱动；显式名称仍可选择其他实例。删除以空 app.registry 禁用注册的用法，改由驱动禁用状态控制。直连客户端不要求发现实例。
 
@@ -496,4 +514,4 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consulconfig.NewSpec`](contrib/bootstrap/consulconfig/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consulconfig.ProviderSet` 使用默认八层路径；自定义名称时使用 `ProviderSetWithCustomRemoteConfigName` 并提供返回 `consulconfig.RemoteConfigName` 的业务 provider；自定义路径时改用 `NewSpec` 并显式提供名称与 RemoteConfigPathsProvider。`NewSpec` 不再接收 AppInfo，参数依次为本地路径、远程配置名称、路径函数；原 `RemoteConfigPaths` 调用改为 `NewDefaultRemoteConfigPathsProvider()` 返回的函数。环境分支、路径顺序与失败流程见该 provider 文档。
+`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consulconfig.NewSpec`](contrib/bootstrap/consulconfig/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consulconfig.ProviderSet` 使用默认八层路径；自定义名称时使用 `ProviderSetWithCustomRemoteConfigName` 并提供返回 `consulconfig.RemoteConfigName` 的业务 provider；自定义路径时改用 `NewSpec` 并显式提供名称与 RemoteConfigPathsProvider。`NewSpec` 不再接收 AppInfo，参数依次为 app.Spec、server.Spec、job.Spec、本地路径、远程配置名称、路径函数；原 `RemoteConfigPaths` 调用改为 `NewDefaultRemoteConfigPathsProvider()` 返回的函数。环境分支、路径顺序与失败流程见该 provider 文档。

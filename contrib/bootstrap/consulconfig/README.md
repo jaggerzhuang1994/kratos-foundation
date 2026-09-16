@@ -1,6 +1,6 @@
 # Consul 配置组装
 
-`NewSpec(localConfigPath bootstrap.LocalConfigPath, remoteConfigName RemoteConfigName, remoteConfigPaths bootstrap.RemoteConfigPathsProvider)` 是与 `bootstrap.BaseProviderSet` 配合的可选 Wire provider，应用无需重复编写环境分支，远程路径可采用 ProviderSet 的默认规则或由业务提供。仅构造并声明 Spec，不执行配置 I/O；配置加载和 cleanup 仍由 `bootstrap.NewConfigManager` 负责。
+`NewSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, localConfigPath bootstrap.LocalConfigPath, remoteConfigName RemoteConfigName, remoteConfigPaths bootstrap.RemoteConfigPathsProvider)` 是与 `bootstrap.BaseProviderSet` 配合的可选 Wire provider，应用无需重复编写环境分支，远程路径可采用 ProviderSet 的默认规则或由业务提供。前三个 Spec 由 BaseProviderSet 中的领域构造函数提供并共享；本入口仅构造并声明 bootstrap.Spec，不执行配置 I/O；配置加载和 cleanup 仍由 `bootstrap.NewConfigManager` 负责。
 
 ```go
 // 放入带 wireinject 标签的应用 injector 文件；业务提供 Bootstrap 和业务 provider。
@@ -73,7 +73,7 @@ flowchart TD
  A([开始组装]) --> A1{名称来源}
  A1 -- 默认 ProviderSet --> A2[NewDefaultRemoteConfigName 读取 AppInfo.Name]
  A1 -- 自定义 ProviderSet --> A3[业务 provider 返回 RemoteConfigName]
- A2 --> A4[NewSpec 接收名称与路径函数]
+ A2 --> A4[NewSpec 接收共享领域 Spec、名称与路径函数]
  A3 --> A4
  A4 --> B{APP_ENV 为 local?}
  B -- 是 --> C[登记本地路径 loader]

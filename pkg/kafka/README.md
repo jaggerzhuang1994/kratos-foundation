@@ -223,13 +223,16 @@ func NewBillingOrderCreated(
 		releaseProducer()
 		return nil, billingOrderCreatedBootstrap{}, nil, err
 	}
-	if err := appSpec.RegisterRuntime(runtime); err != nil {
-		releaseProducer()
-		return nil, billingOrderCreatedBootstrap{}, nil, err
-	}
+	// 登记属于构造阶段；编程错误导致 panic 时也释放本 provider 的 producer。
+	registered := false
+	defer func() { if !registered { releaseProducer() } }()
+	appSpec.RegisterRuntime(runtime)
+	registered = true
 	return producer, billingOrderCreatedBootstrap{}, releaseProducer, nil
 }
 ```
+
+`RegisterRuntime` 无返回值，冻结后登记会 panic；上述 provider 仅负责释放自身已构造的 producer，不将 panic 转成业务错误。登记与冻结流程见 [app](../app/README.md#runtime-登记)。
 
 `Retry: nil` 默认最多调用 Handler 三次，初始退避 500ms、最大退避 30s。非 nil 的 `RetryPolicy` 必须提供正数 MaxAttempts（最多 1000），MinBackoff 为零表示不等待；MaxBackoff 为零时仅首次重试等待 MinBackoff，后续不等待；两者非零时间隔倍增并受最大值限制。Handler 返回 `kafka.Permanent(err)` 跳过重试；panic 转换为可重试错误。
 

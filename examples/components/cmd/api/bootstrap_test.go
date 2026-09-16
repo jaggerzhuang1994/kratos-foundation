@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +42,7 @@ func TestInitializeAndCleanup(t *testing.T) {
 
 func TestSourcesRejectsDirectory(t *testing.T) {
 	t.Setenv("LOG_FILE_ENABLE", "false")
-	if _, err := newSpec(configPath(t.TempDir())); err == nil {
+	if _, err := newSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), configPath(t.TempDir())); err == nil {
 		t.Fatal("directory accepted as configuration")
 	}
 }

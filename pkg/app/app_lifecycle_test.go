@@ -129,20 +129,14 @@ func applicationTestInfo() applicationAppInfo {
 func newApplicationTestSpec(t testing.TB) *Spec {
 	t.Helper()
 	spec := NewSpec()
-	if err := spec.RegisterAppInfo(applicationTestInfo()); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.RegisterLogger(kratoslog.NewStdLogger(io.Discard)); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterAppInfo(applicationTestInfo())
+	spec.RegisterLogger(kratoslog.NewStdLogger(io.Discard))
 	return spec
 }
 
 func registerApplicationRuntime(t testing.TB, spec *Spec, runtime Runtime) {
 	t.Helper()
-	if err := spec.RegisterRuntime(runtime); err != nil {
-		t.Fatal(err)
-	}
+	spec.RegisterRuntime(runtime)
 }
 
 func TestNewApplicationRunsSuccessfulLifecycleWithRegistration(t *testing.T) {
@@ -151,37 +145,25 @@ func TestNewApplicationRunsSuccessfulLifecycleWithRegistration(t *testing.T) {
 	calls := new(applicationHookCalls)
 	afterStarted := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.AddContext(func(ctx context.Context) context.Context {
+	spec.AddContext(func(ctx context.Context) context.Context {
 		return context.WithValue(ctx, assembledKey, "yes")
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.BeforeStart(func(ctx context.Context) error {
+	})
+	spec.BeforeStart(func(ctx context.Context) error {
 		if got := ctx.Value(assembledKey); got != "yes" {
 			t.Fatalf("assembled context value = %v, want yes", got)
 		}
 		calls.add("before-start")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AfterStart(func(context.Context) error {
+	})
+	spec.AfterStart(func(context.Context) error {
 		calls.add("after-start")
 		close(afterStarted)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.BeforeStop(func(context.Context) error { calls.add("before-stop"); return nil }); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AfterStop(func(context.Context) error { calls.add("after-stop"); return nil }); err != nil {
-		t.Fatal(err)
-	}
+	})
+	spec.BeforeStop(func(context.Context) error { calls.add("before-stop"); return nil })
+	spec.AfterStop(func(context.Context) error { calls.add("after-stop"); return nil })
 	registrar := new(registrarCallFake)
-	if err := spec.AddEndpoints(&url.URL{Scheme: "http", Host: "127.0.0.1:8000"}); err != nil {
-		t.Fatal(err)
-	}
+	spec.AddEndpoints(&url.URL{Scheme: "http", Host: "127.0.0.1:8000"})
 
 	runtime := newApplicationRuntime()
 	registerApplicationRuntime(t, spec, runtime)
@@ -258,12 +240,8 @@ func TestApplicationBeforeStartFailureStopsWithoutStartingRuntimes(t *testing.T)
 	cause := errors.New("before-start failed")
 	afterStopped := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.BeforeStart(func(context.Context) error { return cause }); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.AfterStop(func(context.Context) error { close(afterStopped); return nil }); err != nil {
-		t.Fatal(err)
-	}
+	spec.BeforeStart(func(context.Context) error { return cause })
+	spec.AfterStop(func(context.Context) error { close(afterStopped); return nil })
 	runtime := newApplicationRuntime()
 	registerApplicationRuntime(t, spec, runtime)
 	app, err := NewApp(
@@ -289,9 +267,7 @@ func TestApplicationBeforeStartFailureStopsWithoutStartingRuntimes(t *testing.T)
 func TestApplicationAfterStartFailureStopsStartedRuntime(t *testing.T) {
 	cause := errors.New("after-start failed")
 	spec := newApplicationTestSpec(t)
-	if err := spec.AfterStart(func(context.Context) error { return cause }); err != nil {
-		t.Fatal(err)
-	}
+	spec.AfterStart(func(context.Context) error { return cause })
 	runtime := newApplicationRuntime()
 	registerApplicationRuntime(t, spec, runtime)
 	app, err := NewApp(
@@ -318,13 +294,11 @@ func TestApplicationRuntimeFailureDuringAfterStartPreservesRootFailure(t *testin
 	hookEntered := make(chan struct{})
 	releaseRuntime := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.AfterStart(func(ctx context.Context) error {
+	spec.AfterStart(func(ctx context.Context) error {
 		close(hookEntered)
 		<-ctx.Done()
 		return ctx.Err()
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	registerApplicationRuntime(t, spec, &applicationFailureRuntime{
 		hookEntered: hookEntered,
 		release:     releaseRuntime,
@@ -435,13 +409,11 @@ func TestApplicationStopRequestIgnoresAfterStartCallbackCancellation(t *testing.
 	hookEntered := make(chan struct{})
 	releaseRuntime := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.AfterStart(func(ctx context.Context) error {
+	spec.AfterStart(func(ctx context.Context) error {
 		close(hookEntered)
 		<-ctx.Done()
 		return ctx.Err()
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	registerApplicationRuntime(t, spec, &applicationStopRequestRuntime{release: releaseRuntime})
 	app, err := NewApp(
 		context.Background(),
@@ -468,13 +440,11 @@ func TestApplicationStopRequestPreservesUnrelatedAfterStartCallbackError(t *test
 	hookEntered := make(chan struct{})
 	releaseRuntime := make(chan struct{})
 	spec := newApplicationTestSpec(t)
-	if err := spec.AfterStart(func(ctx context.Context) error {
+	spec.AfterStart(func(ctx context.Context) error {
 		close(hookEntered)
 		<-ctx.Done()
 		return want
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	registerApplicationRuntime(t, spec, &applicationStopRequestRuntime{release: releaseRuntime})
 	app, err := NewApp(
 		context.Background(),

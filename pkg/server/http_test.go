@@ -27,7 +27,6 @@ func TestIntegrationHTTPRoutes(t *testing.T) {
 	}
 	type requestKey struct{}
 	spec := NewSpec()
-	spec.GRPC().Disable()
 	var handler HTTPServer
 	spec.HTTP().Option(kratoshttp.PathPrefix("/v1"))
 	spec.HTTP().Middleware(func(next middleware.Handler) middleware.Handler {

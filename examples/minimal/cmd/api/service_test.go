@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -25,7 +27,7 @@ func TestHTTPExportsDashboardMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(closeMetrics)
-	sources, err := newSpec("../../configs/config.yaml")
+	sources, err := newSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), "../../configs/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,9 +46,8 @@ func TestHTTPExportsDashboardMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := server.NewSpec()
-	spec.GRPC().Disable()
 	var httpServer server.HTTPServer
-	spec.HTTP().Health(server.HealthConfig{Disable: true}).Register(func(srv server.HTTPServer) error {
+	spec.HTTP().Register(func(srv server.HTTPServer) error {
 		httpServer = srv
 		service.register(srv)
 		return nil
