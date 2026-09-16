@@ -19,15 +19,25 @@ func (m *Manager) Start(parent context.Context) error {
 		return nil
 	}
 	m.started = true
+	// 将订阅建立阶段计入生命周期，Stop 不会在 Start 仍创建订阅时提前完成。
+	m.workers.Add(1)
 	ctx, cancel := context.WithCancel(parent)
 	m.cancel = cancel
 	m.mu.Unlock()
 
 	if err := parent.Err(); err != nil {
+		m.workers.Done()
 		m.beginShutdown()
 		return err
 	}
+	if err := m.subscribeConfig(); err != nil {
+		m.workers.Done()
+		m.beginShutdown()
+		return err
+	}
+
 	onceDone, daemonErrors, launched := m.startJobs(ctx)
+	m.workers.Done()
 	if !launched {
 		return nil
 	}
@@ -78,8 +88,12 @@ func (m *Manager) beginShutdown() {
 		m.mu.Lock()
 		m.stopping = true
 		cancel := m.cancel
+		unsubscribe := m.unsubscribe
 		cronStarted := m.cronStarted
 		m.mu.Unlock()
+		if unsubscribe != nil {
+			unsubscribe()
+		}
 		if cancel != nil {
 			cancel()
 		}

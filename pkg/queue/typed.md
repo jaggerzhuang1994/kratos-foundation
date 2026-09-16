@@ -104,7 +104,7 @@ func RegisterMail(
 
 ## 默认观测依赖
 
-`bootstrap.BaseProviderSet` 和 `BaseProviderSetWithCustomJobCoordinator` 已包含 `queue.NewObservability`。应用入口直接声明 `queue.Observability` 参数即可由 Wire 提供，无需业务手写 struct 或 provider；同一依赖图中的队列复用应用已有的 `log.Logger`、`tracing.Provider`、`metrics.Provider`。
+`bootstrap.BaseProviderSet` 已包含 `queue.NewObservability`。应用入口直接声明 `queue.Observability` 参数即可由 Wire 提供，无需业务手写 struct 或 provider；同一依赖图中的队列复用应用已有的 `log.Logger`、`tracing.Provider`、`metrics.Provider`。
 
 手动组装时调用 `queue.NewObservability(logger, tracingProvider, metricsProvider)`；不使用默认集合的 Wire injector 可显式添加 `queue.NewObservability`。三个参数必须非 nil，不为缺失依赖自动创建全局实例或静默降级为 no-op。已有 `Observability{...}` 显式写法保持可用。使用默认集合后，应移除自己提供相同返回类型的 provider，避免 Wire 重复绑定；需要单队列定制时在该队列的构造函数内调整传入的值。
 

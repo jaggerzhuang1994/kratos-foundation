@@ -39,7 +39,7 @@ func runLocked(ctx context.Context, manager foundationredis.Manager, action func
 }
 ```
 
-`action` 必须响应 Context 并在租约到期前结束；Locker 不自动续租。`Lock`、`TryLock` 和 `Refresh` 的 TTL 至少为 **1ms**，底层按毫秒精度处理；小于 1ms 即使为正也会返回错误。长任务需要显式续租或使用 [Job 协调器](../../../pkg/job/README.md)，失去租约后不能继续假定独占执行权。这里只释放操作级租约，共享客户端由 Redis Manager cleanup 在业务停止后释放。
+`action` 必须响应 Context 并在租约到期前结束；Locker 不自动续租。`Lock`、`TryLock` 和 `Refresh` 的 TTL 至少为 **1ms**，底层按毫秒精度处理；小于 1ms 即使为正也会返回错误。长任务需要由业务显式续租，失去租约后不能继续假定独占执行权。这里只释放操作级租约，共享客户端由 Redis Manager cleanup 在业务停止后释放。
 
 ```mermaid
 flowchart TD

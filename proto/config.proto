@@ -6,6 +6,7 @@ package kratos_foundation_pb;
 import "pubg/jsonschema.proto";
 
 import "config_pb/app.proto";
+import "config_pb/job.proto";
 import "config_pb/log.proto";
 import "config_pb/tracing.proto";
 import "config_pb/server.proto";
@@ -31,7 +32,7 @@ option (pubg.jsonschema.file) = {
 //
 // 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：
 // log、app.stop_timeout、server.middleware、client.clients、tracing.sampler
-// 以及 database 各连接的连接池参数。
+// 以及 database 各连接的连接池参数和 job.cron。
 message Config {
   // 应用配置。仅 stop_timeout 支持热更新。
   optional App app = 1;
@@ -53,4 +54,6 @@ message Config {
   optional OSS oss = 9;
   // 全局输出日志策略。[热更新]。
   optional Logging log = 10;
+  // 已注册 Cron 任务的调度和本进程并发策略。[热更新]
+  optional Job job = 11;
 }

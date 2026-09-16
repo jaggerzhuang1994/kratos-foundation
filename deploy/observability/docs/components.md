@@ -12,7 +12,7 @@
 | Kafka | kafka_producer_*、kafka_consumer_*；kafka_destination/kafka_consumer/kafka_result | 使用包提供的 Producer/Runtime，并注入 Observability 的 Metrics/Tracing；绕过封装的原生 SDK 调用不包含这些业务计数 |
 | Queue | queue_producer_*、queue_consumer_*；queue_destination/queue_consumer/queue_result | 使用 Queue/Worker 并注入 Observability；派发、处理尝试、最终结果、重试、失败归档和运行时故障 |
 | Job | job_runs_total、job_duration_seconds、job_running；exported_job/status | Manager 注入 Provider；默认启用，可由 job.WithMetrics(false) 关闭。只统计已进入执行的任务，跳过和等待不等于执行失败 |
-| Lock | lock_operations_total、lock_operation_duration_seconds、lock_released_hold_duration_seconds；lock_name/operation/result | 业务构造时显式用 lock.WithMetrics 包装原 Locker，再注入业务或 Job 协调器，见 [Lock 文档](../../../pkg/lock/README.md) |
+| Lock | lock_operations_total、lock_operation_duration_seconds、lock_released_hold_duration_seconds；lock_name/operation/result | 业务构造时显式用 lock.WithMetrics 包装原 Locker，再注入业务，见 [Lock 文档](../../../pkg/lock/README.md) |
 
 Redis 新增 redis_connection 标签保留配置连接身份，解决多个 client 共用地址时样本无法区分的问题。旧版本序列没有该标签，按 All 可查看旧数据，按具体连接只展示新数据。使用多个进程时，应先按 instance 排障，再切到 app 汇总。
 

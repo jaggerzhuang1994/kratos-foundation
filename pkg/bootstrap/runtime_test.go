@@ -255,20 +255,6 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 	}
 }
 
-// 嵌入接口仅用于构造契约：Bootstrap 不应在构造期执行任务或调用协调器。
-type constructionCoordinator struct{ job.ConcurrencyCoordinator }
-
-func TestJobBootstrapInjectsCoordinator(t *testing.T) {
-	logger, tracing, metrics := newTestObservability(t)
-	spec := newTestSpec()
-	spec.Job().RegisterCron("distributed", "@hourly", job.TaskFunc(func(context.Context) error { return nil }), job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
-	prepareServer(t, spec)
-	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, constructionCoordinator{}, logger, metrics, tracing)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // 任务测试按 Wire 顺序构造服务器；关闭业务监听，避免生命周期测试占用固定端口。
 func prepareServer(t *testing.T, spec *testSpec) bootstrap.ServerBootstrap {
 	t.Helper()
@@ -355,5 +341,15 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 				t.Fatal("selected component was not started")
 			}
 		})
+	}
+}
+
+func TestJobBootstrapUsesConfiguration(t *testing.T) {
+	spec := newTestSpec()
+	spec.Job().RegisterCron("configured", "", job.TaskFunc(func(context.Context) error { return nil }))
+	cfg := testconfig.New(t, "job", &config_pb.Job{Cron: map[string]*config_pb.CronJob{"configured": {Schedule: proto.String("@hourly")}}})
+	logger, tracing, metrics := newTestObservability(t)
+	if _, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, cfg, logger, metrics, tracing); err != nil {
+		t.Fatal(err)
 	}
 }

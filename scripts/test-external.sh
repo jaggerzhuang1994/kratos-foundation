@@ -38,7 +38,7 @@ export FOUNDATION_TEST_MYSQL_DSN='root:foundation-local-test-only@tcp(127.0.0.1:
 compose ps > "$output/services.txt"
 go version > "$output/toolchain.txt"
 if ! go test -race -count=1 -timeout=3m -run '^Test(External|StoreRedis|StatsRedis)' -v \
-    ./pkg/kafka ./contrib/queue/redis ./contrib/database/mysql ./contrib/job/redis ./contrib/lock/redis ./pkg/redis ./contrib/config/consul \
+    ./pkg/kafka ./contrib/queue/redis ./contrib/database/mysql ./contrib/lock/redis ./pkg/redis ./contrib/config/consul \
     > "$output/functional.txt" 2>&1; then
     cat "$output/functional.txt"
     exit 1

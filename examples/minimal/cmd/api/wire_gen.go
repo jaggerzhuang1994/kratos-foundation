@@ -140,8 +140,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	concurrencyCoordinator := job.DefaultCoordinator()
-	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, jobSpec, concurrencyCoordinator, logger, provider, tracingProvider)
+	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, jobSpec, manager, logger, provider, tracingProvider)
 	if err != nil {
 		cleanup8()
 		cleanup7()

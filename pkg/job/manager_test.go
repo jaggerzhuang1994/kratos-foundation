@@ -23,7 +23,7 @@ import (
 
 func TestNewManagerConstructsWithObservabilityDependencies(t *testing.T) {
 	logger, tracingProvider, metricsProvider := newTestObservability(t)
-	manager, err := NewManager(logger, NewSpec(), tracingProvider, metricsProvider, DefaultCoordinator())
+	manager, err := NewManager(logger, NewSpec(), tracingProvider, metricsProvider, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,40 +265,6 @@ func TestNewManagerCanDisableObservabilityWithoutDisablingRecovery(t *testing.T)
 	}
 }
 
-func TestNewManagerInjectsConcurrencyCoordinator(t *testing.T) {
-	for _, policy := range []ConcurrentPolicy{AllowOverlap, DelayIfRunning, SkipIfRunning, DelayIfDistributedRunning, SkipIfDistributedRunning} {
-		t.Run(fmt.Sprint(policy), func(t *testing.T) {
-			logger, tracingProvider, metricsProvider := newTestObservability(t)
-			ran := false
-			spec := NewSpec()
-			spec.RegisterCron("injected", "@hourly", TaskFunc(func(context.Context) error { ran = true; return nil }), WithConcurrentPolicy(policy))
-			manager, err := NewManager(logger, spec, tracingProvider, metricsProvider, nil)
-			if policy.distributed() {
-				if err == nil || manager != nil || !strings.Contains(err.Error(), "requires a concurrency coordinator") {
-					t.Fatalf("missing coordinator = (%v, %v)", manager, err)
-				}
-			} else if err != nil {
-				t.Fatal(err)
-			}
-			guard := &testGuard{ctx: context.Background()}
-			coordinator := &testCoordinator{guard: guard}
-			manager, err = NewManager(logger, spec, tracingProvider, metricsProvider, coordinator)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := manager.cronJobs[0].job.Run(context.Background()); err != nil {
-				t.Fatal(err)
-			}
-			if !ran {
-				t.Fatal("injected task did not run")
-			}
-			if policy.distributed() && (coordinator.key != "injected" || guard.releases != 1) {
-				t.Fatalf("injected coordinator was not used: %+v, %+v", coordinator, guard)
-			}
-		})
-	}
-}
-
 func TestIntegrationJobCronOptionsAndMiddleware(t *testing.T) {
 	observability := newRuntimeObservability(t)
 	location := time.FixedZone("UTC+9", 9*60*60)
@@ -326,7 +292,7 @@ func TestIntegrationJobCronOptionsAndMiddleware(t *testing.T) {
 			events = append(events, "task")
 			run <- struct{}{}
 			return nil
-		}), RunImmediately(), WithConcurrentPolicy(DelayIfRunning)).(*Spec)
+		}), RunImmediately(true), WithConcurrentPolicy(DelayIfRunning)).(*Spec)
 	manager, err := NewManager(
 		observability.logger,
 		spec,
@@ -410,7 +376,7 @@ func TestIntegrationJobMixedLifecycle(t *testing.T) {
 				return ctx.Err()
 			})
 			spec.RegisterDaemon("worker", wait)
-			spec.RegisterCron("refresh", "@hourly", wait, RunImmediately())
+			spec.RegisterCron("refresh", "@hourly", wait, RunImmediately(true))
 			manager := newTestManager(t, spec)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

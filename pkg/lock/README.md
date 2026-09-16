@@ -20,7 +20,7 @@ flowchart TD
 
 ## 指标包装
 
-可在业务 Wire provider 中调用 `lock.WithMetrics(rawLocker, "orders", metricsProvider)`，检查返回错误后，将返回的 `Locker` 注入业务或 Job 协调器。`rawLocker`、`metricsProvider` 是已构造的必需依赖；名称必须为非空且无首尾空白的固定业务分类，不传订单 ID、租户 ID 或完整锁键。包装层借用资源，不产生额外 cleanup。
+可在业务 Wire provider 中调用 `lock.WithMetrics(rawLocker, "orders", metricsProvider)`，检查返回错误后，将返回的 `Locker` 注入业务。`rawLocker`、`metricsProvider` 是已构造的必需依赖；名称必须为非空且无首尾空白的固定业务分类，不传订单 ID、租户 ID 或完整锁键。包装层借用资源，不产生额外 cleanup。
 
 | 指标 | 标签 / 含义 |
 | --- | --- |

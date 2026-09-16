@@ -44,8 +44,12 @@ func chainMiddlewares(middlewares ...Middleware) Middleware {
 // middlewareChain 保留任务中间件的声明顺序。
 type middlewareChain []Middleware
 
-// newMiddlewares 统一确定 tracing、metrics、logging 和 recovery 的执行顺序，
-// 避免不同任务拼出不一致的中间件链。
+// errJobPanicked 是观测层在下层未正常返回时记录的失败标记。
+// 这里只识别异常退出，不调用 recover；具体 panic 与堆栈由最外层统一转换。
+var errJobPanicked = errors.New("job execution panicked")
+
+// newMiddlewares 按 tracing、metrics、logging 的顺序构造观测链。
+// recovery 由 newManagedJob 固定在整个执行链最外层，不属于可选观测能力。
 func newMiddlewares(
 	log moduleLog,
 	options managerOptions,
@@ -73,13 +77,14 @@ func newMiddlewares(
 	if options.LoggingEnabled {
 		middlewares = append(middlewares, loggingMiddleware(log))
 	}
-	middlewares = append(middlewares, recoveryMiddleware())
 	return middlewares, nil
 }
 
 func loggingMiddleware(log moduleLog) Middleware {
 	return func(next Handler) Handler {
 		return func(ctx context.Context) (err error) {
+			// return next(ctx) 只有正常返回才会覆盖 err；panic 展开时保留失败标记。
+			err = errJobPanicked
 			started := time.Now()
 			logger := log.WithContext(ctx)
 			logger.Info("job execution started")
@@ -88,7 +93,7 @@ func loggingMiddleware(log moduleLog) Middleware {
 				switch {
 				case err == nil:
 					logger.With("duration", time.Since(started)).Info("job execution done")
-				case ctx.Err() != nil && errors.Is(err, ctx.Err()):
+				case stoppedByContext(ctx, err):
 					logger.With("duration", time.Since(started), "cause", ctx.Err()).Info("job execution stopped")
 				}
 			}()
@@ -113,6 +118,7 @@ func recoveryMiddleware() Middleware {
 func metricsMiddleware(provider jobMetrics) Middleware {
 	return func(next Handler) Handler {
 		return func(ctx context.Context) (err error) {
+			err = errJobPanicked
 			started := time.Now()
 			provider.reportStart(ctx)
 			defer func() { provider.reportDone(ctx, err, time.Since(started)) }()
@@ -124,6 +130,7 @@ func metricsMiddleware(provider jobMetrics) Middleware {
 func tracingMiddleware(provider jobTracing) Middleware {
 	return func(next Handler) Handler {
 		return func(ctx context.Context) (err error) {
+			err = errJobPanicked
 			ctx, span := provider.recordStart(ctx)
 			defer func() { provider.recordEnd(span, err) }()
 			return next(ctx)

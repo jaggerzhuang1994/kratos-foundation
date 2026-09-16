@@ -10,6 +10,18 @@ type Task interface {
 	Run(ctx context.Context) error
 }
 
+// ScheduleProvider 为 Task 提供默认 Cron 表达式；注册时非空表达式和配置可覆盖它。
+type ScheduleProvider interface{ Schedule() string }
+
+// ConcurrentPolicyProvider 为 Task 提供默认本进程并发策略。
+type ConcurrentPolicyProvider interface{ ConcurrentPolicy() ConcurrentPolicy }
+
+// RunImmediatelyProvider 为 Task 提供默认的启动立即执行行为。
+type RunImmediatelyProvider interface{ RunImmediately() bool }
+
+// MaxPendingRunsProvider 为 Task 提供默认 Delay 等待容量。
+type MaxPendingRunsProvider interface{ MaxPendingRuns() int }
+
 // TaskFunc 把函数适配为 Task，适合无需额外状态的任务。
 type TaskFunc func(ctx context.Context) error
 
@@ -53,9 +65,12 @@ type managedJob struct {
 
 // newManagedJob 固化任务名称和中间件链，使运行阶段不再重复组装。
 func newManagedJob(name string, target Task, middlewares []Middleware) *managedJob {
+	// recovery 只在最外层组装一次，覆盖并发控制、观测、业务中间件和 Task。
+	// 观测层在 panic 展开时自行记录失败，由这里统一转换具体错误与堆栈。
+	run := recoveryMiddleware()(chainMiddlewares(middlewares...)(target.Run))
 	return &managedJob{
 		name: name,
-		job:  TaskFunc(chainMiddlewares(middlewares...)(target.Run)),
+		job:  TaskFunc(run),
 	}
 }
 

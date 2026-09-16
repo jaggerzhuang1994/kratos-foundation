@@ -73,14 +73,14 @@
 
 **使用条件**：为一次操作添加重试、观测、协调、续租等行为；或者装饰一个已有能力。可以有局部状态或 goroutine，但生命周期归请求、任务或所属对象。
 
-- **目录**：留在所属领域，如 `pkg/queue/queue.go`、`pkg/job/coordinator.go`；需要公共复用且具有清晰子能力时可新增公共子包，如建议的 `pkg/lock/watchdog`。
+- **目录**：留在所属领域，如 `pkg/queue/queue.go`；需要公共复用且具有清晰子能力时可新增公共子包，如建议的 `pkg/lock/watchdog`。
 - **API**：构造显式接收被装饰能力和配置；普通调用 `Do(ctx, ...)`。需要持有句柄时，获取方法返回句柄与 release，明确一对一所有权。
 - **依赖**：依赖行为接口，不依赖业务的 Wire、全局 Manager 或具体驱动；具体后端在组装层选择。
 - **生命周期**：构造通常不启动任务；实际 Acquire/调用成功后才启动局部循环。操作结束停止循环并释放资源；不要给每个句柄注册一个应用 Runtime。
 - **错误/观测**：定义失败是返回、取消所属操作还是重试。正常竞争与系统故障分开；避免底层和调用方重复记录相同错误。
 - **验收**：底层失败透传、上下文取消、重复释放、释放与循环交错、无 goroutine 泄漏、借用依赖不被关闭。
 
-**现有示例**：Job 的 ExecutionGuard 在取得租约后启动 watch；`Release` 停止并等待 watch，再释放租约。这属于 M4，虽然持有它的 Job Manager 属于 M5。
+操作级租约归取得它的调用者负责释放。Job 已移除跨进程租约，不再提供自动续租的 Guard 示例。
 
 ## M5：应用 Runtime
 
@@ -155,7 +155,7 @@ flowchart TD
 - **Registry**：仅 database/oss 等满足四项条件的场景使用现有注册机制；queue/lock/job 继续显式组装。
 - **验收**：外部错误映射、超时/取消、契约一致性、共享客户端不被误关；用可控替身或隔离的集成环境验证 SDK 语义。
 
-**现有示例**：`contrib/lock/redis.New` 借用 Redis Manager 的连接，实现 `lock.Locker`。`contrib/job/redis` 是便利组装层，把 Redis Locker 接到通用 Job Coordinator。
+**现有示例**：`contrib/lock/redis.New` 借用 Redis Manager 的连接，实现 `lock.Locker`。Job 仅提供本进程并发策略，不再组合 Redis Locker。
 
 ## M9：具体业务
 
@@ -177,14 +177,11 @@ flowchart TD
 | --- | --- | --- |
 | [`lock/lock.go`](lock/lock.go) | Locker、Lease、Refresh、Unlock、稳定错误 | 保持底层契约可单独使用 |
 | [`contrib/lock/redis`](../contrib/lock/redis/locker.go) | 带租约所有者校验的 Redis 实现 | 显式注入，不复制 Redis 加锁/解锁逻辑 |
-| [`job/coordinator.go`](job/coordinator.go) | Acquire/TryAcquire、自动续租、失败取消、幂等 Release | 仅 Job 场景直接使用公开 `job.NewLockCoordinator` |
-| [`contrib/job/redis`](../contrib/job/redis/README.md) | Redis Locker 与 Job Coordinator 的便利组装 | Job + Redis 场景已有现成入口 |
 
-当前 Job 协调器默认 LeaseTTL 为 30 秒，RefreshInterval 为 TTL 的三分之一；首次有效刷新失败即携带 `ErrCoordinationLost` 取消任务上下文。Release 会先停止并等待 watch，再使用独立超时上下文解锁。这是现有行为说明，不代表通用 watchdog 已存在。
 
 **建议选择**：
 
-1. 仅用于 Job：直接复用现有协调器，不新增包。
+1. Job 只提供本进程策略；业务确需跨进程租约时，在业务层显式使用独立锁能力。
 2. Job、请求、消费者都要用：新增公共子包 `pkg/lock/watchdog`，采用 **M4 操作级组件 + M2 lock 契约 + M8 Redis adapter**。
 3. 确实要集中管理全进程租约：才评估 M5。必须额外定义注册/注销、关闭时禁止新租约、排空、就绪依赖，以及租约失败是只取消所属任务还是停止应用。
 
@@ -201,7 +198,7 @@ pkg/lock/watchdog/
     README.md         用法、所有权、失败语义及流程图
 ```
 
-单包足够时不增加 internal。以后 Job 复用时，由 `pkg/job` 将通用 Guard 转换成 `job.ExecutionGuard` 并映射错误，watchdog 不导入 job。
+单包足够时不增加 internal。watchdog 应保持独立，Job 不提供 Guard 适配。
 
 建议的 API 草图，不是可直接调用的现有代码：
 
@@ -229,9 +226,9 @@ New(locker lock.Locker, config Config, logger log.Logger) (*Locker, error)
 - **所有者**：业务调用拥有 Guard/release；Guard 拥有一个续租循环；Redis Manager 拥有连接。构造不加锁，获取失败不启动循环。
 - **释放顺序**：业务结束后停止并等待续租，再按所有者令牌解锁。release 必须幂等；共享状态同步只包围短小状态操作，不持锁执行 Redis I/O。
 - **时间预算**：要求正 TTL，`RefreshInterval + OperationTimeout < LeaseTTL`，并留出调度/网络余量；所有外部操作受超时控制。该不等式不等于分布式互斥保证。
-- **失效**：建议沿用当前 Job 的保守行为，第一次续租失败就将 Guard 标记为失效并取消业务上下文；不要静默无限重试或重新抢锁后继续原临界区。
+- **失效**：建议采用保守行为，第一次续租失败就将 Guard 标记为失效并取消业务上下文；不要静默无限重试或重新抢锁后继续原临界区。
 - **取消/解锁**：上下文取消要停止续租，但业务仍必须调用 release。解锁不能直接使用已取消的请求 context，应保留必要值、去除原取消并设置短超时；解锁失败由 TTL 最终回收。
-- **错误**：区分锁竞争、获取取消/超时、续租失败/租约丢失、释放失败。`func()` 的关闭错误通过 Guard.Err 和指定日志边界报告，不能吞掉；Job 适配时再转换成 Job 错误。
+- **错误**：区分锁竞争、获取取消/超时、续租失败/租约丢失、释放失败。`func()` 的关闭错误通过 Guard.Err 和指定日志边界报告，不能吞掉，由业务边界决定如何处理。
 - **性能**：每个活跃 Guard 一个定时循环和周期性续租请求。只有实际规模/测量表明成本过高，再考虑集中调度；集中调度仍不自动意味着需要应用 Runtime。
 
 以下是**建议流程**。图中事件均为拟新增日志，当前代码不保证存在这些事件；实现时事件字段至少包含函数、操作、耗时或错误，不能记录租约令牌。
@@ -275,7 +272,7 @@ flowchart TD
 2. 用小型 Locker/Lease 替身验证组件行为，再接现有 Redis adapter；测试时使用可控的内部计时设施，不为测试增加公共选项。
 3. 验证：获取失败不启动 watch、正常续租、续租失去所有权、网络失败、父取消、未释放前不会关闭共享 client、重复 release、release 与 Refresh 交错、解锁超时和退出无泄漏。
 4. 验证：两个调用者竞争同一 key 不会错误共享 Guard，不同 key 不互相串行阻塞；已失效 Guard 不会因后续成功操作“复活”。
-5. 如将现有 Job 改为复用 watchdog，保持 `ErrExecutionInProgress`、`ErrCoordinationLost`、默认配置和 Job 策略语义，再运行 Job 与锁相关回归及竞态测试。
+5. 新增 watchdog 时独立验证锁租约、取消和释放边界；不要向 Job 重新加入跨进程协调策略。
 6. 只有选择 M5 才补应用注册、启动失败、停止排空和多 Runtime 并发关闭的测试。本次指南不引入新锁或改动现有并发策略。
 
 ## 可复制的包开发说明模板

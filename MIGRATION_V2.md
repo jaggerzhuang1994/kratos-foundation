@@ -80,18 +80,14 @@ Deadline 缺失时默认回退超时为 10s，仅在父 Context 没有截止时�
 关闭回退超时。不要把旧 timeout 字段机械改名后沿用语义。
 
 仅支持文档声明的热更新范围：app.stop_timeout、server.middleware、client.clients、
-tracing.sampler 和数据库连接池参数。DSN、驱动、连接集合、服务监听地址等变化需要重启。
+tracing.sampler、job.cron 和数据库连接池参数。DSN、驱动、连接集合、服务监听地址等变化需要重启。
 恢复 main 的 protobuf 字段编号后，此前未发布 v2 的二进制配置不能复用；从 YAML/JSON 重新生成。
 
 ### v2 开发期可选依赖迁移
 
-此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 和
-`job.Spec.Coordinator`（包括 `job.Builder.Coordinator`）已移除。Registrar 改为
-`app.NewApp` 的最后一个构造参数或 `bootstrap.NewKratosApp` 的 registrar 参数；Coordinator 改为
-`job.NewManager` 的最后一个构造参数或 `bootstrap.NewJobBootstrap` 的 coordinator 参数。
-删除 Boot 中的对应登记，给 Wire 增加返回目标接口的 provider，再重新生成 injector。
-禁用时返回 nil interface，启用时选择对应 contrib 实现；分布式 Cron 在协调器为 nil 时仍报构造错误。
-完整示例和构造流程见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)。
+此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 已移除；Registrar 由 app.NewApp 或 bootstrap.NewKratosApp 显式注入。
+
+Job 的 Coordinator、ExecutionGuard、锁租约实现、Redis Job 适配和两种分布式并发策略全部删除。移除对应 Wire provider，统一使用 BaseProviderSet；NewJobBootstrap 第三个参数和 job.NewManager 最后一个参数改为 config.Manager。`RunImmediately()` 改为 `RunImmediately(true)`，可用 false 显式覆盖 Task 声明。重新生成 Wire。配置 `job.cron` 支持逐字段覆盖及热更新，优先级为配置 > 注册 > Task > 框架默认值；运行中修改立即执行标志不补触发。完整示例见 [Job 文档](pkg/job/README.md)。
 
 ### CallOptions 迁移示例
 
@@ -303,7 +299,7 @@ ProviderSet 列出了构造函数，并不表示 Wire 一定执行它们。
 
 将来恢复业务登记时应修改 Bootstrap/Wire 源并重新生成，不直接修改 `wire_gen.go`。
 演示 Job、调试生命周期输出和日志全局设置应单独核对是否属于应用需求，不能作为迁移模板照搬。
-Registrar 与 Job Coordinator 由 Wire 构造注入，细节见 [Bootstrap 文档](pkg/bootstrap/README.md)。
+Registrar 与 Job 的 config.Manager 由 Wire 构造注入，细节见 [Bootstrap 文档](pkg/bootstrap/README.md)。
 
 ### 协议搬迁要统一映射，并控制类型来源
 
@@ -514,4 +510,4 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 NewConfigSources 只组装 ConfigSources；环境选择、校验和延迟加载由 bootstrap.NewSpec 实现。业务显式注入 `bootstrap.RemoteConfigDirName` 和 `bootstrap.LocalConfigPath`，没有默认远程目录。两种 PathsProvider 契约也位于 bootstrap。旧 consulconfig.NewSpec、RemoteConfigName 和自定义名称 ProviderSet 移除；默认远程改为十二层，configs 先于 secrets，每组公共先于应用、基础先于环境、单文件先于片段目录。本地目录只取应用单文件和环境应用单文件，普通文件只加载自身，否则使用 glob。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire。
+旧驱动 provider set 统一为 `BaseProviderSet`；自定义 Job Coordinator 的变体已删除，不保留别名。默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 NewConfigSources 只组装 ConfigSources；环境选择、校验和延迟加载由 bootstrap.NewSpec 实现。业务显式注入 `bootstrap.RemoteConfigDirName` 和 `bootstrap.LocalConfigPath`，没有默认远程目录。两种 PathsProvider 契约也位于 bootstrap。旧 consulconfig.NewSpec、RemoteConfigName 和自定义名称 ProviderSet 移除；默认远程改为十二层，configs 先于 secrets，每组公共先于应用、基础先于环境、单文件先于片段目录。本地目录只取应用单文件和环境应用单文件，普通文件只加载自身，否则使用 glob。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire。

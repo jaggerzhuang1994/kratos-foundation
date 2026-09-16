@@ -20,10 +20,7 @@ import (
 
 // BaseProviderSet 按注册驱动组装配置、注册和发现；业务提供已声明 Configuration 的 *Spec、AppInfo 和 Boot。
 // 包含 app/server/job 的 Spec 及 queue.Observability provider，同一依赖图内共享实例；所有注册与发现均通过具名驱动解析。
-var BaseProviderSet = wire.NewSet(BaseProviderSetWithCustomJobCoordinator, job.DefaultCoordinator)
-
-// BaseProviderSetWithCustomJobCoordinator 由应用显式提供 Job Coordinator。
-var BaseProviderSetWithCustomJobCoordinator = wire.NewSet(
+var BaseProviderSet = wire.NewSet(
 	NewConfigManager, registry.NewFactory, app.NewRegistrar,
 	wire.Bind(new(client.DiscoveryResolver), new(*registry.Factory)), client.NewFactory,
 	log.NewLogger, wire.Bind(new(kratoslog.Logger), new(log.Logger)),

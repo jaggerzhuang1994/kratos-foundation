@@ -45,7 +45,7 @@
 | [`client`](client/README.md) | HTTP/gRPC 客户端工厂与共享租用 | M3 Factory + M4 调用租约 | Factory cleanup 管理整体资源；每次 `AcquireClient` 还要调用自己的 release |
 | [`kafka`](kafka/README.md) | Kafka 客户端、消息生产和消费 | M3 Factory + M4 组件 + M5 Runtime | `NewClientFactory` 创建客户端工厂；`NewProducer`、`NewConsumer` 显式构造，`ConsumerRuntime` 管理消费生命周期 |
 | [`queue`](queue/README.md) | 持久化任务、延迟和重试 | M2 契约 + M4 组件 + M5 Runtime | `Queue[T]` 提供 Post，`Worker[T]` 管理消费；`Observability` 直接复用应用观测依赖；Redis Store 或业务 Database Repo 显式注入，资源由组装层释放 |
-| [`job`](job/README.md) | 任务声明、调度和并发协调 | M5 Runtime + M4 Guard | `job.Manager` 是 Runtime；每次任务的 ExecutionGuard 是操作级组件，已有自动续租 |
+| [`job`](job/README.md) | 任务声明、热更新调度和本进程并发策略 | M5 Runtime | `job.Manager` 拥有任务、调度器和配置订阅的生命周期 |
 | [`server`](server/README.md) | HTTP/gRPC 服务装配 | M5 Runtime | `server.Runtime` 是聚合对象；组装层登记 `Servers()` 返回的 HTTP/gRPC 运行时，并非登记聚合对象本身 |
 
 `pkg/lock` 的使用边界见 [`lock/README.md`](lock/README.md)。
@@ -54,7 +54,7 @@
 
 | 概念 | 识别依据 | 示例 |
 | --- | --- | --- |
-| 运行时组件 | 被请求、任务、Runtime 或资源所有者调用；生命周期可长可短 | Producer 装饰器、ExecutionGuard、watchdog、客户端租约 |
+| 运行时组件 | 被请求、任务、Runtime 或资源所有者调用；生命周期可长可短 | Producer 装饰器、watchdog、客户端租约 |
 | 应用 Runtime | 具有 `Start(context.Context) error` / `Stop(context.Context) error`，并实际登记到 `app.Spec` | Job Manager、Queue Worker[T]、HTTP/gRPC server |
 | Bootstrap | 借用 Wire 注入的 app/server/job Spec；Runtime 立即登记到共享 app.Spec | `bootstrap.NewMetricsBootstrap`、`bootstrap.NewRuntimeBootstrap` |
 | 资源 Provider/Manager/Factory | 创建、借出或持有资源，并明确释放责任 | Redis Manager、Kafka ClientFactory |
@@ -105,14 +105,14 @@ flowchart TD
 | metrics / tracing | Provider、配置、Exporter/Sampler、上下文 | 无 |
 | queue | 消息契约、类型化接入、持久化投递、消费生命周期和执行 | telemetry |
 | kafka | 连接工厂、消息生产、消费运行时、offset提交和恢复 | telemetry |
-| job | Spec、调度、Manager 生命周期、并发策略、锁租约 | 无 |
+| job | Spec、配置热更新、调度、Manager 生命周期、本进程并发策略 | 无 |
 | server | HTTP/gRPC、WebSocket、配置与中间件策略、Runtime | validator / ratelimit 中间件 |
 | config | Manager 与公开配置契约 | decoder / snapshot / source / subscription |
 | 工具包 | 按计算、转换或算法职责组织 | crypto 按独立算法提供公共子包 |
 
 ## 新增 watchdog 时从哪里开始
 
-只用于定时任务时，先复用 [`job.NewLockCoordinator`](job/coordinator.go)。需要跨 Job、请求、消费者复用时，建议新增公共 `pkg/lock/watchdog`，依赖现有 `lock.Locker/Lease`，按 **M4 操作级组件**开发。
+Job 仅提供本进程并发策略。跨进程租约若需自动续租，应作为独立的 lock 能力设计，不再通过 Job Coordinator 复用。
 
 完整的选择依据、建议 API、并发边界、释放流程和测试场景见[watchdog 开发示例](DEVELOPMENT.md#watchdog-开发示例)。
 

@@ -27,7 +27,7 @@ func TestPublicManagerAndCronOptionsDriveImmediateFailureHandling(t *testing.T) 
 		"report",
 		"@hourly",
 		TaskFunc(func(context.Context) error { return wantErr }),
-		RunImmediately(),
+		RunImmediately(true),
 	)
 
 	manager := newTestManager(t, spec)
@@ -63,7 +63,6 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 	}{
 		{name: "empty name", spec: NewSpec().RegisterOnce("", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
 		{name: "nil task", spec: NewSpec().RegisterOnce("once", nil).(*Spec)},
-		{name: "missing cron schedule", spec: NewSpec().RegisterCron("cron", "", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
 		{name: "duplicate names", spec: NewSpec().RegisterOnce("same", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("same", TaskFunc(func(context.Context) error { return nil })).(*Spec)},
 		{name: "exit without once", spec: NewSpec().RegisterDaemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
 		{name: "exit with background work", spec: NewSpec().RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("daemon", TaskFunc(func(context.Context) error { return nil })).ExitWhenDone().(*Spec)},
@@ -74,22 +73,9 @@ func TestSpecValidateRejectsInvalidDefinitions(t *testing.T) {
 			}
 		})
 	}
-	invalid := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(ConcurrentPolicy(99))).(*Spec)
-	if err := invalid.Validate(); err == nil {
-		t.Fatal("invalid policy accepted")
-	}
-	valid := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(DelayIfDistributedRunning)).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).(*Spec)
+
+	valid := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithConcurrentPolicy(DelayIfRunning)).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).(*Spec)
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestSpecRejectsInvalidPendingCapacity(t *testing.T) {
-	for _, limit := range []int{-2, int(^uint(0) >> 1)} {
-		spec := NewSpec()
-		spec.RegisterCron("invalid", "@hourly", TaskFunc(func(context.Context) error { return nil }), WithMaxPendingRuns(limit))
-		if err := spec.Validate(); err == nil {
-			t.Fatalf("accepted limit=%d", limit)
-		}
 	}
 }

@@ -1,135 +1,124 @@
 # Job
 
-`pkg/job` 是业务与 Wire 声明、构造和注册后台任务的公共入口。业务使用 `bootstrap.Spec.Job()` 声明 Cron、Once 或 Daemon 任务，再由 `bootstrap.NewJobBootstrap` 在 Boot 后构造并登记运行时；不应导入 `pkg/job/internal/*`。
+`pkg/job` 声明 Cron、Once 和 Daemon 任务。`bootstrap.Spec.Job()` 使用 Wire 共享的 job.Spec；`bootstrap.NewJobBootstrap` 注入应用的 config.Manager，构造 Manager 并登记 Runtime。Job 只提供本进程内、同一 Manager 中同一注册名称的并发控制；不同 Manager 和进程互不协调。
 
-并发策略只作用于 Cron：默认 `AllowOverlap` 允许重叠，`SkipIfRunning` / `DelayIfRunning` 只约束当前进程；跨进程控制必须同时注入 `ConcurrencyCoordinator` 并为任务选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。仅注入协调器不会改变任务策略。`NewManager(logger, spec, tracing, metrics, coordinator)` 的最后一个参数允许 nil，此时仅可使用进程内策略；分布式策略缺少协调器会在构造时返回错误，不会静默退化为无锁执行。所有声明必须在 `NewManager` 之前完成，之后修改 Spec 不会重配已创建的 Manager。
+## 声明与优先级
 
-## Delay 容量
+Cron 四项参数逐字段按 **配置 > 注册时显式指定 > Task 自身声明 > 框架默认值** 解析。Task 可分别实现以下可选接口，不必全部实现；方法只在 Manager 构造时调用一次，后续热更新复用这份基线。
 
-`DelayIfRunning` 默认最多一轮执行、一轮等待；满额的新触发直接跳过，默认返回 nil 并记录 `WARN limitPendingRuns | job backlog full; trigger skipped`，不调用 ErrorHandler。`DelayIfDistributedRunning` 在外部 Acquire 前限制每个任务、每个进程最多两个进入竞争的调用；其他节点持有执行权时，这两个调用可能都在等待。该限制不是分布式全局队列，也不保证严格 FIFO。
+| 参数 | 配置字段 | 注册声明 | Task 可选方法 | 框架默认值 |
+| --- | --- | --- | --- | --- |
+| 定时规则 | `schedule` | RegisterCron 的非空 schedule | `Schedule() string` | 无，合并后必须非空且合法 |
+| 并发策略 | `concurrent_policy` | `WithConcurrentPolicy(...)` | `ConcurrentPolicy() job.ConcurrentPolicy` | `AllowOverlap` |
+| 启动立即执行 | `run_immediately` | `RunImmediately(bool)` | `RunImmediately() bool` | false |
+| Delay 容量 | `max_pending_runs` | `WithMaxPendingRuns(int)` | `MaxPendingRuns() int` | 1 |
 
-使用 `job.WithMaxPendingRuns(n)` 覆盖，`n=0` 不保留额外等待名额，`n=-1` 显式恢复旧的无界等待。分布式 Delay 的总进入名额为 `n+1`，因此 n=0 时仍可能有一个调用等待远端执行权。负数仅允许 -1；最大 int 不支持，因为还需预留一个执行名额。所有配置在 Manager 构造时固化，不能运行期修改。默认 `AllowOverlap` 和两种 Skip 策略不受此选项限制。
-
-```go
-spec.RegisterCron("refresh", "@every 10s", task,
-    job.WithConcurrentPolicy(job.DelayIfRunning),
-    job.WithMaxPendingRuns(1))
-```
-
-片段中的 `spec` 是 `job.NewSpec()`，`task` 实现 `job.Task`。必须逐轮可靠执行的工作应使用持久队列；有界 Delay 会丢弃超额触发，显式无界 Delay 则仍有积压耗尽资源的风险。
-
-通过 `job.WithDelayOverflowHandler` 为单个 Cron 注入业务告警：
-
-```go
-// 前置条件：spec 为已完成配置加载的 bootstrap.Spec，内部共享 Wire 注入的 job.Spec；task 为业务 job.Task。
-// notify 由业务注入，签名为 func(context.Context, job.DelayOverflow) error。
-spec.Job().RegisterCron("refresh", "@every 10s", task,
-    job.WithConcurrentPolicy(job.DelayIfRunning),
-    job.WithMaxPendingRuns(1),
-    job.WithDelayOverflowHandler(func(ctx context.Context, event job.DelayOverflow) error {
-        notifyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-        defer cancel()
-        return notify(notifyCtx, event)
-    }))
-```
-
-使用独立 `job.Spec` 时直接调用 `spec.RegisterCron`，选项相同。示例需导入 `context`、`time`、`job` 和 `bootstrap`。回调事件是独立值，含任务名 `Name`、策略 `Policy` 和配置容量 `MaxPendingRuns`；不代表全局或实时队列长度。仅有界 Delay 满额时调用，未配置、无界 Delay、Skip 和 AllowOverlap 不调用。
-
-回调在默认 WARN 之后同步执行，不持锁、不占任务执行名额；可能被同一任务的多个触发并发调用。业务负责并发安全、请求超时及告警去重/限频，框架不创建通知 goroutine、不重试。慢回调仍会占用调度 goroutine 并延迟停止，应响应传入 Context，避免无限阻塞。回调成功仍跳过本轮；错误保留错误链，panic 转为错误，沿用 Cron 最终错误入口（自定义 `WithErrorHandler` 或默认 `ERROR cron job failed`）。与普通任务一致，随调度 Context 正常取消的错误不再上报。回调依赖由业务构造并在任务停止后释放；构造 Manager 后修改 Spec 不会替换已捕获的回调。
-
-名额通过每任务独立的 buffered channel 非阻塞申请，不增加包级锁；执行、外部 Acquire 和日志不在互斥临界区中。正常返回、取消和 panic 均归还名额；进程内执行令牌与分布式 guard 的取得/释放沿用原策略。第三方 Acquire 仍须响应 Context；容量限制不能强制终止不合作的实现。
-
-```mermaid
-flowchart TD
-    A([Cron 并发触发]) --> B{Delay 且启用容量限制?}
-    B -- 否 --> S([沿用原策略及其返回路径])
-    B -- 是 --> D{Context 已取消?}
-    D -- 是 --> E([返回取消错误])
-    D -- 否 --> F{非阻塞申请本任务进程内名额成功?}
-    F -- 否 --> G[WARN limitPendingRuns job backlog full trigger skipped]
-    G --> U{配置回调?}
-    U -- 否 --> H([返回 nil 跳过本轮])
-    U -- 是 --> V[无锁同步回调 可调用外部告警服务 使用 Context 超时]
-    V -- 成功 --> H
-    V -- 错误或 panic 转错误 --> W{调度 Context 正常取消?}
-    W -- 是 --> X([结束 不上报正常取消])
-    W -- 否 --> Y[WithErrorHandler 或默认 ERROR cron job failed]
-    Y --> Z([结束 本轮仍跳过])
-    F -- 是 --> I[登记 defer 归还名额]
-    I --> J{进程内 Delay 或分布式 Delay?}
-    J -- 进程内 --> K[等待执行令牌 或 Context 取消]
-    J -- 分布式 --> L[外部 Acquire 等待 guard 或 Context 取消]
-    K -- 取消 --> M[归还名额]
-    L -- 失败 --> N[ERROR job coordination failed]
-    N --> M
-    K -- 取得 --> O[执行 Handler 结束或 panic 时归还令牌]
-    L -- 取得 --> P[在 guard Context 下执行 Handler 释放 guard]
-    P -- 失去执行权或释放失败 --> Q[ERROR job coordination lost]
-    Q --> M
-    O --> M
-    P -- 成功 --> M
-    M --> R([返回结果或由现有路径处理 panic])
-```
-
-## 构造示例
-
-以下 Wire provider 构造 Redis 协调器并声明任务。`redisManager` 已按 [Redis 配置](../redis/README.md) 声明 `locks` 连接；其他依赖由业务 Wire 提供。各领域 Spec 由 Wire 构造并共享；Boot 返回的标记纳入 [Bootstrap 聚合](../bootstrap/README.md)，由 Server → Job 阶段在应用构造前完成登记。`cleanupTask` 是实现 `job.Task` 的业务任务。
+下面是可放入业务组装包的完整声明示例。Task 的 Run 承担业务工作，Boot 只登记已注入的 Task。
 
 ```go
 package assembly
 
 import (
-	jobredis "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/job/redis"
-	lockredis "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/lock/redis"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/redis"
+    "context"
+    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
+    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 )
 
-func newJobCoordinator(redisManager redis.Manager) (job.ConcurrencyCoordinator, error) {
-	return jobredis.NewLockCoordinator(
-		redisManager,
-		job.LockCoordinatorConfig{KeyPrefix: "example:production:job:"},
-		lockredis.WithConnection("locks"),
-	)
-}
+type RefreshTask struct{}
+func (*RefreshTask) Run(ctx context.Context) error { return ctx.Err() } // 替换为实际业务逻辑。
+func (*RefreshTask) Schedule() string { return "@every 1m" }
+func (*RefreshTask) ConcurrentPolicy() job.ConcurrentPolicy { return job.SkipIfRunning }
+func (*RefreshTask) RunImmediately() bool { return true }
+func (*RefreshTask) MaxPendingRuns() int { return 2 }
 
-func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, cleanupTask job.Task) bootstrap.Bootstrap {
-    spec.Job().RegisterCron("cleanup", "@every 1m", cleanupTask,
-        job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
+func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *RefreshTask) bootstrap.Bootstrap {
+    spec.Job().RegisterCron("refresh", "", task, job.RunImmediately(false))
     return bootstrap.Bootstrap{}
 }
 ```
 
-将 `newJobCoordinator`、`Boot`、`bootstrap.NewJobBootstrap` 加入业务 Wire provider 集合，协调器由 Wire 注入 NewJobBootstrap，再传给 `job.NewManager`。NewRuntimeBootstrap 接收 JobBootstrap 保证登记完成；禁用能力的 provider 示例见 [Bootstrap 文档](../bootstrap/README.md#可选依赖由-wire-构造注入)。
+空注册表达式表示使用 Task 或配置。配置中的空字符串是显式覆盖，因表达式无效而报错。配置使用 optional 字段，false、0、ALLOW_OVERLAP 都是有效的显式覆盖。有效快照中删除某个覆盖字段或将其设为 null，会重新使用注册/Task 基线。来源如何合并和删除字段仍遵循 [Config 语义](../config/README.md#来源与合并)。修改已经传入的 Spec 或 Task 默认方法不产生热更新。
 
-`KeyPrefix` 应替换成自己的应用和环境标识；需要互斥的副本使用相同前缀与任务名。任务结束后由协调器释放租约；共享 Redis 连接仍由 Redis Manager cleanup 释放。
+```yaml
+job:
+  cron:
+    refresh:
+      schedule: "*/10 * * * * *"
+      concurrent_policy: DELAY_IF_RUNNING
+      run_immediately: false
+      max_pending_runs: 1
+```
+
+表达式支持五字段、六字段（含秒）以及 `@hourly`、`@every 1m` 等描述符，时区由 `job.WithLocation` 指定。配置只覆盖已注册 Cron；未知任务名和 Once/Daemon 名称均拒绝，不能通过配置动态创建 Task。三种并发枚举为 `ALLOW_OVERLAP`、`DELAY_IF_RUNNING`、`SKIP_IF_RUNNING`；旧分布式策略不再支持。
+
+## 配置热更新与生命周期
+
+`NewManager(logger, spec, tracing, metrics, configManager)` 构造时读取并验证配置；configManager 可显式传 nil，表示只用静态声明。Bootstrap 正常注入应用 config.Manager。Start 再读取最新快照并建立 `job` 订阅，Stop 取消订阅；不额外返回 cleanup。由 App 管理 Start/Stop，应用先停止任务，再清理 Config Manager、日志和遥测资源。
+
+每次更新先完整校验全部任务，任一表达式、策略、容量或名称无效则整批拒绝，记录 `ERROR job.config.rejected` 并保留上一份有效规则；初次构造或启动时无效则返回错误。合法变更记录 `INFO job.config.applied`。Config Manager 按轮询快照通知，短时间多次更新可能合并。
+
+新表达式重新计算后续调度，旧周期不补跑。调度控制循环通过替换 robfig 条目应用更新，不等待正在执行的 Task。运行中修改 run_immediately 不额外触发：它只影响下一次进程启动；构造后、Start 前的配置变化仍会影响本次启动。
+
+并发规则与容量作用于后续触发；正在执行的任务继续，已经排队的调用仍等待串行执行。切换策略保留运行计数，AllowOverlap 改成 Skip/Delay 时不会丢失旧调用。缩容不丢弃已有等待，只限制新增等待；切到 AllowOverlap 后，新调用可能先于旧等待执行，不保证严格 FIFO 或公平性。容量只限制 Delay 的等待数，不限制 AllowOverlap 的并行数。
 
 ```mermaid
 flowchart TD
-    A([开始组装]) --> B[借用 Redis 连接，构造 coordinator]
-    B -- 失败 --> X([返回错误])
-    B -- 成功 --> C[Spec 注册带分布式策略的 Cron]
-    C --> D[NewManager 接收 coordinator 并校验任务与策略]
-    D -- 校验失败 --> X
-    D -- 成功 --> E[Bootstrap 同步登记到 app.Spec]
-    E -- 登记失败 --> X
-    E -- 成功 --> F([等待应用生命周期启动])
-    G([多个进程到达同名 Cron 周期]) --> H[向共享 Redis 请求同前缀与任务名的租约]
-    H -- 已被持有 --> I[WARN distributed job skipped]
-    I --> Z([结束本轮])
-    H -- 获取失败 --> J[ERROR job coordination failed]
-    J --> Z
-    H -- 获取成功 --> K[运行 Handler，协调器定期续租]
-    K -- 续租失败或超时 --> L[取消执行 Context，标记 ErrCoordinationLost]
-    K -- Handler 返回 --> M[停止续租并有界释放原租约]
-    L --> M
-    M -- 刷新未退出超时 --> N[不并发 Unlock，等待租约自然过期]
-    M -- 租约丢失或释放失败 --> O[ERROR job coordination lost]
-    N --> O
-    M -- 已失去协调权 --> O
-    M -- 成功 --> Z
-    O --> Z
+ A([构造 Manager]) --> B[读取 Task 和注册基线 合并 job.cron]
+ B --> C{整批校验通过?}
+ C -- 否 --> X([返回错误])
+ C -- 是 --> D[Start 重读配置 建立订阅]
+ D -- 失败 --> X
+ D -- 成功 --> E[启动调度控制循环和任务]
+ U([Config 异步回调]) --> V[锁外解析整批快照]
+ V -- 无效 --> W[ERROR job.config.rejected 保留旧规则]
+ V -- 有效 --> L[获取 Manager 状态锁]
+ L --> S{正在停机?}
+ S -- 是 --> Z[释放锁 忽略更新]
+ S -- 否 --> G[逐任务获取 gate 锁 更新策略并释放 gate 锁]
+ G --> H[发布新调度声明 释放 Manager 锁]
+ H --> I[INFO job.config.applied]
+ I --> J[控制循环锁外替换 robfig 条目]
+ J --> E
+ W --> E
+ E --> K([Stop 或父 Context 取消])
+ K --> M[状态锁内标记停止 取出取消函数 释放锁]
+ M --> N[锁外取消订阅和任务 通知调度控制循环退出]
+ N --> O[等待执行和等待中的任务退出]
+ O -- 超过 Stop Context --> P([返回超时 收敛继续])
+ O -- 完成 --> Q([结束])
+ Z --> Q
+```
+
+## Delay 容量
+
+`DelayIfRunning` 默认最多一轮执行、一轮等待。`max_pending_runs=0` 不保留等待，-1 表示无界等待；小于 -1 或最大 int 拒绝。满额触发跳过并记录 WARN，不调用 ErrorHandler。需要逐轮可靠处理的工作使用持久队列。
+
+`WithDelayOverflowHandler(func(context.Context, job.DelayOverflow) error)` 可注入满额通知，事件含 Name、Policy、MaxPendingRuns。回调在锁外同步调用，不占执行名额；可能并发发生，业务负责并发安全、超时和去重。回调成功仍跳过本轮，错误或 panic 转换结果交给 Cron ErrorHandler；框架不重试。配置热更新不替换此回调。
+
+```mermaid
+flowchart TD
+ A([Cron 并发触发]) --> B[获取本任务 gate 互斥锁]
+ B --> C{Context 已取消?}
+ C -- 是 --> R[释放锁 返回取消]
+ C -- 否 --> D{允许重叠 或没有运行和等待?}
+ D -- 是 --> E[增加运行数 释放锁]
+ D -- 否 --> F{Skip 策略?}
+ F -- 是 --> S[释放锁 WARN job skipped]
+ F -- 否 --> G{Delay 等待已满?}
+ G -- 是 --> H[释放锁 WARN pending-run queue is full]
+ H --> I[锁外调用可选业务通知 含外部超时]
+ I -- 错误或 panic --> J[交给 ErrorHandler]
+ I -- 成功 --> Z([跳过结束])
+ G -- 否 --> K[增加等待数]
+ K --> K1[释放锁 等待运行完成或取消]
+ K1 --> L[重新获取 gate 锁检查状态]
+ L -- 取消 --> M[减少等待数 释放锁 返回取消]
+ L -- 仍有运行 --> K1
+ L -- 可执行 --> N[减少等待数 增加运行数 释放锁]
+ E & N --> O[锁外执行 Task 和业务中间件]
+ O --> P[defer 获取 gate 锁 减少运行数 唤醒等待 释放锁]
+ P --> T([返回结果])
+ R & M & J & S --> Z
 ```
 
 Job Runtime 在 `Start` 时立即启动。`ExitWhenDone` 要求至少注册一个 Once，且 Spec 只能包含 Once；混入 Cron 或 Daemon 会在 `NewManager` 校验时返回错误。该模式在所有 Once 任务成功完成后返回 `job.ErrCompleted`；组装层 `bootstrap.NewJobBootstrap` 的适配器将该结果转换为 `app.ErrStopRequested`，请求正常停机。任务自身的失败原样保留。直接使用 Manager 时，由调用方处理 `job.ErrCompleted`。
@@ -162,20 +151,9 @@ flowchart TD
     F --> G
 ```
 
-`bootstrap.NewJobBootstrap` 在 Server 完成后，从 Wire 注入的共享 job.Spec 构造 Manager，仅在包含任务时登记 Runtime；空 Job 声明不登记。它不启动任务、不返回 cleanup；Manager 的 Start/Stop 由 App 生命周期监督层拥有。单次、有序组装由 Wire 依赖链保证；底层 app.Spec 冻结后登记仍会 panic，构造失败后应放弃本次组装。
+`bootstrap.NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing)` 只构造和登记有任务的 Runtime，空 Spec 不登记。Job 不依赖 app/bootstrap，不管理全局容器，也没有 Coordinator、锁租约或 Redis 适配。`manager.go` 管构造，`manager_lifecycle.go` 管启停，`config.go` 管优先级，`config_reload.go` 管订阅与更新，`concurrent_policy.go` 管持续存在的本进程执行状态。
 
-Job 不使用全局驱动注册表，也不会读取 `job.lock.driver` 自动选择实现。任务与协调器公共契约、调度、并发策略和观测逻辑直接定义在 `pkg/job`。`manager.go` 负责构造与任务组装，`manager_lifecycle.go` 负责运行和收敛；`cron.go` 集中调度与表达式解析，`log.go` 集中任务及 cron 日志适配；`lock_coordinator.go` 负责锁获取与配置校验，`lock_guard.go` 负责租约续租释放。
-
-租约续租失败或超过 `OperationTimeout` 时，执行 Context 会独立取消并携带 `ErrCoordinationLost`，即使底层 `Refresh` 尚未返回；晚到的成功不会恢复旧任务。Handler 应响应 Context 取消。协调器不会重新拿锁继续旧任务，后续周期调度仍按原计划运行。
-
-Release 先取消旧执行和续租，再最多等待 `OperationTimeout` 让在途续租退出。超过等待预算便返回错误，不与在途刷新并发 Unlock，而让租约自然过期。Redis 在途 I/O 仍遵守原客户端配置；默认读取超时有限。显式配置无限读取且禁用 Context 超时时，旧任务仍及时取消、Release 仍可返回，但原续租调用需等网络返回或 Redis Manager cleanup 关闭连接后收尾。第三方 Lease 仍须遵守 Context 约定，完全不可取消的实现无法被 Go 强制终止。协调器不为每次调用额外创建阻塞 goroutine；超时只触发短取消回调。
-
-任务实现和中间件可通过 `job.JobNameFromContext(ctx)` 读取任务的注册名称。
-名称由执行器注入，派生 Context 会继承；非任务 Context 返回空字符串。
-
-默认不启用分布式协调时，Wire 可选择 `job.DefaultCoordinator`，其返回真正的 nil interface。
-它不提供本地锁实现；进程内并发策略仍由 Job 自身处理。需要分布式协调时，替换该 provider，
-不要同时登记默认和自定义 provider。
+任务和中间件通过 `job.JobNameFromContext(ctx)` 读取注册名；非任务 Context 返回空字符串。
 
 共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
 
@@ -196,4 +174,31 @@ flowchart TD
  D --> H([结束])
  E --> H
  G --> H
+```
+
+## 中间件执行顺序
+
+Cron 的进入顺序为：recovery → 并发控制 → tracing → metrics → logging → 按注册顺序的业务中间件 → Task；返回及 defer 按相反顺序执行。Once、Daemon 使用同一顺序，但没有并发控制。关闭观测只移除对应观测层，recovery 始终位于整个执行链最外层，且只组装一次。
+
+观测层进入时将结果初始化为 panic 失败标记，只有下层正常返回才用返回值覆盖。因此 panic 展开期间不会按 nil error 记录成功，运行指标会归还、span 会以失败状态结束。最外层 recovery 统一将 panic 转为携带原始内容与堆栈的错误，交给既有结果处理边界。业务 panic 的 trace 使用通用 `job execution panicked` 描述，详细错误由最终 ErrorHandler 接收。
+
+观测实现自身 panic 时只能保证返回错误，不能保证该实现已中断的指标或 span 完整。构造中间件时、最终 ErrorHandler 内及 Task 自建 goroutine 中的 panic 不在这条执行链的保护范围内。
+
+```mermaid
+flowchart LR
+ A([任务触发]) --> R[最外层 recovery]
+ R --> G[并发控制 仅 Cron]
+ G -- 跳过或取消 --> R
+ G -- 获得执行名额 --> T[tracing 初始化失败标记]
+ T --> M[metrics 初始化失败标记]
+ M --> L[logging 初始化失败标记]
+ L --> B[业务中间件 按注册顺序]
+ B --> J[Task]
+ J -- 正常返回覆盖标记 或 panic 保留标记 --> L
+ L -- defer 仅正常成功记录 done --> M
+ M -- defer 记录结果和耗时 归还运行指标 --> T
+ T -- defer 设置 span 状态并结束 --> G
+ G -- defer 归还执行名额 --> R
+ R -- 正常结果或 panic 转为含堆栈错误 --> E[统一结果处理 错误交给最终 ErrorHandler]
+ E --> Z([结束])
 ```

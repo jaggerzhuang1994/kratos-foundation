@@ -43,7 +43,7 @@ func initialize(sources config.Sources, version string, decorate app.ContextDeco
 		newBusinessServer,
 		newBootstrap,
 		bootstrap.NewInfrastructureBootstrap,
-		job.DefaultCoordinator,
+
 		bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
 		bootstrap.NewApplicationBootstrap,
 		bootstrap.NewKratosApp,
@@ -54,7 +54,7 @@ func initialize(sources config.Sources, version string, decorate app.ContextDeco
 
 func initializeComponents(sources config.Sources, version string) (*kratos.App, func(), error) {
 	wire.Build(
-		newRegistrar, job.DefaultCoordinator, bootstrap.NewConfigManager, app.NewSpec, server.NewSpec, job.NewSpec, app.NewConfig, app.NewStopPolicy,
+		newRegistrar, bootstrap.NewConfigManager, app.NewSpec, server.NewSpec, job.NewSpec, app.NewConfig, app.NewStopPolicy,
 		appinfo.New, log.NewLogger,
 		wire.Bind(new(kratoslog.Logger), new(log.Logger)),
 		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,

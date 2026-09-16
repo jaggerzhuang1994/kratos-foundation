@@ -45,7 +45,7 @@ Job Spec 始终由 Wire 提供；NewJobBootstrap 构造 Manager，任务为空�
 
 Wire 注册 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`，分别构造唯一的领域声明；`bootstrap.NewSpec(application, servers, jobs, sources)` 借用这些指针，不创建副本。`BaseProviderSet` 已包含三个领域构造函数，使用它时不要重复注册；业务仍提供 bootstrap.Spec 的配置声明 provider。
 
-`BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator` 同时包含 `queue.NewObservability`，自动复用应用已有的 Logger、Tracing、Metrics；队列 provider 直接接收 `queue.Observability`。不要再注册返回相同类型的手写 provider。该入口不创建资源或增加 cleanup，详见 [Queue 默认观测依赖](../queue/typed.md#默认观测依赖)。
+`BaseProviderSet` 包含 `queue.NewObservability`，自动复用应用已有的 Logger、Tracing、Metrics；队列 provider 直接接收 `queue.Observability`。不要再注册返回相同类型的手写 provider。该入口不创建资源或增加 cleanup，详见 [Queue 默认观测依赖](../queue/typed.md#默认观测依赖)。
 
 不用 BaseProviderSet 时，在现有 injector 中显式添加：
 
@@ -129,7 +129,7 @@ flowchart TD
 | `NewTracingBootstrap()` | `TracingBootstrap` | 设置日志中的 trace/span 动态字段 |
 | `NewMetricsBootstrap(spec, meter)` | `MetricsBootstrap` | 将默认 Meter 注入 App Context |
 | `NewServerBootstrap(application, servers, manager, logger, metrics, tracing, boot)` | `ServerBootstrap` | 按统一 Spec 构造和登记服务器，返回 cleanup |
-| `NewJobBootstrap(application, jobs, coordinator, logger, metrics, tracing, serverBootstrap)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
+| `NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
 
 构造参数统一按 Spec、配置依赖、组件专属依赖、观测依赖（Logger、Metrics、Tracing）、阶段完成标记排列；不存在的类别直接省略。纯阶段聚合函数按阶段顺序接收标记。参数位置只用于阅读，Wire 仍按类型解析依赖；组装顺序由完成标记建立，见下方流程图。
 
@@ -185,85 +185,21 @@ flowchart TD
 
 ## 可选依赖由 Wire 构造注入
 
-`registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`；
-`job.ConcurrencyCoordinator` 注入 `NewJobBootstrap(application, jobs, coordinator, logger, metrics, tracing, serverBootstrap)`，
-再传给 `job.NewManager`。它们不属于 Spec 声明，不需要 Boot 登记。
+`registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`。可选服务注册通过业务 provider 返回 nil Registrar 禁用，不需要 Boot 登记；默认 BaseProviderSet 使用 app.NewRegistrar。
 
-下面是完整的最小 Wire 示例，两个文件放在消费项目的同一个组装包中，并执行该项目的 Wire 生成命令。
-示例将其余依赖作为 injector 输入：调用 `initializeApp` 前须完成基础设施/业务 Bootstrap 聚合，
-取得同一份 `app.Spec` 和 `StartupReady`；调用 `initializeJobs` 前须声明好任务。
-实际应用也可将这两个 nil provider 放进已有的完整 `wire.Build`，由现有 provider 构造其余依赖。
-
-`wire.go`（普通源码，生成后的应用也需要编译这些 provider）：
-
-```go
-package assembly
-
-import (
-    "github.com/go-kratos/kratos/v2/registry"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
-)
-
-func noRegistrar() registry.Registrar { return nil }
-func noCoordinator() job.ConcurrencyCoordinator { return nil }
-```
-
-`wire.go`：
-
-```go
-//go:build wireinject
-
-package assembly
-
-import (
-    "github.com/go-kratos/kratos/v2"
-    "github.com/google/wire"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
-)
-
-func initializeApp(spec *app.Spec, ready bootstrap.StartupReady,
-    config app.Config, stopPolicy *app.StopPolicy) (*kratos.App, error) {
-    wire.Build(noRegistrar, bootstrap.NewKratosApp)
-    return nil, nil
-}
-
-func initializeJobs(logger log.Logger, spec *job.Spec, tracingProvider tracing.Provider,
-    metricsProvider metrics.Provider) (*job.Manager, error) {
-    wire.Build(noCoordinator, job.NewManager)
-    return nil, nil
-}
-```
-
-nil provider 应返回真正的 nil interface，不能返回装入接口的 nil 具体指针。
-nil Registrar 禁用服务注册；nil Coordinator 允许普通 Cron、Once、Daemon，但带分布式并发策略的 Cron 会在 `NewManager` 构造时失败。
-注入协调器本身不会启用分布式策略，仍须显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。Delay 默认限制每任务每进程的进入数量，可通过 `spec.Job().RegisterCron(..., job.WithDelayOverflowHandler(handler))` 接入满额通知；容量、回调与超额跳过语义见 [Job 文档](../job/README.md#delay-容量)。
-这些依赖在构造时确定，不支持通过事后修改 Spec 切换。
-
-应用组装使用 `app.NewRegistrar` 和 `registry.NewFactory`，由 `app.registry` 选择实例（省略或为空使用 default），驱动禁用时跳过注册；上例的 nil Registrar 仅说明 App 底层接口语义。
-启用 Redis 协调时，将 `noCoordinator` 替换为 [Job 文档中的 `newJobCoordinator`](../job/README.md)，由业务 provider 固定连接名及协调参数。
-每个接口只保留一个 provider；无需额外 `wire.Bind`，这些 provider 已返回目标接口。
-共享客户端仍由其构造函数返回的 cleanup 管理；先停止应用，再由 Wire 逆序释放依赖。
+Job 不再有 Coordinator provider，NewJobBootstrap 直接接收应用 config.Manager。表达式、并发策略、runImmediately、maxPendingRuns 按配置 > 注册 > Task 默认值解析，热更新边界见 [Job 文档](../job/README.md)。
 
 ```mermaid
 flowchart TD
-    A([Wire 选择接口 provider]) --> B{需要可选能力?}
-    B -- 否 --> C[provider 返回 nil interface]
-    B -- 是 --> D[构造 contrib 实现及所需依赖]
-    D -- 构造失败 --> X([返回错误，Wire 逆序 cleanup])
-    C --> E[构造参数注入 App 或 Job Manager]
-    D -- 成功 --> E
-    E --> F{分布式 Cron 缺少协调器?}
-    F -- 是 --> X
-    F -- 否 --> G[App 按 Registrar 是否为 nil 决定服务注册]
-    G --> H([构造完成，等待应用启动])
+ A([Wire 组装]) --> B[注入 config.Manager 与共享 job.Spec]
+ B --> C[NewJobBootstrap 构造 Job Manager]
+ C -- 配置或声明无效 --> X([返回错误])
+ C -- 成功且有任务 --> D[登记 Runtime 等待 App Start]
+ C -- 无任务 --> E([不登记 Runtime])
+ D --> F[Start 订阅配置并调度]
+ F --> G[Stop 取消订阅与任务并等待收敛]
+ G --> H([结束后清理配置资源])
 ```
-
-以上构造路径返回错误，不额外记录日志；运行时服务注册及租约获取、续租、释放流程见对应领域和 contrib 文档。
 
 ## 配置订阅与监控端点
 
@@ -279,7 +215,7 @@ Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterRuntime()、RegisterKaf
 
 ## 驱动组装
 
-使用 `BaseProviderSet`，业务提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot。需要自定义 Job Coordinator 时改用 `BaseProviderSetWithCustomJobCoordinator`，并提供 `job.ConcurrencyCoordinator`；两个集合二选一。
+使用 `BaseProviderSet`，业务提供已声明 Configuration 的 `*bootstrap.Spec`、`appinfo.AppInfo` 和 Boot。Job 复用应用 config.Manager，不需要单独的 Coordinator provider。
 
 ```go
 // wireinject 文件中的业务 provider：Boot 已声明应用组件。

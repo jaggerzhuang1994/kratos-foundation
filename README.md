@@ -41,6 +41,7 @@
 | `client` | 具名服务客户端、调用中间件与清理预算 | 仅 `clients`；`cleanup_timeout` 需重启，日志由 log.modules 管理 |
 | `kafka` | 具名 broker 连接、TLS/SASL、生产/消费参数 | 无 |
 | `oss` | 按逻辑名配置 bucket 和驱动参数 | 无 |
+| `job` | 已注册 Cron 的调度与本进程并发策略 | schedule、concurrent_policy、max_pending_runs；run_immediately 只在启动时触发 |
 
 热更新按组件生效，不能视为整份应用配置同时切换。Server 中间件会先校验组合再逐项发布；Database 同次更新若含需重启字段，会跳过整次数据库更新，连接池参数也不应用；Client 的日志或 cleanup 预算变更只提示需重启，不阻止有效的 `clients` 更新。配置 Manager 接受快照也不代表每个组件都已应用，具体边界见各包 README。
 
@@ -72,7 +73,7 @@ flowchart TD
 | 根日志 | `log` 配置动态控制策略，`LOG_*` 提供启动默认值与输出资源配置；模块策略统一集中到 `log.modules` |
 | Consul 地址与认证 | 配置源与注册发现共享 env 驱动的进程单例，见[内部生命周期](internal/consul/README.md) |
 | Metrics Provider | 显式构造和注入；HTTP 暴露位置仍由 `server.http.metrics` 配置 |
-| Job、Queue | 强类型 Spec/构造配置及显式 Bootstrap；Kafka 连接配置仍位于 `kafka` |
+| Job、Queue | Job 的 `job.cron` 支持热更新；Queue 使用强类型构造配置及显式 Bootstrap |
 
 配置协议不保留已删除字段的名称或编号；旧配置不再依赖 reserved 校验拒绝，迁移时应主动清理，详见 [配置迁移表](pkg/config/README.md) 和 [v2 迁移清单](MIGRATION_V2.md)。
 
@@ -88,7 +89,7 @@ flowchart TD
 
 ## 构造依赖约定
 
-Wire 或手工组装层负责提供非空的必需组件依赖（如 Config Manager、Logger、AppInfo、遥测 Provider、Spec 和 Runtime）。构造函数及 Bootstrap 不重复检查这些依赖是否为 `nil`；直接调用时也必须遵守该前置条件。配置、外部输入、回调以及来源不确定的返回值继续按各包契约校验。显式支持禁用的可选依赖（如 Consul Client、Registrar、Discovery 和未使用分布式策略时的 Job Coordinator）保留 `nil` 语义。
+Wire 或手工组装层负责提供非空的必需组件依赖（如 Config Manager、Logger、AppInfo、遥测 Provider、Spec 和 Runtime）。构造函数及 Bootstrap 不重复检查这些依赖是否为 `nil`；直接调用时也必须遵守该前置条件。配置、外部输入、回调以及来源不确定的返回值继续按各包契约校验。显式支持禁用的可选依赖（如 Consul Client、Registrar、Discovery ）保留 `nil` 语义。
 
 ## 核心组装流程
 
@@ -108,7 +109,7 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-`BaseProviderSet` 统一构造配置源链与具名注册/发现实例，并为队列提供复用应用观测依赖的 `queue.Observability`；自定义 Job Coordinator 使用 `BaseProviderSetWithCustomJobCoordinator`。 默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)，由 `bootstrap.NewSpec` 登记加载器。应用显式提供 AppInfo、LocalConfigPath 和 RemoteConfigDirName；默认十二层远程路径与本地文件/目录/glob 规则在 contrib 实现。
+`BaseProviderSet` 统一构造配置源链与具名注册/发现实例，并为队列提供复用应用观测依赖的 `queue.Observability`。 默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)，由 `bootstrap.NewSpec` 登记加载器。应用显式提供 AppInfo、LocalConfigPath 和 RemoteConfigDirName；默认十二层远程路径与本地文件/目录/glob 规则在 contrib 实现。
 
 ## 日志
 
@@ -166,13 +167,10 @@ flowchart LR
     G --> H([运行时退出后释放存储或Kafka客户端])
 ```
 
-## Job 并发协调
+## Job 调度与并发
 
-`pkg/job` 保留通用并发协调契约，具体 Redis 组合由业务/Wire 显式选择并通过 `job.NewManager` 的最后一个构造参数注入。统一 Spec 模式由 `bootstrap.NewJobBootstrap` 接收并转交协调器，Spec 仅声明任务与策略。
+Job 仅提供本进程、同一 Manager 内的 AllowOverlap、SkipIfRunning、DelayIfRunning。`job.cron` 按注册名称热更新表达式、并发策略和等待容量；run_immediately 只在启动时触发。四项均按配置、注册声明、Task 默认值的顺序解析，详见 [Job 文档](pkg/job/README.md)。Bootstrap 注入 config.Manager，无需 Coordinator provider。
 
-不需要跨进程协调时，业务 provider 返回 nil `job.ConcurrencyCoordinator`；启用时提供 Redis contrib 实现，并在任务上显式选择 `SkipIfDistributedRunning` 或 `DelayIfDistributedRunning`。分布式策略缺少协调器会在 Manager 构造时返回错误；仅注入协调器不会把进程内策略升级为分布式策略。这里不使用全局驱动注册表，也不会根据 `job.lock.driver` 自动分发。Delay 默认有界等待，超额触发会跳过；详见 [Job 容量说明](pkg/job/README.md#delay-容量)。
-
-`app.NewRegistrar` 按 `app.registry` 解析具名实例并注入 `bootstrap.NewKratosApp`，配置省略或为空时使用 `registry.instances.default`；缺少实例返回错误，驱动禁用时跳过注册。完整的 nil provider 与 Wire 示例见 [Bootstrap 文档](pkg/bootstrap/README.md#可选依赖由-wire-构造注入)，Redis provider 与租约边界见 [Job 文档](pkg/job/README.md)。
 
 ## 主要目录
 

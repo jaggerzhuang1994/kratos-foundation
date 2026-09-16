@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +41,40 @@ func TestCronJobPreservesBusinessErrorsDuringCancellation(t *testing.T) {
 				}
 			} else if reported != nil {
 				t.Fatalf("reported error = %v, want normal shutdown", reported)
+			}
+		})
+	}
+}
+
+func TestManagedJobRecoversEntireExecutionChain(t *testing.T) {
+	for _, phase := range []string{"before next", "after next", "defer"} {
+		t.Run(phase, func(t *testing.T) {
+			panicMiddleware := func(next Handler) Handler {
+				return func(ctx context.Context) error {
+					if phase == "before next" {
+						panic(phase)
+					}
+					if phase == "defer" {
+						defer func() { panic(phase) }()
+					}
+					err := next(ctx)
+					if phase == "after next" {
+						panic(phase)
+					}
+					return err
+				}
+			}
+			// 外围中间件和它的 defer 均由同一个最外层 recovery 捕获。
+			gate := newExecutionGate(testModuleLog(t), "test", cronConfig{policy: DelayIfRunning, pending: 0}, nil)
+			task := newManagedJob("test", TaskFunc(func(context.Context) error { return nil }), []Middleware{gate.middleware, panicMiddleware})
+			var reported error
+			trigger := cronJob{ctx: context.Background(), name: "test", job: task.job, errorHandler: func(_ context.Context, _ string, err error) { reported = err }}
+			trigger.Run()
+			if gate.running != 0 {
+				t.Fatal("panic leaked execution slot")
+			}
+			if reported == nil || !strings.Contains(reported.Error(), "job panic: "+phase) {
+				t.Fatalf("panic escaped final error path: %v", reported)
 			}
 		})
 	}

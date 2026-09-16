@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -12,6 +13,8 @@ import (
 type cronScheduler interface {
 	// schedule 注册已经解析的调度计划。
 	schedule(context.Context, string, Task, scheduleSpec)
+	// reschedule 发布新的后续计划，保留任务与执行上下文。
+	reschedule(string, scheduleSpec)
 	// start 启动调度循环。
 	start()
 	// stop 等待调度循环及已启动任务退出。
@@ -19,6 +22,14 @@ type cronScheduler interface {
 }
 
 type cron_ struct {
+	mu      sync.Mutex
+	desired map[string]*cronRegistration
+	wake    chan struct{}
+	stopCh  chan struct{}
+	done    chan struct{}
+	started bool
+	stopped bool
+
 	log          moduleLog
 	cron         *cron.Cron
 	errorHandler func(context.Context, string, error)
@@ -47,33 +58,102 @@ func newCron(
 		}
 	}
 	return &cron_{
+		desired: make(map[string]*cronRegistration), wake: make(chan struct{}, 1), stopCh: make(chan struct{}), done: make(chan struct{}),
 		log:          log,
 		cron:         cron.New(opt...),
 		errorHandler: errorHandler,
 	}
 }
 
-// schedule 注册一个已经完成语法校验的周期任务。
+// cronRegistration 一旦发布即只读；Next 的可变状态仅由 robfig 调度协程访问。
+type cronRegistration struct {
+	job      *cronJob
+	schedule scheduleSpec
+}
+
+// schedule 只发布声明并唤醒控制循环，不在 Manager 的状态锁内等待 cron 通道。
 func (c *cron_) schedule(ctx context.Context, name string, job Task, schedule scheduleSpec) {
-	c.cron.Schedule(schedule, &cronJob{
-		ctx:          withJobName(ctx, name),
-		name:         name,
-		job:          job,
-		errorHandler: c.errorHandler,
-	})
+	c.mu.Lock()
+	if !c.stopped {
+		c.desired[name] = &cronRegistration{job: &cronJob{ctx: withJobName(ctx, name), name: name, job: job, errorHandler: c.errorHandler}, schedule: schedule}
+	}
+	c.mu.Unlock()
+	c.notify()
 }
 
-// start 启动 cron 调度循环。
+func (c *cron_) reschedule(name string, schedule scheduleSpec) {
+	c.mu.Lock()
+	if previous := c.desired[name]; previous != nil && !c.stopped {
+		c.desired[name] = &cronRegistration{job: previous.job, schedule: schedule}
+	}
+	c.mu.Unlock()
+	c.notify()
+}
+
+func (c *cron_) notify() {
+	select {
+	case c.wake <- struct{}{}:
+	default:
+	}
+}
+
 func (c *cron_) start() {
-	c.log.Info("starting cron server")
-	c.cron.Start()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.started || c.stopped {
+		return
+	}
+	c.started = true
+	// 控制循环归调度器所有，stop 发出退出信号并等待其及已启动任务结束。
+	go c.run()
 }
 
-// stop 等待 cron 调度循环和正在执行的任务结束。
+func (c *cron_) run() {
+	defer close(c.done)
+	c.log.With("function", "cron.run").Info("starting cron server")
+	c.cron.Start()
+	applied := make(map[string]*cronRegistration)
+	ids := make(map[string]cron.EntryID)
+	for {
+		select {
+		case <-c.stopCh:
+			c.log.With("function", "cron.run").Info("stopping cron server")
+			<-c.cron.Stop().Done()
+			c.log.With("function", "cron.run").Info("cron server stopped")
+			return
+		case <-c.wake:
+			c.mu.Lock()
+			snapshot := make(map[string]*cronRegistration, len(c.desired))
+			for name, entry := range c.desired {
+				snapshot[name] = entry
+			}
+			c.mu.Unlock()
+			// 外部调度调用及 Next/日志均在锁外；整个替换序列只由本协程执行。
+			for name, entry := range snapshot {
+				if applied[name] == entry {
+					continue
+				}
+				if id, ok := ids[name]; ok {
+					c.cron.Remove(id)
+				}
+				ids[name] = c.cron.Schedule(entry.schedule, entry.job)
+				applied[name] = entry
+			}
+		}
+	}
+}
+
 func (c *cron_) stop() {
-	c.log.Info("stopping cron server")
-	<-c.cron.Stop().Done()
-	c.log.Info("cron server stopped")
+	c.mu.Lock()
+	if !c.stopped {
+		c.stopped = true
+		close(c.stopCh)
+	}
+	started := c.started
+	c.mu.Unlock()
+	if started {
+		<-c.done
+	}
 }
 
 type cronJob struct {

@@ -8,7 +8,7 @@
 # 地址、连接名及凭据均为示例，按实际环境替换；仅在应用组装对应组件后生效。
 # 本文件不自动加载；由应用通过 contrib/config/file 或其他配置源显式加载。
 # 热更新范围：log.filter_keys/modules/std/file、app.stop_timeout、server.middleware、client.clients、tracing.sampler、数据库连接池。
-# 其余字段需重启；LOG_*、Consul 连接参数以及 Job/Queue Spec 见 README.md。
+# job.cron 支持热更新；其余字段需重启；LOG_*、Consul 连接参数以及 Queue Spec 见 README.md。
 #
 
 # =============================================================================
@@ -601,3 +601,12 @@ client:
     #       max_timeout: 10s
     #     circuit_breaker:
     #       enable: true
+
+# 仅可配置已经由业务注册的 Cron 任务；未知名称会导致启动/热更新校验失败。
+job:
+  cron: {}
+#    refresh:
+#      schedule: "*/10 * * * * *"
+#      concurrent_policy: DELAY_IF_RUNNING
+#      run_immediately: false # 只控制启动时立即执行，热更新不补触发。
+#      max_pending_runs: 1

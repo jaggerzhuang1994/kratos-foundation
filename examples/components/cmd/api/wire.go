@@ -33,7 +33,7 @@ func initialize(path configPath, version string) (*kratos.App, func(), error) {
 		bootstrap.NewAppInfoBootstrap, bootstrap.NewLogBootstrap,
 		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,
 		bootstrap.NewInfrastructureBootstrap,
-		job.DefaultCoordinator, bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
+		bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
 		app.NewStopPolicy, bootstrap.NewApplicationBootstrap, bootstrap.NewKratosApp,
 	)
 	return nil, nil, nil

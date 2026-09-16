@@ -1,0 +1,30 @@
+syntax = "proto3";
+option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb";
+
+package kratos_foundation_pb;
+
+// Job 配置已注册的 Cron 任务，不从配置动态创建业务 Task。
+message Job {
+  // 以注册名称为键的任务覆盖项。[热更新]
+  map<string, CronJob> cron = 1;
+}
+
+// CronJob 各字段独立按配置、注册声明、Task 声明、框架默认值的顺序解析。
+// optional 保留 false、0 和 ALLOW_OVERLAP 的显式覆盖语义。
+message CronJob {
+  // Cron 表达式，支持可选秒字段和标准描述符。[热更新]
+  optional string schedule = 1;
+  // 本进程内同一任务的重叠策略。[热更新]
+  optional JobConcurrentPolicy concurrent_policy = 2;
+  // 是否在启动时立即执行。Start 前读取最新值；运行中修改不补触发，下次启动生效。
+  optional bool run_immediately = 3;
+  // Delay 等待容量，默认 1；0 不等待，-1 无界等待。[热更新]
+  optional int32 max_pending_runs = 4;
+}
+
+// JobConcurrentPolicy 仅作用于本 Manager 中同一注册任务，不提供跨进程协调。
+enum JobConcurrentPolicy {
+  ALLOW_OVERLAP = 0;
+  DELAY_IF_RUNNING = 1;
+  SKIP_IF_RUNNING = 2;
+}

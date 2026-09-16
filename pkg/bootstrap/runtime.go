@@ -63,12 +63,12 @@ func NewServerBootstrap(
 func NewJobBootstrap(
 	application *app.Spec,
 	jobs *job.Spec,
-	coordinator job.ConcurrencyCoordinator,
+	configuration config.Manager,
 	logger log.Logger,
 	meter metrics.Provider,
 	tracer tracing.Provider,
 ) (JobBootstrap, error) {
-	manager, err := job.NewManager(logger, jobs, tracer, meter, coordinator)
+	manager, err := job.NewManager(logger, jobs, tracer, meter, configuration)
 	if err != nil {
 		return JobBootstrap{}, fmt.Errorf("job bootstrap: %w", err)
 	}

@@ -2,96 +2,117 @@ package job
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
+	"sync"
 )
 
-// ConcurrentPolicy 决定同一周期任务重叠时继续、等待还是跳过。
+// ConcurrentPolicy 决定本 Manager 内同一周期任务重叠时继续、等待还是跳过。
 type ConcurrentPolicy uint8
 
 const (
 	// AllowOverlap 允许同一任务的多次调用重叠执行。
 	AllowOverlap ConcurrentPolicy = iota
-	// DelayIfRunning 在当前进程内有界等待上一轮完成，容量由 WithMaxPendingRuns 决定。
+	// DelayIfRunning 在本进程内等待正在运行的调用结束。
 	DelayIfRunning
-	// SkipIfRunning 在当前进程已有同名任务运行时跳过本轮。
+	// SkipIfRunning 在本进程已有同名任务运行时跳过本轮。
 	SkipIfRunning
-	// DelayIfDistributedRunning 在进程内限制竞争者数量，跨进程等待独占执行权。
-	DelayIfDistributedRunning
-	// SkipIfDistributedRunning 在其他进程持有执行权时跳过本轮。
-	SkipIfDistributedRunning
 )
 
-// valid 判断策略值是否属于公开枚举范围。
-func (p ConcurrentPolicy) valid() bool {
-	return p <= SkipIfDistributedRunning
+func (p ConcurrentPolicy) valid() bool { return p <= SkipIfRunning }
+
+// executionGate 在热更新期间保留执行与等待计数，禁止替换中间件后丢失独占状态。
+// mu 只保护状态转移；任务、等待、日志与通知均在锁外执行。
+type executionGate struct {
+	mu       sync.Mutex
+	policy   ConcurrentPolicy
+	limit    int
+	running  int
+	pending  int
+	changed  chan struct{}
+	name     string
+	log      moduleLog
+	overflow func(context.Context, DelayOverflow) error
 }
 
-// distributed 判断策略是否需要跨进程协调器。
-func (p ConcurrentPolicy) distributed() bool {
-	return p == DelayIfDistributedRunning || p == SkipIfDistributedRunning
+func newExecutionGate(log moduleLog, name string, config cronConfig, overflow func(context.Context, DelayOverflow) error) *executionGate {
+	return &executionGate{policy: config.policy, limit: config.pending, changed: make(chan struct{}), name: name, log: log, overflow: overflow}
 }
 
-// concurrentMiddleware 把声明式并发策略转换为任务中间件。
-func concurrentMiddleware(
-	log moduleLog,
-	policy ConcurrentPolicy,
-	coordinator ConcurrencyCoordinator,
-	key string,
-	maxPendingRuns int,
-	overflowHandler func(context.Context, DelayOverflow) error,
-) Middleware {
-	switch policy {
-	case DelayIfRunning:
-		return limitPendingRuns(log, DelayOverflow{Name: key, Policy: policy, MaxPendingRuns: maxPendingRuns}, overflowHandler, delayIfStillRunning(log))
-	case SkipIfRunning:
-		return skipIfStillRunning(log)
-	case DelayIfDistributedRunning:
-		return limitPendingRuns(log, DelayOverflow{Name: key, Policy: policy, MaxPendingRuns: maxPendingRuns}, overflowHandler, distributedConcurrent(log, coordinator, key, true))
-	case SkipIfDistributedRunning:
-		return distributedConcurrent(log, coordinator, key, false)
-	default:
-		return nil
+func (g *executionGate) update(config cronConfig) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.policy, g.limit = config.policy, config.pending
+}
+
+func (g *executionGate) middleware(next Handler) Handler {
+	return func(ctx context.Context) error {
+		admitted, err := g.acquire(ctx)
+		if err != nil || !admitted {
+			return err
+		}
+		defer g.release()
+		return next(ctx)
 	}
 }
 
-// limitPendingRuns 在等待执行权前限制本任务、本进程的进入数量，容量包含正在执行的一轮。
-// 非阻塞申请名额；结束、取消和 panic 均通过 defer 归还，不在 Handler 或外部 Acquire 期间持锁。
-func limitPendingRuns(
-	log moduleLog,
-	event DelayOverflow,
-	overflowHandler func(context.Context, DelayOverflow) error,
-	middleware Middleware,
-) Middleware {
-	maxPendingRuns := event.MaxPendingRuns
-	return func(next Handler) Handler {
-		execute := middleware(next)
-		if maxPendingRuns < 0 {
-			return execute
+func (g *executionGate) acquire(ctx context.Context) (bool, error) {
+	g.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		g.mu.Unlock()
+		return false, err
+	}
+	if g.policy == AllowOverlap || (g.running == 0 && g.pending == 0) {
+		g.running++
+		g.mu.Unlock()
+		return true, nil
+	}
+	if g.policy == SkipIfRunning {
+		g.mu.Unlock()
+		g.log.WithContext(ctx).With("function", "executionGate.acquire", "job", g.name).Warn("job skipped")
+		return false, nil
+	}
+	if g.limit >= 0 && g.pending >= g.limit {
+		event := DelayOverflow{Name: g.name, Policy: g.policy, MaxPendingRuns: g.limit}
+		g.mu.Unlock()
+		g.log.WithContext(ctx).With("function", "executionGate.acquire", "job", g.name, "max_pending_runs", event.MaxPendingRuns).Warn("Skipped job trigger because the pending-run queue is full")
+		if g.overflow != nil {
+			return false, handleDelayOverflow(ctx, event, g.overflow)
 		}
-		slots := make(chan struct{}, maxPendingRuns+1)
-		return func(ctx context.Context) error {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			select {
-			case slots <- struct{}{}:
-				defer func() { <-slots }()
-				return execute(ctx)
-			default:
-				warnConcurrent(log, ctx, "Skipped job trigger because the pending-run queue is full", "max_pending_runs", maxPendingRuns)
-				if overflowHandler != nil {
-					return handleDelayOverflow(ctx, event, overflowHandler)
-				}
-				return nil
-			}
+		return false, nil
+	}
+	g.pending++
+	// 已经进入等待的调用保留串行等待语义；后续新触发才使用热更新后的策略。
+	for {
+		if err := ctx.Err(); err != nil {
+			g.pending--
+			g.mu.Unlock()
+			return false, err
 		}
+		if g.running == 0 {
+			g.pending--
+			g.running++
+			g.mu.Unlock()
+			return true, nil
+		}
+		changed := g.changed
+		g.mu.Unlock()
+		select {
+		case <-ctx.Done():
+		case <-changed:
+		}
+		g.mu.Lock()
 	}
 }
 
-// handleDelayOverflow 位于任务 recovery 中间件之外，单独隔离业务通知 panic。
-// 此时未取得执行名额；错误交给 Cron 的最终错误入口，不在底层重复记录。
+func (g *executionGate) release() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.running--
+	close(g.changed)
+	g.changed = make(chan struct{})
+}
+
+// handleDelayOverflow 隔离业务回调 panic，错误交给 Cron 的最终错误入口。
 func handleDelayOverflow(ctx context.Context, event DelayOverflow, handler func(context.Context, DelayOverflow) error) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -102,152 +123,4 @@ func handleDelayOverflow(ctx context.Context, event DelayOverflow, handler func(
 		return fmt.Errorf("delay overflow handler for job %q: %w", event.Name, err)
 	}
 	return nil
-}
-
-// delayIfStillRunning 使用进程内令牌串行执行同一任务，并响应等待上下文取消。
-func delayIfStillRunning(log moduleLog) Middleware {
-	return func(next Handler) Handler {
-		token := make(chan struct{}, 1)
-		token <- struct{}{}
-		return func(ctx context.Context) error {
-			start := time.Now()
-			select {
-			case value := <-token:
-				defer func() {
-					token <- value
-				}()
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			if duration := time.Since(start); duration > 5*time.Second {
-				warnConcurrent(log, ctx, "job delayed", "duration", duration)
-			}
-			return next(ctx)
-		}
-	}
-}
-
-// skipIfStillRunning 使用非阻塞令牌在本轮重叠时直接跳过。
-func skipIfStillRunning(log moduleLog) Middleware {
-	return func(next Handler) Handler {
-		token := make(chan struct{}, 1)
-		token <- struct{}{}
-		return func(ctx context.Context) error {
-			select {
-			case value := <-token:
-				defer func() {
-					token <- value
-				}()
-				return next(ctx)
-			default:
-				warnConcurrent(log, ctx, "job skipped")
-				return nil
-			}
-		}
-	}
-}
-
-// distributedConcurrent 在执行任务前取得跨进程守卫，并合并执行权丢失与释放错误。
-func distributedConcurrent(
-	log moduleLog,
-	coordinator ConcurrencyCoordinator,
-	key string,
-	wait bool,
-) Middleware {
-	return func(next Handler) Handler {
-		return func(ctx context.Context) error {
-			start := time.Now()
-			var (
-				guard ExecutionGuard
-				err   error
-			)
-			if wait {
-				guard, err = coordinator.Acquire(ctx, key)
-			} else {
-				guard, err = coordinator.TryAcquire(ctx, key)
-			}
-			if !wait && errors.Is(err, ErrExecutionInProgress) {
-				warnConcurrent(log, ctx, "distributed job skipped", "key", key)
-				return nil
-			}
-			if err != nil {
-				err = fmt.Errorf("coordinate job execution %q: %w", key, err)
-				errorConcurrent(log, ctx, "job coordination failed", "key", key, "error", err)
-				return err
-			}
-			if guard == nil {
-				err = fmt.Errorf("coordinate job execution %q: nil execution guard", key)
-				errorConcurrent(log, ctx, "job coordination failed", "key", key, "error", err)
-				return err
-			}
-			released := false
-			defer func() {
-				if !released {
-					// 正常路径会显式合并释放错误；这里只处理外层中间件意外 panic 的兜底路径。
-					if releaseErr := guard.Release(); releaseErr != nil {
-						errorConcurrent(
-							log,
-							ctx,
-							"release job coordination after panic failed",
-							"key",
-							key,
-							"error",
-							releaseErr,
-						)
-					}
-				}
-			}()
-			if wait {
-				if duration := time.Since(start); duration > 5*time.Second {
-					warnConcurrent(
-						log,
-						ctx,
-						"distributed job delayed",
-						"key",
-						key,
-						"duration",
-						duration,
-					)
-				}
-			}
-
-			executionCtx := guard.Context()
-			runErr := next(executionCtx)
-			cause := context.Cause(executionCtx)
-			if !errors.Is(cause, ErrCoordinationLost) {
-				cause = nil
-			}
-			released = true
-			releaseErr := guard.Release()
-			if releaseErr != nil {
-				releaseErr = fmt.Errorf(
-					"release job execution coordination %q: %w",
-					key,
-					releaseErr,
-				)
-			}
-			if cause != nil || releaseErr != nil {
-				errorConcurrent(
-					log,
-					ctx,
-					"job coordination lost",
-					"key",
-					key,
-					"error",
-					errors.Join(cause, releaseErr),
-				)
-			}
-			return errors.Join(runErr, cause, releaseErr)
-		}
-	}
-}
-
-// warnConcurrent 为并发策略告警补齐任务上下文和结构化字段。
-func warnConcurrent(log moduleLog, ctx context.Context, message string, keyvals ...any) {
-	log.WithContext(ctx).With(keyvals...).Warn(message)
-}
-
-// errorConcurrent 为协调失败日志补齐任务上下文和结构化字段。
-func errorConcurrent(log moduleLog, ctx context.Context, message string, keyvals ...any) {
-	log.WithContext(ctx).With(keyvals...).Error(message)
 }

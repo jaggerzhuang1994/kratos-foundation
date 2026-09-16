@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -111,7 +112,7 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 	}
 
 	run := func(name string, ctx context.Context, handler Handler) error {
-		return chainMiddlewares(middlewares...)(handler)(withJobName(ctx, name))
+		return newManagedJob(name, TaskFunc(handler), middlewares).job.Run(withJobName(ctx, name))
 	}
 	if err := run("success", context.Background(), func(context.Context) error { return nil }); err != nil {
 		t.Fatal(err)
@@ -125,16 +126,31 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 	if err := run("canceled", canceled, func(ctx context.Context) error { return ctx.Err() }); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled error = %v", err)
 	}
+	if err := run("canceled-failure", canceled, func(context.Context) error {
+		return errors.Join(context.Canceled, wantFailure)
+	}); !errors.Is(err, wantFailure) {
+		t.Fatalf("cancellation hid business failure: %v", err)
+	}
 	panicErr := run("panic", context.Background(), func(context.Context) error { panic("broken invariant") })
 	if panicErr == nil || !strings.Contains(panicErr.Error(), "job panic: broken invariant") || !strings.Contains(panicErr.Error(), "goroutine") {
 		t.Fatalf("panic error = %v", panicErr)
 	}
 
+	businessPanic := func(Handler) Handler {
+		return func(context.Context) error { panic("business middleware") }
+	}
+	fullChain := append(append([]Middleware(nil), middlewares...), businessPanic)
+	task := newManagedJob("middleware-panic", TaskFunc(func(context.Context) error { t.Fatal("short-circuited task ran"); return nil }), fullChain)
+	if err := task.job.Run(withJobName(context.Background(), "middleware-panic")); err == nil {
+		t.Fatal("business middleware panic was not recovered")
+	}
 	wantSpanStatus := map[string]codes.Code{
-		"success":  codes.Ok,
-		"failure":  codes.Error,
-		"canceled": codes.Error,
-		"panic":    codes.Error,
+		"canceled-failure": codes.Error,
+		"success":          codes.Ok,
+		"failure":          codes.Error,
+		"canceled":         codes.Error,
+		"panic":            codes.Error,
+		"middleware-panic": codes.Error,
 	}
 	if spans := observability.spans.GetSpans(); len(spans) != len(wantSpanStatus) {
 		t.Fatalf("exported spans = %d, want %d", len(spans), len(wantSpanStatus))
@@ -143,6 +159,9 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 			want, ok := wantSpanStatus[span.Name]
 			if !ok || span.Status.Code != want {
 				t.Errorf("span %q status = %v, want %v", span.Name, span.Status.Code, want)
+			}
+			if (span.Name == "panic" || span.Name == "middleware-panic") && span.Status.Description != errJobPanicked.Error() {
+				t.Errorf("panic span missing failure marker: %+v", span.Status)
 			}
 			if span.InstrumentationScope.Name != instrumentationNameJob {
 				t.Errorf("span %q scope = %q", span.Name, span.InstrumentationScope.Name)
@@ -156,7 +175,9 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 		{job: "success", status: "success"},
 		{job: "failure", status: "failure"},
 		{job: "canceled", status: "failure"},
+		{job: "canceled-failure", status: "failure"},
 		{job: "panic", status: "failure"},
+		{job: "middleware-panic", status: "failure"},
 	} {
 		labels := map[string]string{metricLabelJob: outcome.job, metricLabelStatus: outcome.status}
 		if sample := findJobMetricSample(t, observability.metricsProvider, jobRunsInstrumentName, labels); sample.counter != 1 {
@@ -175,6 +196,14 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := string(written)
+	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, "job=canceled-failure") && strings.Contains(line, "job execution stopped") {
+			t.Fatalf("business failure logged as normal cancellation: %s", line)
+		}
+		if (strings.Contains(line, "job=panic") || strings.Contains(line, "job=middleware-panic")) && strings.Contains(line, "job execution done") {
+			t.Fatalf("panic logged as success: %s", line)
+		}
+	}
 	if strings.Contains("\n"+logs, "\nERROR ") || strings.Contains(logs, "job panic:") {
 		t.Fatalf("middleware duplicated final error logging: %s", logs)
 	}
@@ -203,10 +232,10 @@ func TestDisabledObservabilityLeavesRecoveryActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(middlewares) != 1 {
-		t.Fatalf("disabled middleware count = %d, want recovery only", len(middlewares))
+	if len(middlewares) != 0 {
+		t.Fatalf("disabled observability middleware count = %d, want 0", len(middlewares))
 	}
-	err = chainMiddlewares(middlewares...)(func(context.Context) error { panic("still recovered") })(context.Background())
+	err = newManagedJob("disabled", TaskFunc(func(context.Context) error { panic("still recovered") }), middlewares).job.Run(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "job panic: still recovered") {
 		t.Fatalf("recovery error = %v", err)
 	}
@@ -264,5 +293,26 @@ func TestJobNameFromContext(t *testing.T) {
 	defer cancel()
 	if got := JobNameFromContext(derived); got != "reconcile" {
 		t.Fatalf("derived context name = %q", got)
+	}
+}
+
+func TestChainMiddlewaresPreservesDeclaredNesting(t *testing.T) {
+	var events []string
+	wrap := func(name string) Middleware {
+		return func(next Handler) Handler {
+			return func(ctx context.Context) error {
+				events = append(events, name+":before")
+				err := next(ctx)
+				events = append(events, name+":after")
+				return err
+			}
+		}
+	}
+	err := chainMiddlewares(wrap("one"), nil, wrap("two"))(func(context.Context) error { events = append(events, "run"); return nil })(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"one:before", "two:before", "run", "two:after", "one:after"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("events = %#v", events)
 	}
 }

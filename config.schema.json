@@ -308,10 +308,13 @@
         },
         "log": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.log"
+        },
+        "job": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Config.job"
         }
       },
       "type": "object",
-      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n log、app.stop_timeout、server.middleware、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数。"
+      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n log、app.stop_timeout、server.middleware、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数和 job.cron。"
     },
     ".kratos_foundation_pb.Config.app": {
       "$ref": "#/definitions/.kratos_foundation_pb.App",
@@ -324,6 +327,10 @@
     ".kratos_foundation_pb.Config.database": {
       "$ref": "#/definitions/.kratos_foundation_pb.Database",
       "description": "数据库配置。仅各连接的连接池参数支持热更新。"
+    },
+    ".kratos_foundation_pb.Config.job": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Job",
+      "description": "已注册 Cron 任务的调度和本进程并发策略。[热更新]"
     },
     ".kratos_foundation_pb.Config.kafka": {
       "$ref": "#/definitions/.kratos_foundation_pb.Kafka",
@@ -352,6 +359,40 @@
     ".kratos_foundation_pb.Config.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Tracing",
       "description": "链路追踪组件配置。仅 sampler 支持热更新。"
+    },
+    ".kratos_foundation_pb.CronJob": {
+      "properties": {
+        "schedule": {
+          "$ref": "#/definitions/.kratos_foundation_pb.CronJob.schedule"
+        },
+        "concurrent_policy": {
+          "$ref": "#/definitions/.kratos_foundation_pb.CronJob.concurrent_policy"
+        },
+        "run_immediately": {
+          "$ref": "#/definitions/.kratos_foundation_pb.CronJob.run_immediately"
+        },
+        "max_pending_runs": {
+          "$ref": "#/definitions/.kratos_foundation_pb.CronJob.max_pending_runs"
+        }
+      },
+      "type": "object",
+      "description": "CronJob 各字段独立按配置、注册声明、Task 声明、框架默认值的顺序解析。\n optional 保留 false、0 和 ALLOW_OVERLAP 的显式覆盖语义。"
+    },
+    ".kratos_foundation_pb.CronJob.concurrent_policy": {
+      "$ref": "#/definitions/.kratos_foundation_pb.JobConcurrentPolicy",
+      "description": "本进程内同一任务的重叠策略。[热更新]"
+    },
+    ".kratos_foundation_pb.CronJob.max_pending_runs": {
+      "type": "integer",
+      "description": "Delay 等待容量，默认 1；0 不等待，-1 无界等待。[热更新]"
+    },
+    ".kratos_foundation_pb.CronJob.run_immediately": {
+      "type": "boolean",
+      "description": "是否在启动时立即执行。Start 前读取最新值；运行中修改不补触发，下次启动生效。"
+    },
+    ".kratos_foundation_pb.CronJob.schedule": {
+      "type": "string",
+      "description": "Cron 表达式，支持可选秒字段和标准描述符。[热更新]"
     },
     ".kratos_foundation_pb.DBConnection": {
       "properties": {
@@ -1050,6 +1091,31 @@
     ".kratos_foundation_pb.HttpServerOption.path_prefix": {
       "type": "string",
       "description": "http 路由前缀"
+    },
+    ".kratos_foundation_pb.Job": {
+      "properties": {
+        "cron": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Job.cron"
+        }
+      },
+      "type": "object",
+      "description": "Job 配置已注册的 Cron 任务，不从配置动态创建业务 Task。"
+    },
+    ".kratos_foundation_pb.Job.cron": {
+      "additionalProperties": {
+        "$ref": "#/definitions/.kratos_foundation_pb.CronJob"
+      },
+      "type": "object",
+      "description": "以注册名称为键的任务覆盖项。[热更新]"
+    },
+    ".kratos_foundation_pb.JobConcurrentPolicy": {
+      "type": "string",
+      "enum": [
+        "ALLOW_OVERLAP",
+        "DELAY_IF_RUNNING",
+        "SKIP_IF_RUNNING"
+      ],
+      "description": "JobConcurrentPolicy 仅作用于本 Manager 中同一注册任务，不提供跨进程协调。"
     },
     ".kratos_foundation_pb.Kafka": {
       "properties": {

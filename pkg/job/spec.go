@@ -73,15 +73,19 @@ type CronOption func(*cronOptions)
 
 type cronOptions struct {
 	runImmediately       bool
+	runImmediatelySet    bool
+	concurrentPolicySet  bool
+	maxPendingRunsSet    bool
 	concurrentPolicy     ConcurrentPolicy
 	maxPendingRuns       int
 	delayOverflowHandler func(context.Context, DelayOverflow) error
 }
 
-// RunImmediately 要求调度器启动后立即执行一次。
-func RunImmediately() CronOption {
+// RunImmediately 显式设置启动时是否立即执行，可用 false 覆盖 Task 默认值。
+func RunImmediately(enabled bool) CronOption {
 	return func(options *cronOptions) {
-		options.runImmediately = true
+		options.runImmediately = enabled
+		options.runImmediatelySet = true
 	}
 }
 
@@ -89,14 +93,15 @@ func RunImmediately() CronOption {
 func WithConcurrentPolicy(policy ConcurrentPolicy) CronOption {
 	return func(options *cronOptions) {
 		options.concurrentPolicy = policy
+		options.concurrentPolicySet = true
 	}
 }
 
 // WithMaxPendingRuns 设置 Delay 策略的等待容量，默认 1；0 不保留本地等待名额。
-// -1 显式恢复无界等待。分布式 Delay 限制每进程进入竞争的调用数为 limit+1，非全局队列。
+// -1 显式恢复无界等待。容量仅作用于本 Manager 内同一任务。
 // AllowOverlap 和 Skip 策略不使用此值。队列满时跳过新触发并记录告警。
 func WithMaxPendingRuns(limit int) CronOption {
-	return func(options *cronOptions) { options.maxPendingRuns = limit }
+	return func(options *cronOptions) { options.maxPendingRuns = limit; options.maxPendingRunsSet = true }
 }
 
 // DelayOverflow 描述被本进程 Delay 容量限制拒绝的一次 Cron 触发。
@@ -173,7 +178,7 @@ func (s *Spec) Option(options ...ManagerOption) Builder {
 
 // RegisterCron 向 Spec 注册周期任务。
 func (s *Spec) RegisterCron(name, schedule string, job Task, options ...CronOption) Builder {
-	cron := cronOptions{concurrentPolicy: AllowOverlap, maxPendingRuns: 1}
+	cron := cronOptions{}
 	for _, option := range options {
 		if option != nil {
 			option(&cron)
@@ -215,7 +220,7 @@ func (s *Spec) ExitWhenDone() Builder {
 	return s
 }
 
-// Validate 拒绝不完整、重复或策略不兼容的任务定义。
+// Validate 校验任务身份与生命周期；Cron 参数在 Manager 合并配置之后校验。
 func (s *Spec) Validate() error {
 	names := make(map[string]struct{}, len(s.definitions))
 	var once int
@@ -225,19 +230,6 @@ func (s *Spec) Validate() error {
 		}
 		if definition.job == nil {
 			return fmt.Errorf("job %q is nil", definition.name)
-		}
-		if definition.kind == kindCron && definition.schedule == "" {
-			return fmt.Errorf("cron job %q requires a schedule", definition.name)
-		}
-		if definition.kind == kindCron && (definition.cron.maxPendingRuns < -1 || definition.cron.maxPendingRuns == int(^uint(0)>>1)) {
-			return fmt.Errorf("job %q max pending runs must be -1 or a non-negative value below max int", definition.name)
-		}
-		if definition.kind == kindCron && !definition.cron.concurrentPolicy.valid() {
-			return fmt.Errorf(
-				"cron job %q has invalid concurrent policy %d",
-				definition.name,
-				definition.cron.concurrentPolicy,
-			)
 		}
 		if _, ok := names[definition.name]; ok {
 			return fmt.Errorf("job %q is already registered", definition.name)
