@@ -12,7 +12,7 @@ import (
 
 func TestNewClientSpecUsesDiscoveryDefault(t *testing.T) {
 	t.Parallel()
-	spec := newClientSpec("orders", nil)
+	spec := newClientSpec("orders", nil, nil)
 	if spec.protocol != config_pb.Protocol_GRPC || spec.target != "discovery:///orders" {
 		t.Fatalf("default spec = %s %q", spec.protocol, spec.target)
 	}
@@ -20,7 +20,7 @@ func TestNewClientSpecUsesDiscoveryDefault(t *testing.T) {
 
 func TestEffectiveDefaultMatchesEmptyOption(t *testing.T) {
 	t.Parallel()
-	if !newClientSpec("orders", nil).equal(newClientSpec("orders", new(config_pb.ClientOption))) {
+	if !newClientSpec("orders", nil, nil).equal(newClientSpec("orders", new(config_pb.ClientOption), nil)) {
 		t.Fatal("absent and empty options differ")
 	}
 }
@@ -77,8 +77,8 @@ func TestClientSpecCanonicalizesMiddlewareDefaults(t *testing.T) {
 	for _, tt := range equivalent {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			left := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.left})
-			right := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.right})
+			left := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.left}, nil)
+			right := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.right}, nil)
 			if !left.equal(right) {
 				t.Fatal("default-equivalent middleware produced different client specs")
 			}
@@ -116,8 +116,8 @@ func TestClientSpecCanonicalizesMiddlewareDefaults(t *testing.T) {
 	for _, tt := range different {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			left := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.left})
-			right := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.right})
+			left := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.left}, nil)
+			right := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.right}, nil)
 			if left.equal(right) {
 				t.Fatal("effective middleware change produced equal client specs")
 			}
@@ -155,6 +155,57 @@ func TestClientRejectsInvalidSREConfiguration(t *testing.T) {
 			config.Clients["orders"].Middleware.CircuitBreaker.Enable = proto.Bool(false)
 			if err := builder.validateConfig(config); err != nil {
 				t.Fatalf("disabled SRE configuration must be ignored: %v", err)
+			}
+		})
+	}
+}
+
+func TestClientSpecInheritsRootDefaults(t *testing.T) {
+	root := &config_pb.Client{FallbackTimeout: durationpb.New(5 * time.Second), MaxTimeout: durationpb.New(8 * time.Second), MinBudget: durationpb.New(time.Second), Discovery: proto.String("regional")}
+	for _, tt := range []struct {
+		name      string
+		option    *config_pb.ClientOption
+		want      *config_pb.Middleware_Deadline
+		discovery string
+	}{
+		{"absent client", nil, &config_pb.Middleware_Deadline{FallbackTimeout: root.FallbackTimeout, MaxTimeout: root.MaxTimeout, MinBudget: root.MinBudget}, "regional"},
+		{"partial override", &config_pb.ClientOption{Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(3 * time.Second)}}}, &config_pb.Middleware_Deadline{FallbackTimeout: root.FallbackTimeout, MaxTimeout: durationpb.New(3 * time.Second), MinBudget: root.MinBudget}, "regional"},
+		{"explicit zero", &config_pb.ClientOption{Discovery: "custom", Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0), MaxTimeout: durationpb.New(0), MinBudget: durationpb.New(0)}}}, &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)}, "custom"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			beforeRoot, beforeOption := proto.CloneOf(root), proto.CloneOf(tt.option)
+			spec := newClientSpec("orders", tt.option, root)
+			if spec.discovery != tt.discovery || !proto.Equal(spec.middleware.Deadline, tt.want) {
+				t.Fatalf("effective spec = %s %v", spec.discovery, spec.middleware.Deadline)
+			}
+			if !proto.Equal(root, beforeRoot) || !proto.Equal(tt.option, beforeOption) {
+				t.Fatal("input configuration mutated")
+			}
+			spec.middleware.Deadline.FallbackTimeout.Seconds = 99
+			if !proto.Equal(root, beforeRoot) || !proto.Equal(tt.option, beforeOption) {
+				t.Fatal("effective configuration aliases input")
+			}
+		})
+	}
+}
+
+func TestClientRejectsInvalidRootDefaults(t *testing.T) {
+	b := newTestRealBuilder(t, nil)
+	for _, tt := range []struct {
+		name   string
+		config *config_pb.Client
+	}{
+		{"negative fallback", &config_pb.Client{FallbackTimeout: durationpb.New(-time.Second)}},
+		{"negative max", &config_pb.Client{MaxTimeout: durationpb.New(-time.Second)}},
+		{"negative budget", &config_pb.Client{MinBudget: durationpb.New(-time.Second)}},
+		{"invalid duration", &config_pb.Client{MaxTimeout: &durationpb.Duration{Nanos: 1000000000}}},
+		{"root conflict", &config_pb.Client{MaxTimeout: durationpb.New(time.Second), MinBudget: durationpb.New(2 * time.Second)}},
+		{"inherited conflict", &config_pb.Client{MinBudget: durationpb.New(2 * time.Second), Clients: map[string]*config_pb.ClientOption{"orders": {Target: "localhost:9000", Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(time.Second)}}}}}},
+		{"missing discovery", &config_pb.Client{Discovery: proto.String("missing"), Clients: map[string]*config_pb.ClientOption{"orders": nil}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := b.validateConfig(tt.config); err == nil {
+				t.Fatal("invalid defaults accepted")
 			}
 		})
 	}

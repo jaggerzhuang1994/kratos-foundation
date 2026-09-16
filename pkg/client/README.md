@@ -19,12 +19,16 @@ defer release()
 // 在 release 前使用当前协议对应的 httpClient 或 grpcConn。
 ```
 
-除 `discoveries` 外，构造依赖必须非 nil，由组装层保证，构造函数不重复判空。服务发现仅在使用 `discovery:///...` 目标时需要；直连客户端可传 nil。客户端名称不能为空，未配置的名称使用默认 discovery 目标和 default 发现实例；需要提供 registry.instances.default 对应能力。
+除 `discoveries` 外，构造依赖必须非 nil，由组装层保证，构造函数不重复判空。服务发现仅在使用 `discovery:///...` 目标时需要；直连客户端可传 nil。客户端名称不能为空，未配置的名称使用默认 discovery 目标，并继承 `client.discovery`（根配置也省略时为 `default`）；需要提供对应 registry 实例能力。
 
 最小直连配置如下，先由配置源交给 config.Manager，再构造 Factory：
 
 ```yaml
 client:
+  fallback_timeout: 10s
+  max_timeout: 0s
+  min_budget: 0s
+  discovery: default
   clients:
     orders:
       protocol: GRPC
@@ -37,7 +41,7 @@ client:
       target: "https://payments.example.com:443"
 ```
 
-`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，`discovery` 省略或为空时使用 `default`，需注入包含该实例的 DiscoveryResolver；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。获取未配置的名称时同样使用 default 实例；实例缺失或不可用时返回发现解析错误。官方默认 merge 保留更新中省略的字段，不能通过从源中删除条目移除有效配置。
+`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，`discovery` 省略或为空时继承 `client.discovery`，根配置也省略或为空时使用 `default`，需注入包含该实例的 DiscoveryResolver；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。获取未配置的名称时同样继承根级 discovery；实例缺失或不可用时返回发现解析错误。官方默认 merge 保留更新中省略的字段，不能通过从源中删除条目移除有效配置。
 
 当前 Factory 的 gRPC 使用 `DialInsecure`，不提供 gRPC TLS/mTLS 配置，`GRPCS` 已移除；目标 URL 和单次调用选项不能启用 gRPC TLS。HTTPS 使用 TLS，标准 Transport 至少要求 TLS 1.2，并保留其已有 TLS 配置；自定义 RoundTripper/TLS 拨号函数须自行实现安全与取消策略。需要 gRPC TLS 时应由应用单独构造并管理原生客户端。
 
@@ -67,7 +71,22 @@ flowchart TD
     L --> N[INFO client closed 或 ERROR client close failed]
 ```
 
-`middleware.deadline.fallback_timeout` 缺失时默认 **10s**，未配置 `middleware` 或 `deadline` 也采用该默认值；仅在父 Context 没有截止时间时生效。显式设置 `fallback_timeout: 0s` 关闭回退超时，但仍遵守父 Context 和正数 `max_timeout` 的限制。路由未指定该字段时继承全局值，显式 `0s` 可关闭该路由的回退超时。热更新会区分“缺失”和“显式 0s”，删除显式值会恢复默认 10s。服务端与客户端共享[截止时间计算规则](../server/README.md#截止时间)。
+根级 `client.fallback_timeout`、`client.max_timeout`、`client.min_budget` 为每个客户端提供默认值；根字段省略时分别为 **10s、0s、0s**。单个 `client.clients.<name>.middleware.deadline` 按字段覆盖根配置，未配置 middleware/deadline 或未列在 clients 中的名称也继承根配置。时长必须是合法的非负 Protobuf Duration，超出 Go duration 范围时沿用现有饱和转换；有效 min_budget 不能超过正数 fallback_timeout 或 max_timeout，合并后的客户端和路由策略也参与校验。
+
+显式 `0s` 覆盖继承值：fallback_timeout 关闭无父截止时间时的回退超时，max_timeout 关闭本地最大耗时限制，min_budget 关闭最小剩余预算检查。父 Context 的截止时间仍生效。路由规则继续逐字段覆盖该客户端的有效策略。服务端与客户端共享[截止时间计算规则](../server/README.md#截止时间)。
+
+`client.discovery` 为每个客户端提供默认发现实例，省略或空值默认 `default`；单个客户端的非空 discovery 优先，空值继承。直连目标不解析发现实例。根级四个字段支持热更新，新快照移除覆盖值后恢复继承（配置源默认 merge 会保留省略字段，仅删除源文件字段不保证移除有效值）；仅有效配置变化的客户端重建，已有租约继续持有旧版本。合并在独立副本上进行，不修改配置源快照。非法根时长（即使 clients 为空）或非法合并策略会拒绝整批配置；未配置名称的发现实例在实际获取时解析。
+
+```mermaid
+flowchart TD
+    A([加载或更新 client 配置]) --> B[单个 client 字段优先 缺失字段继承根配置]
+    B --> C[根字段缺失采用 10s / 0s / 0s / default]
+    C --> D{根策略和合并策略有效?}
+    D -- 否 --> E([构造返回错误；更新记录 ERROR client config update rejected 并保留旧配置])
+    D -- 是 --> F[按有效配置创建或更新版本 复用下方租约与状态锁流程]
+    F --> G([后续调用使用新策略])
+```
+
 
 启用 SRE 熔断时，`bucket` 必须为正数，`window` 必须是可精确表示为 Go `time.Duration` 的正时长，整除后的每桶时长至少为 1ns。`success` 必须在 `(0, 1]` 内且倒数有限；`request` 必须非负，零值表示不设最低请求数门槛。缺失字段沿用 Aegis 默认值（3s、10 桶、成功率 0.6、最低请求数 100），仍参与组合校验；禁用熔断时忽略其参数。`NewFactory` 在首次 RPC 前拒绝非法配置，配置订阅复用同一校验，任一客户端配置非法时整批更新被拒绝，现有版本与租约继续生效。
 

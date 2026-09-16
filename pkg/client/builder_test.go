@@ -83,7 +83,7 @@ func TestBuilderBuildsDirectGRPCClient(t *testing.T) {
 	builder := newTestRealBuilder(t, nil)
 	result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Target: "passthrough:///orders",
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestBuilderBuildsDirectHTTPClients(t *testing.T) {
 			result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 				Protocol: &protocol,
 				Target:   tt.target,
-			}))
+			}, nil))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -125,7 +125,7 @@ func TestBuilderBuildsDirectHTTPClients(t *testing.T) {
 func TestBuilderDefaultTargetRequiresDiscovery(t *testing.T) {
 	t.Parallel()
 	builder := newTestRealBuilder(t, nil)
-	_, err := builder.build(context.Background(), newClientSpec("orders", nil))
+	_, err := builder.build(context.Background(), newClientSpec("orders", nil, nil))
 	if !errors.Is(err, ErrDiscoveryNotInitialized) {
 		t.Fatalf("error = %v, want %v", err, ErrDiscoveryNotInitialized)
 	}
@@ -147,7 +147,7 @@ func TestBuilderUsesConstructionEnvironmentSnapshot(t *testing.T) {
 	defer cancel()
 	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol, Target: "discovery:///orders",
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestBuilderHTTPPropagatesRequestDebug(t *testing.T) {
 		result, err := builder.build(t.Context(), newClientSpec("debug", &config_pb.ClientOption{
 			Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL,
 			Middleware: &config_pb.ClientMiddleware{RequestDebug: &config_pb.Middleware_RequestDebug{Propagate: proto.Bool(propagate)}},
-		}))
+		}, nil))
 		if err != nil {
 			t.Fatal(err)
 		}

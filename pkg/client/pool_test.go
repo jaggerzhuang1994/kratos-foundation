@@ -219,7 +219,7 @@ func TestFactoryCompletedBuildRechecksState(t *testing.T) {
 		factory.mu.Lock()
 		factory.slots["orders"].current = &clientVersion{
 			revision: 2,
-			spec:     newClientSpec("orders", configWithTarget("orders", "http://new-orders.test").GetClients()["orders"]),
+			spec:     newClientSpec("orders", configWithTarget("orders", "http://new-orders.test").GetClients()["orders"], nil),
 			client: clientResult{
 				httpClient: replacementClient,
 			},

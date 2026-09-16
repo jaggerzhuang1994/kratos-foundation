@@ -513,6 +513,12 @@ kafka:
 # 服务客户端配置
 # =============================================================================
 client:
+  # 各客户端逐字段继承这些默认值；单个 middleware.deadline 显式值优先。[热更新]
+  fallback_timeout: 10s
+  max_timeout: 0s
+  min_budget: 0s
+  # 单个客户端 discovery 省略或为空时继承；根级省略或为空时默认 default。[热更新]
+  discovery: default
   # Wire cleanup 的排空等待上限；到期后强制关闭仍被租用的连接。[需重启]
   cleanup_timeout: 30s
   # clients 支持热更新；新增、修改和删除会影响后续 Factory 解析。
@@ -525,17 +531,17 @@ client:
       # 支持服务发现: discovery:///service-name
       # 支持直连: host:port
       target: discovery:///user-service
-      # 发现实例；省略或为空时默认 default，直连目标不使用此字段。
+      # 发现实例；省略或为空时继承 client.discovery，直连目标不使用此字段。
       discovery: default
       # 中间件配置
       middleware:
         # 调用预算配置
         deadline:
-          # 父 Context 无截止时间时的兜底值 [默认: 10s；显式 0s 关闭回退超时]
+          # 父 Context 无截止时间时的兜底值 [省略继承 client.fallback_timeout；显式 0s 关闭回退超时]
           fallback_timeout: 2s
-          # 单次调用最大耗时；无父预算且 fallback 为 0 时也会作为超时 [默认: 0s，不限制]
+          # 单次调用最大耗时；无父预算且 fallback 为 0 时也会作为超时 [省略继承 client.max_timeout；显式 0s 不限制]
           max_timeout: 2s
-          # 预算低于该值时不再发起请求 [默认: 0s，不检查]
+          # 预算低于该值时不再发起请求 [省略继承 client.min_budget；显式 0s 不检查]
           min_budget: 0.020s
           routes:
             - path: /api.user.v1.UserService/GetProfile

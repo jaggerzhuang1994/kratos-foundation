@@ -220,7 +220,7 @@ func newFactoryState(
 			name: name,
 			current: &clientVersion{
 				revision: 1,
-				spec:     newClientSpec(name, option),
+				spec:     newClientSpec(name, option, initial),
 			},
 		}
 	}

@@ -141,6 +141,18 @@
         "clients": {
           "$ref": "#/definitions/.kratos_foundation_pb.Client.clients"
         },
+        "fallback_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Client.fallback_timeout"
+        },
+        "max_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Client.max_timeout"
+        },
+        "min_budget": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Client.min_budget"
+        },
+        "discovery": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Client.discovery"
+        },
         "cleanup_timeout": {
           "$ref": "#/definitions/.kratos_foundation_pb.Client.cleanup_timeout"
         }
@@ -159,6 +171,25 @@
       },
       "type": "object",
       "description": "[热更新] 后续调用使用新配置，旧连接等待活跃调用释放。"
+    },
+    ".kratos_foundation_pb.Client.discovery": {
+      "type": "string",
+      "description": "[热更新] 各客户端未指定 discovery 时使用的 registry.instances 名称；省略或空值默认 default。"
+    },
+    ".kratos_foundation_pb.Client.fallback_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "[热更新] 各客户端缺失的 deadline 字段逐项继承根配置；此处缺失默认 10s，显式 0s 关闭回退超时。"
+    },
+    ".kratos_foundation_pb.Client.max_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "[热更新] 默认 0s，不限制本地最大耗时；各客户端可显式覆盖为 0s。"
+    },
+    ".kratos_foundation_pb.Client.min_budget": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "[热更新] 默认 0s，不限制派发调用所需的最小剩余预算。"
     },
     ".kratos_foundation_pb.ClientMiddleware": {
       "properties": {
@@ -232,7 +263,7 @@
     },
     ".kratos_foundation_pb.ClientOption.discovery": {
       "type": "string",
-      "description": "discovery 目标使用的 registry.instances 名称；省略或空值默认 default。"
+      "description": "discovery 目标使用的 registry.instances 名称；省略或空值继承 client.discovery。"
     },
     ".kratos_foundation_pb.ClientOption.middleware": {
       "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware",

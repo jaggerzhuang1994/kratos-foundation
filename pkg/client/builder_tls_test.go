@@ -46,7 +46,7 @@ func TestBuilderHTTPSDiscoveryUsesTLS(t *testing.T) {
 	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   "discovery:///orders",
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestBuilderCloseClosesPrivateHTTPSTransportIdleConnections(t *testing.T) {
 	result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   server.URL,
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestBuilderHTTPSUsesCustomDefaultRoundTripper(t *testing.T) {
 	result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   "https://orders.example",
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

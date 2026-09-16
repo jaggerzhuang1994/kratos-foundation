@@ -31,7 +31,7 @@ Consul 客户端由 `CONSUL_*` 环境变量驱动，配置源和所有具名实�
 
 配置源使用普通导入，通过 `spec.Configuration(file.AddConfigSource(...), consul.AddConfigSource(...))` 显式声明；env 默认在首位。配置阶段的可编译组装示例和执行顺序见 [Bootstrap Configuration](../bootstrap/README.md#configuration-配置阶段)。不再提供配置源驱动注册表或进程级默认路径。
 
-`app.registry` 与 `client.clients.<name>.discovery` 省略或为空时均使用 `default`，必须配置 `registry.instances.default` 及对应驱动；显式名称选择其他实例。App 组装时由 `app.NewRegistrar` 解析实例，再注入 Registrar；缺少实例返回错误。空名称不再禁用注册，驱动返回 Disabled 时才跳过注册。直连客户端不解析发现实例。App 不访问工厂。客户端注入 `DiscoveryResolver`，由 Wire 将 `*registry.Factory` 绑定到该接口。
+`app.registry` 省略或为空时使用 `default`；`client.clients.<name>.discovery` 省略或为空时继承 `client.discovery`，根配置也省略或为空时使用 `default`，必须配置 `registry.instances.default` 及对应驱动；显式名称选择其他实例。App 组装时由 `app.NewRegistrar` 解析实例，再注入 Registrar；缺少实例返回错误。空名称不再禁用注册，驱动返回 Disabled 时才跳过注册。直连客户端不解析发现实例。App 不访问工厂。客户端注入 `DiscoveryResolver`，由 Wire 将 `*registry.Factory` 绑定到该接口。
 
 ## 生命周期与并发
 
@@ -83,7 +83,7 @@ Consul 连接构造使用 `newClient` 的初始化日志及 10 秒 leader 探测
 ```mermaid
 flowchart TD
  A([解析注册或发现能力]) --> B{名称为空?}
- B -- 是 --> C[使用 default]
+ B -- 是 --> C[客户端先继承 client.discovery 仍为空则使用 default；App 使用 default]
  B -- 否 --> D[使用指定名称]
  C --> E[查询 registry.instances]
  D --> E

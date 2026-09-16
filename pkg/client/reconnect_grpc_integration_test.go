@@ -28,7 +28,7 @@ func TestGRPCClientSurvivesServerRestart(t *testing.T) {
 	first := start(listener)
 	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("health", &config_pb.ClientOption{
 		Target: "passthrough:///" + address,
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

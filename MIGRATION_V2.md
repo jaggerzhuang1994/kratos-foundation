@@ -486,7 +486,9 @@ flowchart LR
 
 `NewJobBootstrap` 现在接收统一 Spec、协调器、日志/观测依赖及 Bootstrap 标记，在 Boot 完成后构造并登记 Job Manager。`NewRuntimeBootstrap(spec, serverBootstrap, jobBootstrap)` 汇合两个组件标记，仅返回 `(RuntimeBootstrap, error)`，删除空 cleanup 及领域构造依赖。
 
-`app.registry` 和 `client.clients.<name>.discovery` 省略或为空时均使用 `default`，须配置 `registry.instances.default` 及驱动；显式名称仍可选择其他实例。删除以空 app.registry 禁用注册的用法，改由驱动禁用状态控制。直连客户端不要求发现实例。
+`app.registry` 省略或为空时使用 `default`；`client.clients.<name>.discovery` 省略或为空时继承 `client.discovery`，根级也省略或为空时使用 `default`。须配置所选 registry 实例及驱动；显式名称仍可选择其他实例。删除以空 app.registry 禁用注册的用法，改由驱动禁用状态控制。直连客户端不要求发现实例。
+
+客户端新增根级 `fallback_timeout`、`max_timeout`、`min_budget`，分别默认 10s、0s、0s；单个客户端的 deadline 按字段覆盖，显式 0s 保留关闭语义。根时长与 discovery 均支持热更新，继承和校验流程见 [Client 文档](pkg/client/README.md)。
 
 配置 proto 已清除 reserved 声明，消息字段按声明顺序从 1 连续编号，不保证旧 protobuf 二进制兼容。JSON 字段名、枚举数值和生成器扩展编号保持不变。Foundation 旧字段不再因 reserved 被拒绝，应按当前 schema 主动清理；业务自定义消息的 reserved 校验仍有效。
 

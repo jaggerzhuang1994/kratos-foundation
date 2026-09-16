@@ -54,7 +54,7 @@ func (w *emptyWatcher) Stop() error {
 func TestBuilderAcceptsInjectedDiscovery(t *testing.T) {
 	t.Parallel()
 	builder := newTestRealBuilder(t, emptyDiscovery{})
-	result, err := builder.build(context.Background(), newClientSpec("orders", nil))
+	result, err := builder.build(context.Background(), newClientSpec("orders", nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

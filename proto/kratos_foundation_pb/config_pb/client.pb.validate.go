@@ -102,6 +102,109 @@ func (m *Client) validate(all bool) error {
 		}
 	}
 
+	if m.FallbackTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetFallbackTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientValidationError{
+						field:  "FallbackTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientValidationError{
+						field:  "FallbackTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetFallbackTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientValidationError{
+					field:  "FallbackTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MaxTimeout != nil {
+
+		if all {
+			switch v := interface{}(m.GetMaxTimeout()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientValidationError{
+						field:  "MaxTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientValidationError{
+						field:  "MaxTimeout",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMaxTimeout()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientValidationError{
+					field:  "MaxTimeout",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MinBudget != nil {
+
+		if all {
+			switch v := interface{}(m.GetMinBudget()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientValidationError{
+						field:  "MinBudget",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientValidationError{
+						field:  "MinBudget",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMinBudget()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientValidationError{
+					field:  "MinBudget",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Discovery != nil {
+		// no validation rules for Discovery
+	}
+
 	if m.CleanupTimeout != nil {
 
 		if d := m.GetCleanupTimeout(); d != nil {

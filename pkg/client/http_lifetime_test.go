@@ -64,7 +64,7 @@ func TestClosingBuiltHTTPClientCancelsResponseBody(t *testing.T) {
 	t.Cleanup(server.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", configWithTarget("orders", server.URL).Clients["orders"]))
+	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", configWithTarget("orders", server.URL).Clients["orders"], nil))
 	if err != nil {
 		t.Fatal(err)
 	}

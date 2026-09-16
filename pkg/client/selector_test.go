@@ -55,7 +55,7 @@ func TestFactorySnapshotsAppInfoForDiscoveryRouting(t *testing.T) {
 	t.Cleanup(cleanup)
 	info.metadata[appinfo.MetadataEnvironment] = "prod"
 	info.metadata[appinfo.MetadataHostname] = "changed-host"
-	filters, err := clientFactory.(*factory).builder.(*builder).getNodeFilters(newClientSpec("orders", nil))
+	filters, err := clientFactory.(*factory).builder.(*builder).getNodeFilters(newClientSpec("orders", nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,8 +31,8 @@ func TestNamedDiscoveryValidation(t *testing.T) {
 	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {Target: "localhost:9000", Discovery: "missing"}}}); err != nil {
 		t.Fatal(err)
 	}
-	a := newClientSpec("orders", &config_pb.ClientOption{Discovery: "a"})
-	other := newClientSpec("orders", &config_pb.ClientOption{Discovery: "b"})
+	a := newClientSpec("orders", &config_pb.ClientOption{Discovery: "a"}, nil)
+	other := newClientSpec("orders", &config_pb.ClientOption{Discovery: "b"}, nil)
 	if a.equal(other) {
 		t.Fatal("discovery changes must replace cached connections")
 	}
@@ -43,7 +43,7 @@ func TestNamedDiscoveryValidation(t *testing.T) {
 		name string
 		want registry.Discovery
 	}{{"", first}, {"default", first}, {"a", first}, {"b", second}} {
-		got, err := b.resolveDiscovery(newClientSpec("orders", &config_pb.ClientOption{Discovery: item.name}))
+		got, err := b.resolveDiscovery(newClientSpec("orders", &config_pb.ClientOption{Discovery: item.name}, nil))
 		if err != nil || got != item.want {
 			t.Fatalf("selection %s: %v", item.name, err)
 		}

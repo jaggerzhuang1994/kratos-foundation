@@ -21,7 +21,7 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 	)
 	nextSpecs := make(map[string]clientSpec, len(next.GetClients()))
 	for name, option := range next.GetClients() {
-		nextSpecs[name] = newClientSpec(name, option)
+		nextSpecs[name] = newClientSpec(name, option, next)
 	}
 
 	f.mu.Lock()
@@ -49,13 +49,13 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 		_, currentPresent := currentClients[name]
 		_, nextPresent := nextClients[name]
 		slot := f.slots[name]
-		currentSpec := newClientSpec(name, nil)
+		currentSpec := newClientSpec(name, nil, current)
 		if slot != nil {
 			currentSpec = slot.current.spec
 		}
 		nextSpec, configured := nextSpecs[name]
 		if !configured {
-			nextSpec = newClientSpec(name, nil)
+			nextSpec = newClientSpec(name, nil, next)
 		}
 		if currentSpec.equal(nextSpec) {
 			continue

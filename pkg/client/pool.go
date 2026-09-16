@@ -43,7 +43,7 @@ func (f *factory) AcquireClient(ctx context.Context, name string) (
 				name: name,
 				current: &clientVersion{
 					revision: 1,
-					spec:     newClientSpec(name, f.config.GetClients()[name]),
+					spec:     newClientSpec(name, f.config.GetClients()[name], f.config),
 				},
 			}
 			f.slots[name] = slot

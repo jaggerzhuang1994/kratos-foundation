@@ -12,6 +12,14 @@ import "validate/validate.proto";
 message Client {
   // [热更新] 后续调用使用新配置，旧连接等待活跃调用释放。
   map<string, ClientOption> clients = 1;
+  // [热更新] 各客户端缺失的 deadline 字段逐项继承根配置；此处缺失默认 10s，显式 0s 关闭回退超时。
+  optional google.protobuf.Duration fallback_timeout = 3;
+  // [热更新] 默认 0s，不限制本地最大耗时；各客户端可显式覆盖为 0s。
+  optional google.protobuf.Duration max_timeout = 4;
+  // [热更新] 默认 0s，不限制派发调用所需的最小剩余预算。
+  optional google.protobuf.Duration min_budget = 5;
+  // [热更新] 各客户端未指定 discovery 时使用的 registry.instances 名称；省略或空值默认 default。
+  optional string discovery = 6;
   // cleanup 等待租约与在途活动的上限，默认 30s；超时强制关闭连接并记录日志。[需重启]
   optional google.protobuf.Duration cleanup_timeout = 2 [(validate.rules).duration = {gt: {}}];
 }
@@ -25,7 +33,7 @@ message ClientOption {
   string target = 2;
   // 中间件
   optional ClientMiddleware middleware = 3;
-  // discovery 目标使用的 registry.instances 名称；省略或空值默认 default。
+  // discovery 目标使用的 registry.instances 名称；省略或空值继承 client.discovery。
   string discovery = 4;
 }
 

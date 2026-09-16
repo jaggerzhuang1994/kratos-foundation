@@ -20,13 +20,16 @@ type clientSpec struct {
 	middleware *config_pb.ClientMiddleware
 }
 
-func newClientSpec(name string, option *config_pb.ClientOption) clientSpec {
+func newClientSpec(name string, option *config_pb.ClientOption, defaults *config_pb.Client) clientSpec {
 	target := option.GetTarget()
 	if target == "" {
 		target = fmt.Sprintf("discovery:///%s", name)
 	}
 
 	discovery := option.GetDiscovery()
+	if discovery == "" {
+		discovery = defaults.GetDiscovery()
+	}
 	if discovery == "" {
 		discovery = "default"
 	}
@@ -36,6 +39,20 @@ func newClientSpec(name string, option *config_pb.ClientOption) clientSpec {
 		middleware = new(config_pb.ClientMiddleware)
 	} else {
 		middleware = proto.Clone(middleware).(*config_pb.ClientMiddleware)
+	}
+	// 在独立副本上逐字段继承，必须先于零值规范化，保证显式 0s 可以覆盖根配置。
+	if middleware.Deadline == nil {
+		middleware.Deadline = new(config_pb.Middleware_Deadline)
+	}
+	d := middleware.Deadline
+	if d.FallbackTimeout == nil {
+		d.FallbackTimeout = proto.CloneOf(defaults.GetFallbackTimeout())
+	}
+	if d.MaxTimeout == nil {
+		d.MaxTimeout = proto.CloneOf(defaults.GetMaxTimeout())
+	}
+	if d.MinBudget == nil {
+		d.MinBudget = proto.CloneOf(defaults.GetMinBudget())
 	}
 	canonicalizeClientMiddleware(middleware)
 
@@ -124,15 +141,17 @@ func (b *builder) validateConfig(config *config_pb.Client) error {
 	if err := config.ValidateAll(); err != nil {
 		return fmt.Errorf("validate client config: %w", err)
 	}
+	// 即使没有具名客户端，也校验按名称动态获取时会使用的根策略。
+	rootSpec := newClientSpec("", nil, config)
+	if _, err := deadline.NewStore(rootSpec.middleware.GetDeadline()); err != nil {
+		return fmt.Errorf("client default deadline: %w", err)
+	}
 	for name, option := range config.GetClients() {
-		spec := newClientSpec(name, option)
-		if spec.useDiscovery() && (b.discoveries != nil || option.GetDiscovery() != "") {
+		spec := newClientSpec(name, option, config)
+		if spec.useDiscovery() && (b.discoveries != nil || option.GetDiscovery() != "" || config.GetDiscovery() != "") {
 			if _, err := b.resolveDiscovery(spec); err != nil {
 				return err
 			}
-		}
-		if option == nil {
-			continue
 		}
 		protocol := option.GetProtocol()
 		switch protocol {
@@ -140,7 +159,7 @@ func (b *builder) validateConfig(config *config_pb.Client) error {
 		default:
 			return fmt.Errorf("client %q: %w: %s (%d)", name, ErrInvalidProtocol, protocol, protocol)
 		}
-		middleware := option.GetMiddleware()
+		middleware := spec.middleware
 		if _, err := deadline.NewStore(middleware.GetDeadline()); err != nil {
 			return fmt.Errorf("client %q deadline: %w", name, err)
 		}

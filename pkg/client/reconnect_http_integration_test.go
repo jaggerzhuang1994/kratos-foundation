@@ -38,7 +38,7 @@ func TestHTTPClientReconnectsWithoutReplayingRequest(t *testing.T) {
 	protocol := config_pb.Protocol_HTTP
 	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol, Target: server.URL,
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestHTTPDoesNotReplayAfterServerReceivesRequest(t *testing.T) {
 	protocol := config_pb.Protocol_HTTP
 	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol, Target: server.URL,
-	}))
+	}, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

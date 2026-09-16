@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -376,5 +377,55 @@ func TestFactoryRejectsSREUpdateWithoutRetiringExistingClients(t *testing.T) {
 	}
 	if currentSnapshot(factory, "orders") != beforeOrders || currentSnapshot(factory, "payments") != beforePayments {
 		t.Fatal("invalid SRE update changed active client versions")
+	}
+}
+
+func TestFactoryRootDefaultsUpdate(t *testing.T) {
+	seen := make(chan clientSpec, 8)
+	initial := &config_pb.Client{Discovery: proto.String("regional"), FallbackTimeout: durationpb.New(5 * time.Second), Clients: map[string]*config_pb.ClientOption{
+		"inherited": {Target: "localhost:9000"},
+		"override":  {Target: "localhost:9001", Discovery: "fixed", Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(2 * time.Second)}}},
+	}}
+	f := newConfiguredTestFactory(t, initial, func(_ context.Context, spec clientSpec) (clientResult, error) {
+		seen <- spec
+		return fakeGRPCResult(new(atomic.Int32)), nil
+	})
+	acquire := func(name string) {
+		t.Helper()
+		_, _, release, err := f.AcquireClient(context.Background(), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		release()
+	}
+	for _, name := range []string{"inherited", "override", "dynamic"} {
+		acquire(name)
+		receiveWithin(t, seen, "initial client spec")
+	}
+	before := currentSnapshot(f, "override")
+	next := proto.CloneOf(initial)
+	next.FallbackTimeout = durationpb.New(7 * time.Second)
+	next.Discovery = proto.String("updated")
+	if err := updateFactoryConfig(f, next); err != nil {
+		t.Fatal(err)
+	}
+	if currentSnapshot(f, "override") != before {
+		t.Fatal("overridden client rebuilt")
+	}
+	for _, name := range []string{"inherited", "dynamic", "new-dynamic"} {
+		acquire(name)
+		spec := receiveWithin(t, seen, "updated client spec")
+		if spec.middleware.Deadline.FallbackTimeout.AsDuration() != 7*time.Second || spec.discovery != "updated" {
+			t.Fatalf("%s did not inherit updated root", name)
+		}
+	}
+	next = proto.CloneOf(next)
+	next.FallbackTimeout = nil
+	if err := updateFactoryConfig(f, next); err != nil {
+		t.Fatal(err)
+	}
+	acquire("dynamic")
+	if spec := receiveWithin(t, seen, "updated client spec"); spec.middleware.GetDeadline().GetFallbackTimeout() != nil {
+		t.Fatal("removed root timeout did not restore built-in default")
 	}
 }
