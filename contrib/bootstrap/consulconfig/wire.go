@@ -11,19 +11,3 @@ var ProviderSet = wire.NewSet(
 	NewSpec,
 	wire.Value(bootstrap.RemoteConfigPathsProvider(RemoteConfigPaths)),
 )
-
-// RemoteConfigPaths 返回独立的八层 Consul 配置路径列表，调用方可修改。
-// 保留八层初次加载顺序，后加载的路径覆盖前面的同名配置项。
-// 热更新仍遵循官方 merge，不保证跨来源的固定覆盖优先级。
-func RemoteConfigPaths(name, env string) []string {
-	return []string{
-		"configs/common*.yaml",
-		"configs/" + env + "/common*.yaml",
-		"secrets/common*.yaml",
-		"secrets/" + env + "/common*.yaml",
-		"configs/" + name + "/*.yaml",
-		"configs/" + name + "/" + env + "/*.yaml",
-		"secrets/" + name + "/*.yaml",
-		"secrets/" + name + "/" + env + "/*.yaml",
-	}
-}
