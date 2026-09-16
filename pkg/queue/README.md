@@ -1,69 +1,40 @@
 # Queue
 
-新业务优先使用[类型化接入](typed.md)：业务仅定义消息、发送小接口和处理方法，应用入口用 `NewEndpoint` 一次构造发布与消费；纯发布进程使用 `NewPublisher`。以下保留底层 Store/Dispatcher/Worker 契约与高级用法。
+业务入口见[类型化接入](typed.md)：`NewQueue(definition, store, observability)` 返回投递入口 `Queue[T]`；`q.Worker(handle, config)` 返回独立消费运行时 `Worker[T]`。纯发布进程只创建 Queue。业务定义消息和处理逻辑，驱动、Wire 与运行时登记位于应用组装层。
 
-Worker 和 Dispatcher 在构造时从注入 Logger 派生 `module=queue`，业务 handler 的日志由业务自行声明模块。
+`NewObservability` 复用应用已有 Logger、Tracing、Metrics，直接注入 Queue；默认 Bootstrap provider set 包含此入口。Queue 和 Worker 派生 `module=queue` 的日志。
 
-`pkg/queue` 是持久化后台任务队列，提供 `Task`、`Store`、`Dispatcher` 和 `Worker`。业务显式选择 [Redis Store](../../contrib/queue/redis/README.md) 或 [Database Repo 适配器](../../contrib/queue/database/README.md)，通过构造参数注入业务 Handler 和观测依赖。Kafka 消息生产、消费组、重试/死信位于独立的 [pkg/kafka](../kafka/README.md)，不作为任务 Store。`pkg/job` 保留 Cron、Once、Daemon；`job.DelayIfRunning` 不是持久化延迟队列。
+本包实现持久化任务、延迟、租约与重试。业务选择 [Redis Store](../../contrib/queue/redis/README.md) 或 [Database Repo](../../contrib/queue/database/README.md)。Kafka 位于独立的 [pkg/kafka](../kafka/README.md)，不作为任务 Store；`pkg/job` 的调度也不替代持久化队列。
 
-## 契约与所有权
+## 文件组织
 
-- Task 只存任务类型、可序列化 Payload、Header、ID 与时间；业务依赖通过 Handler 闭包或方法注入，不序列化服务对象。Type 必须非空，对应 Worker 构造时的 Handler 表。
-- Dispatcher 深复制输入，补齐 ID、CreatedAt、AvailableAt 并传播 W3C trace context/baggage；不修改调用者对象。Handler 收到独立副本，修改它不会更改待重试记录。返回的 Reservation/FailedTask 也为独立快照；Reservation 的 Task ID、Token、Attempts 应只读。
+实现按职责归并为以下七个文件；每个实现最多对应一个同名测试文件，不按单个类型拆文件。
+
+| 文件 | 职责 |
+| --- | --- |
+| [queue.go](queue.go) | Definition、Codec、Queue 构造与 Post；私有投递实现、输入快照和追踪传播 |
+| [worker.go](worker.go) | WorkerConfig 默认值及校验、Worker 构造、Start/Stop、领取循环 |
+| [worker_handler.go](worker_handler.go) | Execution、处理器与中间件契约、Queue.Worker 适配及错误分类钩子 |
+| [worker_execution.go](worker_execution.go) | 单次任务执行、超时与 panic、Ack/Release/Fail、归档成功后的失败通知 |
+| [retry.go](retry.go) | 重试策略、退避计算和等待、Permanent 错误标记 |
+| [task.go](task.go) | Task、Reservation、FailedTask、Store、Stats 与存储错误契约 |
+| [observability.go](observability.go) | 应用观测依赖及积压统计指标注册 |
+
+`internal/telemetry` 保留独立的指标与追踪实现，`testdata/wireassembly` 保留真实 Wire 生成验证。运行流程见下方“执行、延迟与失败”；文件归属不改变调用顺序或资源所有权。
+
+## 底层契约与所有权
+
+- Task 只存任务类型、可序列化 Payload、Header、ID 与时间；业务依赖通过 Handler 闭包或方法注入，不序列化服务对象。Type 必须非空，须匹配 Definition 的显式消息类型与版本。
+- Queue 编码消息并复制 Header，补齐 ID、CreatedAt、AvailableAt 并传播 W3C trace context/baggage；不修改调用者对象。消息处理器收到独立解码结果，修改它不会更改待重试记录。返回的 Reservation/FailedTask 也为独立快照；Reservation 的 Task ID、Token、Attempts 应只读。
 - Redis Store 用业务提供的 `KeyPrefix` 隔离，前缀原样保留且不得为空或全为空白；Database Store 由业务绑定单个队列的 Repo 隔离，可为每个队列使用不同表。任务 ID 为 1–128 字节且不能全为空白。相同 ID 的待执行、已领取、失败记录不能重复入队，返回 `ErrDuplicate`；完成删除后允许复用 ID。这不是永久业务去重。
-- Dispatch 返回实际 ID；存储提交后响应丢失时可能同时返回 ID 和错误。需要跨重试识别同一任务时，业务应在投递前设置稳定 ID。调用成功表示后端已接受，耐久性仍依赖 Redis AOF/RDB/复制或数据库刷盘配置。
-- Store 借用 Redis Manager 或业务 Repo，无独立 cleanup。先停止 Worker 并等待 Handler 退出，再由原拥有者释放连接。Dispatcher、Worker 均不关闭 Store 连接；没有全局 Registry、隐式启动或顶层 queue 配置。
+- Post 返回实际 ID；存储提交后响应丢失时可能同时返回 ID 和错误。需要跨重试识别同一任务时，业务应在投递前设置稳定 ID。调用成功表示后端已接受，耐久性仍依赖 Redis AOF/RDB/复制或数据库刷盘配置。
+- Store 借用 Redis Manager 或业务 Repo，无独立 cleanup。先停止 Worker 并等待 Handler 退出，再由原拥有者释放连接。Queue、Worker 均不关闭 Store 连接；没有全局 Registry、隐式启动或顶层 queue 配置。
 
 ## 构造与投递
 
-以下是可编译的业务组装函数。前置条件：业务已经实现绑定 mail 队列的 `databasequeue.Repo` 并完成自己选择的表迁移，观测依赖已初始化，`appSpec` 是应用唯一的 `app.Spec`，Handler 可并发调用并响应 Context。业务也可使用 [GORM 泛型 Repo](../../contrib/queue/database/gorm/README.md) 复用默认实现。Repo 的原子领取与错误语义必须满足 [持久化契约](../../contrib/queue/database/README.md)。
+完整可编译的组装示例见[类型化接入](typed.md#应用入口一次接入)，两种驱动都显式注入 Store。`PostWith` 支持稳定 ID 和延迟时间，消息类型与编码格式由 Definition 统一确定。
 
-```go
-package assembly
-
-import (
-    "context"
-    "time"
-
-    databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
-    "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
-)
-
-func NewMailQueue(
-    repo databasequeue.Repo,
-    appSpec *app.Spec,
-    observability queue.Observability,
-    sendEmail queue.Handler,
-) (*queue.Dispatcher, error) {
-    store := databasequeue.NewStore(repo)
-    dispatcher, err := queue.NewDispatcher("mail", store, observability)
-    if err != nil {
-        return nil, err
-    }
-    worker, err := queue.NewWorker(queue.WorkerConfig{
-        Name: "mail-worker", Queue: "mail", Concurrency: 4,
-    }, store, map[string]queue.Handler{"send-email": sendEmail}, observability)
-    if err != nil {
-        return nil, err
-    }
-    appSpec.RegisterRuntime(worker)
-    return dispatcher, nil
-}
-
-func SendLater(ctx context.Context, dispatcher *queue.Dispatcher) (string, error) {
-    return dispatcher.Dispatch(ctx, &queue.Task{
-        ID: "welcome-user-42",
-        Type: "send-email",
-        Payload: []byte(`{"user_id":42}`),
-        AvailableAt: time.Now().Add(10 * time.Minute),
-    })
-}
-```
-
-RegisterRuntime 无返回值，冻结后调用直接 panic。登记及冻结流程见 [app](../app/README.md#runtime-登记)。Wire 层须将上述登记过程纳入最终 Bootstrap 构造屏障，确保在 app.Spec 冻结前完成。Store 不新增资源，函数无 cleanup；业务 Repo 及数据库依赖的 cleanup 由应用组装层保留。完整生命周期组装见 [Bootstrap 文档](../bootstrap/README.md)。
-
-Redis 使用 `redisqueue.NewStore(redisManager, redisqueue.Config{Connection: "main", KeyPrefix: "app:queue:mail"})` 替换 Store 构造，其余 Dispatcher/Worker 不变。Redis 连接必须已在 Manager 中声明；示例与键结构见 [Redis Store](../../contrib/queue/redis/README.md)。
+仅 Worker 登记为 Runtime；先停止运行时，再清理借用连接和观测依赖。Task 仅用于驱动适配，dispatcher 为包内实现。
 
 ## 执行、延迟与失败
 
@@ -73,13 +44,14 @@ Worker 每次从 Store 原子领取一个任务并持久增加 Attempts，再在
 
 | 配置 | 零值/省略默认 | 约束 |
 | --- | --- | --- |
-| Name / Queue | 无默认 | 必填，Queue 是观测逻辑名，不用于选择 Redis KeyPrefix、Repo 或数据库表 |
+| Name | Definition.Queue | 观测名称，不用于选择 Redis KeyPrefix、Repo 或数据库表 |
 | Concurrency | 1 | 1–1024；Handler 可能被并发调用 |
 | PollInterval | 200ms | 必须为正；空队列等待可取消 |
 | Timeout | 30s | 从领取请求开始计算，包含领取耗时，采用协作取消 |
 | StorageTimeout | 5s | 每次 Reserve/Ack/Release/Fail 操作的最长等待 |
-| Lease | 60s | 至少 1ms，且严格大于 Timeout + StorageTimeout |
-| Retry=nil | 3 次领取，500ms 初始退避，30s 最大退避 | 次数包含首次领取及执行前崩溃的领取 |
+| Lease | max(60s, Timeout + StorageTimeout + 1s) | 至少 1ms，且严格大于 Timeout + StorageTimeout |
+| MaxAttempts | 3 | 次数包含首次领取及执行前崩溃的领取；非零时不能同时指定 Retry |
+| Retry=nil | 500ms 初始退避，30s 最大退避 | 次数使用 MaxAttempts |
 | Retry 非 nil | 使用显式字段 | MaxAttempts 为 1–1000；退避不可负；两个 Backoff 均为零表示不等待 |
 
 Retry 的第一次等待使用 MinBackoff，后续按两倍增长并受 MaxBackoff 限制；沿用已有 RetryPolicy 的显式零语义：MinBackoff 为零始终不等待，MinBackoff 非零而 MaxBackoff 为零时仅第一次使用 MinBackoff，后续不等待。重试配置在构造时固化，不热更新。
@@ -94,10 +66,10 @@ Start 阻塞运行且实例只能启动一次。Stop 幂等取消领取和 Handl
 
 ```mermaid
 flowchart TD
-    A([Dispatch]) --> B[复制校验并注入trace]
+    A([Post]) --> B[复制校验并注入trace]
     B -- 无效 --> C([返回校验错误])
     B -- 有效 --> D[外部Store写入任务 / Database可参与业务事务]
-    D -- 失败 --> E[ERROR Dispatch enqueue.failed]
+    D -- 失败 --> E[ERROR enqueue.failed]
     E --> C
     D -- 成功 --> F([返回任务ID / 外层事务仍需提交])
     G([多个Worker并发入口]) --> H[外部Store原子领取或恢复过期租约]
@@ -125,7 +97,7 @@ flowchart TD
 
 日志记录队列、任务 ID、任务类型、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
 
-Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Dispatch 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
+Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Post 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
 
 ## 验证与迁移
 

@@ -44,7 +44,7 @@
 | [`oss`](oss/README.md) | 对象存储资源与操作契约 | M3 Manager + M2 契约 | Manager 延迟创建并缓存 bucket；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`client`](client/README.md) | HTTP/gRPC 客户端工厂与共享租用 | M3 Factory + M4 调用租约 | Factory cleanup 管理整体资源；每次 `AcquireClient` 还要调用自己的 release |
 | [`kafka`](kafka/README.md) | Kafka 客户端、消息生产和消费 | M3 Factory + M4 组件 + M5 Runtime | `NewClientFactory` 创建客户端工厂；`NewProducer`、`NewConsumer` 显式构造，`ConsumerRuntime` 管理消费生命周期 |
-| [`queue`](queue/README.md) | 持久化任务、延迟和重试 | M2 契约 + M4 组件 + M5 Runtime | `Publisher`/`Consumer` 提供类型化接入，`Endpoint` 一次组装；底层 `Dispatcher`/`Worker` 保留；Redis Store 或业务 Database Repo 显式注入，资源由组装层释放 |
+| [`queue`](queue/README.md) | 持久化任务、延迟和重试 | M2 契约 + M4 组件 + M5 Runtime | `Queue[T]` 提供 Post，`Worker[T]` 管理消费；`Observability` 直接复用应用观测依赖；Redis Store 或业务 Database Repo 显式注入，资源由组装层释放 |
 | [`job`](job/README.md) | 任务声明、调度和并发协调 | M5 Runtime + M4 Guard | `job.Manager` 是 Runtime；每次任务的 ExecutionGuard 是操作级组件，已有自动续租 |
 | [`server`](server/README.md) | HTTP/gRPC 服务装配 | M5 Runtime | `server.Runtime` 是聚合对象；组装层登记 `Servers()` 返回的 HTTP/gRPC 运行时，并非登记聚合对象本身 |
 
@@ -55,7 +55,7 @@
 | 概念 | 识别依据 | 示例 |
 | --- | --- | --- |
 | 运行时组件 | 被请求、任务、Runtime 或资源所有者调用；生命周期可长可短 | Producer 装饰器、ExecutionGuard、watchdog、客户端租约 |
-| 应用 Runtime | 具有 `Start(context.Context) error` / `Stop(context.Context) error`，并实际登记到 `app.Spec` | Job Manager、Queue Consumer / Worker、HTTP/gRPC server |
+| 应用 Runtime | 具有 `Start(context.Context) error` / `Stop(context.Context) error`，并实际登记到 `app.Spec` | Job Manager、Queue Worker[T]、HTTP/gRPC server |
 | Bootstrap | 借用 Wire 注入的 app/server/job Spec；Runtime 立即登记到共享 app.Spec | `bootstrap.NewMetricsBootstrap`、`bootstrap.NewRuntimeBootstrap` |
 | 资源 Provider/Manager/Factory | 创建、借出或持有资源，并明确释放责任 | Redis Manager、Kafka ClientFactory |
 

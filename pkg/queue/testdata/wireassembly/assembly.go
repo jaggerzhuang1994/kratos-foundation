@@ -2,40 +2,41 @@ package wireassembly
 
 import (
 	"context"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-// 队列身份只存在于组装层；相同 string 消息不会导致 Wire 实例冲突。
-type emailQueue struct{ *queue.Endpoint[string] }
-type botQueue struct{ *queue.Endpoint[string] }
+type EmailMessage string
+type BotMessage string
 type queueStores struct{ email, bot queue.Store }
 type typedQueues struct {
-	Email emailSender
-	Bot   botSender
+	Email         *queue.Queue[EmailMessage]
+	Bot           *queue.Queue[BotMessage]
+	EmailWorker   *queue.Worker[EmailMessage]
+	BotWorker     *queue.Worker[BotMessage]
+	Observability queue.Observability
+	Logger        log.Logger
+	Metrics       metrics.Provider
+	Tracing       tracing.Provider
 }
 
-func newEmailQueue(stores queueStores, obs queue.Observability) (*emailQueue, error) {
-	endpoint, err := queue.NewEndpoint(queue.Definition[string]{Queue: "mail", MessageType: "send", Version: 1}, stores.email, queue.Handle(deliverText), queue.ConsumerConfig{}, obs)
-	if err != nil {
-		return nil, err
-	}
-	return &emailQueue{Endpoint: endpoint}, nil
+func newEmailQueue(stores queueStores, observability queue.Observability) (*queue.Queue[EmailMessage], error) {
+	return queue.NewQueue(queue.Definition[EmailMessage]{Queue: "mail", MessageType: "send", Version: 1}, stores.email, observability)
+}
+func newBotQueue(stores queueStores, observability queue.Observability) (*queue.Queue[BotMessage], error) {
+	return queue.NewQueue(queue.Definition[BotMessage]{Queue: "bot", MessageType: "send", Version: 1}, stores.bot, observability)
 }
 
-func newBotQueue(stores queueStores, obs queue.Observability) (*botQueue, error) {
-	endpoint, err := queue.NewEndpoint(queue.Definition[string]{Queue: "bot", MessageType: "send", Version: 1}, stores.bot, queue.Handle(deliverText), queue.ConsumerConfig{}, obs)
-	if err != nil {
-		return nil, err
-	}
-	return &botQueue{Endpoint: endpoint}, nil
-}
+// 服务依赖投递入口，Worker 再依赖服务，构造图不形成循环。
+type emailService struct{ queue *queue.Queue[EmailMessage] }
 
-// 业务只声明自己需要的发送能力，不依赖 queue、Wire 或 Runtime。
-type emailSender interface {
-	Publish(context.Context, string) (string, error)
+func newEmailService(q *queue.Queue[EmailMessage]) *emailService   { return &emailService{queue: q} }
+func (s *emailService) Handle(context.Context, EmailMessage) error { return nil }
+func newEmailWorker(q *queue.Queue[EmailMessage], service *emailService) (*queue.Worker[EmailMessage], error) {
+	return q.Worker(service.Handle, queue.WorkerConfig{DisableProcessing: true})
 }
-type botSender interface {
-	Publish(context.Context, string) (string, error)
+func newBotWorker(q *queue.Queue[BotMessage]) (*queue.Worker[BotMessage], error) {
+	return q.Worker(func(context.Context, BotMessage) error { return nil }, queue.WorkerConfig{DisableProcessing: true})
 }
-
-func deliverText(context.Context, string) error { return nil }

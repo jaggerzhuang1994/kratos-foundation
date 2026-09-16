@@ -32,23 +32,23 @@ var errDemoFailure = errors.New("demo handler failure")
 // messaging 借用 Redis 和观测 Provider，独占两个 Kafka Producer。
 // app 先停止运行时，再执行 cleanup 注销采样并释放 Producer，最后才能释放借用资源。
 type messaging struct {
-	producer   kafka.Producer
-	consumer   *kafka.ConsumerRuntime
-	worker     *queue.Worker
-	dispatcher *queue.Dispatcher
-	backlog    *queue.Dispatcher
-	business   []businessQueue
-	client     *redis.Client
-	logger     log.Logger
+	producer kafka.Producer
+	consumer *kafka.ConsumerRuntime
+	worker   *queue.Worker[string]
+	tasks    *queue.Queue[string]
+	backlog  *queue.Queue[string]
+	business []businessQueue
+	client   *redis.Client
+	logger   log.Logger
 }
 
 // businessQueue 保存固定业务类型及其运行时；资源随 messaging 一起启动和停止。
 type businessQueue struct {
-	name       string
-	taskType   string
-	payload    string
-	dispatcher *queue.Dispatcher
-	worker     *queue.Worker
+	name     string
+	taskType string
+	payload  string
+	tasks    *queue.Queue[string]
+	worker   *queue.Worker[string]
 }
 
 func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory, metricsProvider metrics.Provider, tracingProvider tracing.Provider, logger log.Logger) (_ *messaging, cleanup func(), err error) {
@@ -107,10 +107,6 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 		if createErr != nil {
 			return nil, cleanup, createErr
 		}
-		dispatcher, createErr := queue.NewDispatcher(name, store, queueObs)
-		if createErr != nil {
-			return nil, cleanup, createErr
-		}
 		unregister, createErr := queue.RegisterStats(name, store, metricsProvider, time.Second)
 		if createErr != nil {
 			return nil, cleanup, createErr
@@ -120,10 +116,6 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 				logger.With("queue", name, "error", releaseErr).Error("Failed to unregister queue statistics")
 			}
 		})
-		if name == backlogQueue {
-			m.backlog = dispatcher
-			continue
-		}
 		workerName, taskType, handler := consumerName, "demo", m.handleTask
 		switch name {
 		case emailQueue:
@@ -131,20 +123,30 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 		case reportQueue:
 			workerName, taskType, handler = "report-worker", "report.summarize", m.handleReport
 		}
-		worker, createErr := queue.NewWorker(queue.WorkerConfig{
-			Name: workerName, Queue: name, Concurrency: 1, PollInterval: 100 * time.Millisecond,
+		q, createErr := queue.NewQueue(queue.Definition[string]{Queue: name, MessageType: taskType, Version: 1, Codec: taskTextCodec{}}, store, queueObs)
+		if createErr != nil {
+			return nil, cleanup, createErr
+		}
+		if name == backlogQueue {
+			m.backlog = q
+			continue
+		}
+		worker, createErr := q.WorkerWithExecution(func(ctx context.Context, execution queue.Execution[string]) error {
+			return handler(ctx, &queue.Task{ID: execution.ID, Payload: []byte(execution.Message)})
+		}, queue.WorkerConfig{
+			Name: workerName, Concurrency: 1, PollInterval: 100 * time.Millisecond,
 			Retry: &queue.RetryPolicy{MaxAttempts: 2, MinBackoff: 100 * time.Millisecond, MaxBackoff: 100 * time.Millisecond},
-		}, store, map[string]queue.Handler{taskType: handler}, queueObs)
+		})
 		if createErr != nil {
 			return nil, cleanup, createErr
 		}
 		if name == taskQueue {
-			m.dispatcher, m.worker = dispatcher, worker
+			m.tasks, m.worker = q, worker
 			continue
 		}
 		for i := range m.business {
 			if m.business[i].name == name {
-				m.business[i].dispatcher, m.business[i].worker = dispatcher, worker
+				m.business[i].tasks, m.business[i].worker = q, worker
 			}
 		}
 	}
@@ -153,9 +155,9 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 
 // Register 在业务声明阶段登记，启动与停止由 app supervisor 统一负责。
 func (m *messaging) Register(spec *bootstrap.Spec) {
-	spec.RegisterKafkaConsumer(m.consumer).RegisterQueueWorker(m.worker)
+	spec.RegisterKafkaConsumer(m.consumer).RegisterRuntime(m.worker)
 	for _, business := range m.business {
-		spec.RegisterQueueWorker(business.worker)
+		spec.RegisterRuntime(business.worker)
 	}
 }
 
@@ -167,7 +169,7 @@ func (m *messaging) Run(ctx context.Context, runID string) error {
 		if err := m.producer.Publish(ctx, &kafka.Message{ID: id, Key: []byte(runID), Body: []byte(scenario)}); err != nil {
 			return fmt.Errorf("publish demo event: %w", err)
 		}
-		if _, err := m.dispatcher.Dispatch(ctx, &queue.Task{ID: id, Type: "demo", Payload: []byte(scenario)}); err != nil {
+		if _, err := m.tasks.PostWith(ctx, scenario, queue.PostOptions{ID: id}); err != nil {
 			return fmt.Errorf("dispatch demo task: %w", err)
 		}
 	}
@@ -176,14 +178,12 @@ func (m *messaging) Run(ctx context.Context, runID string) error {
 		if scenario == "scheduled" {
 			available = available.Add(24 * time.Hour)
 		}
-		if _, err := m.backlog.Dispatch(ctx, &queue.Task{ID: runID + "-" + scenario, Type: "demo", Payload: []byte("success"), AvailableAt: available}); err != nil {
+		if _, err := m.backlog.PostWith(ctx, "success", queue.PostOptions{ID: runID + "-" + scenario, AvailableAt: available}); err != nil {
 			return fmt.Errorf("dispatch demo backlog: %w", err)
 		}
 	}
 	for _, business := range m.business {
-		if _, err := business.dispatcher.Dispatch(ctx, &queue.Task{
-			ID: runID + "-" + business.taskType, Type: business.taskType, Payload: []byte(business.payload),
-		}); err != nil {
+		if _, err := business.tasks.PostWith(ctx, business.payload, queue.PostOptions{ID: runID + "-" + business.taskType}); err != nil {
 			return fmt.Errorf("dispatch %s task: %w", business.name, err)
 		}
 	}
@@ -247,3 +247,9 @@ func (m *messaging) handleReport(ctx context.Context, task *queue.Task) error {
 	m.logger.WithContext(ctx).Infow("event", "report.summarized", "task_id", task.ID, "total", total)
 	return nil
 }
+
+// taskTextCodec 保留演示任务的纯文本格式；任务类型显式带版本。
+type taskTextCodec struct{}
+
+func (taskTextCodec) Encode(value string) ([]byte, error) { return []byte(value), nil }
+func (taskTextCodec) Decode(value []byte) (string, error) { return string(value), nil }

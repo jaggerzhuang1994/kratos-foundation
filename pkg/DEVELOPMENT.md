@@ -15,7 +15,7 @@
 | M1 工具/值对象 | 输入转输出，或保存少量局部配置 | `Do(input) (output, error)` / `New(config)` | compress、gormscope、totp |
 | M2 公共契约 | 多个实现需要共享语义 | 小接口、值类型、稳定错误 | lock |
 | M3 资源服务 | 创建、管理或借出连接/输出/provider | `New(deps) (value, func(), error)`；无资源则省略 cleanup | config、redis、client、kafka |
-| M4 操作级组件 | 给一次请求/任务附加行为，或包裹另一能力 | `New(dep, config)`，必要时 `Acquire(ctx) (handle, release, error)` | queue Dispatcher、job guard |
+| M4 操作级组件 | 给一次请求/任务附加行为，或包裹另一能力 | `New(dep, config)`，必要时 `Acquire(ctx) (handle, release, error)` | queue Queue[T]、job guard |
 | M5 应用 Runtime | 需要由应用统一启动和停止执行循环 | `New(deps)` + `Start(ctx)` / `Stop(ctx)` | queue Worker、job manager |
 | M6 Bootstrap | 把已有对象贡献给应用装配 | `NewXXXBootstrap(spec, component) (XXXBootstrap, error)` | bootstrap |
 | M7 应用核心 | 多种 Runtime 共同需要的生命周期规则 | Spec、冻结、监督、停机协调 | app |
@@ -73,7 +73,7 @@
 
 **使用条件**：为一次操作添加重试、观测、协调、续租等行为；或者装饰一个已有能力。可以有局部状态或 goroutine，但生命周期归请求、任务或所属对象。
 
-- **目录**：留在所属领域，如 `pkg/queue/dispatcher.go`、`pkg/job/coordinator.go`；需要公共复用且具有清晰子能力时可新增公共子包，如建议的 `pkg/lock/watchdog`。
+- **目录**：留在所属领域，如 `pkg/queue/queue.go`、`pkg/job/coordinator.go`；需要公共复用且具有清晰子能力时可新增公共子包，如建议的 `pkg/lock/watchdog`。
 - **API**：构造显式接收被装饰能力和配置；普通调用 `Do(ctx, ...)`。需要持有句柄时，获取方法返回句柄与 release，明确一对一所有权。
 - **依赖**：依赖行为接口，不依赖业务的 Wire、全局 Manager 或具体驱动；具体后端在组装层选择。
 - **生命周期**：构造通常不启动任务；实际 Acquire/调用成功后才启动局部循环。操作结束停止循环并释放资源；不要给每个句柄注册一个应用 Runtime。

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -442,33 +443,32 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 			repo, db := testRepo(t)
 			store := &integrationQueueStore{Store: databasequeue.NewStore(repo), settled: make(chan error, 1)}
 			obs := integrationQueueObservability(t)
-			dispatcher, err := queue.NewDispatcher("email", store, obs)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			original := &queue.Task{ID: "order-123", Type: "email.v1", Payload: []byte("invoice"), Headers: map[string]string{"tenant": "acme"}}
+			if tc.name == "unknown_type" {
+				original.Type = "missing.v1"
+			}
+			publisher, err := queue.NewQueue(queue.Definition[[]byte]{Queue: "email", MessageType: strings.TrimSuffix(original.Type, ".v1"), Version: 1, Codec: payloadCodec{}}, store, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			original := &queue.Task{ID: "order-123", Type: "email", Payload: []byte("invoice"), Headers: map[string]string{"tenant": "acme"}}
-			if tc.name == "unknown_type" {
-				original.Type = "missing"
-			}
-			if id, err := dispatcher.Dispatch(ctx, original); err != nil || id != original.ID {
+			if id, err := publisher.PostWith(ctx, original.Payload, queue.PostOptions{ID: original.ID, Headers: original.Headers}); err != nil || id != original.ID {
 				t.Fatalf("dispatch id=%q error=%v", id, err)
 			}
-			if _, err := dispatcher.Dispatch(ctx, original); !errors.Is(err, queue.ErrDuplicate) {
+			if _, err := publisher.PostWith(ctx, original.Payload, queue.PostOptions{ID: original.ID, Headers: original.Headers}); !errors.Is(err, queue.ErrDuplicate) {
 				t.Fatalf("duplicate dispatch = %v", err)
 			}
 			original.Payload[0] = 'X'
 			original.Headers["tenant"] = "changed"
 			runs := 0
-			handler := func(_ context.Context, task *queue.Task) error {
+			handler := func(_ context.Context, payload []byte) error {
 				runs++
-				if string(task.Payload) != "invoice" || task.Headers["tenant"] != "acme" {
-					t.Errorf("persisted task mutated across dispatch/retry: %+v", task)
+				if string(payload) != "invoice" {
+					t.Errorf("persisted payload mutated across dispatch/retry: %s", payload)
 				}
 				// Handler 的写入不能污染下一次重试或失败归档的数据。
-				task.Payload[0] = 'Y'
-				task.Headers["tenant"] = "handler"
+				payload[0] = 'Y'
 				switch tc.name {
 				case "transient_then_success":
 					if runs == 1 {
@@ -483,12 +483,13 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				}
 				return nil
 			}
-			runWorker := func(handlers map[string]queue.Handler) {
+			runWorker := func(messageType string, handle func(context.Context, []byte) error) {
 				t.Helper()
-				worker, err := queue.NewWorker(queue.WorkerConfig{
-					Name: "mailer", Queue: "email", PollInterval: time.Millisecond,
-					Retry: &queue.RetryPolicy{MaxAttempts: 2},
-				}, store, handlers, obs)
+				q, err := queue.NewQueue(queue.Definition[[]byte]{Queue: "email", MessageType: messageType, Version: 1, Codec: payloadCodec{}}, store, obs)
+				if err != nil {
+					t.Fatal(err)
+				}
+				worker, err := q.Worker(handle, queue.WorkerConfig{Name: "mailer", PollInterval: time.Millisecond, Retry: &queue.RetryPolicy{MaxAttempts: 2}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -527,7 +528,7 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 					t.Fatal("worker did not persist terminal state")
 				}
 			}
-			runWorker(map[string]queue.Handler{"email": handler})
+			runWorker("email", handler)
 			if runs != tc.wantRuns {
 				t.Fatalf("handler runs=%d want=%d", runs, tc.wantRuns)
 			}
@@ -542,7 +543,7 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				if err := store.Retry(ctx, original.ID, time.Now().Add(-time.Second)); err != nil {
 					t.Fatal(err)
 				}
-				runWorker(map[string]queue.Handler{original.Type: func(context.Context, *queue.Task) error { return nil }})
+				runWorker(strings.TrimSuffix(original.Type, ".v1"), func(context.Context, []byte) error { return nil })
 			} else if len(failed) != 0 {
 				t.Fatalf("successful task archived: %+v", failed)
 			}
@@ -556,3 +557,9 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 		})
 	}
 }
+
+// payloadCodec 保留此存储回归用例的原始字节，验证处理器不能改写持久化快照。
+type payloadCodec struct{}
+
+func (payloadCodec) Encode(value []byte) ([]byte, error) { return value, nil }
+func (payloadCodec) Decode(value []byte) ([]byte, error) { return value, nil }

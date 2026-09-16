@@ -6,10 +6,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
+
+// Observability 是任务投递与执行所需的日志、追踪和指标依赖。
+// 借用应用已有实例，不拥有资源；三个依赖均为必需项。
+type Observability struct {
+	Logger  log.Logger
+	Tracing tracing.Provider
+	Metrics metrics.Provider
+}
+
+// NewObservability 复用应用注入的观测依赖，供显式组装及 Wire 自动构造。
+// 不创建资源、不读取全局实例、不改变启用状态；cleanup 仍由原 provider 负责。
+func NewObservability(logger log.Logger, tracingProvider tracing.Provider, metricsProvider metrics.Provider) Observability {
+	return Observability{Logger: logger, Tracing: tracingProvider, Metrics: metricsProvider}
+}
 
 // RegisterStats 为一个固定业务队列名注册同步于指标采集的只读回调，无后台 goroutine。
 // timeout 必须为正；source 必须遵守 Context 取消。同一 Provider/队列名只能注册一次。

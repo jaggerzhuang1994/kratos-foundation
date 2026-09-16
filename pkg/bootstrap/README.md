@@ -23,15 +23,14 @@ func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *se
 worker 的 provider 则可以选择任务和消费者：
 
 ```go
-func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *jobimpl.Reconcile, worker *queue.Worker) (bootstrap.Bootstrap, error) {
+func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *jobimpl.Reconcile, worker *queue.Worker[email.Message]) (bootstrap.Bootstrap, error) {
     spec.Job().RegisterCron("reconcile", "@every 1m", task)
-    spec.RegisterQueueWorker(worker)
+    spec.RegisterRuntime(worker)
     return bootstrap.Bootstrap{}, nil
 }
 ```
 
-以上业务类型由消费项目定义。Queue Worker 由 Wire 调用 queue.NewWorker 构造，Kafka 消息消费则使用 kafka.NewConsumerRuntime，
-分别通过 `spec.RegisterQueueWorker(worker)` 和 `spec.RegisterKafkaConsumer(consumer)` 登记；两个入口接收已构造的非 nil 具体实例，内部调用 `RegisterRuntime`，复用其登记逻辑并返回同一 Spec。自定义 Runtime 继续使用 `RegisterRuntime(runtime)`。三个入口均立即写入共享 app.Spec，不负责构造、配置或释放资源，cleanup 仍归原 provider，Start/Stop 由 App 管理。
+以上业务类型由消费项目定义。队列使用 [queue.NewQueue](../queue/typed.md) 构造投递对象，再调用 q.Worker 绑定业务处理方法；通过 `spec.RegisterRuntime(worker)` 登记。Kafka 使用 `kafka.NewConsumerRuntime`，通过 `spec.RegisterKafkaConsumer(consumer)` 登记。登记立即写入共享 app.Spec，不负责构造或释放资源；cleanup 归原 provider，Start/Stop 由 App 管理。
 `Http()` 只声明业务 HTTP 路由、WebSocket 和业务选项，不是全部 HTTP 监听的总开关。
 业务 HTTP 即使未调用 `Http()` 也默认开启，只有 `server.http.disable: true` 关闭业务监听。
 gRPC 仅在 `Grpc().Register(...)` 注册了至少一个非 nil 回调时默认开启；单独获取 Builder、配置中间件或 Option 不会开启。
@@ -45,6 +44,8 @@ gRPC 仅在 `Grpc().Register(...)` 注册了至少一个非 nil 回调时默认�
 Job Spec 始终由 Wire 提供；NewJobBootstrap 构造 Manager，任务为空时不登记 Runtime；空 Spec 仍默认创建业务 HTTP，但不会自动创建数据库、Redis 或消息客户端。
 
 Wire 注册 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`，分别构造唯一的领域声明；`bootstrap.NewSpec(application, servers, jobs)` 借用这些指针，不创建副本。`BaseProviderSet` 已包含三个领域构造函数，使用它时不要重复注册；业务仍提供 bootstrap.Spec 的配置声明 provider。
+
+`BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator` 同时包含 `queue.NewObservability`，自动复用应用已有的 Logger、Tracing、Metrics；队列 provider 直接接收 `queue.Observability`。不要再注册返回相同类型的手写 provider。该入口不创建资源或增加 cleanup，详见 [Queue 默认观测依赖](../queue/typed.md#默认观测依赖)。
 
 不用 BaseProviderSet 时，在现有 injector 中显式添加：
 
@@ -72,14 +73,14 @@ Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则�
 
 配置源应在提供 Spec 的构造函数中声明，供 NewConfigManager 使用。领域 Builder 是共享可变声明，应在 Boot 返回前完成修改；组件构造后修改蓝图不会重建已有资源。
 
-`Configuration`、`RegisterRuntime`、`RegisterQueueWorker`、`RegisterKafkaConsumer`、`AddContext`、`AddMetadata`、`AddEndpoints`、`AddSignals` 和全部 Hook 方法返回同一个 `*bootstrap.Spec`，可链式调用；Http/Grpc/Health/Job 仍返回对应领域 Builder。保留 nil 配置 loader 校验和底层 app.Spec 冻结后的写入保护。配置加载和资源构造的实际失败继续返回 error，由 Wire 逆序释放已成功构造的资源。
+`Configuration`、`RegisterRuntime`、`RegisterKafkaConsumer`、`AddContext`、`AddMetadata`、`AddEndpoints`、`AddSignals` 和全部 Hook 方法返回同一个 `*bootstrap.Spec`，可链式调用；Http/Grpc/Health/Job 仍返回对应领域 Builder。保留 nil 配置 loader 校验和底层 app.Spec 冻结后的写入保护。配置加载和资源构造的实际失败继续返回 error，由 Wire 逆序释放已成功构造的资源。
 
 `NewRuntimeBootstrap(serverBootstrap, jobBootstrap)` 仅返回 `RuntimeBootstrap`，汇合组件完成标记；它不暂存、登记或重放 Runtime。`spec.RegisterRuntime` 直接调用共享 `app.Spec.RegisterRuntime`，因此自定义 Runtime 在业务调用当下登记，早于后续构造的服务器和任务。App 仍并发启动 Runtime，登记顺序不表示启动完成顺序。服务器资源由 NewServerBootstrap 的 cleanup 释放。
 
 业务 Boot 可以这样链式登记（业务 Runtime 已由 provider 构造）：
 
 ```go
-spec.RegisterQueueWorker(worker).
+spec.RegisterRuntime(worker).
     AddMetadata(map[string]string{"component": "worker"}).
     BeforeStart(beforeStart).
     AfterStop(afterStop)
@@ -163,7 +164,7 @@ flowchart TD
 不会给全局或其他组件日志附加该模块。全局派生 Logger 保留独立的 cleanup 身份，不增加固定 caller 跳过层数；默认模式由日志包统一识别 Kratos 全局函数及 Context/Helper 包装。深度统一按过滤包装后的调用点计数，详见 [日志 caller 规则](../log/README.md#caller-depth)。
 日志全局安装沿用单应用、逆序释放的约定；多个应用并发安装或交错释放全局 Logger 不受本包保障。优先将实例 Logger 显式注入组件。
 
-`JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `ConsumerRuntime` 通过 Go 方法集隐式满足 `app.Runtime`；由 Wire 调用 `queue.NewConsumerRuntime` 构造，再通过 `spec.RegisterRuntime` 登记；统一入口不代为构造消费者。
+`JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `Worker[T]` 隐式满足 `app.Runtime`；应用入口通过 `q.Worker` 绑定业务方法，再调用 `spec.RegisterRuntime(worker)`。`Queue[T]` 只负责投递。
 
 ```mermaid
 flowchart TD
@@ -272,7 +273,7 @@ NewServerBootstrap 同时登记业务监听与 `Runtime.ManagementServers()` 返
 
 业务 Spec 显式开放组件声明、AddContext、AddMetadata、AddEndpoints、AddSignals 和四个生命周期钩子。
 app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo、RegisterLogger 或 Ready；
-Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterQueueWorker()、RegisterKafkaConsumer() 声明，其他运行时使用 RegisterRuntime()。各 provider 按需直接注入相同的领域 Spec。
+Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterRuntime()、RegisterKafkaConsumer() 声明，其他运行时使用 RegisterRuntime()。各 provider 按需直接注入相同的领域 Spec。
 
 日志 Wire provider 使用 log.NewLogger 创建输出；NewLogBootstrap 注入 config.Manager 订阅 log，日志包校验并原子发布完整策略。策略优先级与 API 边界见 [日志文档](../log/README.md#三层策略与公共-api)。
 

@@ -1,6 +1,6 @@
 # Redis 持久化任务队列
 
-本 Store 可直接注入 [类型化 Publisher/Consumer/Endpoint](../../../pkg/queue/typed.md)，业务无需编写 JSON 编解码或启停转发；物理 key 前缀仍由应用入口配置。
+本 Store 可直接注入 [类型化 Queue](../../../pkg/queue/typed.md)，业务无需编写 JSON 编解码或启停转发；物理 key 前缀仍由应用入口配置。
 
 本包实现 `pkg/queue.Store`，支持立即或延迟执行、租约回收、失败记录和人工重试。旧 Redis Streams Producer/Consumer API 已移除；本包不提供 Consumer Group、广播或 Kafka 兼容接口。
 
@@ -16,7 +16,7 @@ store, err := redisqueue.NewStore(redisManager, redisqueue.Config{
 if err != nil {
     return err
 }
-// 将 store 注入 pkg/queue 的 Dispatcher/Worker；具体用法见核心包 README。
+// 将 store 注入 pkg/queue 的 Queue/Worker；具体用法见核心包 README。
 ```
 
 其中 `redisqueue` 指向 `github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/redis`，`redisManager` 是已构造的 `pkg/redis.Manager`。Connection 和 KeyPrefix 均必填；Connection 构造时去除首尾空白，KeyPrefix 不得为空或全为空白，无默认前缀。KeyPrefix 原样保留，不裁剪空白或尾部冒号，也没有原队列名的 64 字节限制。构造只向 Manager 解析连接，不发送 Redis 命令、不启动 goroutine、不返回 cleanup。Store 借用连接，应用停止 worker 后再执行 Manager cleanup；连接关闭后的操作返回 Redis 错误。配置在构造期固定，不支持热切换。

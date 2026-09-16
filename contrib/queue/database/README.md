@@ -4,7 +4,7 @@
 
 本包提供面向**单个队列**的 `Repo` 契约、任务状态模型 `TaskRecord` 和实现 `queue.Store` 的适配器。业务自行实现 Repo，决定使用 GORM、database/sql 或其他访问方式，并为不同队列选择不同表或其他隔离方式。本包不依赖 ORM/数据库驱动，不执行 SQL，不提供迁移入口。
 
-**一个 Repo 实例绑定一个队列。** Store 不再接收队列配置，Repo 方法没有 queue 参数，TaskRecord 没有 Queue 字段，也没有 TableName 方法。Worker、Dispatcher 的逻辑队列名仅用于观测，不决定 Repo 的表名或路由。
+**一个 Repo 实例绑定一个队列。** Store 不再接收队列配置，Repo 方法没有 queue 参数，TaskRecord 没有 Queue 字段，也没有 TableName 方法。Worker、Queue 的逻辑队列名仅用于观测，不决定 Repo 的表名或路由。
 
 Store 负责任务校验、领取 token 生成、任务副本及仓储结果校验。Repo 负责实际存储、原子操作、错误转换、索引、迁移和连接生命周期。Store 构造不调用 Repo，不启动 goroutine，无 cleanup；应用先停止 Worker，再由业务释放 Repo 所用资源。
 
@@ -24,7 +24,7 @@ func NewTaskStores(emailRepo, reportRepo databasequeue.Repo) (*databasequeue.Sto
 }
 ```
 
-业务 Wire 建议通过具体 Repo 类型或显式 provider 函数区分不同队列，避免将同一个 Repo 错误地注入两个队列。业务可用 `var _ databasequeue.Repo = (*EmailRepo)(nil)` 验证接口完整性。Store 再注入 Dispatcher/Worker，见 [Queue 组装示例](../../../pkg/queue/README.md)。接口编译通过不代表 Repo 已满足并发和持久化保证。
+业务 Wire 建议通过具体 Repo 类型或显式 provider 函数区分不同队列，避免将同一个 Repo 错误地注入两个队列。业务可用 `var _ databasequeue.Repo = (*EmailRepo)(nil)` 验证接口完整性。Store 再注入 Queue/Worker，见 [Queue 组装示例](../../../pkg/queue/README.md)。接口编译通过不代表 Repo 已满足并发和持久化保证。
 
 ## Repo 接口约束
 
@@ -46,7 +46,7 @@ func NewTaskStores(emailRepo, reportRepo databasequeue.Repo) (*databasequeue.Sto
 
 ## 与业务事务一起投递
 
-可以把业务数据和任务写入同一个数据库本地事务，消除“业务提交后、投递前崩溃”的窗口。两个 Repo 必须使用同一个实际事务连接，而不只是同一个数据库地址。业务显式开启事务，并把回调 Context 传给业务 Repo 和 Dispatcher；任务 Repo.Insert 从该 Context 取事务，不自行提交。
+可以把业务数据和任务写入同一个数据库本地事务，消除“业务提交后、投递前崩溃”的窗口。两个 Repo 必须使用同一个实际事务连接，而不只是同一个数据库地址。业务显式开启事务，并把回调 Context 传给业务 Repo 和 Queue.Post；任务 Repo.Insert 从该 Context 取事务，不自行提交。
 
 如果业务采用 `pkg/database.Manager`，两个 Repo 都通过同一个 Manager 的 `Connection(txCtx)` 取连接即可复用事务。该依赖只存在于业务实现和以下组装示例，本适配器不导入 GORM 或数据库驱动。
 
@@ -65,23 +65,21 @@ type OrderRepo interface {
     Create(context.Context, string) error
 }
 
-// 前置条件：tasks 注入的是 Database Store，其 Repo.Insert 复用 tx 的事务。
-func CreateOrder(ctx context.Context, tx database.TransactionManager, orders OrderRepo, tasks *queue.Dispatcher, orderID string) error {
+type OrderCreated struct { OrderID string `json:"order_id"` }
+
+// 前置条件：tasks 使用 OrderCreated 的消息定义，注入 Database Store，Repo.Insert 复用 tx 的事务。
+func CreateOrder(ctx context.Context, tx database.TransactionManager, orders OrderRepo, tasks *queue.Queue[OrderCreated], orderID string) error {
     return tx.Transaction(ctx, func(txCtx context.Context) error {
         if err := orders.Create(txCtx, orderID); err != nil {
             return err
         }
-        _, err := tasks.Dispatch(txCtx, &queue.Task{
-            ID: orderID,
-            Type: "order.created",
-            Payload: []byte(orderID),
-        })
+        _, err := tasks.PostWith(txCtx, OrderCreated{OrderID:orderID}, queue.PostOptions{ID:orderID})
         return err
     })
 }
 ```
 
-必须检查外层 Transaction 的最终返回值；Dispatch 返回 nil 及成功指标只表示投递调用成功，不表示事务已提交。事务 Context 不能逃逸回调，也不能拿来启动 Worker。事务应只包含短时本地写入，避免网络调用、长任务或等待 Worker；数据库事务结束时释放相应行锁，失败/超时回滚业务和任务。不同连接、Redis Store 或另开独立事务的 Insert 不满足该保证；提交响应丢失仍是结果不确定，需要业务唯一键及对账。
+必须检查外层 Transaction 的最终返回值；Post 返回 nil 及成功指标只表示投递调用成功，不表示事务已提交。事务 Context 不能逃逸回调，也不能拿来启动 Worker。事务应只包含短时本地写入，避免网络调用、长任务或等待 Worker；数据库事务结束时释放相应行锁，失败/超时回滚业务和任务。不同连接、Redis Store 或另开独立事务的 Insert 不满足该保证；提交响应丢失仍是结果不确定，需要业务唯一键及对账。
 
 任务表由 Worker 直接消费时，这是事务性任务表，可承担 Outbox 的持久待办职责。如果 Handler 把记录发布到 Kafka/其他外部系统，则它是典型 Outbox relay。两种方式均不保证外部副作用 exactly-once：业务执行成功后、Ack 前崩溃仍会重投，需要下游幂等；默认有限重试，失败记录仍需监控和人工处理。
 
@@ -92,7 +90,7 @@ flowchart TD
     C --> D[Dispatch / Insert 复用同一事务写任务]
     D --> E{外层结果}
     C & D -- 错误或取消 --> R[回滚业务和任务 / 释放锁]
-    D -- 插入失败 --> L[ERROR Dispatch enqueue.failed]
+    D -- 插入失败 --> L[ERROR enqueue.failed]
     L --> R
     E -- 业务拒绝 --> R
     E -- 成功 --> F[提交业务和任务 / 释放锁]

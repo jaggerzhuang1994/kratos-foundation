@@ -295,7 +295,7 @@ func (s *taskStore) Reserve(context.Context, time.Time, time.Duration) (*queue.R
 	if s.acknowledged {
 		return nil, s.failure
 	}
-	return &queue.Reservation{Task: &queue.Task{ID: "one", Type: "test"}, Token: "lease", Attempts: 1}, nil
+	return &queue.Reservation{Task: &queue.Task{ID: "one", Type: "test.v1", Payload: []byte(`"test"`)}, Token: "lease", Attempts: 1}, nil
 }
 
 func (s *taskStore) Ack(context.Context, *queue.Reservation) error { s.acknowledged = true; return nil }
@@ -325,11 +325,15 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 				}
 				register = func() *bootstrap.Spec { return components.RegisterKafkaConsumer(runtime) }
 			case "queue":
-				worker, err := queue.NewWorker(queue.WorkerConfig{Name: "tasks", Queue: "test"}, &taskStore{failure: failure}, map[string]queue.Handler{"test": func(context.Context, *queue.Task) error { called = true; return nil }}, queue.Observability{Logger: logger, Tracing: tracing, Metrics: metrics})
+				q, err := queue.NewQueue(queue.Definition[string]{Queue: "test", MessageType: "test", Version: 1}, &taskStore{failure: failure}, queue.NewObservability(logger, tracing, metrics))
 				if err != nil {
 					t.Fatal(err)
 				}
-				register = func() *bootstrap.Spec { return components.RegisterQueueWorker(worker) }
+				worker, err := q.Worker(func(context.Context, string) error { called = true; return nil }, queue.WorkerConfig{Name: "tasks"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				register = func() *bootstrap.Spec { return components.RegisterRuntime(worker) }
 			}
 			if register != nil && register() != components.Spec {
 				t.Fatal("typed registration did not return the same Spec")

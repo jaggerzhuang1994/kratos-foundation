@@ -72,7 +72,7 @@ flowchart TD
 | 模块与可运行入口 | 常见用法与边界 | 测试环境 |
 | --- | --- | --- |
 | [job](job/manager_test.go)，`TestIntegrationJob*` | Cron + Spec + 中间件；批量 Once 错误聚合仍执行健康任务；Once/Cron/Daemon 混合，Stop 和父上下文取消；中间件短路拒绝。断言结果、上下文和停止完成 | 真实 Manager/调度器，synctest 控制时间；5 场景 |
-| [queue](../contrib/queue/database/gorm/repo_test.go)，`TestIntegrationQueuePersistentWorker` | Dispatcher → SQLite Repo → Worker；成功、暂时失败恢复、耗尽重试、永久失败、panic、未知类型；失败人工重放。每组验证重复 ID、输入与处理器修改隔离、失败分类不含原始错误、Ack 删除、完成后重放 ErrNotFound | 真实 SQLite 与 Store，通知包装只在真实持久化后发信号；6 场景 |
+| [queue](../contrib/queue/database/gorm/repo_test.go)，`TestIntegrationQueuePersistentWorker` | Queue.PostWith → SQLite Repo → Worker；成功、暂时失败恢复、耗尽重试、永久失败、panic、未知类型；失败人工重放。每组验证重复 ID、输入与处理器修改隔离、失败分类不含原始错误、Ack 删除、完成后重放 ErrNotFound | 真实 SQLite 与 Store，通知包装只在真实持久化后发信号；6 场景 |
 | [log](log/logger_test.go)，`TestIntegrationLogger*` | 模块继承/提高/降低级别、输出级别最终过滤、禁用模块不影响根日志；全局/模块/局部/输出过滤；请求字段覆盖去重及 Valuer；环境构造快照；释放后同路径重新打开追加 | 真实临时日志文件；7 场景 |
 | [server HTTP](server/http_test.go)，`TestIntegrationHTTPRoutes` | JSON POST、空对象、中间件上下文、业务错误及响应头、未知错误脱敏、panic 恢复、坏 JSON、405、前缀和 slash 重定向 | 正式 NewRuntime/Spec/HTTP handler，httptest 临时监听；9 场景 |
 | [server gRPC](server/grpc_test.go)，`TestIntegrationGRPC*` | 注册服务正常调用、服务未就绪、未知服务、已取消调用 | 正式 gRPC server，bufconn 内存连接；4 场景 |
@@ -123,7 +123,7 @@ flowchart TD
     C --> F[Job Start 并发入口 Once Cron Daemon]
     F --> G[中间件接受或拒绝 业务结果与错误聚合]
     G --> H[Stop 或父取消 等待 Start 退出]
-    C --> I[Dispatcher 写入共享 SQLite Store]
+    C --> I[Queue.PostWith 写入共享 SQLite Store]
     I --> J[Worker 领取租约 token 进入 Handler]
     J --> K{处理结果}
     K -- 成功 --> L[Ack 删除任务并发出终态信号]

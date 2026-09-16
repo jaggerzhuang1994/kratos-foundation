@@ -13,7 +13,7 @@ func TestWorkerLifecycle(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		obs, _ := testObservability(t)
 		store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) { return nil, nil }}
-		w, err := NewWorker(WorkerConfig{Name: "worker", Queue: "mail", Concurrency: 2}, store, map[string]Handler{"x": func(context.Context, *Task) error { return nil }}, obs)
+		w, err := newWorker[*Task](workerConfig{Name: "worker", Queue: "mail", Concurrency: 2}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -32,7 +32,7 @@ func TestWorkerLifecycle(t *testing.T) {
 		if err = w.Stop(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		w, err = NewWorker(WorkerConfig{Name: "worker", Queue: "mail"}, store, map[string]Handler{"x": func(context.Context, *Task) error { return nil }}, obs)
+		w, err = newWorker[*Task](workerConfig{Name: "worker", Queue: "mail"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +55,7 @@ func TestWorkerDoesNotSwallowStorageErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			obs, _ := testObservability(t)
 			store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) { return nil, tc.err }}
-			w, err := NewWorker(WorkerConfig{Name: "w", Queue: "q"}, store, map[string]Handler{"x": func(context.Context, *Task) error { return nil }}, obs)
+			w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -87,7 +87,7 @@ func TestWorkerLeaseConflictAndStoredOutcome(t *testing.T) {
 				}
 				return ErrLeaseLost
 			}}
-			w, err := NewWorker(WorkerConfig{Name: "w", Queue: "q"}, store, map[string]Handler{"x": func(context.Context, *Task) error { return nil }}, obs)
+			w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -110,7 +110,7 @@ func TestWorkerStopDeadline(t *testing.T) {
 		store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
 			return &Reservation{Task: &Task{Type: "x"}, Token: "t", Attempts: 1}, nil
 		}}
-		w, err := NewWorker(WorkerConfig{Name: "w", Queue: "q"}, store, map[string]Handler{"x": func(context.Context, *Task) error { close(entered); <-release; return nil }}, obs)
+		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { close(entered); <-release; return nil }}, obs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,18 +133,18 @@ func TestWorkerConfigurationAndErrorClassification(t *testing.T) {
 	obs, _ := testObservability(t)
 	for _, tc := range []struct {
 		name   string
-		config WorkerConfig
+		config workerConfig
 	}{
-		{"empty", WorkerConfig{}}, {"concurrency", WorkerConfig{Name: "w", Queue: "q", Concurrency: -1}}, {"window", WorkerConfig{Name: "w", Queue: "q", Lease: time.Second}}, {"retry", WorkerConfig{Name: "w", Queue: "q", Retry: &RetryPolicy{MaxAttempts: -1}}},
+		{"empty", workerConfig{}}, {"concurrency", workerConfig{Name: "w", Queue: "q", Concurrency: -1}}, {"window", workerConfig{Name: "w", Queue: "q", Lease: time.Second}}, {"retry", workerConfig{Name: "w", Queue: "q", Retry: &RetryPolicy{MaxAttempts: -1}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := NewWorker(tc.config, nil, map[string]Handler{"x": func(context.Context, *Task) error { return nil }}, obs); err == nil {
+			if _, err := newWorker[*Task](tc.config, nil, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs); err == nil {
 				t.Fatal("accepted invalid config")
 			}
 		})
 	}
-	for _, handlers := range []map[string]Handler{nil, {"x": nil}, {" ": func(context.Context, *Task) error { return nil }}} {
-		if _, err := NewWorker(WorkerConfig{Name: "w", Queue: "q"}, nil, handlers, obs); err == nil {
+	for _, handlers := range []map[string]taskHandler{nil, {"x": nil}, {" ": func(context.Context, *Task) error { return nil }}} {
+		if _, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, nil, handlers, obs); err == nil {
 			t.Fatal("accepted handlers")
 		}
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
@@ -71,12 +70,6 @@ func (s *Spec) Job() job.Builder {
 func (s *Spec) RegisterRuntime(runtime app.Runtime) *Spec {
 	s.application.RegisterRuntime(runtime)
 	return s
-}
-
-// RegisterQueueWorker 登记已构造的非 nil Queue Worker，返回同一 Spec 以支持链式调用。
-// 复用 RegisterRuntime 的登记逻辑；App 管理 Start/Stop，cleanup 仍归原 provider。
-func (s *Spec) RegisterQueueWorker(worker *queue.Worker) *Spec {
-	return s.RegisterRuntime(worker)
 }
 
 // RegisterKafkaConsumer 登记已构造的非 nil Kafka ConsumerRuntime，返回同一 Spec 以支持链式调用。

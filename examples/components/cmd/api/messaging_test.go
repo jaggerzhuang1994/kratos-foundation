@@ -151,15 +151,15 @@ func TestMessagingRun(t *testing.T) {
 				reports.err = errDemoFailure
 			}
 			obs := queue.Observability{Logger: messagingLogger{}, Metrics: messagingMetrics{}, Tracing: messagingTracing{}}
-			dispatcher, err := queue.NewDispatcher(taskQueue, tasks, obs)
+			dispatcher, err := queue.NewQueue(queue.Definition[string]{Queue: taskQueue, MessageType: "demo", Version: 1, Codec: taskTextCodec{}}, tasks, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
-			backlogDispatcher, err := queue.NewDispatcher(backlogQueue, backlog, obs)
+			backlogDispatcher, err := queue.NewQueue(queue.Definition[string]{Queue: backlogQueue, MessageType: "demo", Version: 1, Codec: taskTextCodec{}}, backlog, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
-			m := &messaging{producer: producer, dispatcher: dispatcher, backlog: backlogDispatcher, logger: obs.Logger}
+			m := &messaging{producer: producer, tasks: dispatcher, backlog: backlogDispatcher, logger: obs.Logger}
 			for _, business := range []struct {
 				name, taskType, payload string
 				store                   *messagingStore
@@ -167,11 +167,11 @@ func TestMessagingRun(t *testing.T) {
 				{emailQueue, "email.render", "welcome", emails},
 				{reportQueue, "report.summarize", "daily", reports},
 			} {
-				dispatcher, createErr := queue.NewDispatcher(business.name, business.store, obs)
+				dispatcher, createErr := queue.NewQueue(queue.Definition[string]{Queue: business.name, MessageType: business.taskType, Version: 1, Codec: taskTextCodec{}}, business.store, obs)
 				if createErr != nil {
 					t.Fatal(createErr)
 				}
-				m.business = append(m.business, businessQueue{name: business.name, taskType: business.taskType, payload: business.payload, dispatcher: dispatcher})
+				m.business = append(m.business, businessQueue{name: business.name, taskType: business.taskType, payload: business.payload, tasks: dispatcher})
 			}
 			err = m.Run(context.Background(), "run-one")
 			if failure != "" {
@@ -207,7 +207,7 @@ func TestMessagingRun(t *testing.T) {
 					t.Fatalf("%s tasks = %d", business.name, len(store.tasks))
 				}
 				task := store.tasks[0]
-				if task.ID != "run-one-"+business.taskType || task.Type != business.taskType || string(task.Payload) != business.payload {
+				if task.ID != "run-one-"+business.taskType || task.Type != business.taskType+".v1" || string(task.Payload) != business.payload {
 					t.Fatalf("unexpected business task: %+v", task)
 				}
 			}
@@ -234,7 +234,7 @@ func TestMessagingBusinessHandlers(t *testing.T) {
 	m := &messaging{logger: messagingLogger{}}
 	for _, tc := range []struct {
 		name, payload string
-		handler       queue.Handler
+		handler       func(context.Context, *queue.Task) error
 	}{
 		{"email", "welcome", m.handleEmail},
 		{"report", "daily", m.handleReport},
@@ -247,5 +247,17 @@ func TestMessagingBusinessHandlers(t *testing.T) {
 				t.Fatalf("invalid payload error = %v", err)
 			}
 		})
+	}
+}
+
+func TestTaskTextCodec(t *testing.T) {
+	codec := taskTextCodec{}
+	encoded, err := codec.Encode("hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := codec.Decode(encoded)
+	if err != nil || decoded != "hello" {
+		t.Fatalf("roundtrip = %q, %v", decoded, err)
 	}
 }

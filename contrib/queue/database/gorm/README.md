@@ -17,7 +17,7 @@ flowchart TD
     B -- 是 --> C[部署显式调用 Migrate 外部数据库 DDL]
     C -- 错误或超时 --> E
     C -- 成功 --> D([表和索引就绪])
-    F([应用入口构造 SimpleRepo]) --> G[NewStore 注入类型化 Endpoint]
+    F([应用入口构造 SimpleRepo]) --> G[NewStore 注入类型化 Queue]
     G --> H([登记 Runtime 由应用启停])
 ```
 
