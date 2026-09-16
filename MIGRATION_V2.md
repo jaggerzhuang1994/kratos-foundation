@@ -496,4 +496,4 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consulconfig.NewSpec`](contrib/bootstrap/consulconfig/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consulconfig.ProviderSet` 使用默认八层路径；自定义路径时改用 `NewSpec` 和业务定义的 RemoteConfigPathsProvider。环境分支、路径顺序与失败流程见该 provider 文档。
+`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consulconfig.NewSpec`](contrib/bootstrap/consulconfig/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consulconfig.ProviderSet` 使用默认八层路径；自定义名称时使用 `ProviderSetWithCustomRemoteConfigName` 并提供返回 `consulconfig.RemoteConfigName` 的业务 provider；自定义路径时改用 `NewSpec` 并显式提供名称与 RemoteConfigPathsProvider。`NewSpec` 不再接收 AppInfo，参数依次为本地路径、远程配置名称、路径函数；原 `RemoteConfigPaths` 调用改为 `NewDefaultRemoteConfigPathsProvider()` 返回的函数。环境分支、路径顺序与失败流程见该 provider 文档。

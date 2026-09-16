@@ -106,7 +106,7 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-`BaseProviderSet` 统一构造配置源链与具名注册/发现实例；自定义 Job Coordinator 使用 `BaseProviderSetWithCustomJobCoordinator`。 默认 local/Consul 配置选择可直接使用 [consulconfig.NewSpec](contrib/bootstrap/consulconfig/README.md)，应用提供 AppInfo 和本地配置路径。
+`BaseProviderSet` 统一构造配置源链与具名注册/发现实例；自定义 Job Coordinator 使用 `BaseProviderSetWithCustomJobCoordinator`。 默认 local/Consul 配置选择可直接使用 [consulconfig.NewSpec](contrib/bootstrap/consulconfig/README.md)，默认组装由应用提供 AppInfo 和本地配置路径，自定义远程配置名称可使用 `consulconfig.ProviderSetWithCustomRemoteConfigName`。
 
 ## 日志
 

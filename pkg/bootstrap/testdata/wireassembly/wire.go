@@ -72,3 +72,8 @@ func initializeDrivers(info appinfo.AppInfo, localConfigPath bootstrap.LocalConf
 	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }
+
+func initializeDriversWithCustomName(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSetWithCustomRemoteConfigName, customRemoteConfigName, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+	return nil, nil, nil
+}

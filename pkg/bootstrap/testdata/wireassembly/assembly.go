@@ -3,6 +3,7 @@ package wireassembly
 import (
 	"context"
 	"github.com/go-kratos/kratos/v2"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consulconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -47,8 +48,13 @@ func componentsBoot(_ bootstrap.InfrastructureBootstrap, components *bootstrap.S
 }
 
 type driverAssembly struct {
-	App      *kratos.App
-	Client   client.Factory
-	Registry *foundationregistry.Factory
-	Config   config.Manager
+	ConfigName consulconfig.RemoteConfigName
+	App        *kratos.App
+	Client     client.Factory
+	Registry   *foundationregistry.Factory
+	Config     config.Manager
+}
+
+func customRemoteConfigName() consulconfig.RemoteConfigName {
+	return "shared-orders"
 }

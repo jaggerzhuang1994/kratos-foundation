@@ -3,6 +3,7 @@ package consulconfig
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
@@ -18,7 +19,7 @@ func TestNewSpecLocalConfiguration(t *testing.T) {
 			if kind == "invalid pattern" {
 				path = "["
 			}
-			spec, err := NewSpec(appinfo.New("test"), bootstrap.LocalConfigPath(path), func(string, string) []string {
+			spec, err := NewSpec(bootstrap.LocalConfigPath(path), "unused-remote", func(string, string) []string {
 				t.Fatal("local configuration called remote paths provider")
 				return nil
 			})
@@ -63,11 +64,11 @@ func TestNewSpecLocalConfiguration(t *testing.T) {
 func TestNewSpecAllowsDisabledConsul(t *testing.T) {
 	t.Setenv("APP_ENV", "prod")
 	t.Setenv("BOOTSTRAP_TEST_VALUE", "from-env")
-	info := appinfo.New("test")
+	configName := RemoteConfigName("shared-orders")
 	called := false
-	spec, err := NewSpec(info, "unused-local.yaml", func(name, environment string) []string {
+	spec, err := NewSpec("unused-local.yaml", configName, func(name, environment string) []string {
 		called = true
-		if name != info.Name() || environment != "prod" {
+		if name != string(configName) || environment != "prod" {
 			t.Fatalf("unexpected provider arguments: %q, %q", name, environment)
 		}
 		return []string{"custom/" + environment + "/" + name + ".yaml"}
@@ -88,5 +89,27 @@ func TestNewSpecAllowsDisabledConsul(t *testing.T) {
 	var value string
 	if err := manager.Load("BOOTSTRAP_TEST_VALUE", &value); err != nil || value != "from-env" {
 		t.Fatal(value, err)
+	}
+}
+
+func TestDefaultRemoteConfigProviders(t *testing.T) {
+	info := appinfo.New("test")
+	if got := NewDefaultRemoteConfigName(info); string(got) != info.Name() {
+		t.Fatalf("default name = %q, want %q", got, info.Name())
+	}
+	provider := NewDefaultRemoteConfigPathsProvider()
+	want := []string{
+		"configs/common*.yaml", "configs/prod/common*.yaml",
+		"secrets/common*.yaml", "secrets/prod/common*.yaml",
+		"configs/shared-orders/*.yaml", "configs/shared-orders/prod/*.yaml",
+		"secrets/shared-orders/*.yaml", "secrets/shared-orders/prod/*.yaml",
+	}
+	got := provider("shared-orders", "prod")
+	if !slices.Equal(got, want) {
+		t.Fatalf("paths = %v, want %v", got, want)
+	}
+	got[0] = "changed"
+	if next := provider("shared-orders", "prod"); !slices.Equal(next, want) {
+		t.Fatalf("paths shared between calls: %v", next)
 	}
 }

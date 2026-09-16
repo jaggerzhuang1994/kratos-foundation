@@ -11,16 +11,41 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
+// RemoteConfigName 是远程配置所属名称，可独立于应用名由业务 provider 提供。
+type RemoteConfigName string
+
+// NewDefaultRemoteConfigName 默认使用应用名作为远程配置名称。
+func NewDefaultRemoteConfigName(info appinfo.AppInfo) RemoteConfigName {
+	return RemoteConfigName(info.Name())
+}
+
+// NewDefaultRemoteConfigPathsProvider 返回默认八层路径函数，每次调用生成独立列表。
+// 初次加载按返回顺序覆盖；热更新遵循配置源 merge 规则。
+func NewDefaultRemoteConfigPathsProvider() bootstrap.RemoteConfigPathsProvider {
+	return func(name, env string) []string {
+		return []string{
+			"configs/common*.yaml",
+			"configs/" + env + "/common*.yaml",
+			"secrets/common*.yaml",
+			"secrets/" + env + "/common*.yaml",
+			"configs/" + name + "/*.yaml",
+			"configs/" + name + "/" + env + "/*.yaml",
+			"secrets/" + name + "/*.yaml",
+			"secrets/" + name + "/" + env + "/*.yaml",
+		}
+	}
+}
+
 // NewSpec 声明默认配置源，供 Wire 与 bootstrap.BaseProviderSet 配合使用。
 // local 使用 localConfigPath；其他环境使用业务提供的远程路径函数。
 // 构造期只登记声明；配置源加载错误在 NewConfigManager 执行 Configuration 时返回。
-func NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, remoteConfigPaths bootstrap.RemoteConfigPathsProvider) (*bootstrap.Spec, error) {
+func NewSpec(localConfigPath bootstrap.LocalConfigPath, remoteConfigName RemoteConfigName, remoteConfigPaths bootstrap.RemoteConfigPathsProvider) (*bootstrap.Spec, error) {
 	environment := env.AppEnv()
 	var loader config.SourceLoader
 	if environment == env.Local {
 		loader = fileconfig.AddConfigSource(string(localConfigPath))
 	} else {
-		paths := remoteConfigPaths(info.Name(), environment)
+		paths := remoteConfigPaths(string(remoteConfigName), environment)
 		loader = consulsource.AddConfigSource(paths...)
 	}
 	spec := bootstrap.NewSpec()
@@ -32,7 +57,7 @@ func NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, re
 		// 无额外来源时允许使用 env 启动，并在配置加载前提示降级。
 		if len(sources) == 0 {
 			log.WithModule("bootstrap/consulconfig").With(
-				"environment", environment, "app", info.Name(),
+				"env", environment, "name", remoteConfigName,
 			).Warn("No configuration sources available from default spec; continuing with env and any additional sources")
 		}
 		return sources, nil
@@ -40,20 +65,4 @@ func NewSpec(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, re
 		return nil, err
 	}
 	return spec, nil
-}
-
-// RemoteConfigPaths 返回独立的八层 Consul 配置路径列表，调用方可修改。
-// 保留八层初次加载顺序，后加载的路径覆盖前面的同名配置项。
-// 热更新仍遵循官方 merge，不保证跨来源的固定覆盖优先级。
-func RemoteConfigPaths(name, env string) []string {
-	return []string{
-		"configs/common*.yaml",
-		"configs/" + env + "/common*.yaml",
-		"secrets/common*.yaml",
-		"secrets/" + env + "/common*.yaml",
-		"configs/" + name + "/*.yaml",
-		"configs/" + name + "/" + env + "/*.yaml",
-		"secrets/" + name + "/*.yaml",
-		"secrets/" + name + "/" + env + "/*.yaml",
-	}
 }

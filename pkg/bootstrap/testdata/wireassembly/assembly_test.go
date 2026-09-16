@@ -99,20 +99,35 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	info := appinfo.New("drivers")
-	application, cleanup, err := initializeDrivers(info, bootstrap.LocalConfigPath(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	cleanup()
-	cleanup()
-	if application.App == nil {
-		t.Fatal("nil app")
-	}
-	if _, _, _, err := application.Client.AcquireClient(context.Background(), "missing"); !errors.Is(err, client.ErrFactoryClosed) {
-		t.Fatalf("client cleanup: %v", err)
-	}
-	var value string
-	if err := application.Config.Load("missing", &value); !errors.Is(err, config.ErrManagerClosed) {
-		t.Fatalf("config cleanup: %v", err)
+	for _, tt := range []struct {
+		name     string
+		build    func(appinfo.AppInfo, bootstrap.LocalConfigPath) (*driverAssembly, func(), error)
+		wantName string
+	}{
+		{"default name", initializeDrivers, info.Name()},
+		{"custom name provider", initializeDriversWithCustomName, "shared-orders"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			application, cleanup, err := tt.build(info, bootstrap.LocalConfigPath(path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(application.ConfigName) != tt.wantName {
+				t.Fatalf("config name = %q, want %q", application.ConfigName, tt.wantName)
+			}
+			cleanup()
+			cleanup()
+			if application.App == nil {
+				t.Fatal("nil app")
+			}
+			if _, _, _, err := application.Client.AcquireClient(context.Background(), "missing"); !errors.Is(err, client.ErrFactoryClosed) {
+				t.Fatalf("client cleanup: %v", err)
+			}
+			var value string
+			if err := application.Config.Load("missing", &value); !errors.Is(err, config.ErrManagerClosed) {
+				t.Fatalf("config cleanup: %v", err)
+			}
+
+		})
 	}
 }
