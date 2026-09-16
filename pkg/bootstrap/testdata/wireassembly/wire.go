@@ -82,3 +82,8 @@ func initializeDriversWithDirectoryProvider(info appinfo.AppInfo, localConfigPat
 func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, sources config.Sources) *bootstrap.Spec {
 	return bootstrap.NewSpec(application, servers, jobs, bootstrap.ConfigSources{}).Configuration(func() (config.Sources, error) { return sources, nil })
 }
+
+func initializeDriversWithNameProvider(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSetWithCustomRemoteConfigName, customRemoteConfigDirName, customRemoteConfigName, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+	return nil, nil, nil
+}

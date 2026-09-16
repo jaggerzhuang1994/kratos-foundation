@@ -5,7 +5,10 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 )
 
-// ProviderSet 使用默认本地与远程路径规则，为 bootstrap.NewSpec 提供具体的 ConfigSources 描述。
-// 业务提供 AppInfo、bootstrap.LocalConfigPath、bootstrap.RemoteConfigDirName，配合 BaseProviderSet 使用。
-// 自定义路径规则时显式组装 NewConfigSources、bootstrap.NewSpec 和业务路径 provider。
-var ProviderSet = wire.NewSet(bootstrap.NewSpec, NewConfigSources, NewDefaultLocalConfigPathsProvider, NewDefaultRemoteConfigPathsProvider)
+// ProviderSet 使用 AppInfo.Name() 作为远程配置名称，配合 BaseProviderSet 使用。
+// 业务提供 AppInfo、bootstrap.LocalConfigPath 和 bootstrap.RemoteConfigDirName。
+var ProviderSet = wire.NewSet(ProviderSetWithCustomRemoteConfigName, NewDefaultRemoteConfigName)
+
+// ProviderSetWithCustomRemoteConfigName 由业务额外提供 bootstrap.RemoteConfigName。
+// 与 ProviderSet 二选一；自定义完整路径规则时显式组装各 provider。
+var ProviderSetWithCustomRemoteConfigName = wire.NewSet(bootstrap.NewSpec, NewConfigSources, NewDefaultLocalConfigPathsProvider, NewDefaultRemoteConfigPathsProvider)

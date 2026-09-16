@@ -1,6 +1,7 @@
 package consul
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,9 +16,11 @@ import (
 	"testing"
 	"time"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	consulapi "github.com/hashicorp/consul/api"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 func TestNewSourcesReturnsOneSourcePerPath(t *testing.T) {
@@ -263,6 +266,10 @@ func TestExternalConsulSnapshotUpdateDeletionAndStop(t *testing.T) {
 }
 
 func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {
+	var output bytes.Buffer
+	previous := log.GetLogger()
+	log.SetLogger(kratoslog.NewStdLogger(&output))
+	t.Cleanup(func() { log.SetLogger(previous) })
 	for _, invalid := range []string{"configs/[.yaml", "configs/[].yaml", `configs/abc\`, "configs/[a-].yaml"} {
 		if err := validatePaths(PathList{invalid}); !errors.Is(err, path.ErrBadPattern) {
 			t.Fatalf("accepted %q", invalid)
@@ -289,9 +296,23 @@ func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			output.Reset()
 			values, _, err := (&kvSource{client: client, path: pattern}).query(context.Background(), 1, time.Second)
 			if err != nil {
 				t.Fatal(err)
+			}
+			for _, value := range values {
+				if !strings.Contains(output.String(), "path=configs/app/"+value.Key) || !strings.Contains(output.String(), "DEBUG") || !strings.Contains(output.String(), "function=kvSource.query") {
+					t.Fatalf("missing loaded path in log: %s", output.String())
+				}
+			}
+			for _, excluded := range []string{"configs/app/prod/b.yaml", "configs/app/x.yml", "configs/app-other/a.yaml", "value: last", "value: first", "value: new"} {
+				if strings.Contains(output.String(), excluded) {
+					t.Fatalf("unexpected %q in log: %s", excluded, output.String())
+				}
+			}
+			if len(values) == 0 && output.Len() != 0 {
+				t.Fatalf("empty snapshot logged loaded files: %s", output.String())
 			}
 			switch len(pairs) {
 			case 5:

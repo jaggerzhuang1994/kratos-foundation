@@ -13,6 +13,7 @@ import (
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
 	kratosfile "github.com/go-kratos/kratos/v2/config/file"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/reconnect"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type fileSource struct {
@@ -26,6 +27,16 @@ func newFileSource(path string) (*fileSource, error) {
 		return nil, err
 	}
 	return &fileSource{Source: kratosfile.NewSource(absolute), path: absolute}, nil
+}
+
+// Load 在读取成功后记录实际文件路径，初次加载与监听重载共用此入口。
+func (s *fileSource) Load() ([]*kratosconfig.KeyValue, error) {
+	values, err := s.Source.Load()
+	if err != nil {
+		return nil, err
+	}
+	log.WithModule("config/file").With("function", "fileSource.Load", "path", s.path).Debug("Loaded configuration file")
+	return values, nil
 }
 
 // Watch 监听稳定的父目录，避免文件被原子替换后仍然监听旧 inode。

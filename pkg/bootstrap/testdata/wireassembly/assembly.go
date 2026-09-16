@@ -50,6 +50,7 @@ func componentsBoot(_ bootstrap.InfrastructureBootstrap, components *bootstrap.S
 
 type driverAssembly struct {
 	Directory bootstrap.RemoteConfigDirName
+	Name      bootstrap.RemoteConfigName
 	App       *kratos.App
 	Client    client.Factory
 	Registry  *foundationregistry.Factory
@@ -58,4 +59,8 @@ type driverAssembly struct {
 
 func customRemoteConfigDirName() bootstrap.RemoteConfigDirName {
 	return "shared-orders"
+}
+
+func customRemoteConfigName() bootstrap.RemoteConfigName {
+	return "shared-config"
 }

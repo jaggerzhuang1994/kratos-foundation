@@ -120,7 +120,7 @@ flowchart TD
 
 基础组装使用 `BaseProviderSet`，具体后端由具名驱动配置选择。
 
-采用 local 文件、其他环境 Consul 的约定时，添加 [consulconfig.ProviderSet](../../contrib/bootstrap/consulconfig/README.md)。该集合通过 NewConfigSources 为 `bootstrap.NewSpec` 提供具体的 ConfigSources 描述，由 NewSpec 负责环境选择、校验和延迟加载，业务显式注入 AppInfo、LocalConfigPath 和 RemoteConfigDirName（无默认值）。RemoteConfigPathsProvider 与 LocalConfigPathsProvider 契约定义在 bootstrap，默认实现位于 contrib：远程十二层、本地文件/目录/glob。BaseProviderSet 本身不包含此可选配置约定，也不重复提供 bootstrap.NewSpec。
+采用 local 文件、其他环境 Consul 的约定时，添加 [consulconfig.ProviderSet](../../contrib/bootstrap/consulconfig/README.md)。该集合通过 NewConfigSources 为 `bootstrap.NewSpec` 提供具体的 ConfigSources 描述，由 NewSpec 负责环境选择、校验和延迟加载，业务显式注入 AppInfo、LocalConfigPath 和 RemoteConfigDirName（无默认值）。RemoteConfigName 默认来自 AppInfo.Name()，可选择 `ProviderSetWithCustomRemoteConfigName` 并注入自定义名称；远程环境路径为 `{dir}/{env}/{name}.yaml` 和 `{dir}/{name}/{env}/*.yaml`。RemoteConfigPathsProvider 与 LocalConfigPathsProvider 契约定义在 bootstrap，默认实现位于 contrib：远程十二层、本地文件/目录/glob。BaseProviderSet 本身不包含此可选配置约定，也不重复提供 bootstrap.NewSpec。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |

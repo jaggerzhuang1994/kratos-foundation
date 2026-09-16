@@ -14,15 +14,35 @@ func wireApp(info appinfo.AppInfo, local bootstrap.LocalConfigPath, directory bo
 }
 ```
 
-`ProviderSet` 包含 `bootstrap.NewSpec`、`NewConfigSources`、`NewDefaultLocalConfigPathsProvider` 和 `NewDefaultRemoteConfigPathsProvider`。三个领域 Spec 由 BaseProviderSet 共享。四个路径契约均定义在 bootstrap：
+`ProviderSet` 包含 `bootstrap.NewSpec`、`NewConfigSources`、`NewDefaultRemoteConfigName`、`NewDefaultLocalConfigPathsProvider` 和 `NewDefaultRemoteConfigPathsProvider`。三个领域 Spec 由 BaseProviderSet 共享。五个路径契约均定义在 bootstrap：
 
 ```go
 // 均位于 pkg/bootstrap。
 type RemoteConfigDirName string
+type RemoteConfigName string
 type LocalConfigPath string
-type RemoteConfigPathsProvider func(directory RemoteConfigDirName, name, environment string) []string
-type LocalConfigPathsProvider func(location LocalConfigPath, name, environment string) ([]string, error)
+type RemoteConfigPathsProvider func(info appinfo.AppInfo, environment string, directory RemoteConfigDirName, name RemoteConfigName) []string
+type LocalConfigPathsProvider func(info appinfo.AppInfo, environment string, location LocalConfigPath) ([]string, error)
 ```
+
+默认 `ProviderSet` 包含 `NewDefaultRemoteConfigName(info)`，返回 `bootstrap.RemoteConfigName(info.Name())`。需要共享或独立命名的远程配置时，改用 `ProviderSetWithCustomRemoteConfigName`，并由业务提供名称：
+
+```go
+func remoteConfigName() bootstrap.RemoteConfigName {
+    return "shared-orders"
+}
+
+// 放入应用 wireinject 文件，business.ProviderSet 与 Boot 由消费项目提供。
+func wireApp(info appinfo.AppInfo, local bootstrap.LocalConfigPath, directory bootstrap.RemoteConfigDirName) (*kratos.App, func(), error) {
+    wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSetWithCustomRemoteConfigName,
+        remoteConfigName, business.ProviderSet, Boot)
+    return nil, nil, nil
+}
+```
+
+两个路径函数均接收 bootstrap 传入的 AppInfo。本地默认规则通过 `info.Name()` 取得应用名；远程默认规则只使用 `RemoteConfigName` 作为配置名，AppInfo 供自定义远程规则按需使用。
+
+两组 ProviderSet 必须二选一，Wire 不支持覆盖重复 provider。自定义名称只改变远程路径，不改变 AppInfo、注册服务名或本地配置文件名；也可直接将 `bootstrap.RemoteConfigName` 作为 injector 参数注入。名称在组装时提供，不从远程配置读取，也不热更新。
 
 手工组装的完整函数如下。返回 Spec 只登记声明；之后调用 `bootstrap.NewConfigManager`，处理错误并保留返回的 cleanup。应用先停止使用配置的组件，再由组装层逆序释放资源。
 
@@ -40,6 +60,7 @@ import (
 
 func Configure(application *app.Spec, servers *server.Spec, jobs *job.Spec, info appinfo.AppInfo, local bootstrap.LocalConfigPath, directory bootstrap.RemoteConfigDirName) *bootstrap.Spec {
     sources := consulconfig.NewConfigSources(info, local, directory,
+        consulconfig.NewDefaultRemoteConfigName(info),
         consulconfig.NewDefaultLocalConfigPathsProvider(),
         consulconfig.NewDefaultRemoteConfigPathsProvider())
     return bootstrap.NewSpec(application, servers, jobs, sources)
@@ -52,24 +73,24 @@ func Configure(application *app.Spec, servers *server.Spec, jobs *job.Spec, info
 
 ## 远程路径和优先级
 
-local 使用本地配置，dev/test/pre/prod 使用 Consul。环境由 `env.AppEnv()` 在 bootstrap.NewSpec 构造时固定；路径函数与配置 I/O 在 `NewConfigManager` 执行加载器时调用。非 local 环境的空白远程目录名会报错，不自动取应用名。Consul 禁用时返回空来源，不回退本地文件。
+local 使用本地配置，dev/test/pre/prod 使用 Consul。环境由 `env.AppEnv()` 在 bootstrap.NewSpec 构造时固定；路径函数与配置 I/O 在 `NewConfigManager` 执行加载器时调用。非 local 环境的空白远程目录名或配置名称会报错，不自动取应用名。Consul 禁用时返回空来源，不回退本地文件。
 
-以下为**首次加载从低到高的优先级**。`dir` 为业务提供的 RemoteConfigDirName，`app` 始终为 AppInfo.Name()，`env` 为当前环境：
+以下为**首次加载从低到高的优先级**。`dir` 为业务提供的 RemoteConfigDirName，`name` 为 RemoteConfigName，默认取 AppInfo.Name()，`env` 为当前环境：
 
 | 顺序 | 路径 |
 | --- | --- |
 | 1 | `configs/common*.yaml` |
 | 2 | `configs/{env}/common*.yaml` |
-| 3 | `configs/{dir}/{app}.yaml` |
-| 4 | `configs/{dir}/{app}/*.yaml` |
-| 5 | `configs/{dir}/{env}/{app}.yaml` |
-| 6 | `configs/{dir}/{env}/{app}/*.yaml` |
+| 3 | `configs/{dir}/{name}.yaml` |
+| 4 | `configs/{dir}/{name}/*.yaml` |
+| 5 | `configs/{dir}/{env}/{name}.yaml` |
+| 6 | `configs/{dir}/{name}/{env}/*.yaml` |
 | 7 | `secrets/common*.yaml` |
 | 8 | `secrets/{env}/common*.yaml` |
-| 9 | `secrets/{dir}/{app}.yaml` |
-| 10 | `secrets/{dir}/{app}/*.yaml` |
-| 11 | `secrets/{dir}/{env}/{app}.yaml` |
-| 12 | `secrets/{dir}/{env}/{app}/*.yaml` |
+| 9 | `secrets/{dir}/{name}.yaml` |
+| 10 | `secrets/{dir}/{name}/*.yaml` |
+| 11 | `secrets/{dir}/{env}/{name}.yaml` |
+| 12 | `secrets/{dir}/{name}/{env}/*.yaml` |
 
 规则是 configs 先于 secrets；每组公共先于应用、基础先于环境、单文件先于同名目录片段。因而 secrets 的公共配置也能覆盖 configs 的应用配置。每个 glob 内按键名字典序加载，后加载值覆盖先加载值；`*.yaml` 只匹配该层文件，不递归。返回的路径切片每次独立，调用方可修改，不影响后续调用。
 
@@ -89,7 +110,11 @@ Stat 的权限、非法路径等错误直接返回，不当作无匹配。已有
 
 ```mermaid
 flowchart TD
-    A([Wire 组装 ConfigSources]) --> B{配置描述是否完整?}
+    A([开始 Wire 组装]) --> A1{选择 ProviderSet}
+    A1 -- 默认 --> A2[AppInfo.Name 提供 RemoteConfigName]
+    A1 -- 自定义 --> A3[业务提供 RemoteConfigName]
+    A2 & A3 --> A4[组装 ConfigSources]
+    A4 --> B{配置描述是否完整?}
     B -- 零值跳过默认来源 --> L
     B -- 不完整 --> P([NewSpec panic 组装错误])
     B -- 完整 --> B1[bootstrap.NewSpec 固定环境并登记默认加载器]
@@ -103,7 +128,7 @@ flowchart TD
     F & G & H --> I[文件源创建有序来源]
     I -- 非法路径或 glob --> X
     I -- 有匹配 --> IL[INFO Matched local configuration files]
-    D -- 否 --> J{远程目录非空?}
+    D -- 否 --> J{远程目录和名称非空?}
     J -- 否 --> X
     J -- 是 --> K[生成十二层路径 Consul AddConfigSource]
     K -- 客户端或路径错误 --> X
@@ -120,6 +145,6 @@ NewSpec 不执行 I/O、不启动 goroutine；非零 ConfigSources 缺少必要�
 
 ## 迁移与验证
 
-移除 `consulconfig.NewSpec`、`RemoteConfigName`、`NewDefaultRemoteConfigName` 和 `ProviderSetWithCustomRemoteConfigName`。名称不再兼作目录：目录由 `bootstrap.RemoteConfigDirName` 显式提供，应用文件名取 AppInfo.Name()。`bootstrap.NewSpec` 接收具体的 `bootstrap.ConfigSources`，不再注入泛化的 `config.SourceLoader`；原远程函数增加目录参数，本地路径也使用可替换的 provider。
+`RemoteConfigName` 现在定义在 bootstrap，仅表示配置名称；目录仍由 `RemoteConfigDirName` 显式提供。`NewConfigSources` 新增名称参数，手工组装需传入 `NewDefaultRemoteConfigName(info)` 或自定义值。远程环境片段目录由 `{dir}/{env}/{app}/*.yaml` 改为 `{dir}/{name}/{env}/*.yaml`（configs 与 secrets 同步调整）；需迁移这些 Consul 键，不再读取旧片段目录。环境单文件继续使用 `{dir}/{env}/{name}.yaml`，避免被基础层 `{dir}/{name}/*.yaml` 误读而混入其他环境。公共路径与本地路径保持原规则，扩展名仍为 `.yaml`。修改 provider 后重新生成 Wire。
 
-真实 Wire 用例位于 [injector](../../../pkg/bootstrap/testdata/wireassembly/wire.go)，覆盖目录作为 injector 参数和业务 provider 两种方式。根目录执行 `make test-business` 生成并运行临时 injector 与业务测试；本包测试覆盖来源描述和路径规则；bootstrap 测试覆盖本地文件/目录/glob、延迟解析、环境固定、错误及 Consul 禁用，无需真实 Consul。
+真实 Wire 用例位于 [injector](../../../pkg/bootstrap/testdata/wireassembly/wire.go)，覆盖默认名称、目录参数、目录 provider 和自定义名称 provider。根目录执行 `make test-business` 生成并运行临时 injector 与业务测试；本包测试覆盖来源描述和路径规则；bootstrap 测试覆盖本地文件/目录/glob、延迟解析、环境固定、错误及 Consul 禁用，无需真实 Consul。

@@ -162,6 +162,8 @@ func (s *kvSource) query(ctx context.Context, index uint64, wait time.Duration) 
 		if !matched || strings.HasSuffix(pair.Key, "/") {
 			continue
 		}
+		// 记录匹配后的完整 KV 键，避免相对键或输入 glob 隐藏实际来源；不输出配置值。
+		log.WithModule("config/consul").With("function", "kvSource.query", "path", pair.Key).Debug("Loaded configuration file")
 		key := strings.TrimPrefix(pair.Key, directory)
 
 		values = append(values, &kratosconfig.KeyValue{

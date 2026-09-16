@@ -1,14 +1,18 @@
 package file
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type watchResult struct {
@@ -232,4 +236,41 @@ func TestFileWatcherObservesSymlinkTargetWritesAndRetargeting(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFileValue(t, watcher, "value: final\n")
+}
+
+func TestFileSourceLoadLogsSuccessfulPath(t *testing.T) {
+	var output bytes.Buffer
+	previous := log.GetLogger()
+	log.SetLogger(kratoslog.NewStdLogger(&output))
+	t.Cleanup(func() { log.SetLogger(previous) })
+	filename := filepath.Join(t.TempDir(), "config.yaml")
+	const content = "password: private-value"
+	if err := os.WriteFile(filename, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := newFileSource(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Load(); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"DEBUG", "function=fileSource.Load", "path=" + filename, "Loaded configuration file"} {
+		if !strings.Contains(output.String(), field) {
+			t.Fatalf("missing %q in log: %s", field, output.String())
+		}
+	}
+	if strings.Contains(output.String(), "private-value") {
+		t.Fatal("configuration content leaked into log")
+	}
+	output.Reset()
+	if err := os.Remove(filename); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Load(); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "Loaded configuration file") {
+		t.Fatal("failed read logged as successful")
+	}
 }

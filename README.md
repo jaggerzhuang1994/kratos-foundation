@@ -109,7 +109,7 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-`BaseProviderSet` 统一构造配置源链与具名注册/发现实例，并为队列提供复用应用观测依赖的 `queue.Observability`。 默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)，由 `bootstrap.NewSpec` 登记加载器。应用显式提供 AppInfo、LocalConfigPath 和 RemoteConfigDirName；默认十二层远程路径与本地文件/目录/glob 规则在 contrib 实现。
+`BaseProviderSet` 统一构造配置源链与具名注册/发现实例，并为队列提供复用应用观测依赖的 `queue.Observability`。 默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)，由 `bootstrap.NewSpec` 登记加载器。应用显式提供 AppInfo、LocalConfigPath 和 RemoteConfigDirName；RemoteConfigName 默认来自 AppInfo.Name()，可选择 `ProviderSetWithCustomRemoteConfigName` 并注入自定义名称；远程环境路径为 `{dir}/{env}/{name}.yaml` 和 `{dir}/{name}/{env}/*.yaml`。默认十二层远程路径与本地文件/目录/glob 规则在 contrib 实现。
 
 ## 日志
 

@@ -106,14 +106,16 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 	}
 	info := appinfo.New("drivers")
 	for _, tt := range []struct {
-		name     string
-		build    func(appinfo.AppInfo, bootstrap.LocalConfigPath) (*driverAssembly, func(), error)
-		wantName string
+		name           string
+		build          func(appinfo.AppInfo, bootstrap.LocalConfigPath) (*driverAssembly, func(), error)
+		wantName       string
+		wantConfigName string
 	}{
 		{"directory argument", func(info appinfo.AppInfo, path bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
 			return initializeDrivers(info, path, "orders")
-		}, "orders"},
-		{"directory provider", initializeDriversWithDirectoryProvider, "shared-orders"},
+		}, "orders", info.Name()},
+		{"directory provider", initializeDriversWithDirectoryProvider, "shared-orders", info.Name()},
+		{"name provider", initializeDriversWithNameProvider, "shared-orders", "shared-config"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			application, cleanup, err := tt.build(info, bootstrap.LocalConfigPath(path))
@@ -122,6 +124,9 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 			}
 			if string(application.Directory) != tt.wantName {
 				t.Fatalf("config directory = %q, want %q", application.Directory, tt.wantName)
+			}
+			if string(application.Name) != tt.wantConfigName || application.App.Name() != info.Name() {
+				t.Fatalf("config name=%q app name=%q", application.Name, application.App.Name())
 			}
 			cleanup()
 			cleanup()

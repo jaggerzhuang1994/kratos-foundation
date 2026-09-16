@@ -32,7 +32,7 @@ func TestLocalConfiguration(t *testing.T) {
 			case "empty":
 				path = ""
 			}
-			sources := consulconfig.NewConfigSources(info, bootstrap.LocalConfigPath(path), "unused", consulconfig.NewDefaultLocalConfigPathsProvider(), func(bootstrap.RemoteConfigDirName, string, string) []string {
+			sources := consulconfig.NewConfigSources(info, bootstrap.LocalConfigPath(path), "unused", "custom-name", consulconfig.NewDefaultLocalConfigPathsProvider(), func(appinfo.AppInfo, string, bootstrap.RemoteConfigDirName, bootstrap.RemoteConfigName) []string {
 				t.Fatal("local called remote provider")
 				return nil
 			})
@@ -95,15 +95,15 @@ func TestRemoteConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "local")
 	info := appinfo.New("test")
 	called := false
-	sources := consulconfig.NewConfigSources(info, "unused.yaml", "services", func(bootstrap.LocalConfigPath, string, string) ([]string, error) {
+	sources := consulconfig.NewConfigSources(info, "unused.yaml", "services", "shared-orders", func(appinfo.AppInfo, string, bootstrap.LocalConfigPath) ([]string, error) {
 		t.Fatal("remote called local provider")
 		return nil, nil
-	}, func(dir bootstrap.RemoteConfigDirName, name, environment string) []string {
+	}, func(gotInfo appinfo.AppInfo, environment string, dir bootstrap.RemoteConfigDirName, name bootstrap.RemoteConfigName) []string {
 		called = true
-		if dir != "services" || name != info.Name() || environment != "prod" {
+		if gotInfo != info || dir != "services" || name != "shared-orders" || environment != "prod" {
 			t.Fatalf("arguments=%s %s %s", dir, name, environment)
 		}
-		return []string{"configs/services/" + name + ".yaml"}
+		return []string{"configs/services/" + string(name) + ".yaml"}
 	})
 	// ConfigSources 只描述依赖；环境直到 NewSpec 才固定。
 	t.Setenv("APP_ENV", "prod")
@@ -122,16 +122,23 @@ func TestRemoteConfiguration(t *testing.T) {
 		t.Fatal("remote loader not used")
 	}
 	t.Setenv("APP_ENV", "prod")
-	spec = bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), consulconfig.NewConfigSources(info, "unused", "", consulconfig.NewDefaultLocalConfigPathsProvider(), consulconfig.NewDefaultRemoteConfigPathsProvider()))
+	spec = bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), consulconfig.NewConfigSources(info, "unused", "", "orders", consulconfig.NewDefaultLocalConfigPathsProvider(), consulconfig.NewDefaultRemoteConfigPathsProvider()))
 	if _, _, err := bootstrap.NewConfigManager(spec); err == nil {
 		t.Fatal("missing directory accepted")
+	}
+	for _, name := range []bootstrap.RemoteConfigName{"", "   "} {
+		sources.RemoteName = name
+		spec = bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
+		if _, _, err := bootstrap.NewConfigManager(spec); err == nil {
+			t.Fatal("blank remote name accepted")
+		}
 	}
 }
 
 func TestLocalProviderError(t *testing.T) {
 	t.Setenv("APP_ENV", "local")
 	failure := errors.New("path lookup failed")
-	sources := consulconfig.NewConfigSources(appinfo.New("test"), "unused", "unused", func(bootstrap.LocalConfigPath, string, string) ([]string, error) { return nil, failure }, consulconfig.NewDefaultRemoteConfigPathsProvider())
+	sources := consulconfig.NewConfigSources(appinfo.New("test"), "unused", "unused", "", func(appinfo.AppInfo, string, bootstrap.LocalConfigPath) ([]string, error) { return nil, failure }, consulconfig.NewDefaultRemoteConfigPathsProvider())
 	spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
 	if _, _, err := bootstrap.NewConfigManager(spec); !errors.Is(err, failure) {
 		t.Fatal(err)
