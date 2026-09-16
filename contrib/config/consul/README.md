@@ -7,8 +7,8 @@
 手工组装时普通导入本包及 `pkg/app`、`pkg/server`、`pkg/job`、`pkg/bootstrap`，客户端由内部 env 单例提供。Wire 场景应注入同一组领域 Spec，再由业务 provider 转交 bootstrap.NewSpec：
 
 ```go
-spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec())
-spec.Configuration(consul.AddConfigSource("configs/app.yaml"))
+spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{}).Configuration(
+    consul.AddConfigSource("configs/app.yaml"))
 return spec, nil
 ```
 

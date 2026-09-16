@@ -43,7 +43,7 @@ gRPC 仅在 `Grpc().Register(...)` 注册了至少一个非 nil 回调时默认�
 不需要业务 HTTP 的 worker 须配置 `server.http.disable: true`；若仍需探针或 metrics，显式配置对应管理地址。
 Job Spec 始终由 Wire 提供；NewJobBootstrap 构造 Manager，任务为空时不登记 Runtime；空 Spec 仍默认创建业务 HTTP，但不会自动创建数据库、Redis 或消息客户端。
 
-Wire 注册 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`，分别构造唯一的领域声明；`bootstrap.NewSpec(application, servers, jobs)` 借用这些指针，不创建副本。`BaseProviderSet` 已包含三个领域构造函数，使用它时不要重复注册；业务仍提供 bootstrap.Spec 的配置声明 provider。
+Wire 注册 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`，分别构造唯一的领域声明；`bootstrap.NewSpec(application, servers, jobs, sources)` 借用这些指针，不创建副本。`BaseProviderSet` 已包含三个领域构造函数，使用它时不要重复注册；业务仍提供 bootstrap.Spec 的配置声明 provider。
 
 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator` 同时包含 `queue.NewObservability`，自动复用应用已有的 Logger、Tracing、Metrics；队列 provider 直接接收 `queue.Observability`。不要再注册返回相同类型的手写 provider。该入口不创建资源或增加 cleanup，详见 [Queue 默认观测依赖](../queue/typed.md#默认观测依赖)。
 
@@ -120,7 +120,7 @@ flowchart TD
 
 基础组装使用 `BaseProviderSet`，具体后端由具名驱动配置选择。
 
-采用 local 文件、其他环境 Consul 的默认约定时，额外提供 [`contrib/bootstrap/consulconfig.NewSpec`](../../contrib/bootstrap/consulconfig/README.md)。使用该包的 `ProviderSet` 时，应用只需传入 `AppInfo` 和 `localConfigPath bootstrap.LocalConfigPath`；默认提供八层远程路径及基于应用名的 `RemoteConfigName`。自定义名称时改用 `ProviderSetWithCustomRemoteConfigName` 并提供名称 provider；自定义路径时单独使用 `NewSpec`，同时提供名称和 `bootstrap.RemoteConfigPathsProvider`。该可选约定不包含在 BaseProviderSet 中。
+采用 local 文件、其他环境 Consul 的约定时，添加 [consulconfig.ProviderSet](../../contrib/bootstrap/consulconfig/README.md)。该集合通过 NewConfigSources 为 `bootstrap.NewSpec` 提供具体的 ConfigSources 描述，由 NewSpec 负责环境选择、校验和延迟加载，业务显式注入 AppInfo、LocalConfigPath 和 RemoteConfigDirName（无默认值）。RemoteConfigPathsProvider 与 LocalConfigPathsProvider 契约定义在 bootstrap，默认实现位于 contrib：远程十二层、本地文件/目录/glob。BaseProviderSet 本身不包含此可选配置约定，也不重复提供 bootstrap.NewSpec。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |
@@ -319,7 +319,7 @@ flowchart TD
 
 ```go
 func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec) *bootstrap.Spec {
-    return bootstrap.NewSpec(application, servers, jobs).Configuration(
+    return bootstrap.NewSpec(application, servers, jobs, bootstrap.ConfigSources{}).Configuration(
         file.AddConfigSource("configs/app.yaml"),
         consul.AddConfigSource("configs/production/app.yaml"),
     )

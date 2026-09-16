@@ -5,8 +5,7 @@ Manager 内部持有 Kratos 官方 `config.Config`，使用其默认 decoder、�
 ## 组装
 
 ```go
-spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec())
-spec.Configuration(
+spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{}).Configuration(
     file.AddConfigSource("configs/app.yaml"),
     consul.AddConfigSource("configs/production/app.yaml"),
 )

@@ -42,7 +42,7 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 			spec.RegisterLogger(logger)
 			infrastructure := bootstrap.NewInfrastructureBootstrap(bootstrap.AppInfoBootstrap{}, bootstrap.LogBootstrap{}, bootstrap.TracingBootstrap{}, bootstrap.MetricsBootstrap{})
 			spec.AddMetadata(map[string]string{"business": "ready"})
-			completed := bootstrap.NewApplicationBootstrap(infrastructure, bootstrap.NewRuntimeBootstrap(bootstrap.ServerBootstrap{}, bootstrap.JobBootstrap{}))
+			completed := bootstrap.NewApplicationBootstrap(infrastructure, bootstrap.Bootstrap{}, bootstrap.NewRuntimeBootstrap(bootstrap.ServerBootstrap{}, bootstrap.JobBootstrap{}))
 			if tt.invalid {
 				spec.AddContext(func(context.Context) context.Context { return nil })
 			}
@@ -123,7 +123,7 @@ func runComponentsApp(t *testing.T, spec *app.Spec) error {
 	t.Cleanup(release)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	ready := bootstrap.NewApplicationBootstrap(bootstrap.InfrastructureBootstrap{}, bootstrap.RuntimeBootstrap{})
+	ready := bootstrap.NewApplicationBootstrap(bootstrap.InfrastructureBootstrap{}, bootstrap.Bootstrap{}, bootstrap.RuntimeBootstrap{})
 	spec.AddContext(func(context.Context) context.Context { return ctx })
 	application, err := bootstrap.NewKratosApp(spec, config, policy, nil, ready)
 	if err != nil {

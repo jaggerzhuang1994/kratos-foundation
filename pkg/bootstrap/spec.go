@@ -11,13 +11,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
-// LocalConfigPath 是本地配置路径，用于区分 Wire 中的其他字符串依赖。
-type LocalConfigPath string
-
-// RemoteConfigPathsProvider 根据配置名称和环境生成有序远程配置路径，由业务提供。
-// 配置源组装方按返回顺序加载路径，具体路径语法由对应配置源约束。
-type RemoteConfigPathsProvider func(name, environment string) []string
-
 // Spec 按领域收集应用声明。使用 NewSpec 构造，仅支持串行组装，不支持并发调用。
 // 配置源在 Manager 构造前声明；业务在提供 Bootstrap 的函数中描述蓝图，由 Wire 保证先声明后构造。
 type Spec struct {
@@ -28,9 +21,13 @@ type Spec struct {
 }
 
 // NewSpec 借用 Wire 注入的共享声明，不创建或复制领域 Spec。
-// 三个参数均为必需依赖；同一组装链应注入同一组实例。
-func NewSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec) *Spec {
-	return &Spec{application: application, server: servers, jobs: jobs}
+// 根据 ConfigSources 固定环境并登记默认加载行为，不执行配置 I/O；同一组装链共享领域 Spec。
+func NewSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, sources ConfigSources) *Spec {
+	spec := &Spec{application: application, server: servers, jobs: jobs}
+	if loader := sources.loader(); loader != nil {
+		spec.Configuration(loader)
+	}
+	return spec
 }
 
 // Configuration 按顺序声明额外配置源；声明阶段不执行 I/O。

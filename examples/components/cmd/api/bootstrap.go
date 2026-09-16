@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"os"
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/registry/consul"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -27,8 +27,7 @@ func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, path c
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("configuration must be a regular file")
 	}
-	spec := bootstrap.NewSpec(application, servers, jobs)
-	spec.Configuration(file.AddConfigSource(string(path)))
+	spec := bootstrap.NewSpec(application, servers, jobs, bootstrap.ConfigSources{}).Configuration(file.AddConfigSource(string(path)))
 	return spec, nil
 }
 

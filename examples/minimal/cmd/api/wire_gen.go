@@ -99,19 +99,8 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 	v2 := metrics.NewMetrics(provider, appInfo)
 	metricsBootstrap := bootstrap.NewMetricsBootstrap(spec, v2)
 	infrastructureBootstrap := bootstrap.NewInfrastructureBootstrap(appInfoBootstrap, logBootstrap, tracingBootstrap, metricsBootstrap)
-	tracingProvider, cleanup7, err := tracing.NewProvider(manager, appInfo)
-	if err != nil {
-		cleanup6()
-		cleanup5()
-		cleanup4()
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
 	mainGreetingService, err := newGreetingService(provider)
 	if err != nil {
-		cleanup7()
 		cleanup6()
 		cleanup5()
 		cleanup4()
@@ -122,7 +111,6 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 	}
 	bootstrapBootstrap, err := boot(infrastructureBootstrap, bootstrapSpec, mainGreetingService)
 	if err != nil {
-		cleanup7()
 		cleanup6()
 		cleanup5()
 		cleanup4()
@@ -131,7 +119,17 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	serverBootstrap, cleanup8, err := bootstrap.NewServerBootstrap(spec, serverSpec, manager, logger, provider, tracingProvider, bootstrapBootstrap)
+	tracingProvider, cleanup7, err := tracing.NewProvider(manager, appInfo)
+	if err != nil {
+		cleanup6()
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	serverBootstrap, cleanup8, err := bootstrap.NewServerBootstrap(spec, serverSpec, manager, logger, provider, tracingProvider)
 	if err != nil {
 		cleanup7()
 		cleanup6()
@@ -143,7 +141,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		return nil, nil, err
 	}
 	concurrencyCoordinator := job.DefaultCoordinator()
-	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, jobSpec, concurrencyCoordinator, logger, provider, tracingProvider, serverBootstrap)
+	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, jobSpec, concurrencyCoordinator, logger, provider, tracingProvider)
 	if err != nil {
 		cleanup8()
 		cleanup7()
@@ -156,7 +154,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		return nil, nil, err
 	}
 	runtimeBootstrap := bootstrap.NewRuntimeBootstrap(serverBootstrap, jobBootstrap)
-	startupReady := bootstrap.NewApplicationBootstrap(infrastructureBootstrap, runtimeBootstrap)
+	startupReady := bootstrap.NewApplicationBootstrap(infrastructureBootstrap, bootstrapBootstrap, runtimeBootstrap)
 	kratosApp, err := bootstrap.NewKratosApp(spec, v, stopPolicy, registrar, startupReady)
 	if err != nil {
 		cleanup8()

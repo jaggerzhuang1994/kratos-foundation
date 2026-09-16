@@ -44,7 +44,7 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 
 ### 应用 Spec 登记迁移
 
-`bootstrap.NewSpec(application, servers, jobs)` 改为注入三个共享领域 Spec，不再自行创建。Wire 添加 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`（BaseProviderSet 已包含），删除 `ApplicationSpec` provider；需要 Spec 的构造函数直接接收对应类型。配置声明 provider 也须接收并转交这三个依赖，更新后重新生成 Wire。
+`bootstrap.NewSpec(application, servers, jobs, sources)` 注入三个共享领域 Spec 和具体的 ConfigSources 描述，不再自行创建领域 Spec 或依赖具体配置驱动。Wire 添加 `app.NewSpec`、`server.NewSpec`、`job.NewSpec`（BaseProviderSet 已包含），删除 `ApplicationSpec` provider；需要 Spec 的构造函数直接接收对应类型。配置声明 provider 也须接收并转交这三个依赖，更新后重新生成 Wire。
 
 `app.Spec` 的 RegisterRuntime、RegisterAppInfo、RegisterLogger、AddContext、AddMetadata、AddEndpoints、AddSignals 及 Hook 登记方法不再返回 error；删除调用方的错误分支，直接调用即可。冻结后写入会 panic(app.ErrSpecFrozen)，重复登记非 nil AppInfo/Logger 也会 panic。NewApp 的配置、依赖、Context 构造失败及重复冻结仍返回 error。
 `bootstrap.Spec` 的声明和转发方法返回同一 `*bootstrap.Spec`，支持链式调用；RegisterRuntime 立即调用共享 application.RegisterRuntime，移除暂存列表和延后重放。移除 bootstrap 阶段状态和调用顺序检查；配置源在 Spec provider 中声明，业务在返回 Bootstrap 的 provider 中描述蓝图，由 Wire 依赖链保证先声明后构造。自定义 Runtime 的登记顺序现在取决于实际调用顺序，App 的并发启动策略不变。流程见 [app](pkg/app/README.md#runtime-登记)。
@@ -514,4 +514,4 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。原来 local 使用文件、其他环境使用 Consul 路径的业务 `newSpec` 可以替换为 [`contrib/bootstrap/consulconfig.NewSpec`](contrib/bootstrap/consulconfig/README.md)，Wire 传入 AppInfo、LocalConfigPath，并搭配 `contrib/bootstrap/consulconfig.ProviderSet` 使用默认八层路径；自定义名称时使用 `ProviderSetWithCustomRemoteConfigName` 并提供返回 `consulconfig.RemoteConfigName` 的业务 provider；自定义路径时改用 `NewSpec` 并显式提供名称与 RemoteConfigPathsProvider。`NewSpec` 不再接收 AppInfo，参数依次为 app.Spec、server.Spec、job.Spec、本地路径、远程配置名称、路径函数；原 `RemoteConfigPaths` 调用改为 `NewDefaultRemoteConfigPathsProvider()` 返回的函数。环境分支、路径顺序与失败流程见该 provider 文档。
+`DriverProviderSet` 与 `DriverProviderSetWithCustomJobCoordinator` 分别更名为 `BaseProviderSet` 与 `BaseProviderSetWithCustomJobCoordinator`，不保留旧别名。默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 NewConfigSources 只组装 ConfigSources；环境选择、校验和延迟加载由 bootstrap.NewSpec 实现。业务显式注入 `bootstrap.RemoteConfigDirName` 和 `bootstrap.LocalConfigPath`，没有默认远程目录。两种 PathsProvider 契约也位于 bootstrap。旧 consulconfig.NewSpec、RemoteConfigName 和自定义名称 ProviderSet 移除；默认远程改为十二层，configs 先于 secrets，每组公共先于应用、基础先于环境、单文件先于片段目录。本地目录只取应用单文件和环境应用单文件，普通文件只加载自身，否则使用 glob。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire。

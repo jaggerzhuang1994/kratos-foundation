@@ -55,7 +55,7 @@ func TestQueueIsNotRuntime(t *testing.T) {
 }
 
 func testSpec() *bootstrap.Spec {
-	return bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec()).Configuration(func() (config.Sources, error) {
+	return bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{}).Configuration(func() (config.Sources, error) {
 		source, err := textconfig.NewSource("queue.json", config.JSONFormat, `{"tracing":{"disable":true}}`)
 		if err != nil {
 			return nil, err

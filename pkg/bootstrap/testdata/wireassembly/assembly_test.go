@@ -3,19 +3,19 @@ package wireassembly
 import (
 	"context"
 	"errors"
-	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/registry/consul"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/registry/consul"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
@@ -110,16 +110,18 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 		build    func(appinfo.AppInfo, bootstrap.LocalConfigPath) (*driverAssembly, func(), error)
 		wantName string
 	}{
-		{"default name", initializeDrivers, info.Name()},
-		{"custom name provider", initializeDriversWithCustomName, "shared-orders"},
+		{"directory argument", func(info appinfo.AppInfo, path bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
+			return initializeDrivers(info, path, "orders")
+		}, "orders"},
+		{"directory provider", initializeDriversWithDirectoryProvider, "shared-orders"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			application, cleanup, err := tt.build(info, bootstrap.LocalConfigPath(path))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(application.ConfigName) != tt.wantName {
-				t.Fatalf("config name = %q, want %q", application.ConfigName, tt.wantName)
+			if string(application.Directory) != tt.wantName {
+				t.Fatalf("config directory = %q, want %q", application.Directory, tt.wantName)
 			}
 			cleanup()
 			cleanup()

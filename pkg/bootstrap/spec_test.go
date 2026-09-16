@@ -30,8 +30,8 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	spec.BeforeStart(func(context.Context) error { started = true; return nil })
 	spec.Job().RegisterOnce("finish", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
 	logger, tracing, metrics := newTestObservability(t)
-	serverBootstrap := prepareServer(t, spec)
-	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, metrics, tracing, serverBootstrap)
+	prepareServer(t, spec)
+	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, metrics, tracing)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,6 @@ func TestSpecHidesInfrastructureAssembly(t *testing.T) {
 }
 
 func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
-	spec := newTestSpec()
 	var calls []int
 	loaders := []config.SourceLoader{}
 	for i := 1; i <= 2; i++ {
@@ -75,13 +74,14 @@ func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
 			return config.Sources{source}, err
 		})
 	}
-	if got := spec.Configuration(loaders...); got != spec.Spec {
+	spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{}).Configuration(loaders[0])
+	if got := spec.Configuration(loaders[1:]...); got != spec {
 		t.Fatal("Configuration did not return the same Spec")
 	}
 	if len(calls) != 0 {
 		t.Fatal("declaration executed loaders")
 	}
-	manager, cleanup, err := bootstrap.NewConfigManager(spec.Spec)
+	manager, cleanup, err := bootstrap.NewConfigManager(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,6 +97,9 @@ func TestConfigurationOrdersSourcesBeforeProvidingManager(t *testing.T) {
 
 func TestConfigurationFailureAndDefaultEnvironment(t *testing.T) {
 	spec := newTestSpec()
+	assertBootstrapPanic(t, "bootstrap: config source loader is nil", func() {
+		bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{}).Configuration(nil)
+	})
 	assertBootstrapPanic(t, "bootstrap: config source loader is nil", func() { spec.Configuration(nil) })
 	expected := errors.New("source construction failed")
 	spec.Configuration(func() (config.Sources, error) { return nil, expected })
@@ -177,7 +180,7 @@ type testSpec struct {
 func newTestSpec() *testSpec {
 	application, servers, jobs := app.NewSpec(), server.NewSpec(), job.NewSpec()
 	return &testSpec{
-		Spec:        bootstrap.NewSpec(application, servers, jobs),
+		Spec:        bootstrap.NewSpec(application, servers, jobs, bootstrap.ConfigSources{}),
 		application: application, servers: servers, jobs: jobs,
 	}
 }

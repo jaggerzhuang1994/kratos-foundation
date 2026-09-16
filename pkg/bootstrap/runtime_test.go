@@ -69,7 +69,7 @@ func TestServerBootstrapPropagatesRegistrationFailure(t *testing.T) {
 				spec.Grpc().Register(func(server.GRPCServer) error { return failure })
 			}
 			logger, metrics, tracing := serverTestDependencies(t, testconfig.Empty(t))
-			_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, testconfig.Empty(t), logger, metrics, tracing, bootstrap.Bootstrap{})
+			_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, testconfig.Empty(t), logger, metrics, tracing)
 			if !errors.Is(err, failure) {
 				t.Fatalf("error = %v", err)
 			}
@@ -103,7 +103,7 @@ func TestServerBootstrapConfigOnlyListeners(t *testing.T) {
 			logger, meter, tracer := serverTestDependencies(t, manager)
 			tracked := &serverSubscriptionTracker{Manager: manager}
 			assemble := func() {
-				_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, tracked, logger, meter, tracer, bootstrap.Bootstrap{})
+				_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, tracked, logger, meter, tracer)
 				if cleanup != nil {
 					cleanup()
 				}
@@ -152,18 +152,18 @@ func TestJobBootstrapSelection(t *testing.T) {
 			case "invalid":
 				spec.Job().RegisterCron("invalid", "not a schedule", job.TaskFunc(func(context.Context) error { return nil }))
 			}
-			serverBootstrap := prepareServer(t, spec)
+			prepareServer(t, spec)
 			if selection == "frozen" {
 				_, _ = app.NewApp(context.Background(), spec.application, nil, nil, nil)
 			}
 			logger, tracer, meter := newTestObservability(t)
 			if selection == "frozen" {
 				assertBootstrapPanic(t, app.ErrSpecFrozen, func() {
-					_, _ = bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer, serverBootstrap)
+					_, _ = bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer)
 				})
 				return
 			}
-			_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer, serverBootstrap)
+			_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer)
 			if (err != nil) != (selection == "invalid") {
 				t.Fatal(err)
 			}
@@ -218,8 +218,8 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 			components.Job().RegisterOnce("once", job.TaskFunc(func(context.Context) error { return tt.result })).ExitWhenDone()
 			jobLogger, tracer, meter := newTestObservability(t)
 			spec := components.application
-			serverBootstrap := prepareServer(t, components)
-			if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer, serverBootstrap); err != nil {
+			prepareServer(t, components)
+			if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer); err != nil {
 				t.Fatal(err)
 			}
 			spec.RegisterAppInfo(appinfo.New("test"))
@@ -262,8 +262,8 @@ func TestJobBootstrapInjectsCoordinator(t *testing.T) {
 	logger, tracing, metrics := newTestObservability(t)
 	spec := newTestSpec()
 	spec.Job().RegisterCron("distributed", "@hourly", job.TaskFunc(func(context.Context) error { return nil }), job.WithConcurrentPolicy(job.SkipIfDistributedRunning))
-	serverBootstrap := prepareServer(t, spec)
-	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, constructionCoordinator{}, logger, metrics, tracing, serverBootstrap)
+	prepareServer(t, spec)
+	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, constructionCoordinator{}, logger, metrics, tracing)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func prepareServer(t *testing.T, spec *testSpec) bootstrap.ServerBootstrap {
 	t.Helper()
 	logger, tracer, meter := newTestObservability(t)
 	manager := testconfig.New(t, "server", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true)}})
-	marker, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, manager, logger, meter, tracer, bootstrap.Bootstrap{})
+	marker, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, manager, logger, meter, tracer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,8 +339,8 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 				t.Fatal("typed registration did not return the same Spec")
 			}
 			spec := components.application
-			serverBootstrap := prepareServer(t, components)
-			_, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, logger, metrics, tracing, serverBootstrap)
+			prepareServer(t, components)
+			_, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, logger, metrics, tracing)
 			if err != nil {
 				t.Fatal(err)
 			}

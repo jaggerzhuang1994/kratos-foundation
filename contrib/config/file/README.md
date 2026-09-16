@@ -80,7 +80,8 @@ Watcher 返回文件内容，由官方 Config 直接处理，不额外重新 Loa
 普通导入本包后，在提供 Spec 的业务构造函数中调用：
 
 ```go
-spec.Configuration(file.AddConfigSource("config/base.yaml", "config/custom/*.yaml"))
+spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{}).Configuration(
+    file.AddConfigSource("config/base.yaml", "config/custom/*.yaml"))
 ```
 
-手工组装前置条件：普通导入 `pkg/app`、`pkg/server`、`pkg/job` 和 `pkg/bootstrap`，创建 `spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec())`。Wire 场景改为接收并转交同一组领域 Spec，由业务 provider 返回 bootstrap.Spec；不要在依赖 Manager 的 Boot 中调用。路径会复制，声明时不执行 I/O；`bootstrap.NewConfigManager` 执行来源构造，Manager 默认先加载官方 env source，再加载这些文件。空路径列表不添加来源，不存在进程级默认路径或 init 注册表。路径集合在构造期确定，内容可热更新，cleanup 统一停止 watcher。完整示例见 [Configuration](../../../pkg/bootstrap/README.md#configuration-配置阶段)。
+手工组装前置条件：普通导入 `pkg/app`、`pkg/server`、`pkg/job` 和 `pkg/bootstrap`，使用零值 ConfigSources 跳过默认来源，再通过 Configuration 登记加载器。Wire 场景改为接收并转交同一组领域 Spec，由业务 provider 返回 bootstrap.Spec；不要在依赖 Manager 的 Boot 中调用。路径会复制，声明时不执行 I/O；`bootstrap.NewConfigManager` 执行来源构造，Manager 默认先加载官方 env source，再加载这些文件。空路径列表不添加来源，不存在进程级默认路径或 init 注册表。路径集合在构造期确定，内容可热更新，cleanup 统一停止 watcher。完整示例见 [Configuration](../../../pkg/bootstrap/README.md#configuration-配置阶段)。
