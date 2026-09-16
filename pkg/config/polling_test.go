@@ -9,6 +9,8 @@ import (
 	"time"
 
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 func TestPollInterval(t *testing.T) {
@@ -276,6 +278,87 @@ func TestPollingInitialReplayErrorsAndCancellation(t *testing.T) {
 			m.poll()
 			if calls != 1 {
 				t.Fatal(calls)
+			}
+		})
+	}
+}
+
+// pollingLogFunc 通过已有全局日志入口捕获通知事件。
+type pollingLogFunc func(kratoslog.Level, ...any) error
+
+func (f pollingLogFunc) Log(level kratoslog.Level, fields ...any) error {
+	return f(level, fields...)
+}
+
+func TestPollingSubscriptionUpdateLogs(t *testing.T) {
+	events := make(chan map[string]any, 32)
+	t.Cleanup(log.SetLogger(pollingLogFunc(func(level kratoslog.Level, fields ...any) error {
+		event := make(map[string]any)
+		for i := 0; i+1 < len(fields); i += 2 {
+			event[fields[i].(string)] = fields[i+1]
+		}
+		if event["msg"] == "poll | config.notify | Configuration subscription update" {
+			event["level"] = level
+			events <- event
+		}
+		return nil
+	})))
+	backend := &scanBackend{values: map[string]any{"key": "secret-value"}}
+	m := &manager{backend: backend, snapshot: backend.values}
+	for _, key := range []string{"key", "key", ""} {
+		var prototype any = new(string)
+		if key == "" {
+			prototype = new(map[string]any)
+		}
+		_, err := m.Subscribe(key, prototype, func(string, any, error) {})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cancel, err := m.Subscribe("key", new(string), func(string, any, error) { t.Fatal("canceled callback") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	for _, step := range []struct {
+		name    string
+		values  map[string]any
+		scanErr error
+		initial bool
+		want    int
+	}{
+		{name: "initial replay", values: backend.values, initial: true, want: 3},
+		{name: "unchanged", values: backend.values},
+		{name: "changed", values: map[string]any{"key": "new-secret-value"}, want: 3},
+		{name: "decode failure", values: map[string]any{"key": map[string]any{"nested": true}}, want: 3},
+		{name: "removed", values: map[string]any{}, want: 3},
+		{name: "scan failure", scanErr: errors.New("scan failed")},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			backend.values, backend.err = step.values, step.scanErr
+			m.poll()
+			if len(events) != step.want {
+				t.Fatalf("got %d log events, want %d", len(events), step.want)
+			}
+			for i := 0; i < step.want; i++ {
+				event := <-events
+				key := "key"
+				if i == 2 {
+					key = ""
+				}
+				_, found := lookup(step.values, key)
+				if key == "" {
+					key = "<root>"
+				}
+				if event["level"] != kratoslog.LevelInfo || event["module"] != "config" ||
+					event["key"] != key || event["initial"] != step.initial || event["found"] != found {
+					t.Fatalf("unexpected event: %v", event)
+				}
+				for _, value := range event {
+					if reflect.DeepEqual(value, "secret-value") || reflect.DeepEqual(value, "new-secret-value") {
+						t.Fatal("configuration value leaked into log")
+					}
+				}
 			}
 		})
 	}

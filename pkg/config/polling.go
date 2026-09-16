@@ -104,6 +104,13 @@ func (m *manager) poll() {
 		active := !m.closed && !sub.canceled
 		m.mu.Unlock()
 		if active {
+			// 只记录通知元数据，避免配置值中的凭据泄漏；此时尚未执行业务回调。
+			key := sub.key
+			if key == "" {
+				key = "<root>" // 整份配置订阅使用非空标识，避免被日志空值过滤器移除。
+			}
+			log.WithModule("config").With("key", key, "initial", initial, "found", exists).
+				Info("poll | config.notify | Configuration subscription update")
 			sub.notify(value, exists)
 		}
 	}

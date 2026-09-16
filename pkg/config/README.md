@@ -119,6 +119,8 @@ defer cancel()
 
 cancel 幂等移除订阅，首次回放前取消会跳过该次回放；不等待已通过执行检查的回调。扫描、比较、解码和业务回调均不持有订阅锁；普通互斥锁只保护快照指针、订阅登记/移除和关闭状态的复合操作，避免注册和扫描交错导致状态不一致。
 
+每个订阅实际通知前记录一行 INFO `poll | config.notify | Configuration subscription update`，字段包含 `module=config`、配置 `key`、是否首次回放 `initial` 和是否存在 `found`，不包含配置值；空 key 的整份配置订阅以 `<root>` 标识。首次回放也记录；相同 key 的多个订阅分别记录，后续未变化、已取消或扫描失败时不记录该事件。日志表示即将通知订阅，不保证解码或业务应用成功；输出受当前 Logger 级别和过滤规则控制。
+
 存在性与值分别比较：若扫描结果中的 key 消失，无默认值通过 observer 返回 `ErrNotFound`，有默认值解码默认值；显式 null 按目标解码规则处理。源文件中省略字段不等于有效配置删除，仍受官方 merge 约束。Manager 不再使用官方 Value/Watch，因此不受其缺失 key、同 key 单 observer 和直接监听 null 的限制；resolver 等官方处理仍沿用上游行为。
 
 `Observer.err` 表示目标解码错误或缺失值错误，不表示来源加载、模板失败或 watcher 健康状态。`ErrWatcherStopped`、`ErrObserverOverloaded`、`StatusReader` 和 ConfigObservability Bootstrap 不恢复。
@@ -142,7 +144,8 @@ flowchart TD
  J -- 是 --> K[获取 mu；检查取消与关闭；释放 mu]
  K --> L{可交付?}
  L -- 否 --> O
- L -- 是 --> M[锁外按登记顺序解码并执行回调]
+ L -- 是 --> L1[INFO poll / config.notify；记录 key、initial、found]
+ L1 --> M[锁外按登记顺序解码并执行回调]
  M -- panic --> N[ERROR Configuration observer panicked；继续其余订阅]
  M -- 正常或解码错误 --> O[继续其余订阅]
  N --> O
