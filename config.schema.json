@@ -238,7 +238,8 @@
       "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
     },
     ".kratos_foundation_pb.ClientMiddleware.tracing": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing"
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
+      "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。"
     },
     ".kratos_foundation_pb.ClientOption": {
       "properties": {
@@ -813,43 +814,9 @@
         },
         "refresh_interval": {
           "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.refresh_interval"
-        },
-        "mysql": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.mysql"
         }
       },
       "type": "object"
-    },
-    ".kratos_foundation_pb.GormMetrics.Mysql": {
-      "properties": {
-        "prefix": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.Mysql.prefix"
-        },
-        "interval": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.Mysql.interval"
-        },
-        "variable_names": {
-          "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.Mysql.variable_names"
-        }
-      },
-      "type": "object"
-    },
-    ".kratos_foundation_pb.GormMetrics.Mysql.interval": {
-      "type": "string",
-      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
-      "description": "间隔 默认 refresh_interval"
-    },
-    ".kratos_foundation_pb.GormMetrics.Mysql.prefix": {
-      "type": "string",
-      "description": "指标前缀，默认 gorm_status_"
-    },
-    ".kratos_foundation_pb.GormMetrics.Mysql.variable_names": {
-      "items": {
-        "type": "string",
-        "description": "采集哪些指标，默认所有"
-      },
-      "type": "array",
-      "description": "采集哪些指标，默认所有"
     },
     ".kratos_foundation_pb.GormMetrics.disable": {
       "type": "boolean",
@@ -861,10 +828,6 @@
       },
       "type": "object",
       "description": "常量labels"
-    },
-    ".kratos_foundation_pb.GormMetrics.mysql": {
-      "$ref": "#/definitions/.kratos_foundation_pb.GormMetrics.Mysql",
-      "description": "MySQL 状态指标配置"
     },
     ".kratos_foundation_pb.GormMetrics.refresh_interval": {
       "type": "string",
@@ -1851,7 +1814,7 @@
     },
     ".kratos_foundation_pb.Middleware.Tracing.disable": {
       "type": "boolean",
-      "description": "是否禁用"
+      "description": "禁用 Span 记录、采样和导出；仍生成或传播日志关联所需的 TraceID/SpanID。"
     },
     ".kratos_foundation_pb.Middleware.Validator": {
       "properties": {
@@ -2373,7 +2336,7 @@
         }
       },
       "type": "object",
-      "description": "服务器中间件配置。\n\n [热更新] 全部字段都支持运行期修改，一次更新会先完整校验和构造，再逐项原子替换；并发请求可能短暂读取新旧组合。任何一项非法\n 都会整体拒绝并保留上一次生效的组合。这些中间件常驻调用链，因此把某项从禁用改为\n 启用也不需要重建 Server。\n\n 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成\n 启用也不会产生链路追踪数据。"
+      "description": "服务器中间件配置。\n\n [热更新] 全部字段都支持运行期修改，一次更新会先完整校验和构造，再逐项原子替换；并发请求可能短暂读取新旧组合。任何一项非法\n 都会整体拒绝并保留上一次生效的组合。这些中间件常驻调用链，因此把某项从禁用改为\n 启用也不需要重建 Server。\n\n 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成\n 启用也只会保留 TraceID/SpanID 关联，不会记录或导出 Span。"
     },
     ".kratos_foundation_pb.ServerMiddleware.deadline": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline",
@@ -2401,7 +2364,7 @@
     },
     ".kratos_foundation_pb.ServerMiddleware.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
-      "description": "链路追踪开关。[热更新]"
+      "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]"
     },
     ".kratos_foundation_pb.ServerMiddleware.validator": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Validator",
@@ -2420,11 +2383,11 @@
         }
       },
       "type": "object",
-      "description": "Tracing 只有 sampler 支持热更新。disable 决定是否创建真实 Provider，\n exporter 持有网络连接与批处理器，两者都需要重建 Provider。"
+      "description": "Tracing 只有 sampler 支持热更新。disable 决定是否创建记录和导出 Span 的 Provider，\n exporter 持有网络连接与批处理器，两者都需要重建 Provider。"
     },
     ".kratos_foundation_pb.Tracing.disable": {
       "type": "boolean",
-      "description": "是否禁用链路追踪 local 环境默认为禁用。[需重启]"
+      "description": "禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。[需重启]"
     },
     ".kratos_foundation_pb.Tracing.exporter": {
       "$ref": "#/definitions/.kratos_foundation_pb.Exporter",

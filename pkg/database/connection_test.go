@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -176,7 +177,7 @@ func TestConnectionFactoryClosesPoolsInReverseConstructionOrder(t *testing.T) {
 	for _, failedConstruction := range []bool{false, true} {
 		t.Run(fmt.Sprintf("construction_failed=%t", failedConstruction), func(t *testing.T) {
 			var closed []string
-			driverName := fmt.Sprintf("database_cleanup_order_%d", mysqlMetricsDriverID.Add(1))
+			driverName := fmt.Sprintf("database_cleanup_order_%d", orderedCloseDriverID.Add(1))
 			sql.Register(driverName, &orderedCloseDriver{closed: &closed})
 			factory := newConnectionFactory(nil)
 			t.Cleanup(func() {
@@ -213,17 +214,24 @@ func TestConnectionFactoryClosesPoolsInReverseConstructionOrder(t *testing.T) {
 
 type orderedCloseDriver struct{ closed *[]string }
 
+var orderedCloseDriverID atomic.Uint64
+
 func (d *orderedCloseDriver) Open(name string) (driver.Conn, error) {
-	return &orderedCloseConn{mysqlMetricsScriptConn: &mysqlMetricsScriptConn{}, name: name, closed: d.closed}, nil
+	return &orderedCloseConn{name: name, closed: d.closed}, nil
 }
 
 type orderedCloseConn struct {
-	*mysqlMetricsScriptConn
 	name   string
 	closed *[]string
 }
 
 func (c *orderedCloseConn) Close() error { *c.closed = append(*c.closed, c.name); return nil }
+func (*orderedCloseConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("prepare unsupported")
+}
+func (*orderedCloseConn) Begin() (driver.Tx, error) {
+	return nil, errors.New("transaction unsupported")
+}
 
 func TestPoolExpansionKeepsRequestedIdleSize(t *testing.T) {
 	db := newPoolTestDB(t)

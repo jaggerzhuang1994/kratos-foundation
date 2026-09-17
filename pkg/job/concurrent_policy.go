@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // ConcurrentPolicy 决定本 Manager 内同一周期任务重叠时继续、等待还是跳过。
@@ -42,10 +43,16 @@ type executionGate struct {
 	log moduleLog
 	// overflow 满额时在锁外同步调用的通知，可为 nil。
 	overflow func(context.Context, DelayOverflow) error
+	// metrics 在锁外记录跳过、等待数量和等待结果。
+	metrics jobAdmissionMetrics
 }
 
-func newExecutionGate(log moduleLog, name string, config cronConfig, overflow func(context.Context, DelayOverflow) error) *executionGate {
-	return &executionGate{disabled: config.disabled, policy: config.policy, limit: config.pending, changed: make(chan struct{}), name: name, log: log, overflow: overflow}
+func newExecutionGate(log moduleLog, name string, config cronConfig, overflow func(context.Context, DelayOverflow) error, optionalMetrics ...jobAdmissionMetrics) *executionGate {
+	metrics := jobAdmissionMetrics(&jobMetricsProvider{disabled: true})
+	if len(optionalMetrics) > 0 && optionalMetrics[0] != nil {
+		metrics = optionalMetrics[0]
+	}
+	return &executionGate{disabled: config.disabled, policy: config.policy, limit: config.pending, changed: make(chan struct{}), name: name, log: log, overflow: overflow, metrics: metrics}
 }
 
 func (g *executionGate) update(config cronConfig) {
@@ -74,6 +81,7 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 	// 禁用与准入共用现有锁，阻止尚未移除的调度条目发起新调用；已排队调用不重查开关。
 	if g.disabled {
 		g.mu.Unlock()
+		g.metrics.reportSkipped(ctx, g.name, "disabled")
 		return false, nil
 	}
 	if g.policy == AllowOverlap || (g.running == 0 && g.pending == 0) {
@@ -83,12 +91,14 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 	}
 	if g.policy == SkipIfRunning {
 		g.mu.Unlock()
+		g.metrics.reportSkipped(ctx, g.name, "already_running")
 		g.log.WithContext(ctx).With("function", "executionGate.acquire", "job", g.name).Warn("job skipped")
 		return false, nil
 	}
 	if g.limit >= 0 && g.pending >= g.limit {
 		event := DelayOverflow{Name: g.name, Policy: g.policy, MaxPendingRuns: g.limit}
 		g.mu.Unlock()
+		g.metrics.reportSkipped(ctx, g.name, "pending_full")
 		g.log.WithContext(ctx).With("function", "executionGate.acquire", "job", g.name, "max_pending_runs", event.MaxPendingRuns).Warn("Skipped job trigger because the pending-run queue is full")
 		if g.overflow != nil {
 			return false, handleDelayOverflow(ctx, event, g.overflow)
@@ -96,17 +106,25 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	g.pending++
+	waitStarted := time.Now()
+	g.mu.Unlock()
+	g.metrics.reportPending(ctx, g.name, 1)
+	g.mu.Lock()
 	// 已经进入等待的调用保留串行等待语义；后续新触发才使用热更新后的策略。
 	for {
 		if err := ctx.Err(); err != nil {
 			g.pending--
 			g.mu.Unlock()
+			g.metrics.reportPending(ctx, g.name, -1)
+			g.metrics.reportWait(ctx, g.name, "canceled", time.Since(waitStarted))
 			return false, err
 		}
 		if g.running == 0 {
 			g.pending--
 			g.running++
 			g.mu.Unlock()
+			g.metrics.reportPending(ctx, g.name, -1)
+			g.metrics.reportWait(ctx, g.name, "admitted", time.Since(waitStarted))
 			return true, nil
 		}
 		changed := g.changed

@@ -101,7 +101,6 @@ func newManagerWithDrivers(
 		connectionFactory,
 		config,
 		appInfo,
-		databaseLogger,
 		metricsProvider,
 	)
 	if err != nil {
@@ -164,7 +163,7 @@ func (mgr *manager) close() error {
 		collector := mgr.metricsCollector
 		mgr.metricsCollector = nil
 		mgr.stateMu.Unlock()
-		// 先停采集再关连接，避免后台 SHOW STATUS 与连接释放相互竞争。
+		// 先注销应用侧指标再释放连接池，避免暴露已经关闭的资源。
 		collector.close()
 		mgr.closeErr = factory.close()
 	})

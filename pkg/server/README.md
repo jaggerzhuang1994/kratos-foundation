@@ -32,7 +32,8 @@ flowchart TD
     K --> L
     L --> M{地址与监控路径有效?}
     M -- 否 --> X
-    M -- 是 --> N[INFO NewRuntime server.assembled 记录协议开关和管理监听数量]
+    M -- 是 --> JK[按稳定顺序逐条 INFO endpoint.registered]
+    JK --> N[INFO NewRuntime server.assembled 记录协议开关和管理监听数量]
     N --> O([返回 Runtime 和 cleanup 由 App 启停及 Wire 释放])
 ```
 
@@ -66,6 +67,12 @@ flowchart LR
 手工调用 `server.NewRuntime` 时，调用方负责 `SetReadinessSource`，将 `Servers()` 中的非 nil 业务 Runtime 和 `ManagementServers()` 登记到应用 Spec；冻结后登记会 panic；Runtime 的 Start/Stop 由 App 监督，构造 cleanup 由调用方在应用停止后释放。
 
 协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、requestdebug、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
+
+`server.middleware.tracing.disable: true` 或全局 `tracing.disable: true` 会停止服务端 Span 的记录、采样和导出，但常驻 tracing 中间件仍使用非采样 Provider 创建或延续请求 SpanContext。因此访问日志和业务日志仍能读取 `trace.id`、`span.id`，下游客户端也可继续传播同一条 TraceID；此模式不会创建 exporter。运行期重新启用 server tracing 时恢复使用构造期注入的真实 Provider；若全局 Provider 在构造期已禁用，则仍只能保留关联 ID，需重启才能恢复记录和导出。
+
+`NewRuntime` 在业务 HTTP、WebSocket、gRPC 和监控处理器组装完成后、服务启动前，按 HTTP 路径/方法及 gRPC 完整方法名的稳定顺序逐条记录 `INFO event=endpoint.registered`。HTTP 字段为 `transport=http, method, path, service, listener`；metrics/health 的 `service` 分别为对应能力，`listener` 为 `business` 或独立管理地址。gRPC 还包含实际服务名，`path` 采用 `/<service>/<method>`。业务路由来自底层 Server 的最终注册表，监控处理器由 Foundation 在挂载成功后补入；禁用的协议或监控能力不输出对应端点。
+
+访问日志中的 `deadline.source` 和 `deadline.remaining` 使用 `log.DebugOnly`：普通 Info 请求日志默认省略；请求 Context 启用 debug 时，即使访问日志事件仍是 Info，也会展开这些字段。默认 `filter_empty=true` 会移除未展开的整组键值。
 
 启用 BBR 时，`bucket` 必须为正数，`window` 必须是可精确表示为 Go `time.Duration` 的正时长，整除后的每桶时长必须在 1ns–1s 内。`cpu_threshold` 必须为正数；`cpu_quota` 必须是有限非负数，零值沿用默认 CPU 采样。缺失字段沿用 Aegis 默认值（10s、100 桶、阈值 800），仍参与组合校验。禁用 BBR 时忽略其参数。`NewRuntime` 和中间件热更新使用相同校验；非法更新保留全部旧策略。更新先完成变化项的构造，再沿用逐项原子替换，不重建未变化的统计窗口；并发请求仍可能短暂读到新旧策略组合。
 
@@ -199,7 +206,7 @@ flowchart TD
 优先于业务路由、Filter、鉴权和限流。不要在这些路径注册业务接口；需要复用路径时先关闭健康检查。
 同一监听上的健康路径不能与 metrics 路径相同。
 
-`bootstrap.NewServerBootstrap` 自动绑定 `app.Spec.Ready`：全部启动后钩子成功才就绪，收到停机
+`bootstrap.NewServerBootstrap` 自动绑定 `app.Spec.Ready`：Kratos 进入 AfterStart 且 Foundation 的 AfterStart hook 全部成功才就绪，收到停机
 请求立即不就绪，不等待 `stop_delay`。直接使用 Runtime 时，必须在启动前调用
 `runtime.SetReadinessSource(readyFunc)`；未绑定时 `/readyz` 保持 503。Runtime.Stop 或 Wire cleanup
 也会关闭就绪状态。`/healthz` 仅证明 HTTP 处理路径仍能响应，不代表所有后台任务正常。
@@ -280,7 +287,7 @@ IP 表示及 `0.0.0.0`/空 host；不通过 DNS 推断 localhost 与 IP 等价�
 `server.http.addr` 配置；不要用原生 `HTTP.Option(http.Address(...))` 隐式改写需要参与复用的地址。
 
 端点路径均相对于所选监听的根路径，独立于业务 PathPrefix、Filter 和鉴权。独立监听不继承业务
-路由、WebSocket、TLS 或全局 DefaultServeMux，默认使用普通 HTTP；通过绑定地址控制监听范围。
+路由、WebSocket、业务原生 Option 或全局 DefaultServeMux，默认使用普通 HTTP；TLS/mTLS 由平台网关或 Service Mesh 终止，必须通过绑定地址和网络策略把业务及管理监听限制在受信任网络，禁止直接暴露到不可信网络。`HTTPBuilder.Option` / `GRPCBuilder.Option` 可以注入原生 Listener 或 TLS，但它们是不受 Foundation 配置治理的业务自管扩展，不能据此推断独立管理监听也获得相同 TLS，也不属于默认平台责任边界。
 同一监听上的 metrics 和健康路径不能冲突，不同监听可以使用相同路径。
 
 `Health().Checks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
@@ -332,9 +339,9 @@ flowchart TD
 
 默认 HTTP/gRPC 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
 
-`Request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.middleware.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。服务端与客户端访问日志不读取请求/响应正文，不输出 cause/stack，只记录操作、状态、耗时及 deadline 字段。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
+`Request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.middleware.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。故障日志始终保留 `operation`、`code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
 
-最外层 `Recovered from a panic while handling a request` 记录 panic 类型与堆栈，并将堆栈保存到服务间错误诊断，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
+最外层 `Recovered from a panic while handling a request` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
 
 业务通过 Spec 同名替换 `errors` 或 `recovery` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC 请求链；WebSocket 异步消息回调需自行处理错误和日志。
 
@@ -349,11 +356,18 @@ flowchart TD
     F --> G
     G --> H[Normalize: 保留已知状态或安全兜底]
     H --> I{服务端故障?}
-    I -- 是 --> J[ERROR Request failed with a server error]
+    I -- 是 --> J[ERROR 摘要: code reason error]
     I -- 否 --> K([返回安全协议错误或成功])
-    J --> K
-    G -. panic .-> L[ERROR Recovered from a panic while handling a request: 类型和栈]
-    L --> M([安全 500])
+    J --> N{请求 debug?}
+    N -- 是 --> O[展开 error.detail]
+    N -- 否 --> K
+    O --> K
+    G -. panic .-> L[ERROR Recovered from a panic: 类型]
+    L --> P{请求 debug?}
+    P -- 是 --> Q[展开 stack]
+    P -- 否 --> M
+    Q --> M
+    M([安全 500])
 ```
 
 服务端与客户端指标使用归一化后的 HTTP 状态计数，保留 422 等非标准 gRPC 映射的状态；指标观察不改变业务调用方收到的原始错误。

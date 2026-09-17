@@ -342,16 +342,7 @@ database:
     # 常量 Labels
     # labels:
     #   env: production
-    # MySQL 状态指标配置
-    mysql:
-      # 指标前缀 [默认: gorm_status_]
-      prefix: gorm_status_
-      # 采集间隔，默认使用 refresh_interval
-      # interval: 15s
-      # 采集的变量名，默认采集所有
-      # variable_names:
-      #   - Threads_connected
-      #   - Threads_running
+    # MySQL 服务端状态不在应用内执行 SHOW STATUS；使用独立 mysqld-exporter 等平台采集器。
 
 # =============================================================================
 # Redis 配置

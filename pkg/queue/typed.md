@@ -194,28 +194,32 @@ flowchart TD
     I -- 空 --> W[可取消轮询]
     W --> I
     I -- 成功 --> J[原子操作提交释放锁 固定 token 和次数]
-    J --> K{次数及类型有效?}
+    J --> JS[INFO task.execution.started]
+    JS --> K{次数及类型有效?}
     K -- 否 --> FAIL[按 token 调用 Store.Fail]
     K -- 是 --> L{解码和校验成功?}
     L -- 否 --> FAIL
     L -- 是 --> M[原子边界外 BeforeHandle 等待及处理中间件 协作超时]
-    M -- 应用取消 --> END
+    M -- 应用取消 --> STOP[INFO task.execution.finished result=stopped duration]
+    STOP --> END
     M -- 成功 --> ACK[按 token Ack]
     M -- 错误或超时 --> N{永久失败或耗尽?}
     N -- 是 --> FAIL
     N -- 否 --> R[按 token Release 保存重试排期]
     R -- 成功 --> RL[WARN retry.scheduled]
-    ACK -- 成功 --> AL[DEBUG task.completed]
+    ACK -- 成功 --> AL[INFO task.execution.finished result=success duration]
     FAIL -- 成功 --> FL[ERROR task.failed]
     FL --> CB{配置 OnFailed?}
-    CB -- 否 --> I
+    CB -- 否 --> FF[INFO task.execution.finished result=failed duration]
     CB -- 是 --> CALL[原子边界外调用回调 独立超时预算]
-    CALL -- 成功 --> I
+    CALL -- 成功 --> FF
     CALL -- 错误或 panic 或超时 --> CL[ERROR failure.callback_failed]
-    CL --> I
-    RL & AL --> I
+    CL --> FF
+    RL --> RF[INFO task.execution.finished result=retry duration]
+    RF & FF & AL --> I
     I & FAIL & ACK & R -- 存储故障 --> SL[ERROR storage.failed]
-    SL --> END
+    SL --> SF[INFO task.execution.finished result=storage_error duration]
+    SF --> END
     FAIL & ACK & R -- 纯租约冲突 --> LL[WARN lease.lost]
     LL --> I
     W -- 取消 --> END

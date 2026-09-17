@@ -255,6 +255,63 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 	}
 }
 
+func TestJobBootstrapWaitsForApplicationReady(t *testing.T) {
+	components := newTestSpec()
+	hookEntered := make(chan struct{})
+	releaseHook := make(chan struct{})
+	jobStarted := make(chan struct{})
+	components.AfterStart(func(context.Context) error {
+		close(hookEntered)
+		<-releaseHook
+		return nil
+	})
+	components.Job().RegisterOnce("once", job.TaskFunc(func(context.Context) error {
+		close(jobStarted)
+		return nil
+	})).ExitWhenDone()
+	jobLogger, tracer, meter := newTestObservability(t)
+	prepareServer(t, components)
+	if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer); err != nil {
+		t.Fatal(err)
+	}
+	components.application.RegisterAppInfo(appinfo.New("test"))
+	logger := kratoslog.NewStdLogger(io.Discard)
+	components.application.RegisterLogger(logger)
+	configs := testconfig.Empty(t)
+	config, err := app.NewConfig(configs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, release, err := app.NewStopPolicy(config, configs, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	application, err := app.NewApp(ctx, components.application, config, policy, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- application.Run() }()
+	<-hookEntered
+	select {
+	case <-jobStarted:
+		t.Fatal("job started before application ready")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(releaseHook)
+	select {
+	case <-jobStarted:
+	case <-ctx.Done():
+		t.Fatal("job did not start after application ready")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 任务测试按 Wire 顺序构造服务器；关闭业务监听，避免生命周期测试占用固定端口。
 func prepareServer(t *testing.T, spec *testSpec) bootstrap.ServerBootstrap {
 	t.Helper()

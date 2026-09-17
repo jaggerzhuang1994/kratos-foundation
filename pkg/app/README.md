@@ -183,20 +183,23 @@ flowchart TD
 
 ## 就绪状态与退出期限
 
-`Spec.Ready()` 可并发读取：构造前、启动钩子尚未全部完成或启动失败时为 false；全部启动后钩子
+`Spec.Ready()` 可并发读取：构造前、Kratos 尚未进入 AfterStart、启动后钩子尚未全部完成或已经请求停机时为 false；全部 AfterStart hook
 成功且未请求停机时为 true；收到停机请求立即为 false。ServerBootstrap 将它绑定到 `/readyz`，
 不会等 stop_delay 或资源 cleanup 才撤销就绪。状态通过原子变量读取，不在探针路径获取生命周期锁。
 
+`Spec.WaitReady(ctx)` 等待同一个单次 Ready 信号，供必须晚于启动后钩子的内部 Runtime 使用；Kratos 进入 AfterStart 且这些 hook 成功后解除等待。Kratos 会并发调用各 Runtime 的 `Start`，其正常实现通常阻塞到停止，因此 Ready 不代表每个 `Start` 已经返回成功，也不能提前确认任意自定义 Runtime 的异步初始化；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，其他依赖应通过 Before/AfterStart hook 或 readiness check 表达。若应用先停止，调用方传入的 Context 会取消等待并返回其错误。该信号不是健康检查订阅，也不会在后续 Ready=false 时重新阻塞；业务请求通常应读取 `Ready()`。通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 使用该信号，确保任务不会早于应用 Ready 执行。
+
 ```mermaid
 flowchart TD
-    A([构造应用 Ready=false]) --> B[启动运行时和启动后钩子]
-    B --> C{全部成功?}
+    A([构造应用 Ready=false]) --> B[Kratos 并发调用 Runtime.Start 并进入 AfterStart]
+    B --> C{全部 AfterStart hook 成功且未停机?}
     C -- 否 --> D[维持未就绪 进入现有故障停机]
     C -- 是 --> E[原子标记启动完成]
     E --> F{并发请求停机?}
     F -- 否 --> G[Ready=true]
+    G --> K[关闭 Ready 信号 唤醒 Job 等待者]
     F -- 是 --> H[原子 stopping=true Ready=false]
-    G --> H
+    K --> H
     D --> H
     H --> I[现有停止钩子 停机延迟 与运行时清理]
     I --> J([结束])

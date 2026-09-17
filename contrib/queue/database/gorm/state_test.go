@@ -110,7 +110,7 @@ func TestRepoLifecycle(t *testing.T) {
 				if err := db.First(&saved).Error; err != nil {
 					t.Fatal(err)
 				}
-				if saved.CompletedAt <= 0 || saved.TenantID != "tenant" || saved.OrderID != task.ID {
+				if saved.CompletedAt == nil || saved.TenantID != "tenant" || saved.OrderID != task.ID {
 					t.Fatalf("lost completion details: %+v", saved)
 				}
 				record, err := saved.record()
@@ -175,7 +175,7 @@ func TestCompleteReservedRejectsDuplicateAndFailedWrites(t *testing.T) {
 	if err := db.First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	if row.Status != StatusRunning || row.CompletedAt != 0 {
+	if row.Status != StatusRunning || row.CompletedAt != nil {
 		t.Fatalf("failed update changed state: %+v", row.Model)
 	}
 	results := make(chan error, 2)
@@ -200,7 +200,7 @@ func TestCompleteReservedRejectsDuplicateAndFailedWrites(t *testing.T) {
 	if err := db.First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	if row.Status != StatusCompleted || row.CompletedAt != now.UnixMilli() {
+	if row.Status != StatusCompleted || row.CompletedAt == nil || !row.CompletedAt.Equal(now) {
 		t.Fatalf("completion time: %+v", row.Model)
 	}
 }

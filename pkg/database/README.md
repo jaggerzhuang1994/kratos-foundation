@@ -254,32 +254,16 @@ flowchart TD
     F --> K
 ```
 
-MySQL 状态采集只针对默认连接，沿用 `gorm_status_<variable>`（或配置的 prefix）与 `db_name` 标签。省略 `variable_names` 时，每个首次出现的数值变量独立注册固定的描述符；显式白名单在启动前注册。成功快照中消失的变量不再输出。注册冲突、查询失败或扫描失败保留上一次完整快照，并记录 WARN；cleanup 只注销本刷新器成功注册的指标，支持在同一个 Registry 中重新创建 Manager。
+Database Manager 不执行 `SHOW STATUS` 或 `SHOW GLOBAL STATUS`。这类服务器状态属于 MySQL 实例而非某个应用连接，会涉及独立权限、抓取频率和高可用拓扑，应由平台部署的 `mysqld-exporter` 等采集器负责；应用侧只暴露 `go_sql_*` 连接池指标以及 Foundation GORM 操作指标。迁移时删除 `database.metrics.mysql` 配置，外部采集边界见[外部指标](../../deploy/observability/docs/external-metrics.md#mysql-服务端指标)。
 
 ```mermaid
-flowchart TD
-    A([启动唯一 MySQL 刷新 goroutine]) --> B[外部 MySQL SHOW STATUS，5 秒超时与取消]
-    B -- 查询失败或超时 --> C[WARN refresh: database MySQL metrics collection failed]
-    B -- 返回行 --> D[扫描数值并过滤白名单与非法指标名]
-    D -- 扫描失败 --> E[WARN refresh: database MySQL metrics row scan failed]
-    D -- 遍历失败 --> F[WARN refresh: database MySQL metrics rows failed]
-    D -- 完整成功 --> G[向注入 Registry 注册新增变量的固定描述符]
-    G -- 冲突 --> H[WARN refresh: metric registration failed]
-    G -- 成功 --> I[获取原有 mu 写锁，替换共享快照，释放写锁]
-    C --> J[保留旧快照，等待下一周期或取消]
-    E --> J
-    F --> J
-    H --> J
-    I --> J
-    J -- 下一周期 --> B
-    J -- cleanup 取消 --> K[等待刷新 goroutine 退出，再注销本刷新器全部指标]
-    B -- cleanup 取消 --> K
-    K --> L([结束])
-    M([并发 Prometheus scrape]) --> N[获取原有 mu 读锁，读取变量值，释放读锁]
-    N --> O{变量仍在快照?}
-    O -- 是 --> P[锁外发送指标]
-    O -- 否 --> Q([不输出该变量])
-    P --> R([完成 scrape])
+flowchart LR
+    A([Foundation 应用]) --> B[连接池与 GORM 操作指标]
+    C([独立 mysqld-exporter]) --> D[受限监控账号读取 MySQL 全局状态]
+    B --> E[Prometheus]
+    D -- 权限或抓取失败 --> F([Exporter 自身 up/错误反映失败])
+    D -- 成功 --> E
+    E --> G([应用与数据库实例指标分开聚合])
 ```
 
 共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。

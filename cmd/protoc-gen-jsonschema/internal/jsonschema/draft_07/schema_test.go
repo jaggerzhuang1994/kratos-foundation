@@ -70,42 +70,53 @@ func TestMergeInitializesMissingDefinitions(t *testing.T) {
 	assertMergeReference(t, schema, ".Merge_0", "#/definitions/Root", "#/definitions/External")
 }
 
-func TestMergePreservesExistingDefinitionsAndSkipsRefConflicts(t *testing.T) {
+func TestMergeRejectsConflictingDefinitions(t *testing.T) {
 	originDefinitions := jsonschema.NewOrderedSchemaMap()
 	originDefinitions.Set("Child", &jsonschema.Schema{Title: "original"})
-	originDefinitions.Set(".Merge_0", &jsonschema.Schema{Title: "reserved"})
 	otherDefinitions := jsonschema.NewOrderedSchemaMap()
+	otherDefinitions.Set("Added", &jsonschema.Schema{Title: "must not leak"})
 	otherDefinitions.Set("Child", &jsonschema.Schema{Title: "replacement"})
-	otherDefinitions.Set("Extra", &jsonschema.Schema{Title: "extra"})
 
 	schema := New(&jsonschema.Schema{Ref: "Root", Definitions: originDefinitions})
 	other := New(&jsonschema.Schema{Ref: "External", Definitions: otherDefinitions})
+	err := schema.Merge(other)
+	if err == nil || !strings.Contains(err.Error(), `definition "Child" conflicts`) {
+		t.Fatalf("Merge() error = %v", err)
+	}
+	if _, exists := schema.Definitions.Get("Added"); exists {
+		t.Fatal("failed merge left a partially added definition")
+	}
+}
+
+func TestMergePreservesExternalRootConstraintsAndDefinitions(t *testing.T) {
+	originDefinitions := jsonschema.NewOrderedSchemaMap()
+	originDefinitions.Set("Child", &jsonschema.Schema{Title: "same"})
+	otherDefinitions := jsonschema.NewOrderedSchemaMap()
+	otherDefinitions.Set("Child", &jsonschema.Schema{Title: "same"})
+	otherDefinitions.Set("Extra", &jsonschema.Schema{Title: "extra"})
+
+	schema := New(&jsonschema.Schema{Ref: "Root", Definitions: originDefinitions})
+	other := New(&jsonschema.Schema{Version: "draft", ID: "https://example.test/external", Ref: "External", Type: "object", Required: []string{"name"}, Definitions: otherDefinitions})
 	if err := schema.Merge(other); err != nil {
 		t.Fatal(err)
 	}
-
-	assertDefinitionTitles(t, schema, "original", "extra", "reserved")
-	assertMergeReference(t, schema, ".Merge_1", "#/definitions/Root", "#/definitions/External")
+	value, _ := schema.Definitions.Get(".Merge_0")
+	merged := value.(*Schema)
+	if got := merged.AllOf[1]; got.Ref != "" || len(got.AllOf) == 0 || got.AllOf[0].Ref != "#/definitions/External" || got.Type != "object" || len(got.Required) != 1 || got.Required[0] != "name" {
+		t.Fatalf("external merge branch = %#v", got)
+	}
+	if merged.AllOf[1].Version != "" || merged.AllOf[1].ID == "" || merged.AllOf[1].Definitions == nil {
+		t.Fatalf("embedded external root lost resource-scoped keywords: %#v", merged.AllOf[1])
+	}
+	if _, ok := schema.Definitions.Get("Extra"); !ok {
+		t.Fatal("external definition Extra was not promoted")
+	}
 }
 
 func TestMergeRejectsIncompatibleDraftWithAccurateType(t *testing.T) {
 	err := New(&jsonschema.Schema{}).Merge(incompatibleDraft{})
 	if err == nil || !strings.Contains(err.Error(), "draft_07.Schema") {
 		t.Fatalf("Merge() error = %v", err)
-	}
-}
-
-func assertDefinitionTitles(t *testing.T, schema *Schema, childTitle, extraTitle, reservedTitle string) {
-	t.Helper()
-	for name, want := range map[string]string{
-		"Child":    childTitle,
-		"Extra":    extraTitle,
-		".Merge_0": reservedTitle,
-	} {
-		value, ok := schema.Definitions.Get(name)
-		if !ok || value.(*Schema).Title != want {
-			t.Fatalf("definition %q = %#v, found=%t", name, value, ok)
-		}
 	}
 }
 
@@ -116,8 +127,8 @@ func assertMergeReference(t *testing.T, schema *Schema, name, left, right string
 	}
 	value, ok := schema.Definitions.Get(name)
 	merged, typeOK := value.(*Schema)
-	if !ok || !typeOK || len(merged.AllOf) != 2 ||
-		merged.AllOf[0].Ref != left || merged.AllOf[1].Ref != right {
+	if !ok || !typeOK || len(merged.AllOf) != 2 || len(merged.AllOf[1].AllOf) == 0 ||
+		merged.AllOf[0].Ref != left || merged.AllOf[1].Ref != "" || merged.AllOf[1].AllOf[0].Ref != right {
 		t.Fatalf("merge definition = %#v, found=%t", value, ok)
 	}
 }

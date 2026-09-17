@@ -54,20 +54,20 @@ func withDeadlineFields(logger log.Logger) log.Logger {
 
 func deadlineFields() []any {
 	return []any{
-		"deadline.source", kratoslog.Valuer(func(ctx context.Context) any {
+		"deadline.source", log.DebugOnly(kratoslog.Valuer(func(ctx context.Context) any {
 			info, ok := deadline.InfoFromContext(ctx)
 			if !ok {
 				return nil
 			}
 			return info.Source
-		}),
-		"deadline.remaining", kratoslog.Valuer(func(ctx context.Context) any {
+		})),
+		"deadline.remaining", log.DebugOnly(kratoslog.Valuer(func(ctx context.Context) any {
 			effective, ok := ctx.Deadline()
 			if !ok {
 				return nil
 			}
 			return time.Until(effective).String()
-		}),
+		})),
 		//"deadline.fallback_ms", deadlineDuration(func(info deadline.Info) time.Duration {
 		//	return info.FallbackTimeout
 		//}),

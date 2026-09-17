@@ -9,7 +9,6 @@ import (
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/otelattr"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	foundationmetrics "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,20 +24,17 @@ type metricsCollector struct {
 	registerer prometheus.Registerer
 	// dbStats 当前实例登记的连接池指标。
 	dbStats []prometheus.Collector
-	// mysql 仅当默认连接使用 MySQL 时创建的状态刷新器；不逐连接采集。
-	mysql *mysqlMetricsCollector
 	// sql 可选的 SQL 操作指标。
 	sql *sqlMetrics
 	// closeOnce 保证刷新器关闭和指标注销仅执行一次。
 	closeOnce sync.Once
 }
 
-// newMetricsCollector 为所有具名连接注册标准连接池指标，并可选采集 MySQL 状态。
+// newMetricsCollector 为所有具名连接注册应用侧连接池指标。
 func newMetricsCollector(
 	connectionFactory *connectionFactory,
 	config *config_pb.Database,
 	appInfo appinfo.AppInfo,
-	logger log.Logger,
 	metricsProvider foundationmetrics.Provider,
 ) (*metricsCollector, error) {
 	conf := config.GetMetrics()
@@ -72,35 +68,15 @@ func newMetricsCollector(
 		collector.dbStats = append(collector.dbStats, dbStats)
 	}
 
-	defaultPool, ok := connectionFactory.pool(config.GetDefault())
-	if !ok || defaultPool.driver != "mysql" {
-		return collector, nil
-	}
-	// 状态与池指标共享 db_name。刷新器持有每个变量的实际注册所有权。
-	mysqlRegisterer := prometheus.WrapRegistererWith(prometheus.Labels{"db_name": defaultPool.name}, registerer)
-	mysqlCollector, err := newMySQLMetricsCollector(
-		defaultPool.db,
-		conf.GetRefreshInterval().AsDuration(),
-		conf.GetMysql(),
-		logger,
-		mysqlRegisterer,
-	)
-	if err != nil {
-		collector.unregisterDBStats()
-		return nil, err
-	}
-	collector.mysql = mysqlCollector
-	collector.mysql.start()
 	return collector, nil
 }
 
-// close 幂等停止后台刷新并从私有 Registry 注销全部数据库指标。
+// close 幂等地从私有 Registry 注销全部应用侧数据库指标。
 func (c *metricsCollector) close() {
 	if c == nil {
 		return
 	}
 	c.closeOnce.Do(func() {
-		c.mysql.close()
 		c.sql.unregister(c.registerer)
 		c.unregisterDBStats()
 	})

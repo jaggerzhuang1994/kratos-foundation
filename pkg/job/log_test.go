@@ -35,12 +35,10 @@ func TestCronLoggerTranslatesFieldsAndSuppressesDuplicateEvents(t *testing.T) {
 	logs := string(written)
 	for _, fragment := range []string{
 		fmt.Sprintf("caller=job/log_test.go:%d", line+1),
-		"DEBUG ",
-		"msg=wake",
 		"msg=retire",
 		"msg=cron error",
 		"error=scheduler failed",
-		"next=2026-08-31T12:12:13Z",
+		"next=2026-08-31T13:12:13Z",
 	} {
 		if !strings.Contains(logs, fragment) {
 			t.Errorf("cron adapter log lacks %q: %s", fragment, logs)
@@ -48,6 +46,9 @@ func TestCronLoggerTranslatesFieldsAndSuppressesDuplicateEvents(t *testing.T) {
 	}
 	if strings.Contains(logs, "must-not-be-written") {
 		t.Fatalf("cron adapter emitted a suppressed event: %s", logs)
+	}
+	if strings.Contains(logs, "msg=wake") {
+		t.Fatalf("cron adapter emitted wake: %s", logs)
 	}
 }
 

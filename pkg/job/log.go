@@ -85,17 +85,13 @@ func newCronLogger(
 	}
 }
 
-// Info 降噪调度器内部日志，并把唤醒事件降为调试级别。
+// Info 降噪调度器内部日志。
 func (logger *cronLogger) Info(msg string, keysAndValues ...any) {
 	// 任务中间件已经记录完整生命周期；重复输出这些事件只会制造两套口径。
-	if msg == "run" || msg == "schedule" || msg == "start" || msg == "stop" {
+	if msg == "run" || msg == "schedule" || msg == "start" || msg == "stop" || msg == "wake" {
 		return
 	}
-	if msg == "wake" {
-		logger.With(replaceKeysAndValues(keysAndValues)...).Debug(msg)
-	} else {
-		logger.With(replaceKeysAndValues(keysAndValues)...).Info(msg)
-	}
+	logger.With(replaceKeysAndValues(keysAndValues)...).Info(msg)
 }
 
 // Error 把 cron 错误和调度字段写入统一任务日志。

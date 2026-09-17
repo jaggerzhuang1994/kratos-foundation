@@ -314,7 +314,7 @@ func (x *GrpcServerOption) GetDisableReflection() bool {
 // 启用也不需要重建 Server。
 //
 // 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成
-// 启用也不会产生链路追踪数据。
+// 启用也只会保留 TraceID/SpanID 关联，不会记录或导出 Span。
 type ServerMiddleware struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -323,7 +323,7 @@ type ServerMiddleware struct {
 	// 旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。
 	// 元数据透传。[热更新]
 	Metadata *Middleware_Metadata `protobuf:"bytes,1,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
-	// 链路追踪开关。[热更新]
+	// Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]
 	Tracing *Middleware_Tracing `protobuf:"bytes,2,opt,name=tracing,proto3,oneof" json:"tracing,omitempty"`
 	// 请求指标开关。[热更新]
 	Metrics *Middleware_Metrics `protobuf:"bytes,3,opt,name=metrics,proto3,oneof" json:"metrics,omitempty"`

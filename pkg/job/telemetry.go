@@ -17,14 +17,26 @@ const (
 	instrumentationNameJob    = "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	metricLabelJob            = "job"
 	metricLabelStatus         = "status"
+	metricLabelReason         = "reason"
+	metricLabelResult         = "result"
 	jobRunsInstrumentName     = "job_runs_total"
 	jobDurationInstrumentName = "job_duration_seconds"
 	jobRunningInstrumentName  = "job_running"
+	jobSkippedInstrumentName  = "job_triggers_skipped_total"
+	jobPendingInstrumentName  = "job_pending"
+	jobWaitInstrumentName     = "job_wait_duration_seconds"
 )
 
 type jobMetrics interface {
+	jobAdmissionMetrics
 	reportStart(context.Context)
 	reportDone(context.Context, error, time.Duration)
+}
+
+type jobAdmissionMetrics interface {
+	reportSkipped(context.Context, string, string)
+	reportPending(context.Context, string, int64)
+	reportWait(context.Context, string, string, time.Duration)
 }
 
 type jobMetricsProvider struct {
@@ -36,6 +48,12 @@ type jobMetricsProvider struct {
 	jobDurationSeconds metric.Float64Histogram
 	// jobRunning 当前执行中的任务数量。
 	jobRunning metric.Int64UpDownCounter
+	// jobTriggersSkippedTotal 按受控原因累计未准入的周期触发。
+	jobTriggersSkippedTotal metric.Int64Counter
+	// jobPending 记录 Delay 策略当前等待准入的调用数。
+	jobPending metric.Int64UpDownCounter
+	// jobWaitDurationSeconds 记录等待结束时的排队时长。
+	jobWaitDurationSeconds metric.Float64Histogram
 }
 
 func newJobMetricsProvider(provider foundationmetrics.Provider, enabled bool) (jobMetrics, error) {
@@ -62,7 +80,50 @@ func newJobMetricsProvider(provider foundationmetrics.Provider, enabled bool) (j
 	if err != nil {
 		return nil, err
 	}
+	result.jobTriggersSkippedTotal, err = meter.Int64Counter(jobSkippedInstrumentName, metric.WithUnit("{call}"))
+	if err != nil {
+		return nil, err
+	}
+	result.jobPending, err = meter.Int64UpDownCounter(jobPendingInstrumentName, metric.WithUnit("{call}"))
+	if err != nil {
+		return nil, err
+	}
+	result.jobWaitDurationSeconds, err = meter.Float64Histogram(
+		jobWaitInstrumentName,
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1, 5, 30, 60, 300, 600, 1800, 3600),
+	)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+func (provider *jobMetricsProvider) reportSkipped(ctx context.Context, name, reason string) {
+	if provider.disabled {
+		return
+	}
+	provider.jobTriggersSkippedTotal.Add(ctx, 1, metric.WithAttributes(
+		attribute.String(metricLabelJob, name),
+		attribute.String(metricLabelReason, reason),
+	))
+}
+
+func (provider *jobMetricsProvider) reportPending(ctx context.Context, name string, delta int64) {
+	if provider.disabled {
+		return
+	}
+	provider.jobPending.Add(ctx, delta, metric.WithAttributes(attribute.String(metricLabelJob, name)))
+}
+
+func (provider *jobMetricsProvider) reportWait(ctx context.Context, name, result string, duration time.Duration) {
+	if provider.disabled {
+		return
+	}
+	provider.jobWaitDurationSeconds.Record(ctx, duration.Seconds(), metric.WithAttributes(
+		attribute.String(metricLabelJob, name),
+		attribute.String(metricLabelResult, result),
+	))
 }
 
 func (provider *jobMetricsProvider) reportStart(ctx context.Context) {

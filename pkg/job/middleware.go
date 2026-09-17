@@ -56,6 +56,16 @@ func newMiddlewares(
 	tracingProvider foundationtracing.Provider,
 	metricsProvider foundationmetrics.Provider,
 ) (middlewareChain, error) {
+	middlewares, _, err := newMiddlewaresWithMetrics(log, options, tracingProvider, metricsProvider)
+	return middlewares, err
+}
+
+func newMiddlewaresWithMetrics(
+	log moduleLog,
+	options managerOptions,
+	tracingProvider foundationtracing.Provider,
+	metricsProvider foundationmetrics.Provider,
+) (middlewareChain, jobMetrics, error) {
 	tp := newJobTracingProvider(
 		tracingProvider,
 		options.TracingEnabled,
@@ -65,7 +75,7 @@ func newMiddlewares(
 		options.MetricsEnabled,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var middlewares middlewareChain
 	if options.TracingEnabled {
@@ -77,7 +87,7 @@ func newMiddlewares(
 	if options.LoggingEnabled {
 		middlewares = append(middlewares, loggingMiddleware(log))
 	}
-	return middlewares, nil
+	return middlewares, mp, nil
 }
 
 func loggingMiddleware(log moduleLog) Middleware {
@@ -87,15 +97,16 @@ func loggingMiddleware(log moduleLog) Middleware {
 			err = errJobPanicked
 			started := time.Now()
 			logger := log.WithContext(ctx)
-			logger.Info("job execution started")
+			logger.With("event", "job.execution.started").Info("job.execution.started")
 			defer func() {
-				// 失败统一交给最终 ErrorHandler，避免重复输出错误和堆栈。
-				switch {
-				case err == nil:
-					logger.With("duration", time.Since(started)).Info("job execution done")
-				case stoppedByContext(ctx, err):
-					logger.With("duration", time.Since(started), "cause", ctx.Err()).Info("job execution stopped")
+				result := "failure"
+				if err == nil {
+					result = "success"
+				} else if stoppedByContext(ctx, err) {
+					result = "stopped"
 				}
+				// 失败详情仍只交给最终 ErrorHandler，结束事件保持稳定且不泄漏业务错误。
+				logger.With("event", "job.execution.finished", "result", result, "duration", time.Since(started)).Info("job.execution.finished")
 			}()
 			return next(ctx)
 		}

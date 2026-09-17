@@ -52,7 +52,7 @@ func TestMonitoringListenerPlacementAndRouteIsolation(t *testing.T) {
 			}
 			health := configuredHealth(config, NewSpec())
 			health.applicationReady = func() bool { return true }
-			extras, err := configureMonitoring(config, business, health, testMetricsProvider{registry: prometheus.NewRegistry()})
+			extras, _, err := configureMonitoring(config, business, health, testMetricsProvider{registry: prometheus.NewRegistry()})
 			if err != nil || len(extras) != tt.extras {
 				t.Fatalf("extras=%d err=%v", len(extras), err)
 			}
@@ -96,11 +96,11 @@ func TestMonitoringRejectsInvalidAddressesAndSharedPaths(t *testing.T) {
 	health.config.LivenessPath = "/metrics"
 	business := kratoshttp.NewServer()
 	provider := testMetricsProvider{registry: prometheus.NewRegistry()}
-	if _, err := configureMonitoring(config, business, health, provider); err == nil {
+	if _, _, err := configureMonitoring(config, business, health, provider); err == nil {
 		t.Fatal("shared path accepted")
 	}
 	health.config.Addr = "127.0.0.1:9001"
-	if _, err := configureMonitoring(config, business, health, provider); err != nil {
+	if _, _, err := configureMonitoring(config, business, health, provider); err != nil {
 		t.Fatalf("different listeners may use same path: %v", err)
 	}
 	for _, kind := range []string{"metrics", "health"} {
@@ -111,12 +111,12 @@ func TestMonitoringRejectsInvalidAddressesAndSharedPaths(t *testing.T) {
 		} else {
 			health.config.Addr = "invalid"
 		}
-		if _, err := configureMonitoring(config, business, health, provider); err == nil {
+		if _, _, err := configureMonitoring(config, business, health, provider); err == nil {
 			t.Fatalf("invalid %s address accepted", kind)
 		}
 	}
 	config.Http.Metrics.Path = proto.String("bad")
-	if _, err := configureMonitoring(config, business, configuredHealth(config, NewSpec()), provider); err == nil {
+	if _, _, err := configureMonitoring(config, business, configuredHealth(config, NewSpec()), provider); err == nil {
 		t.Fatal("invalid metrics path accepted")
 	}
 }
@@ -188,7 +188,7 @@ func TestManagementBindFailureIsReturned(t *testing.T) {
 	}()
 	config := proto.CloneOf(defaultConfig)
 	config.Http.Metrics.Addr = proto.String(occupied.Addr().String())
-	extras, err := configureMonitoring(config, nil, configuredHealth(config, NewSpec()), testMetricsProvider{registry: prometheus.NewRegistry()})
+	extras, _, err := configureMonitoring(config, nil, configuredHealth(config, NewSpec()), testMetricsProvider{registry: prometheus.NewRegistry()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -99,8 +99,8 @@ flowchart TD
 | --- | --- |
 | FoundationKafkaRuntimeFailure | 查看运行时错误与 Topic/消费者配置、Broker 网络及认证；区分 handler 错误、重试和死信投递失败；需要 lag 时检查独立采集器 |
 | FoundationQueueRuntimeFailure | 查看 Worker 与底层 Store 错误、网络及权限；按队列/Worker 查看最终结果和失败任务归档；业务重放前先核对幂等约束 |
-| FoundationJobFailure | 任务名为 exported_job；结合任务日志和 Trace 检查最终错误。没有 job_running 不代表调度一定健康，还要检查任务是否被注册或跳过 |
-| FoundationLockRenewalFailure | 续租 not_held 说明已经失去租约；确认协调器或业务已停止受保护操作。error/timeout 时检查 Redis、上下文期限、任务耗时与 TTL；不应假设锁仍有效后继续写入 |
+| FoundationJobFailure | 任务名为 exported_job；结合任务日志和 Trace 检查最终错误。没有 job_running 不代表调度一定健康，同时查看 job_triggers_skipped_total、job_pending 和 job_wait_duration_seconds |
+| FoundationLockRenewalFailure | 该规则只观察业务显式调用 `Lease.Refresh` 的结果，Foundation 没有自动续租协调器。not_held 说明已经失去租约；确认业务已停止受保护操作。error/timeout 时检查 Redis、上下文期限、任务耗时与 TTL；不应假设锁仍有效后继续写入 |
 | FoundationRedisPoolTimeout | 同时看使用中连接、池等待、命令耗时、连接数和并发量；先检查慢命令/阻塞调用与资源释放，再评估连接池参数；不要将池 misses 当缓存未命中 |
 | FoundationDatabasePoolSaturated | 按 instance/db_name 看使用中连接、等待次数与等待时间，核对未关闭 rows、长事务、慢 SQL；无限上限没有利用率告警，不代表容量无风险 |
 | Redis 非成功比例高 | status=error 包含 key 不存在，先区分业务 miss、取消、超时和真实错误；该图不能直接作为可用性 SLO |

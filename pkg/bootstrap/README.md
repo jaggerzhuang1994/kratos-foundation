@@ -63,7 +63,7 @@ wire.Build(
 领域 Spec 是共享可变声明，不拥有运行时资源，也没有 cleanup。直接注入领域 Spec 不会绕过 Wire 的组装顺序要求：业务声明 provider 仍应依赖 `InfrastructureBootstrap`，在 Boot 返回前完成修改；调用方应在组件构造开始前完成声明。
 
 Boot 返回 `Bootstrap`，NewServerBootstrap 依赖该标记；NewJobBootstrap 显式依赖 ServerBootstrap，保证配置加载 → 业务声明 → Server → Job 的单向顺序；NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
-NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；这是唯一的 StartupReady 构造入口。
+NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；这是唯一的 StartupReady 构造入口。这里的 `StartupReady` 是构造阶段完成标记，不等于运行期应用已经 Ready。运行期 Ready 由 `app.Spec` 在 Kratos 进入 AfterStart 且 Foundation 的 AfterStart hook 成功后关闭内部信号；它不等待阻塞型 Runtime.Start 返回。Job Bootstrap 登记的 Runtime 会等待该信号再启动任务。
 Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则形成循环；Boot 只接收 *bootstrap.Spec，直接调用 BeforeStart 等方法登记应用贡献。
 停机策略直接使用 `app.NewStopPolicy(config, manager, logger)`，不依赖组件标记或服务器等待时间。建议总停机预算为服务器等待和资源清理预留足够时间，不做跨组件硬校验。
 业务无需提供 time.Duration 适配函数；各 provider 的 cleanup 由 Wire 按实际依赖逆序释放。
@@ -168,15 +168,18 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([App 启动 Job Runtime]) --> B[适配器调用 Manager.Start]
-    B --> C{返回结果}
+    A([App 并发启动 Job Runtime]) --> B[等待 app.Spec Ready 信号]
+    B -- 应用取消或启动失败 --> H([不启动任务并退出])
+    B -- Kratos 进入 AfterStart 且 hook 成功 --> B1[逐条 INFO job.registered]
+    B1 --> B2[适配器调用 Manager.Start]
+    B2 --> C{返回结果}
     C -- job.ErrCompleted --> D[转换为 app.ErrStopRequested]
     D --> E[App 正常停止]
     C -- 任务失败 --> F[原样返回错误供 App 收敛]
     C -- nil --> G[正常返回]
-    E --> H([结束])
-    F --> H
-    G --> H
+    E --> I([结束])
+    F --> I
+    G --> I
 ```
 
 真实 Wire 生成、逆序 cleanup 与失败回滚由 `wire_integration_test.go` 在临时模块验证，不提交或手改生成副本。

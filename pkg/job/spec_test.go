@@ -3,6 +3,9 @@ package job
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -51,6 +54,15 @@ func TestPublicManagerAndCronOptionsDriveImmediateFailureHandling(t *testing.T) 
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("job manager did not stop")
+	}
+}
+
+func TestSpecCapturesRegistrationCaller(t *testing.T) {
+	spec := NewSpec()
+	_, file, line, _ := runtime.Caller(0)
+	spec.RegisterOnce("once", TaskFunc(func(context.Context) error { return nil }))
+	if got, want := spec.definitions[0].caller, fmt.Sprintf("%s:%d", file, line+1); !strings.HasSuffix(got, want) {
+		t.Fatalf("registration caller = %q, want suffix %q", got, want)
 	}
 }
 

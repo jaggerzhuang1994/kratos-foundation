@@ -85,20 +85,59 @@ end
 return values
 `
 
-const retryScript = validateKeysScript + `
-if not redis.call('ZSCORE', KEYS[5], ARGV[1]) then return 0 end
-local raw = redis.call('HGET', KEYS[1], ARGV[1])
-if not raw then return redis.error_reply('missing failed queue record') end
-local data = cjson.decode(raw)
-local task = cjson.decode(data.task)
-task.AvailableAt = ARGV[3]
-data.task = cjson.encode(task)
-data.attempts = 0
-data.token = ''
-data.reason = ''
-data.failed_at = 0
-redis.call('HSET', KEYS[1], ARGV[1], cjson.encode(data))
-redis.call('ZADD', KEYS[3], ARGV[2], ARGV[1])
-redis.call('ZREM', KEYS[5], ARGV[1])
+const operationsMutationScript = validateKeysScript + `
+local id = ARGV[1]
+local raw = redis.call('HGET', KEYS[1], id)
+if not raw then return 0 end
+local failed = redis.call('ZSCORE', KEYS[5], id)
+local reserved = redis.call('ZSCORE', KEYS[4], id)
+local delayed = redis.call('ZSCORE', KEYS[3], id)
+local status = 'pending'
+if failed then
+ status = 'failed'
+elseif reserved and tonumber(reserved) > tonumber(ARGV[3]) then
+ status = 'running'
+elseif delayed and tonumber(delayed) > tonumber(ARGV[3]) then
+ status = 'scheduled'
+end
+local action = ARGV[2]
+if action == 'delete' then
+ if status ~= 'failed' then return -1 end
+elseif action == 'cancel' then
+ if status ~= 'pending' and status ~= 'scheduled' then return -1 end
+elseif action == 'retry' then
+ if status ~= 'failed' then return -1 end
+ local data = cjson.decode(raw)
+ local task = cjson.decode(data.task)
+ task.AvailableAt = ARGV[5]
+ data.task = cjson.encode(task)
+ data.attempts = 0
+ data.token = ''
+ data.reason = ''
+ data.failed_at = 0
+ redis.call('HSET', KEYS[1], id, cjson.encode(data))
+ redis.call('ZADD', KEYS[3], ARGV[4], id)
+ redis.call('ZREM', KEYS[5], id)
+ return 1
+else
+ return redis.error_reply('unknown queue operations action')
+end
+redis.call('HDEL', KEYS[1], id)
+redis.call('LREM', KEYS[2], 0, id)
+redis.call('ZREM', KEYS[3], id)
+redis.call('ZREM', KEYS[4], id)
+redis.call('ZREM', KEYS[5], id)
 return 1
+`
+
+const operationsCleanupScript = validateKeysScript + `
+local ids = redis.call('ZRANGEBYSCORE', KEYS[5], '-inf', '(' .. ARGV[1], 'LIMIT', 0, tonumber(ARGV[2]))
+for _, id in ipairs(ids) do
+ redis.call('HDEL', KEYS[1], id)
+ redis.call('LREM', KEYS[2], 0, id)
+ redis.call('ZREM', KEYS[3], id)
+ redis.call('ZREM', KEYS[4], id)
+ redis.call('ZREM', KEYS[5], id)
+end
+return #ids
 `

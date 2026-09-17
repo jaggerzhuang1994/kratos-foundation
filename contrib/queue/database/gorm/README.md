@@ -6,7 +6,7 @@
 
 仅保存队列任务时，应用入口调用 `NewSimpleRepo(ctx, provider, SimpleConfig{Table: "email_tasks"})`，再调用 `databasequeue.NewStore(repo)`。业务无需定义 Model、Factory 或 Repo；`provider` 与扩展模式相同，已初始化且支持 Context 中的事务。构造只校验表名和方言，不建表，不启动后台任务。
 
-部署迁移命令显式调用 `repo.Migrate(ctx)` 并检查错误。它使用框架模型补齐该表和索引，重复执行可复用；不应在业务启动或消费时调用。生产 DDL 的审批、锁等待、超时、权限与版本管理由部署流程负责。该工具支持当前 SQLite/MySQL 方言；没有自动回滚迁移或自动修复历史损坏数据。
+部署迁移命令在空表环境显式调用 `repo.Migrate(ctx)` 并检查错误。它使用框架模型创建或核对当前表和索引，重复执行可复用；不应在业务启动或消费时调用，也不负责把 v2.1 之前的旧表转换为新结构。生产 DDL 的审批、锁等待、超时、权限与版本管理由部署流程负责。该工具支持当前 SQLite/MySQL 方言；没有自动回滚迁移或自动修复历史损坏数据。
 
 每个实例固定绑定独立物理表，表名仍须为简单标识符；多个简单队列可使用同一 Go 模型而不会混用表。任务字段、ID 编码、事务、并发、统计及失败管理完全复用下述 Repo 契约。需要按业务身份建立索引或查询状态时使用扩展模式，不往简单表手工添加业务映射。
 
@@ -38,9 +38,9 @@ flowchart TD
 
 `status`、`completed_at` 是 GORM `Model` 的存储列。原 `failed` 列与 TaskRecord.Failed 保留兼容，正常状态变更在同一数据库语句中同步 status 与失败/租约字段；业务不得独立改写这些列。领取只检索 pending/running，再按失败标记、available_at 和租约截止判断可执行性；未知状态不参与领取。completed 不计入积压统计。
 
-`completed_at` 为 UTC Unix 毫秒，记录 Store 发起成功确认的时间，不是业务事务提交时间；未完成为 0。Attempts 是本轮累计领取次数（包括租约恢复），人工 Retry 仍会清零。每个任务只保留一行最新状态，不保存每次尝试的独立历史、返回值或 Handler 错误原文。完成记录不会自动清理，保留期间 ID 不能复用，Retry 只允许失败任务。重启后关闭保留仅影响后续确认，不会清理已有完成记录。
+`available_at`、`failed_at`、`completed_at` 使用 SQL `timestamp` 时间列并以 UTC `time.Time` 读写；MySQL 与 SQLite 都保留 `timestamp` 声明类型。框架按当前方言共同可依赖的默认精度处理边界：SQLite 为毫秒，MySQL 为秒；写入向上取整、查询时钟向下取整，避免提前执行或回收。MySQL 写入值还必须落在 UTC `1970-01-01 00:00:01` 至 `2038-01-19 03:14:07`，构造出的仓储会在写库前拒绝零值和越界时间。未失败或未完成时对应字段为 NULL。`completed_at` 记录 Store 发起成功确认的时间，不是业务事务提交时间。Attempts 是本轮累计领取次数（包括租约恢复），人工 Retry 仍会清零。每个任务只保留一行最新状态，不保存每次尝试的独立历史、返回值或 Handler 错误原文。完成记录不会自动清理，保留期间 ID 不能复用，Retry 只允许失败任务。重启后关闭保留仅影响后续确认，不会清理已有完成记录。
 
-业务可直接只读查询所绑定任务表，例如以下 SQL；id 列仍为任务 ID 的十六进制编码，data 保留原任务 JSON。框架不提供历史分页 API 或管理界面。
+业务可直接只读查询所绑定任务表，例如以下 SQL；`id` 就是公开的 `Task.ID`，按二进制语义存储，`data` 只保存消息版本、载荷、Headers 和创建时间。GORM Repo 同时实现可选 `OperationsRepo`，可通过 `Queue.Operations()` 构建业务自己的分页运维入口；框架不提供管理界面。
 
 ```sql
 SELECT id, status, attempts, completed_at, failure_reason, failed_at
@@ -49,31 +49,30 @@ ORDER BY completed_at DESC, id ASC
 LIMIT 100;
 ```
 
-### 已有表迁移
+运维 List 按存储主键稳定升序分页，Cursor 为后端不透明值；状态按查询时的 `available_at`、有效租约、失败及完成字段计算，返回结果不包含正文。Get 才返回完整任务快照。Delete 仅接受 failed/completed，Cancel 仅接受没有有效租约的 pending/scheduled，Retry 仅接受 failed；不存在返回 `queue.ErrNotFound`，存在但状态不允许返回 `queue.ErrStateConflict`。Cleanup 在事务内按 ID 选取并再次带终态和截止条件删除至多 `limit` 条 failed/completed，和 Worker 并发时不会删除已转为其他状态的记录。
 
-新版 Repo 即使关闭保留，也会读写新增列。先暂停投递和消费，迁移表，再切换全部旧版 Worker；旧版 Worker 不认识 completed，会把清空租约的完成记录重新领取，不能与保留模式混跑或直接回滚旧二进制。
-
-简单模式部署命令调用 `Migrate(ctx)`：补齐 status（非空、长度 16、默认 pending、索引）与 completed_at（非空、默认 0），再按旧 failed/租约字段回填非 completed 行。重复调用不改变完成记录；DDL 和回填不是一个跨数据库原子事务，中途失败保持停机，修复后重跑，不能直接恢复消费。不会恢复此前已删除的成功记录。
-
-扩展模式由业务迁移补齐相同列和索引，并在停用旧进程期间执行等价回填；原字段不删除、不改名：
-
-```sql
-UPDATE email_tasks
-SET status = CASE
-  WHEN failed = TRUE THEN 'failed'
-  WHEN reserved_until <> 0 THEN 'running'
-  ELSE 'pending'
-END
-WHERE status <> 'completed';
+```mermaid
+flowchart TD
+    A([业务调用 GORM 运维变更]) --> B[数据库条件更新或清理事务]
+    B --> C{ID 存在且状态/租约满足?}
+    C -- 否且不存在 --> D([ErrNotFound])
+    C -- 否但存在 --> E([ErrStateConflict])
+    C -- 是 --> F[原子提交变更]
+    F --> G([返回实际结果])
+    B -- 数据库错误或取消 --> H([保留错误链返回])
 ```
 
-上面的表名是示例，部署须使用实际绑定表；schema 变更与回填成功后才启用新版本。迁移只返回错误，由部署命令处理，不新增运行期后台任务。
+### v2.1 表重建
+
+v2.1 改变主键编码、删除 `identity`、新增 `generation`，并把 `available_at`、`failed_at`、`completed_at` 从整数改为 SQL 时间列；不提供旧任务数据的原地转换或双写兼容。升级前停止旧版投递和消费，按业务备份要求处理历史数据后删除并重建任务表，再统一切换新版本。不要让新旧 Worker 共用同一物理表。
+
+简单模式由部署命令在空表环境调用 `Migrate(ctx)` 创建当前表和索引；该方法只执行当前模型的 AutoMigrate，不回填或解释旧 schema。扩展模式由业务迁移创建与 `Model` 一致的字段和索引。迁移失败时保持停机，修复后重跑；迁移只返回错误，不新增运行期后台任务。
 
 ```mermaid
 flowchart TD
     A([升级开始]) --> B[停止旧版投递和消费]
-    B --> C[部署调用数据库 DDL 补齐列和索引]
-    C --> D[按 failed 和租约回填非 completed 行]
+    B --> C[按业务策略备份后删除旧任务表]
+    C --> D[部署创建当前 schema 与索引]
     C & D -- 错误或超时 --> E([保持停机 返回错误 修复后重跑])
     D --> F[切换全部新版本及一致的 RetainCompleted 配置]
     F --> G([恢复消费])
@@ -117,7 +116,7 @@ func NewEmailStore(ctx context.Context, manager queuegorm.ConnectionProvider) (*
 
 工厂只在 Insert 调用，返回新的非 nil 模型并填充自定义字段；不得保留模型引用或执行外部副作用。框架覆盖 Model 字段，业务工厂对传入任务的修改不会改变已编码正文。工厂错误保留错误链。消费只返回 TaskRecord，不返回扩展模型；Handler 所需数据应放入 Payload，自定义列适合业务查询、索引或审计。
 
-基础 ID 是 Task.ID 的十六进制编码，确保常见不区分大小写/音调的数据库排序规则仍能精确区分任务 ID；字段至少需要 256 字符。Identity 在每次插入时重新生成，避免任务删除后同 ID 重建导致旧快照误领取。Data 保存完整任务 JSON，Payload 保留二进制信息。时间索引用毫秒整数，截止向上取整，查询时钟向下取整；恢复的 AvailableAt 来自索引，CreatedAt 保留正文精度。业务迁移必须保留这些字段和唯一主键，不能通过手工修改表或任务正文绕开契约。
+基础 `id` 直接保存 `Task.ID`，是唯一公开任务标识；MySQL 使用 `varbinary(128)`、SQLite 使用 `BLOB` 保持逐字节比较，不能改成受数字亲和性、大小写、音调或尾随空格规则影响的文本列。`generation` 是每次插入重新生成的内部行世代令牌，只用于避免任务删除后同 ID 重建导致旧领取快照误更新，不是第二个任务 ID，也不会通过 Task 或运维接口返回。`data` 不再重复保存 ID 和 AvailableAt，只保存消息版本、Payload、Headers 与 CreatedAt。AvailableAt 从独立时间列恢复；Payload 在 JSON 中保留二进制信息。业务迁移必须保留这些字段和唯一主键，不能通过手工修改表或任务正文绕开契约。
 
 Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写队列管理列（status、completed_at 与原有租约/失败字段），不对业务模型执行整体 Save。业务字段在领取、释放、失败和重试期间保留。不能配置会自动修改队列列的数据库触发器，不能用自定义 Scope 或 GORM 插件偷偷过滤/修改任务。
 
@@ -125,7 +124,7 @@ Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写
 
 Insert 通过 `Connection(ctx)` 取得会话，允许复用同一 Manager 的业务事务；成功仅代表插入该事务，最终以业务提交结果为准。工厂和业务 Repo 均应传播该 Context。普通插入不做 upsert，重复 ID 返回 `queue.ErrDuplicate`；错误转换在独立会话 Config 上启用，不改变共享连接配置。
 
-Claim、CompleteReserved、ReleaseReserved、FailReserved、RetryFailed 必须在没有外层事务的 Context 中调用，连接提供者必须保证这一点；Repo 会拒绝 GORM 能识别的已打开事务，不要把业务事务 Context 传给 Worker。Repo 不使用长期事务或进程锁：读取候选后，以 ID、Identity、Token、Attempts、租约和可执行时间作为条件执行单次更新，只有更新一行才取得租约。冲突返回空领取；数据库错误返回调用方，不隐式重试。单行更新期间由数据库加锁，语句/默认短事务结束即释放，不跨 Handler 持锁；热点任务可能反复竞争，不保证公平性。
+Claim、CompleteReserved、ReleaseReserved、FailReserved、RetryFailed 必须在没有外层事务的 Context 中调用，连接提供者必须保证这一点；Repo 会拒绝 GORM 能识别的已打开事务，不要把业务事务 Context 传给 Worker。Repo 不使用长期事务或进程锁：读取候选后，以 ID、Generation、Token、Attempts、租约和可执行时间作为条件执行单次更新，只有更新一行才取得租约。冲突返回空领取；数据库错误返回调用方，不隐式重试。单行更新期间由数据库加锁，语句/默认短事务结束即释放，不跨 Handler 持锁；热点任务可能反复竞争，不保证公平性。
 
 Ack/Release/Fail 以 ID、Token、非失败及非空租约为条件更新，旧 owner 返回 `ErrLeaseLost`。成功按 `RetainCompleted` 删除或保留在原行；失败始终保留在原行，Retry 清零次数并重新排期。Claim 解码发现损坏时，按同一快照条件标记失败、保留原始正文并返回错误；失败查询也明确报告损坏。至少需一个正常 Worker 或外部 supervisor 恢复消费；有限尝试次数、网络结果不确定及业务幂等边界见 [核心文档](../../../../pkg/queue/README.md)。本包不提供 exactly-once、永久去重、自动续租或故障数据库的数据恢复。
 
@@ -140,7 +139,8 @@ flowchart TD
     G --> H{更新一行?}
     H -- 否 --> E
     H -- 是 --> I[提交并释放锁 / 返回新 token 和次数]
-    I --> J[Handler 在领取操作外执行]
+    I --> IS[Worker INFO task.execution.started]
+    IS --> J[Handler 在领取操作外执行]
     J --> K{Handler 结果}
     K -- 成功 --> KA{RetainCompleted?}
     KA -- true --> KB[按 token 条件 UPDATE completed 和完成时间 清空租约]
@@ -150,15 +150,20 @@ flowchart TD
     K -- 进程崩溃 --> KR[租约到期后可重新 Claim]
     KR --> B
     KB & KC & KD & KE --> KU[数据库单行短锁 语句提交后释放]
-    KU -- 确认成功 --> KL[Worker DEBUG task.completed]
+    KU -- 确认成功 --> KL[Worker INFO task.execution.finished result=success duration]
     KU -- 重试排期成功 --> KM[Worker WARN retry.scheduled]
     KU -- 失败保存成功 --> KN[Worker ERROR task.failed]
-    KL & KM & KN --> L([完成或等待重试])
+    KM --> KMF[Worker INFO task.execution.finished result=retry duration]
+    KN --> KNF[Worker INFO task.execution.finished result=failed duration]
+    KL & KMF & KNF --> L([完成或等待重试])
     KB & KC & KD & KE -- 旧 token --> M[Worker WARN lease.lost]
     M --> L
-    B & F & G & KB & KC & KD & KE -- 错误或超时 --> N[Worker ERROR storage.failed]
-    N --> O([返回错误 / 未确认任务待租约恢复])
-    F -- 隔离成功 --> N
+    B & F & G -- 错误或超时 --> N0[Worker ERROR storage.failed]
+    N0 --> O
+    KB & KC & KD & KE -- 错误或超时 --> N[Worker ERROR storage.failed]
+    N --> NF[Worker INFO task.execution.finished result=storage_error duration]
+    NF --> O([返回错误 / 未确认任务待租约恢复])
+    F -- 隔离成功 --> N0
 ```
 
 ## 验证
@@ -168,7 +173,7 @@ flowchart TD
 ## 只读统计
 
 `Repo.Stats(ctx, now)` 使用单条 `SUM(CASE...)`/`MIN(CASE...)` 聚合查询返回单表快照，不读取任务载荷、不加锁、不迁移表。
-排期截止与 Claim 使用相同毫秒边界：过期租约计入 ready，有效租约计入 running，失败任务独立计数，completed 行不计入任何积压或最老等待年龄。
+排期截止与 Claim 使用相同的数据库时间精度边界：过期租约计入 ready，有效租约计入 running，失败任务独立计数，completed 行不计入任何积压或最老等待年龄。
 最老 ready 取当前 `available_at`，不是创建时间；空集合精确返回零数量。统计拒绝外层事务，避免读取业务未提交状态。
 统计覆盖索引 `(status, failed, available_at, reserved_until)` 避免为聚合读取任务正文所在的数据行，但仍扫描非 completed 记录，不是常数时间。应结合活跃/失败任务量控制采集频率和 timeout；本实现不在采集时自动新增索引或缓存结果。
 接入 `queue.RegisterStats` 并在释放借用连接前注销，具体指标与流程见 [Queue 统计文档](../../../../pkg/queue/README.md#持久化积压统计)。
@@ -182,7 +187,7 @@ Model 在保留原有单列索引的基础上增加以下非唯一联合索引�
 | failed, failed_at, id | 失败列表按失败时间、ID 排序，支持 LIMIT 提前停止 |
 | status, failed, available_at, reserved_until | 覆盖统计查询的过滤与聚合列，减少回表 |
 
-简单模式通过部署命令重新执行 `Migrate(ctx)` 添加索引；扩展模式由业务迁移添加同列顺序的索引。原索引不自动删除。创建索引需要额外空间，并增加插入和状态更新的维护成本；大表部署须评估 DDL 时间和锁等待，消费路径不执行 DDL。迁移流程及失败处理见上方“已有表迁移”流程图。
+简单模式通过部署命令执行 `Migrate(ctx)` 创建索引；扩展模式由业务迁移添加同列顺序的索引。创建索引需要额外空间，并增加插入和状态更新的维护成本；大表部署须评估 DDL 时间和锁等待，消费路径不执行 DDL。迁移流程及失败处理见上方“v2.1 表重建”流程图。
 
 在本地 MySQL 8.4.6、256MiB buffer pool、临时内存数据目录、512 字节正文、9 万完成 + 1 万失败 + 1 条待执行的隔离数据上，预热后 7 次串行查询的中位耗时如下；不包含 Handler 和并发锁竞争，不是生产 SLA：
 

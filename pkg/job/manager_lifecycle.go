@@ -35,6 +35,7 @@ func (m *Manager) Start(parent context.Context) error {
 		m.beginShutdown()
 		return err
 	}
+	m.logRegistrations(ctx)
 
 	onceDone, daemonErrors, launched := m.startJobs(ctx)
 	m.workers.Done()
@@ -67,6 +68,21 @@ func (m *Manager) Start(parent context.Context) error {
 		err := parent.Err()
 		m.beginShutdown()
 		return err
+	}
+}
+
+func (m *Manager) logRegistrations(ctx context.Context) {
+	m.mu.Lock()
+	registrations := append([]jobRegistration(nil), m.registrations...)
+	m.mu.Unlock()
+	for _, registration := range registrations {
+		m.log.WithContext(withJobName(ctx, registration.name)).With(
+			"event", "job.registered",
+			"kind", registration.kind,
+			"schedule", registration.schedule,
+			"registration.caller", registration.caller,
+			"enabled", registration.enabled,
+		).Info("job.registered")
 	}
 }
 

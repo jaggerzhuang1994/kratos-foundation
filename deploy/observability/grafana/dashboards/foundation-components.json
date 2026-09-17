@@ -4325,7 +4325,7 @@
     },
     {
       "id": 78,
-      "title": "Job 正在运行",
+      "title": "Job 正在运行与等待",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -4337,12 +4337,18 @@
         "w": 12,
         "h": 8
       },
-      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。运行中数量表示已进入执行的任务，跳过/等待调度不是一次已执行任务。",
+      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。running 已进入执行，pending 是 DelayIfRunning 中等待准入的调用。",
       "targets": [
         {
           "refId": "A",
           "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job) (job_running{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"})",
           "legendFormat": "{{exported_job}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job) (job_pending{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"})",
+          "legendFormat": "{{exported_job}} pending · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
           "range": true
         }
       ],
@@ -4378,7 +4384,7 @@
     },
     {
       "id": 79,
-      "title": "Job 完成速率（按结果）",
+      "title": "Job 完成与跳过速率",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -4390,12 +4396,18 @@
         "w": 12,
         "h": 8
       },
-      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。运行中数量表示已进入执行的任务，跳过/等待调度不是一次已执行任务。",
+      "description": "完成按 success/failure，跳过按 disabled/already_running/pending_full；跳过没有进入 Handler，不属于执行失败。",
       "targets": [
         {
           "refId": "A",
           "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job,status) (rate(job_runs_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval]))",
           "legendFormat": "{{exported_job}} / {{status}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job,reason) (rate(job_triggers_skipped_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{exported_job}} skipped/{{reason}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
           "range": true
         }
       ],
@@ -4431,7 +4443,7 @@
     },
     {
       "id": 80,
-      "title": "Job 执行 P95",
+      "title": "Job 执行与等待 P95",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -4443,12 +4455,18 @@
         "w": 12,
         "h": 8
       },
-      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。运行中数量表示已进入执行的任务，跳过/等待调度不是一次已执行任务。",
+      "description": "执行耗时只统计已进入 Handler 的调用；等待耗时在 DelayIfRunning 等待结束时按 admitted/canceled 记录。",
       "targets": [
         {
           "refId": "A",
           "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,exported_job) (rate(job_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval])))",
           "legendFormat": "{{exported_job}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,exported_job,result) (rate(job_wait_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{exported_job}} wait/{{result}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
           "range": true
         }
       ],

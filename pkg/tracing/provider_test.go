@@ -64,6 +64,10 @@ func TestNewProviderReturnsDisabledProviderFromConfig(t *testing.T) {
 	if span.IsRecording() {
 		t.Fatal("disabled provider returned a recording span")
 	}
+	spanContext := span.SpanContext()
+	if !spanContext.TraceID().IsValid() || !spanContext.SpanID().IsValid() {
+		t.Fatalf("disabled provider span context = %s/%s, want valid ids", spanContext.TraceID(), spanContext.SpanID())
+	}
 }
 
 func TestNewBuildsDisabledAndEnabledProviders(t *testing.T) {

@@ -19,6 +19,22 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	spanCtx, span := w.telemetry.Tracer().Start(parent, "queue.execute", trace.WithSpanKind(trace.SpanKindConsumer))
 	defer span.End()
 	started := time.Now()
+	executionResult := "failure"
+	logger := w.log.WithContext(spanCtx).With(
+		"queue", w.config.Queue,
+		"worker", w.config.Name,
+		"task.id", task.ID,
+		"task.message_version", task.MessageVersion,
+		"attempts", reservation.Attempts,
+	)
+	logger.Infow("event", "task.execution.started")
+	defer func() {
+		logger.Infow(
+			"event", "task.execution.finished",
+			"result", executionResult,
+			"duration", time.Since(started),
+		)
+	}()
 	handler := w.handlers[task.MessageVersion]
 	var handlerErr error
 	cause := "handler_error"
@@ -54,6 +70,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	w.telemetry.RecordAttempt(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts, handlerErr, time.Since(started))
 	// 应用停止时不使用取消的上下文改写租约；由持久化租约超时恢复。
 	if err := ctx.Err(); err != nil {
+		executionResult = "stopped"
 		return err
 	}
 	operationCtx, cancel := context.WithTimeout(spanCtx, w.config.StorageTimeout)
@@ -63,9 +80,6 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	switch {
 	case handlerErr == nil:
 		err = w.store.Ack(operationCtx, reservation)
-		if err == nil {
-			w.log.WithContext(spanCtx).Debugw("event", "task.completed", "queue", w.config.Queue, "task.id", task.ID)
-		}
 	case IsPermanent(handlerErr) || reservation.Attempts >= w.retry.MaxAttempts:
 		result = "failed"
 		reason := "retry_exhausted"
@@ -99,6 +113,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	if err != nil {
 		result = "storage_error"
 	}
+	executionResult = result
 	if handlerErr != nil || err != nil {
 		span.SetStatus(codes.Error, result)
 	}

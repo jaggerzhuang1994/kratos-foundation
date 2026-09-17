@@ -1,9 +1,48 @@
 package utils
 
 import (
+	"encoding/json"
 	"maps"
+	"reflect"
 	"slices"
 )
+
+// CloneJSON 使用 JSON 表示深复制仅由可序列化字段组成的值。
+func CloneJSON[T any](source *T) (*T, error) {
+	data, err := json.Marshal(source)
+	if err != nil {
+		return nil, err
+	}
+	var result T
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// EqualJSON 按 JSON 数据模型比较两个值，忽略对象成员顺序。
+func EqualJSON(left, right any) (bool, error) {
+	decode := func(value any) (any, error) {
+		data, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		var result any
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+	leftValue, err := decode(left)
+	if err != nil {
+		return false, err
+	}
+	rightValue, err := decode(right)
+	if err != nil {
+		return false, err
+	}
+	return reflect.DeepEqual(leftValue, rightValue), nil
+}
 
 func CopyIntP(i *int) *int {
 	if i == nil {

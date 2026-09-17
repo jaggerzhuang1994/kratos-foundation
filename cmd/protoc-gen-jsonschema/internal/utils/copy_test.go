@@ -1,8 +1,35 @@
 package utils
 
 import (
+	"math"
 	"testing"
 )
+
+func TestCloneAndCompareJSONValues(t *testing.T) {
+	source := map[string]any{"nested": map[string]any{"value": 1}, "items": []any{"a"}}
+	cloned, err := CloneJSON(&source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	(*cloned)["nested"].(map[string]any)["value"] = float64(2)
+	if source["nested"].(map[string]any)["value"] != 1 {
+		t.Fatal("CloneJSON shared nested state")
+	}
+	equal, err := EqualJSON(map[string]any{"a": 1, "b": 2}, map[string]any{"b": 2, "a": 1})
+	if err != nil || !equal {
+		t.Fatalf("EqualJSON() = %v, %v", equal, err)
+	}
+	equal, err = EqualJSON(map[string]any{"a": 1}, map[string]any{"a": 2})
+	if err != nil || equal {
+		t.Fatalf("EqualJSON(different) = %v, %v", equal, err)
+	}
+	if _, err := CloneJSON(&map[string]any{"invalid": math.Inf(1)}); err == nil {
+		t.Fatal("CloneJSON accepted a non-JSON value")
+	}
+	if _, err := EqualJSON(math.Inf(1), 1); err == nil {
+		t.Fatal("EqualJSON accepted a non-JSON value")
+	}
+}
 
 func TestPointerCopiesHandleNilAndDetachValues(t *testing.T) {
 	intValue, floatValue, boolValue := 1, 1.5, true

@@ -154,10 +154,26 @@ func (s *Schema) Merge(draft jsonschema.Draft) error {
 	// 把 draft.defs 合并到 s.defs 中 (如果有重复，则不覆盖)
 	if draft2.Definitions != nil {
 		for _, key := range draft2.Definitions.Keys() {
-			if _, ok := s.Definitions.Get(key); !ok {
-				value, _ := draft2.Definitions.Get(key)
-				s.Definitions.Set(key, value)
+			value, _ := draft2.Definitions.Get(key)
+			current, exists := s.Definitions.Get(key)
+			if !exists {
+				continue
 			}
+			equal, err := utils.EqualJSON(current, value)
+			if err != nil {
+				return fmt.Errorf("compare definition %q: %w", key, err)
+			}
+			if !equal {
+				return fmt.Errorf("definition %q conflicts with generated schema", key)
+			}
+		}
+		// 先完成全部冲突检查，再写入新 definition，避免失败时留下半合并结果。
+		for _, key := range draft2.Definitions.Keys() {
+			if _, exists := s.Definitions.Get(key); exists {
+				continue
+			}
+			value, _ := draft2.Definitions.Get(key)
+			s.Definitions.Set(key, value)
 		}
 	}
 	var mergeRefID string
@@ -169,14 +185,21 @@ func (s *Schema) Merge(draft jsonschema.Draft) error {
 		}
 		i++
 	}
+	external, err := utils.CloneJSON(draft2)
+	if err != nil {
+		return fmt.Errorf("copy external schema: %w", err)
+	}
+	external.Version = ""
+	if external.Ref != "" {
+		external.AllOf = append([]*Schema{{Ref: external.Ref}}, external.AllOf...)
+		external.Ref = ""
+	}
 	mergeSchema := &Schema{}
 	mergeSchema.AllOf = []*Schema{
 		{
 			Ref: s.Ref,
 		},
-		{
-			Ref: draft2.Ref,
-		},
+		external,
 	}
 	s.Definitions.Set(mergeRefID, mergeSchema)
 	s.Ref = "#/$defs/" + mergeRefID

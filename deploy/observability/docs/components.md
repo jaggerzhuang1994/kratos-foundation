@@ -11,7 +11,7 @@
 | Redis | db_client_connections_*；redis_connection/pool_name/state/type/status | Redis Manager 创建的 client 且 redis.metrics.disable 未开启；当前 redisotel v9.17.2，观察应用客户端，不是 Redis server |
 | Kafka | kafka_producer_*、kafka_consumer_*；kafka_destination/kafka_consumer/kafka_result | 使用包提供的 Producer/Runtime，并注入 Observability 的 Metrics/Tracing；绕过封装的原生 SDK 调用不包含这些业务计数 |
 | Queue | queue_producer_*、queue_consumer_*；queue_destination/queue_consumer/queue_result | 使用 Queue/Worker 并注入 Observability；派发、处理尝试、最终结果、重试、失败归档和运行时故障 |
-| Job | job_runs_total、job_duration_seconds、job_running；exported_job/status | Manager 注入 Provider；默认启用，可由 job.WithMetrics(false) 关闭。只统计已进入执行的任务，跳过和等待不等于执行失败 |
+| Job | job_runs_total、job_duration_seconds、job_running、job_triggers_skipped_total、job_pending、job_wait_duration_seconds；exported_job/status/reason/result | Manager 注入 Provider；默认启用，可由 job.WithMetrics(false) 关闭。执行指标与准入跳过、等待指标分开解释 |
 | Lock | lock_operations_total、lock_operation_duration_seconds、lock_released_hold_duration_seconds；lock_name/operation/result | 业务构造时显式用 lock.WithMetrics 包装原 Locker，再注入业务，见 [Lock 文档](../../../pkg/lock/README.md) |
 
 Redis 新增 redis_connection 标签保留配置连接身份，解决多个 client 共用地址时样本无法区分的问题。旧版本序列没有该标签，按 All 可查看旧数据，按具体连接只展示新数据。使用多个进程时，应先按 instance 排障，再切到 app 汇总。
@@ -22,7 +22,7 @@ Job 的原始指标标签名是 `job`，Prometheus 抓取也有 `job` 标签。�
 
 - 所有 P95 都先合并所选分组的桶再计算；不平均各实例 P95。无操作时留空。Server/Client 的最大有限桶为 1 秒，不能精确区分更长尾延迟。Kafka/Queue 采用当前 OTel SDK 默认桶，业务有明确 SLO 时应单独设计边界。
 - DB 等待时间来自 sql.DB 池等待累计时间，除以等待次数；不是查询耗时。利用率先按每个实例计算，再取分组最大值，避免总量稀释局部耗尽；上限为 0 的无限池被排除。
-- MySQL 还暴露默认连接的 `gorm_status_<variable>` 快照（prefix 可配置），但当前采集执行 `SHOW STATUS`，部分值属于会话；失败会保留旧快照。不能据此宣称全库 QPS 或采集实时成功，因此通用面板不添加这些推测性曲线。
+- Foundation 不在应用进程执行 MySQL `SHOW STATUS`。MySQL 全局状态、InnoDB 和复制指标由独立 `mysqld-exporter` 等基础设施采集器提供，并与应用 `go_sql_*` 连接池指标分开解释。
 - Redis `use_time_milliseconds` 的桶和结果来自命令/pipeline hook；pipeline 每批一次，不能当消息数或命令总数。单位毫秒；建连耗时同样是毫秒。池 waits_duration_nanoseconds 累计纳秒，平均等待在面板换算为秒。
 - Redis SDK 将池 waits/timeouts/hits/misses 以 Gauge 暴露，但值是客户端存活期间的累计数；模板按单调计数的变化计算速率，client 重建归零。hits/misses 表示连接池复用，不是缓存命中率。status=error 包含 redis.Nil（key 不存在），所以没有默认配置“Redis 非成功比例过高”告警。
 - Kafka/Queue 生产消息计数按消息数，生产耗时按调用；消费最终结果、每次 handler 尝试、重试、失败归档、运行时故障分别观察。Queue failed_tasks 的 result=success 表示失败任务归档成功，绝不是任务执行成功；Kafka dead_letters 的 success 表示死信投递成功。它们都不等于积压或业务成功率。
@@ -46,7 +46,7 @@ flowchart TD
 
 ## 其他能力与后续缺口
 
-已经可以接入的公共指标还有进程 CPU/RSS、Go 堆/GC/goroutine，以及配置 watcher 存活、版本、接受/拒绝、订阅过载、队列深度和回调耗时。当前概览已经展示其中一部分；`metrics.Provider` 也允许业务注册自己的低基数 Counter、Histogram 和 Gauge。
+已经可以接入的公共指标还有进程 CPU/RSS、Go 堆/GC/goroutine；Queue 统计通过显式 `RegisterStats` 接入。配置 watcher 的存活、版本、接受/拒绝、订阅过载和回调耗时当前没有公共指标，来源错误查看官方 Config 日志，组件是否应用更新通过组件日志与实际参数验证。`metrics.Provider` 也允许业务注册自己的低基数 Counter、Histogram 和 Gauge。
 
 以下能力已补入可选采集或接入示例；必须完成对应组装，面板才有真实数据：
 
@@ -58,10 +58,10 @@ flowchart TD
 | Redis 业务缓存 | business_cache_lookups_total、business_cache_loads_total、business_cache_load_duration_seconds | metrics.NewCacheMetrics 由业务调用 Hit/Miss/Error/Load，缓存分区可直接展示，不能从连接池 hits/misses 推导 |
 | Kafka | kafka_consumergroup_lag | 可选 Kafka exporter 示例、抓取配置和 Lag 分区；按共享 Kafka 集群/消费组/Topic/分区，不受 App/Pod 筛选；Broker 磁盘/ISR 仍需独立采集 |
 | Queue | queue_tasks、queue_oldest_ready_age_seconds、queue_stats_collection_success、queue_stats_oldest_ready_known | 显式 queue.RegisterStats；数据库单条聚合、Redis只读Lua。Redis ready候选>1000时年龄未知并省略；要求context_timeout_enabled:true。共享快照用max去重不累加 |
-| Job 调度 | 跳过、调度等待、续租丢失 | 在实际调度/协调状态切换处埋点；已有 running 不能推导跳过次数 |
+| Job 调度 | job_triggers_skipped_total、job_pending、job_wait_duration_seconds | 本进程 gate 已记录 disabled、already_running、pending_full，以及 admitted/canceled 等待结果；不提供跨进程启用状态、协调器或续租语义 |
 | Kubernetes | Pod working set、CPU throttling、重启、OOM、期望/就绪副本 | kubelet/cAdvisor 与 kube-state-metrics；普通服务没有这些概念 |
 
-Job 调度跳过/等待与 Kubernetes 专属资源仍需分别接入对应采集。业务自定义指标和缓存接入步骤见 [业务指标指南](business-metrics.md)，健康和 Kafka 部署见 [外部采集](external-metrics.md)。
+Job 调度跳过/等待已随 Manager 指标直接暴露；Kubernetes 专属资源仍需接入对应平台采集。业务自定义指标和缓存接入步骤见 [业务指标指南](business-metrics.md)，健康、Kafka 与 MySQL 部署边界见 [外部采集](external-metrics.md)。
 
 指标维度与开销设计可参照 [Prometheus 埋点规范](https://prometheus.io/docs/practices/instrumentation/)；服务端基础设施的独立采集见 [Prometheus Exporter 列表](https://prometheus.io/docs/instrumenting/exporters/)，需逐项确认部署版本与权限。
 

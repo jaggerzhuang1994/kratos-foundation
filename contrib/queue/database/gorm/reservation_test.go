@@ -48,7 +48,7 @@ func TestRepoCorruptPayload(t *testing.T) {
 	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "bad", MessageVersion: "test"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&testTask{}).Where("id = ?", taskKey("bad")).Update("data", []byte("broken")).Error; err != nil {
+	if err := db.Model(&testTask{}).Where("id = ?", "bad").Update("data", []byte("broken")).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.Claim(ctx, now, now.Add(time.Second), "t"); err == nil {
@@ -83,7 +83,7 @@ func TestRepoClaimRejectsRecreatedTask(t *testing.T) {
 			return
 		}
 		replaced = true
-		if err := db.Where("id = ?", taskKey("same")).Delete(&testTask{}).Error; err != nil {
+		if err := db.Where("id = ?", "same").Delete(&testTask{}).Error; err != nil {
 			t.Error(err)
 			return
 		}
@@ -127,7 +127,7 @@ func TestRepoClaimOnlyExecutableStates(t *testing.T) {
 		if !f.reserved.IsZero() {
 			reserved = f.reserved.UnixMilli()
 		}
-		if err := db.Model(&testTask{}).Where("id = ?", taskKey(f.id)).Updates(map[string]any{"status": f.status, "reserved_until": reserved}).Error; err != nil {
+		if err := db.Model(&testTask{}).Where("id = ?", f.id).Updates(map[string]any{"status": f.status, "reserved_until": reserved}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

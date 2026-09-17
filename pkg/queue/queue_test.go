@@ -165,12 +165,14 @@ func (l *testLog) WithModule(module string) log.Logger {
 	return l
 }
 
+func (l *testLog) With(...any) log.Logger                 { return l }
 func (l *testLog) WithContext(context.Context) log.Logger { return l }
 func (l *testLog) Debugw(args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, fmt.Sprint(args...))
 }
+func (l *testLog) Infow(args ...any)  { l.Debugw(args...) }
 func (l *testLog) Warnw(args ...any)  { l.Debugw(args...) }
 func (l *testLog) Errorw(args ...any) { l.Debugw(args...) }
 

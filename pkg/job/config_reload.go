@@ -109,6 +109,14 @@ func (m *Manager) applyConfig(config *config_pb.Job) error {
 			task.scheduleSpec = &schedule{log: m.log, immediately: next.immediate, schedule: plans[i]}
 		}
 		task.resolved = next
+		for registrationIndex := range m.registrations {
+			registration := &m.registrations[registrationIndex]
+			if registration.kind == "cron" && registration.name == task.name {
+				registration.schedule = next.schedule
+				registration.enabled = !next.disabled
+				break
+			}
+		}
 	}
 	m.mu.Unlock()
 	if changed {

@@ -122,14 +122,14 @@ func (Sampler_Sample) EnumDescriptor() ([]byte, []int) {
 	return file_config_pb_tracing_proto_rawDescGZIP(), []int{2, 0}
 }
 
-// Tracing 只有 sampler 支持热更新。disable 决定是否创建真实 Provider，
+// Tracing 只有 sampler 支持热更新。disable 决定是否创建记录和导出 Span 的 Provider，
 // exporter 持有网络连接与批处理器，两者都需要重建 Provider。
 type Tracing struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// 是否禁用链路追踪 local 环境默认为禁用。[需重启]
+	// 禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。[需重启]
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// 导出配置。[需重启]
 	Exporter *Exporter `protobuf:"bytes,2,opt,name=exporter,proto3,oneof" json:"exporter,omitempty"`

@@ -120,6 +120,15 @@ func NewQueue[T any](definition Definition[T], store Store, observability Observ
 	return &Queue[T]{definition: definition, dispatcher: dispatcher, store: store, observability: observability}, nil
 }
 
+// Operations 返回 Store 可选的运维能力；false 表示业务不得暴露对应运维入口。
+func (q *Queue[T]) Operations() (Operations, bool) {
+	if provider, ok := q.store.(OperationsProvider); ok {
+		return provider.QueueOperations()
+	}
+	operations, ok := q.store.(Operations)
+	return operations, ok
+}
+
 // Post 校验并即时投递消息，返回任务 ID；事务内成功仅表示写入事务；提交后响应丢失仍可能返回错误。
 func (q *Queue[T]) Post(ctx context.Context, message T) (string, error) {
 	return q.PostWith(ctx, message, PostOptions{})

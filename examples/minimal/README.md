@@ -30,7 +30,7 @@ curl --fail http://127.0.0.1:9001/metrics
 
 复制 `cmd/api`、`configs`、Dockerfile 到业务仓库。`cmd/api` 内没有对示例自身 module path 的引用；将业务实现逐步放入自己的 `internal/service`、`internal/biz`、`internal/data`，在 `boot` 中声明端点，在 `wire.go` 中注入依赖。默认配置参数从 `examples/minimal/configs/config.yaml` 改为业务项目的 `configs/config.yaml`，Dockerfile 的 build 路径改为 `./cmd/api`。
 
-业务根目录使用自己的 `go.mod`，Foundation 依赖固定到**实际可获取的 tag 或已推送 commit**。本仓库尚未发布稳定 v2，工作树未提交的 API 不能靠 `go get` 获取；先验证对应版本具备 `bootstrap.NewSpec` 等当前接口。以下命令的 `FOUNDATION_REF` 必须由业务方设为已验证的真实引用：
+业务根目录使用自己的 `go.mod`，Foundation 依赖固定到**实际可获取的 tag 或已推送 commit**。仓库已有 `v2.0.0` tag，但当前开发线仍在继续演进；工作树未提交的 API 不能靠 `go get` 获取，应先验证所选版本具备 `bootstrap.NewSpec` 等所需接口。以下命令的 `FOUNDATION_REF` 必须由业务方设为已验证的真实引用：
 
 ```sh
 # 在新业务项目根目录执行；FOUNDATION_REF 为真实 tag 或已推送 commit。

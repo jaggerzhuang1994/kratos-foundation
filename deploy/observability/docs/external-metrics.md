@@ -1,4 +1,22 @@
-# 健康状态与 Kafka Lag 的外部采集
+# 健康状态、Kafka Lag 与 MySQL 的外部采集
+
+## MySQL 服务端指标
+
+Foundation 应用只暴露连接池与 GORM 操作指标，不在业务进程执行 `SHOW STATUS`。需要连接数、全局命令计数、InnoDB、复制或性能_schema 指标时，由平台部署 [mysqld-exporter](https://github.com/prometheus/mysqld_exporter) 或等价采集器，并使用独立最小权限监控账号；具体权限必须匹配选用 collector 和 MySQL 版本，不能照搬业务账号或把凭据写入仓库。
+
+Exporter 的 `up`、抓取错误和 MySQL 实例标签属于数据库基础设施维度，不应伪装成某个业务 App/Pod 的应用指标。高可用或读写分离环境按真实实例采集，再由平台按集群/角色聚合；应用的 `go_sql_*{db_name}` 只描述本进程连接池，不能与服务器连接总数直接相加。
+
+```mermaid
+flowchart TD
+    A([平台部署 mysqld-exporter]) --> B[从 Secret 读取最小权限监控凭据]
+    B --> C[连接指定 MySQL 实例并采集已启用 collectors]
+    C -- 认证 权限或超时失败 --> D([up=0 或 exporter 错误；不沿用伪快照])
+    C -- 成功 --> E[输出带实例与角色身份的服务端指标]
+    E --> F[Prometheus 独立抓取]
+    G([Foundation 应用]) --> H[输出 go_sql 与 GORM 操作指标]
+    H --> F
+    F --> I([面板分别解释服务端容量与应用连接池])
+```
 
 ## Ready 与 Health
 

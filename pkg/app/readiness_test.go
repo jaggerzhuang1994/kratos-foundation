@@ -51,3 +51,45 @@ func TestFailedStartupNeverBecomesReady(t *testing.T) {
 		t.Fatal("failed startup ready")
 	}
 }
+
+func TestWaitReadyBlocksUntilAfterStartCompletes(t *testing.T) {
+	spec := NewSpec()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	runner := newApp(appSnapshot{
+		readySignal: spec.readySignal,
+		afterStart: []HookFunc{func(context.Context) error {
+			close(entered)
+			<-release
+			return nil
+		}},
+	}, newStaticStopPolicy(time.Second))
+	spec.application.Store(runner)
+
+	waited := make(chan error, 1)
+	go func() { waited <- spec.WaitReady(context.Background()) }()
+	started := make(chan error, 1)
+	go func() { started <- runner.runAfterStart(context.Background()) }()
+	<-entered
+	select {
+	case err := <-waited:
+		t.Fatalf("WaitReady returned before hooks completed: %v", err)
+	default:
+	}
+	close(release)
+	if err := <-started; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-waited; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWaitReadyStopsOnContextCancellation(t *testing.T) {
+	spec := NewSpec()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := spec.WaitReady(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WaitReady = %v, want context canceled", err)
+	}
+}

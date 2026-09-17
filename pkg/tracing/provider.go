@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // provider 提供应用追踪能力。
@@ -131,15 +130,15 @@ func (t *provider) Tracer(name string, options ...trace.TracerOption) trace.Trac
 	return t.tp.Tracer(name, options...)
 }
 
-// disabledProvider 提供显式禁用的 no-op TracerProvider。
+// disabledProvider 提供显式禁用且永不采样的 TracerProvider。
 type disabledProvider struct {
 	// provider 复用基础 Provider 接口实现。
 	*provider
 }
 
-// newDisabledProvider 用标准 no-op TracerProvider 保持禁用态 API 可安全调用。
+// newDisabledProvider 保留有效 SpanContext 供日志关联，但不记录或导出 Span。
 func newDisabledProvider() *disabledProvider {
-	tp := noop.NewTracerProvider()
+	tp := tracesdk.NewTracerProvider(tracesdk.WithSampler(tracesdk.NeverSample()))
 	return &disabledProvider{provider: newProvider(tp)}
 }
 

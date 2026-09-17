@@ -86,7 +86,10 @@ func (a *App) runAfterStart(ctx context.Context) error {
 	if a.isStopping() {
 		return errAppStopping
 	}
-	a.ready.Store(true)
+	// 原子状态先发布，再关闭 channel；等待者解除阻塞后即可观察完整 ready 状态。
+	if a.ready.CompareAndSwap(false, true) {
+		close(a.readySignal)
+	}
 	return nil
 }
 

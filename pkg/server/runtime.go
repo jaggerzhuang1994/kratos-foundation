@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/transport"
+	"github.com/go-kratos/kratos/v2/transport/http"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
@@ -78,13 +80,16 @@ func NewRuntime(
 	if err != nil {
 		return fail(err)
 	}
-	management, err := configureMonitoring(config, httpServer, health, metricsProvider)
+	management, monitoringEndpoints, err := configureMonitoring(config, httpServer, health, metricsProvider)
 	if err != nil {
+		return fail(err)
+	}
+	if err := logRegisteredEndpoints(logger, httpServer, grpcServer, monitoringEndpoints); err != nil {
 		return fail(err)
 	}
 	logger.With("event", "server.assembled",
 		"http_enabled", httpServer != nil, "grpc_enabled", grpcServer != nil,
-		"management_listeners", len(management)).Info("NewRuntime | server.assembled")
+		"management_listeners", len(management)).Info("server.assembled")
 	return &Runtime{
 		health:     health,
 		management: management,
@@ -93,6 +98,63 @@ func NewRuntime(
 		websockets: websockets,
 		stopDelay:  config.GetStopDelay().AsDuration(),
 	}, func() { health.stopped.Store(true); cleanup() }, nil
+}
+
+type registeredEndpoint struct {
+	transport string
+	service   string
+	method    string
+	path      string
+	listener  string
+}
+
+// logRegisteredEndpoints 在服务启动前输出最终路由表，便于核对实际暴露的入口。
+func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer GRPCServer, extra []registeredEndpoint) error {
+	endpoints := append([]registeredEndpoint(nil), extra...)
+	if httpServer != nil {
+		if err := httpServer.WalkRoute(func(routeInfo http.RouteInfo) error {
+			endpoints = append(endpoints, registeredEndpoint{
+				transport: "http",
+				method:    routeInfo.Method,
+				path:      routeInfo.Path,
+			})
+			return nil
+		}); err != nil {
+			return fmt.Errorf("walk HTTP endpoints: %w", err)
+		}
+	}
+	if grpcServer != nil {
+		for service, info := range grpcServer.GetServiceInfo() {
+			for _, method := range info.Methods {
+				endpoints = append(endpoints, registeredEndpoint{
+					transport: "grpc",
+					service:   service,
+					method:    method.Name,
+					path:      "/" + service + "/" + method.Name,
+				})
+			}
+		}
+	}
+	sort.Slice(endpoints, func(i, j int) bool {
+		if endpoints[i].transport != endpoints[j].transport {
+			return endpoints[i].transport == "http"
+		}
+		if endpoints[i].path != endpoints[j].path {
+			return endpoints[i].path < endpoints[j].path
+		}
+		return endpoints[i].method < endpoints[j].method
+	})
+	for _, endpoint := range endpoints {
+		logger.With(
+			"event", "endpoint.registered",
+			"transport", endpoint.transport,
+			"method", endpoint.method,
+			"path", endpoint.path,
+			"service", endpoint.service,
+			"listener", endpoint.listener,
+		).Info("endpoint.registered")
+	}
+	return nil
 }
 
 // StopDelay 返回构造时已经校验的停机等待时间，供调用方了解服务器停机策略。

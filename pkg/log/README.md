@@ -26,6 +26,7 @@ logger.WithModule("orders").Info("ready")
 | `Logger.WithLevel` / `log.WithLevel` | 设置实例最低级别；模块配置与请求 debug 优先，不修改父实例或全局策略 |
 | `WithModule`、`With`、`WithContext`、`WithFilterKeys` | 派生模块、字段、请求上下文和追加过滤 |
 | `Logger.WithCallerDepth` | 调整业务包装深度 |
+| `AtLevel` / `DebugOnly` | 包装按事件级别显示的字段值；`DebugOnly` 在 Debug 事件或请求级 debug 中显示，默认 `filter_empty=true` 时其他场景删除整组 KV |
 | `request.WithDebug(ctx)` | 请求级诊断标记，详见 [request](../request/README.md) |
 | `ValidateRuntimeConfig` / `ApplyRuntimeConfig` | 组装层配置适配入口；校验与发布完整策略，失败返回错误 |
 | `RegisterFields` | 组装层登记 service/trace 等共享元数据 |
@@ -75,7 +76,7 @@ log:
 
 完整策略与各活动实例的 env 合并、校验及输出准备全部成功后才发布。路径不可用或任一实例校验失败时保留所有旧策略、旧输出，由 Bootstrap 记录 ERROR。失败候选会关闭；准备阶段只验证文件可追加，不启动候选轮转任务；可能创建空文件或目录，不保证撤销这些磁盘副作用。已停用或关闭的实例不会因晚到更新重新登记。
 
-并发提交使用共享 `RWMutex`：内置输出只在最终写入时持读锁，核对策略版本后使用同一代策略和输出；更新、登记与退出用写锁保护复合状态。Valuer、Stringer、error 和 Formatter 等用户字段求值及格式化在所有日志锁外执行，可以重入日志或发布策略。每条事件只求值一次；求值期间策略发生变化时，使用已求值字段重新应用最新级别和过滤规则，不重复执行回调。共享字段在事件开始时取快照，期间新登记的字段从后续事件开始生效。
+并发提交使用共享 `RWMutex`：内置输出只在最终写入时持读锁，核对策略版本后使用同一代策略和输出；更新、登记与退出用写锁保护复合状态。Valuer、Stringer、error 和 Formatter 等用户字段求值及格式化在所有日志锁外执行，可以重入日志或发布策略。每条事件只求值一次；`AtLevel` 包装的 Valuer 仅在事件级别精确匹配时求值，`DebugOnly` 还会在绑定 Context 启用请求级 debug 时求值。求值期间策略发生变化时，使用已求值字段重新应用最新级别和过滤规则，不重复执行回调。共享字段在事件开始时取快照，期间新登记的字段从后续事件开始生效。
 
 内置文本输出先按根、模块和实例的 key 规则过滤，再在入场前按原有 `%s`/`%v` 格式固化放行字段；这些规则拒绝的字段不会执行格式化方法。输出端的独立过滤仍在随后执行。外部 Logger 保留原始字段类型，调用其 Log 时不持本包锁，输出生命周期仍由调用方管理。磁盘创建、关闭和轮转任务退出在提交锁外执行；候选准备期间发生其他提交则释放候选并重试。提交会等待现有内置日志写入结束，因此慢磁盘可能延迟更新和新日志。实例缓存锁仅保护不可变快照发布与读取，不与共享入场锁嵌套；内置写入锁顺序为共享入场锁、输出锁、底层文件写锁。不增加常驻 goroutine 或资源租约。
 
@@ -97,7 +98,7 @@ flowchart TD
     K --> KA[关闭新代就绪 channel 放行写入]
     KA --> L([更新完成])
     R([并发日志]) --> R1[短暂缓存锁读取字段快照 后释放]
-    R1 --> R2[锁外求值 Valuer 内置字段延迟格式化]
+    R1 --> R2[按事件级别展开包装值 锁外求值匹配的 Valuer]
     R2 --> R3[锁外按当前策略校验级别 过滤 key 后固化文本]
     R3 --> R4{禁用或级别不足?}
     R4 -- 是 --> V([返回写入结果])
@@ -218,6 +219,35 @@ flowchart TD
 
 ## 字段过滤与去重
 
+### 按事件级别显示字段
+
+`AtLevel` 按当前日志事件的精确级别决定字段值。`DebugOnly` 通常等同于 Debug 级别，但绑定的 Context 经过 `request.WithDebug` 时，也会在 Info/Warn/Error/Fatal 事件中展开，适合让同一条请求日志在诊断模式携带更多字段。它们可以用于 `RegisterFields`、`With`、`WithKv` 和单次 `Log/*w` 的值位置：
+
+```go
+logger := logger.With(
+    "component", "orders",
+    "error.stack", log.DebugOnly(kratoslog.Valuer(func(ctx context.Context) any {
+        return stackFromContext(ctx)
+    })),
+)
+
+logger.Info("request failed")  // 不计算、不输出 error.stack
+logger.Debug("request failed") // 计算并输出 error.stack
+
+debugLogger := logger.WithContext(request.WithDebug(ctx))
+debugLogger.Info("request failed") // 请求级 debug：计算并输出 error.stack
+```
+
+`AtLevel` 匹配事件自身的精确级别，不是 Logger 的最低输出级别；即使请求级 debug 已开启，`AtLevel(kratoslog.LevelDebug, value)` 仍不会出现在 Info、Warn、Error 或 Fatal 事件中。只有 `DebugOnly` 具有请求级 debug 例外。条件不匹配时包装值展开为 `nil`：默认 `LOG_FILTER_EMPTY=true` 会删除键和值；显式设置 `LOG_FILTER_EMPTY=false` 时会保留该键并输出空值。普通单次 `Log/*w` 参数中的 Kratos Valuer 仍不由 Foundation 自动求值，只有显式包装在 `AtLevel`/`DebugOnly` 内的 Valuer 会在匹配条件成立时求值。
+
+字段按用途分为三层：
+
+- `event`、`result`、`duration`、稳定错误分类、请求/任务/资源标识及 `trace.id`、`span.id` 属于检索和关联字段，在 Info/Warn/Error 中保持可见；关闭 tracing 记录与导出也不会隐藏关联 ID。
+- Warn/Error 保留紧凑的 `error`、失败阶段和重试信息，保证后台 Job、Queue、Kafka 以及启动失败不依赖请求 debug 才能定位根因。
+- 完整错误链、调用栈、deadline 计算细节等高噪声或高成本字段使用 `DebugOnly`。请求链可以在单条 Info/Warn/Error 事件中按需展开；没有请求 Context 的后台链路应使用独立 Debug 事件承载额外细节，不能把必要故障信息包装后永久隐藏。
+
+进程最低级别配置为 Debug 不会让一条 Info/Warn/Error 事件中的 `DebugOnly` 自动展开；最低级别决定事件能否输出，包装值仍按事件自身级别或请求 debug 判断。
+
 过滤键支持精确匹配和尾部 `*` 前缀匹配：
 
 - `authorization` 只过滤同名字段；
@@ -330,7 +360,7 @@ flowchart TD
 ## 代码结构
 
 - `shared.go` 管理共享字段、策略与活动输出登记；组件字段通过 `RegisterFields` 合并。
-- `logger.go` 负责 Logger 构造和写入，`logger_fields.go` 负责字段快照、缓存和格式化；`derived.go` 提供受限的实例派生 API，`runtime_config.go` 校验并发布运行期策略。
+- `logger.go` 负责 Logger 构造和写入，`logger_fields.go` 负责字段快照、缓存和格式化，`level_value.go` 提供按事件级别展开的字段值；`derived.go` 提供受限的实例派生 API，`runtime_config.go` 校验并发布运行期策略。
 - `output.go`、`preset.go`、`context.go`、`kratos.go`、`validation.go` 分别提供输出组装、默认字段、上下文字段、Kratos 全局适配与校验辅助能力。
 - `env_config.go` 收拢私有配置类型与环境变量解析，供 Logger 实例构造使用。
 - `runtime_config.go` 定义动态契约与 env 合并；`runtime_output.go` 协调输出提交；`output.go` 管理实例输出生命周期，`internal/output` 实现 file/std/filter/dedupe/stack 等独立底层组件。

@@ -15,7 +15,7 @@
 | M1 工具/值对象 | 输入转输出，或保存少量局部配置 | `Do(input) (output, error)` / `New(config)` | compress、gormscope、totp |
 | M2 公共契约 | 多个实现需要共享语义 | 小接口、值类型、稳定错误 | lock |
 | M3 资源服务 | 创建、管理或借出连接/输出/provider | `New(deps) (value, func(), error)`；无资源则省略 cleanup | config、redis、client、kafka |
-| M4 操作级组件 | 给一次请求/任务附加行为，或包裹另一能力 | `New(dep, config)`，必要时 `Acquire(ctx) (handle, release, error)` | queue Queue[T]、job guard |
+| M4 操作级组件 | 给一次请求/任务附加行为，或包裹另一能力 | `New(dep, config)`，必要时 `Acquire(ctx) (handle, release, error)` | queue Queue[T]、lock.WithMetrics |
 | M5 应用 Runtime | 需要由应用统一启动和停止执行循环 | `New(deps)` + `Start(ctx)` / `Stop(ctx)` | queue Worker、job manager |
 | M6 Bootstrap | 把已有对象贡献给应用装配 | `NewXXXBootstrap(spec, component) (XXXBootstrap, error)` | bootstrap |
 | M7 应用核心 | 多种 Runtime 共同需要的生命周期规则 | Spec、冻结、监督、停机协调 | app |
@@ -268,7 +268,7 @@ flowchart TD
 
 ### 开发顺序与验收
 
-1. 先确定复用范围；若只有 Job，使用现有入口即可。需要通用包时，固定 Guard、release、失效通知及错误语义。
+1. 先确定复用范围；若只有一个 Job 用例，在业务层显式组合现有 `Locker`/`Lease` 并负责续租和取消。需要跨 Job、请求或消费者复用时，再固定 Guard、release、失效通知及错误语义。
 2. 用小型 Locker/Lease 替身验证组件行为，再接现有 Redis adapter；测试时使用可控的内部计时设施，不为测试增加公共选项。
 3. 验证：获取失败不启动 watch、正常续租、续租失去所有权、网络失败、父取消、未释放前不会关闭共享 client、重复 release、release 与 Refresh 交错、解锁超时和退出无泄漏。
 4. 验证：两个调用者竞争同一 key 不会错误共享 Guard，不同 key 不互相串行阻塞；已失效 Guard 不会因后续成功操作“复活”。

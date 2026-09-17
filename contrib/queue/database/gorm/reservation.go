@@ -18,7 +18,7 @@ func (r *Repo[T]) Claim(ctx context.Context, now, until time.Time, token string)
 	}
 	entity := r.entity()
 	// 只检索可执行状态，避免大量完成/失败历史参与候选扫描；running 仍按租约截止恢复。
-	available := r.consumerDB(ctx).Where("status IN ? AND failed = ? AND available_at <= ? AND (reserved_until = 0 OR reserved_until <= ?)", []Status{StatusPending, StatusRunning}, false, now.UnixMilli(), now.UnixMilli())
+	available := r.consumerDB(ctx).Where("status IN ? AND failed = ? AND available_at <= ? AND (reserved_until = 0 OR reserved_until <= ?)", []Status{StatusPending, StatusRunning}, false, timestampFloor(now, r.timestampPrecision), now.UnixMilli())
 	if err := available.Order("available_at ASC, id ASC").Take(entity).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -27,10 +27,10 @@ func (r *Repo[T]) Claim(ctx context.Context, now, until time.Time, token string)
 	}
 	model := entity.QueueModel()
 	record, decodeErr := model.record()
-	// Identity 防止同 ID 删除重建的 ABA；Token/Attempts/截止防止覆盖已变化的快照。
-	claim := r.consumerDB(ctx).Where("id = ? AND identity = ? AND token = ? AND attempts = ? AND reserved_until = ? AND available_at = ? AND failed = ? AND status = ?", model.ID, model.Identity, model.Token, model.Attempts, model.ReservedUntil, model.AvailableAt, false, model.Status)
+	// Generation 防止同 ID 删除重建的 ABA；Token/Attempts/截止防止覆盖已变化的快照。
+	claim := r.consumerDB(ctx).Where("id = ? AND generation = ? AND token = ? AND attempts = ? AND reserved_until = ? AND available_at = ? AND failed = ? AND status = ?", model.ID, model.Generation, model.Token, model.Attempts, model.ReservedUntil, model.AvailableAt, false, model.Status)
 	if decodeErr != nil {
-		result := claim.Updates(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": "corrupt_payload", "failed_at": now.UnixMilli(), "token": "", "reserved_until": 0})
+		result := claim.Updates(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": "corrupt_payload", "failed_at": timestampCeil(now, r.timestampPrecision), "token": "", "reserved_until": 0})
 		if result.Error != nil {
 			return nil, errors.Join(decodeErr, fmt.Errorf("quarantine queue task: %w", result.Error))
 		}

@@ -103,42 +103,51 @@ flowchart TD
 
 `WithDelayOverflowHandler(func(context.Context, job.DelayOverflow) error)` 可注入满额通知，事件含 Name、Policy、MaxPendingRuns。回调在锁外同步调用，不占执行名额；可能并发发生，业务负责并发安全、超时和去重。回调成功仍跳过本轮，错误或 panic 转换结果交给 Cron ErrorHandler；框架不重试。配置热更新不替换此回调。
 
+启用 Job 指标时，准入 gate 额外暴露以下低基数指标：`job_triggers_skipped_total{job,reason}` 统计 `disabled`、`already_running`、`pending_full` 三类未准入触发；`job_pending{job}` 表示 Delay 策略当前等待数量；`job_wait_duration_seconds{job,result}` 在等待结束时按 `admitted` 或 `canceled` 记录耗时。它们不等同于任务执行失败，只有真正进入 Handler 的调用才计入 `job_runs_total`、`job_duration_seconds` 和 `job_running`。Prometheus 默认抓取会把任务标签 `job` 重命名为 `exported_job`。
+
 ```mermaid
 flowchart TD
  A([Cron 并发触发]) --> B[获取本任务 gate 互斥锁]
  B --> C{Context 已取消?}
  C -- 是 --> R[释放锁 返回取消]
  C -- 否 --> C1{已禁用?}
- C1 -- 是 --> C2[释放锁 跳过本轮]
+ C1 -- 是 --> C2[释放锁 增加 skipped reason=disabled]
  C2 --> Z
  C1 -- 否 --> D{允许重叠 或没有运行和等待?}
  D -- 是 --> E[增加运行数 释放锁]
  D -- 否 --> F{Skip 策略?}
- F -- 是 --> S[释放锁 WARN job skipped]
+ F -- 是 --> S[释放锁 增加 skipped reason=already_running WARN job skipped]
  F -- 否 --> G{Delay 等待已满?}
- G -- 是 --> H[释放锁 WARN pending-run queue is full]
+ G -- 是 --> H[释放锁 增加 skipped reason=pending_full WARN pending-run queue is full]
  H --> I[锁外调用可选业务通知 含外部超时]
  I -- 错误或 panic --> J[交给 ErrorHandler]
  I -- 成功 --> Z([跳过结束])
- G -- 否 --> K[增加等待数]
+ G -- 否 --> K[增加等待数与 job_pending]
  K --> K1[释放锁 等待运行完成或取消]
  K1 --> L[重新获取 gate 锁检查状态]
- L -- 取消 --> M[减少等待数 释放锁 返回取消]
+ L -- 取消 --> M[减少等待数与 job_pending 记录 wait canceled 释放锁 返回取消]
  L -- 仍有运行 --> K1
- L -- 可执行 --> N[减少等待数 增加运行数 释放锁]
+ L -- 可执行 --> N[减少等待数与 job_pending 记录 wait admitted 增加运行数 释放锁]
  E & N --> O[锁外执行 Task 和业务中间件]
  O --> P[defer 获取 gate 锁 减少运行数 唤醒等待 释放锁]
  P --> T([返回结果])
  R & M & J & S --> Z
 ```
 
-Job Runtime 在 `Start` 时立即启动。`ExitWhenDone` 要求至少注册一个 Once，且 Spec 只能包含 Once；混入 Cron 或 Daemon 会在 `NewManager` 校验时返回错误。该模式在所有 Once 任务成功完成后返回 `job.ErrCompleted`；组装层 `bootstrap.NewJobBootstrap` 的适配器将该结果转换为 `app.ErrStopRequested`，请求正常停机。任务自身的失败原样保留。直接使用 Manager 时，由调用方处理 `job.ErrCompleted`。
+通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 会先等待 `app.Spec` 发出 Ready 信号，即 Kratos 已进入 AfterStart 且 Foundation 的 AfterStart hook 全部完成后，才调用 `Manager.Start`。该信号不等待阻塞型 Runtime.Start 返回；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，自定义 Runtime 若有必须先于 Job 完成的初始化，应放入启动 hook 或 readiness check。等待期间若应用取消则不启动任务。直接使用 `Manager` 不带这个应用级门闩，调用方自行决定何时调用 Start。
+
+Manager 真正启动前按注册顺序逐条记录 `INFO event=job.registered`，包含任务名、kind、最终生效的 schedule、`registration.caller` 与 enabled；Once/Daemon 的 schedule 分别为 `once`/`daemon`。这些日志完成后才启动 Cron、Once 和 Daemon。Cron 调度器内部的 `wake`、`run`、`schedule`、`start`、`stop` 事件不再重复输出。
+
+`ExitWhenDone` 要求至少注册一个 Once，且 Spec 只能包含 Once；混入 Cron 或 Daemon 会在 `NewManager` 校验时返回错误。该模式在所有 Once 任务成功完成后返回 `job.ErrCompleted`；组装层 `bootstrap.NewJobBootstrap` 的适配器将该结果转换为 `app.ErrStopRequested`，请求正常停机。任务自身的失败原样保留。直接使用 Manager 时，由调用方处理 `job.ErrCompleted`。
 
 ```mermaid
 flowchart TD
     A([声明 ExitWhenDone]) --> B{至少一个任务且全部为 Once?}
     B -- 否 --> C([NewManager 返回校验错误])
-    B -- 是 --> D[应用 Start 并发执行 Once]
+    B -- 是 --> BA[Bootstrap Runtime 等待应用 Ready]
+    BA -- 应用取消 --> J
+    BA -- Ready --> BB[逐条 INFO job.registered]
+    BB --> D[Manager Start 并发执行 Once]
     D -- 全部完成 --> E{存在任务失败?}
     E -- 是 --> F([Start 返回聚合错误，应用按失败处理])
     E -- 否 --> G[Start 返回 ErrCompleted]
@@ -172,15 +181,16 @@ flowchart TD
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
 
-任务中间件记录开始、成功和正常取消；错误与 panic 仅交给最终 ErrorHandler。默认处理器携带 Context 记录一次最终错误；自定义 `WithErrorHandler` 时由业务负责最终错误日志。
+任务中间件在每次实际执行前记录 `INFO event=job.execution.started`，并在退出时始终记录一次 `INFO event=job.execution.finished`，携带 `result=success|failure|stopped` 和 `duration`。失败详情与 panic 堆栈仍只交给最终 ErrorHandler，避免同一错误重复记录；默认处理器携带 Context 记录一次最终错误，自定义 `WithErrorHandler` 时由业务负责最终错误日志。
 
 ```mermaid
 flowchart TD
- A([执行任务]) --> B[INFO job execution started]
+ A([执行任务]) --> B[INFO job.execution.started]
  B --> C{执行结果}
- C -- 成功 --> D[INFO job execution done]
- C -- 正常取消 --> E[INFO job execution stopped]
- C -- 错误或恢复后的 panic --> F[调用最终 ErrorHandler]
+ C -- 成功 --> D[INFO job.execution.finished result=success duration]
+ C -- 正常取消 --> E[INFO job.execution.finished result=stopped duration]
+ C -- 错误或 panic --> I[INFO job.execution.finished result=failure duration]
+ I --> F[恢复 panic 后调用最终 ErrorHandler]
  F --> G[默认 ERROR job failed 或 cron job failed；自定义由业务处理]
  D --> H([结束])
  E --> H
@@ -206,7 +216,7 @@ flowchart LR
  L --> B[业务中间件 按注册顺序]
  B --> J[Task]
  J -- 正常返回覆盖标记 或 panic 保留标记 --> L
- L -- defer 仅正常成功记录 done --> M
+ L -- defer 始终记录 job.execution.finished 结果与耗时 --> M
  M -- defer 记录结果和耗时 归还运行指标 --> T
  T -- defer 设置 span 状态并结束 --> G
  G -- defer 归还执行名额 --> R

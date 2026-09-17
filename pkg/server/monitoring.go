@@ -16,7 +16,7 @@ import (
 
 // configureMonitoring 在构造期按地址归并监听，只创建 Server，不打开 socket。
 // 运行时由 Bootstrap/App 统一启停；独立端口不继承业务路由、鉴权、TLS 或 Filter。
-func configureMonitoring(config componentConfig, business HTTPServer, health *healthState, provider metrics.Provider) ([]HTTPServer, error) {
+func configureMonitoring(config componentConfig, business HTTPServer, health *healthState, provider metrics.Provider) ([]HTTPServer, []registeredEndpoint, error) {
 	conf := config.GetHttp()
 	mainAddr := conf.GetAddr()
 	if business != nil && (conf.GetNetwork() == "tcp" || conf.GetNetwork() == "tcp4" || conf.GetNetwork() == "tcp6" || conf.GetNetwork() == "") {
@@ -26,7 +26,7 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 		var err error
 		mainAddr, err = canonicalMonitoringAddr(mainAddr)
 		if err != nil {
-			return nil, fmt.Errorf("server.http.addr: %w", err)
+			return nil, nil, fmt.Errorf("server.http.addr: %w", err)
 		}
 	}
 	// 空地址代表挂载在业务监听，即使业务使用 Unix socket 也可复用。
@@ -46,18 +46,18 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 	metricsConf := conf.GetMetrics()
 	metricsAddr, metricsEnabled, err := destination(metricsConf.GetAddr())
 	if err != nil && !metricsConf.GetDisable() {
-		return nil, fmt.Errorf("metrics addr: %w", err)
+		return nil, nil, fmt.Errorf("metrics addr: %w", err)
 	}
 	metricsEnabled = metricsEnabled && !metricsConf.GetDisable()
 	healthAddr, healthEnabled, err := destination(health.config.Addr)
 	if err != nil && !health.config.Disable {
-		return nil, fmt.Errorf("health addr: %w", err)
+		return nil, nil, fmt.Errorf("health addr: %w", err)
 	}
 	healthEnabled = healthEnabled && !health.config.Disable
 	metricsPath := metricsConf.GetPath()
 	if metricsEnabled {
 		if strings.TrimSpace(metricsPath) == "" || metricsPath != strings.TrimSpace(metricsPath) || !strings.HasPrefix(metricsPath, "/") {
-			return nil, fmt.Errorf("http server metrics path %q must start with / and contain no surrounding whitespace", metricsPath)
+			return nil, nil, fmt.Errorf("http server metrics path %q must start with / and contain no surrounding whitespace", metricsPath)
 		}
 	}
 	conflictPath := ""
@@ -66,10 +66,11 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 	}
 	if healthEnabled {
 		if err := health.validate(conflictPath); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	extras := make([]HTTPServer, 0, 2)
+	endpoints := make([]registeredEndpoint, 0, 5)
 	byAddress := make(map[string]HTTPServer)
 	target := func(addr string) HTTPServer {
 		if addr == "" {
@@ -98,12 +99,25 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 			}
 			next.ServeHTTP(w, r)
 		})
+		endpoints = append(endpoints, registeredEndpoint{transport: "http", service: "metrics", method: http.MethodGet, path: metricsPath, listener: monitoringListener(metricsAddr)})
 	}
 	if healthEnabled {
 		srv := target(healthAddr)
 		srv.Handler = health.wrap(srv.Handler)
+		for _, path := range []string{health.config.LivenessPath, health.config.ReadinessPath} {
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				endpoints = append(endpoints, registeredEndpoint{transport: "http", service: "health", method: method, path: path, listener: monitoringListener(healthAddr)})
+			}
+		}
 	}
-	return extras, nil
+	return extras, endpoints, nil
+}
+
+func monitoringListener(addr string) string {
+	if addr == "" {
+		return "business"
+	}
+	return addr
 }
 
 // canonicalMonitoringAddr 做确定性地址比较，不解析 DNS；系统仍负责检测绑定冲突。

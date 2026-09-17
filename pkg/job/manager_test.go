@@ -32,6 +32,37 @@ func TestNewManagerConstructsWithObservabilityDependencies(t *testing.T) {
 	}
 }
 
+func TestNewManagerWiresCronAdmissionMetrics(t *testing.T) {
+	observability := newRuntimeObservability(t)
+	block := make(chan struct{})
+	started := make(chan struct{})
+	spec := NewSpec().RegisterCron("admission", "@hourly", TaskFunc(func(context.Context) error {
+		close(started)
+		<-block
+		return nil
+	}), WithConcurrentPolicy(SkipIfRunning)).(*Spec)
+	manager, err := NewManager(observability.logger, spec, observability.tracingProvider, observability.metricsProvider, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := manager.cronJobs[0].managedJob.job.Run
+	done := make(chan error, 1)
+	go func() { done <- run(context.Background()) }()
+	<-started
+	if err := run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	close(block)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if sample := findJobMetricSample(t, observability.metricsProvider, jobSkippedInstrumentName, map[string]string{
+		metricLabelJob: "admission", metricLabelReason: "already_running",
+	}); sample.counter != 1 {
+		t.Fatalf("skip counter = %v, want 1", sample.counter)
+	}
+}
+
 func newTestManager(t *testing.T, spec *Spec) *Manager {
 	t.Helper()
 	logger, tracingProvider, metricsProvider := newTestObservability(t)
@@ -224,7 +255,10 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if logs := string(written); !strings.Contains(logs, "module=job") || !strings.Contains(logs, "job=invoice") || !strings.Contains(logs, "job execution done") {
+	if logs := string(written); !strings.Contains(logs, "module=job") || !strings.Contains(logs, "job=invoice") ||
+		!strings.Contains(logs, "msg=job.registered") || !strings.Contains(logs, "kind=once") ||
+		!strings.Contains(logs, "schedule=once") || !strings.Contains(logs, "registration.caller=") ||
+		!strings.Contains(logs, "msg=job.execution.finished") {
 		t.Fatalf("one-shot logs = %s", logs)
 	}
 }

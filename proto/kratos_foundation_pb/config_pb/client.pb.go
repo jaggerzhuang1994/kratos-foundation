@@ -252,7 +252,8 @@ type ClientMiddleware struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Metadata       *Middleware_Metadata       `protobuf:"bytes,1,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
+	Metadata *Middleware_Metadata `protobuf:"bytes,1,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
+	// Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。
 	Tracing        *Middleware_Tracing        `protobuf:"bytes,2,opt,name=tracing,proto3,oneof" json:"tracing,omitempty"`
 	Metrics        *Middleware_Metrics        `protobuf:"bytes,3,opt,name=metrics,proto3,oneof" json:"metrics,omitempty"`
 	Logging        *Middleware_Logging        `protobuf:"bytes,4,opt,name=logging,proto3,oneof" json:"logging,omitempty"`

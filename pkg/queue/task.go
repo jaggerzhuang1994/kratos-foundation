@@ -61,7 +61,7 @@ var (
 	ErrLeaseLost = errors.New("queue lease lost")
 	// ErrDuplicate 表示同队列已存在相同 ID 的存储记录，包括后端保留的完成任务。
 	ErrDuplicate = errors.New("queue task already exists")
-	// ErrNotFound 表示所请求的失败任务不存在。
+	// ErrNotFound 表示所请求的任务不存在。
 	ErrNotFound = errors.New("queue task not found")
 )
 

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
@@ -46,6 +47,11 @@ type Repo[T Entity] struct {
 	entityType reflect.Type
 	// retainCompleted 固定成功记录保留策略；构造后不热更新。
 	retainCompleted bool
+	// timestampPrecision 是当前方言 timestamp 列的默认精度，用于避免边界提前。
+	timestampPrecision time.Duration
+	// timestampMin 和 timestampMax 限制 MySQL TIMESTAMP 的可写 UTC 范围；SQLite 不限制。
+	timestampMin time.Time
+	timestampMax time.Time
 }
 
 // NewRepo 校验模型和方言，不查询或迁移表，不启动后台任务。
@@ -79,8 +85,16 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 	if db.Error != nil {
 		return nil, fmt.Errorf("resolve queue database: %w", db.Error)
 	}
+	var timestampPrecision time.Duration
+	var timestampMin time.Time
+	var timestampMax time.Time
 	switch db.Dialector.Name() {
-	case "sqlite", "mysql":
+	case "sqlite":
+		timestampPrecision = time.Millisecond
+	case "mysql":
+		timestampPrecision = time.Second
+		timestampMin = time.Date(1970, time.January, 1, 0, 0, 1, 0, time.UTC)
+		timestampMax = time.Date(2038, time.January, 19, 3, 14, 7, 0, time.UTC)
 	default:
 		return nil, errors.New("unsupported queue database dialect")
 	}
@@ -89,7 +103,7 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 		return nil, fmt.Errorf("parse queue model: %w", err)
 	}
 	// 固定基础列的映射和唯一主键，防止自定义字段遮蔽租约或改变任务身份。
-	for _, name := range []string{"Status", "CompletedAt", "ID", "Identity", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt"} {
+	for _, name := range []string{"Status", "CompletedAt", "ID", "Generation", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt"} {
 		f := statement.Schema.LookUpField(name)
 		base, _ := reflect.TypeFor[Model]().FieldByName(name)
 		if f == nil || len(f.BindNames) != 2 || f.BindNames[0] != "Model" || f.StructField.Tag != base.Tag || f.DBName != strings.Split(strings.TrimPrefix(base.Tag.Get("gorm"), "column:"), ";")[0] || !f.Creatable || !f.Updatable || !f.Readable {
@@ -104,7 +118,11 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 	if len(statement.Schema.PrimaryFields) != 1 || statement.Schema.PrimaryFields[0].Name != "ID" || len(statement.Schema.QueryClauses) != 0 || len(statement.Schema.DeleteClauses) != 0 {
 		return nil, errors.New("queue model cannot change primary key or use soft delete")
 	}
-	return &Repo[T]{provider: provider, factory: factory, table: table, modelTable: modelTable, entityType: typ.Elem(), retainCompleted: config.RetainCompleted}, nil
+	return &Repo[T]{
+		provider: provider, factory: factory, table: table, modelTable: modelTable,
+		entityType: typ.Elem(), retainCompleted: config.RetainCompleted,
+		timestampPrecision: timestampPrecision, timestampMin: timestampMin, timestampMax: timestampMax,
+	}, nil
 }
 
 func (r *Repo[T]) entity() T { return reflect.New(r.entityType).Interface().(T) }
@@ -125,15 +143,39 @@ func (r *Repo[T]) consumerDB(ctx context.Context) *gorm.DB {
 	return db
 }
 
+func (r *Repo[T]) validateTimestamp(name string, at time.Time) error {
+	if r.timestampMin.IsZero() {
+		return nil
+	}
+	value := timestampCeil(at, r.timestampPrecision)
+	if at.IsZero() || value.Before(r.timestampMin) || value.After(r.timestampMax) {
+		return fmt.Errorf("queue %s is outside the MySQL timestamp range", name)
+	}
+	return nil
+}
+
 // Insert 将任务和工厂自定义字段写入同一行，可复用业务 Context 中的事务。
 func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) error {
 	if record == nil || record.Task.ID == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.MessageVersion) == "" || strings.TrimSpace(record.Task.ID) == "" || record.Attempts < 0 || len(record.Token) > 36 || len(record.FailureReason) > 128 {
 		return errors.New("invalid queue task")
 	}
+	if err := r.validateTimestamp("available_at", record.Task.AvailableAt); err != nil {
+		return err
+	}
+	if record.Failed {
+		if err := r.validateTimestamp("failed_at", record.FailedAt); err != nil {
+			return err
+		}
+	}
 	snapshot := *record
 	snapshot.Task = *record.Task.Clone()
 	// 在调用工厂前编码，业务工厂不能修改框架即将保存的任务内容。
-	data, err := json.Marshal(snapshot.Task)
+	data, err := json.Marshal(taskData{
+		MessageVersion: snapshot.Task.MessageVersion,
+		Payload:        snapshot.Task.Payload,
+		Headers:        snapshot.Task.Headers,
+		CreatedAt:      snapshot.Task.CreatedAt,
+	})
 	if err != nil {
 		return fmt.Errorf("encode queue task: %w", err)
 	}
@@ -144,13 +186,13 @@ func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) 
 	if reflect.ValueOf(entity).IsNil() || entity.QueueModel() == nil || entity.TableName() != r.modelTable {
 		return errors.New("factory returned an invalid queue model")
 	}
-	model := Model{Status: StatusPending, ID: taskKey(record.Task.ID), Identity: uuid.NewString(), Data: data, AvailableAt: deadlineMillis(record.Task.AvailableAt), Attempts: record.Attempts, Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason}
+	model := Model{Status: StatusPending, ID: taskID(record.Task.ID), Generation: uuid.NewString(), Data: data, AvailableAt: timestampCeil(record.Task.AvailableAt, r.timestampPrecision), Attempts: record.Attempts, Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason}
 	if !record.ReservedUntil.IsZero() {
 		model.ReservedUntil = deadlineMillis(record.ReservedUntil)
 		model.Status = StatusRunning
 	}
 	if record.Failed {
-		model.FailedAt = record.FailedAt.UnixMilli()
+		model.FailedAt = timestampPointer(record.FailedAt, r.timestampPrecision)
 		model.Status = StatusFailed
 	}
 	*entity.QueueModel() = model

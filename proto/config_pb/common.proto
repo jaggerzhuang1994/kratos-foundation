@@ -37,7 +37,7 @@ message Middleware {
 
   // 链路追踪配置
   message Tracing {
-    // 是否禁用
+    // 禁用 Span 记录、采样和导出；仍生成或传播日志关联所需的 TraceID/SpanID。
     optional bool disable = 1;
   }
 

@@ -15,14 +15,15 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 		attempt int
 		handler taskHandler
 		want    string
+		result  string
 	}{
-		{"success", 1, func(_ context.Context, t *Task) error { t.Payload[0] = 'X'; return nil }, "ack"},
-		{"retry", 1, func(context.Context, *Task) error { return errors.New("temporary") }, "release"},
-		{"exhausted", 3, func(context.Context, *Task) error { return errors.New("temporary") }, "retry_exhausted"},
-		{"crashed repeatedly", 4, func(context.Context, *Task) error { panic("must not run") }, "retry_exhausted"},
-		{"permanent", 1, func(context.Context, *Task) error { return Permanent(errors.New("invalid")) }, "permanent"},
-		{"unknown type", 1, nil, "permanent"},
-		{"panic", 1, func(context.Context, *Task) error { panic("private panic data") }, "release"},
+		{"success", 1, func(_ context.Context, t *Task) error { t.Payload[0] = 'X'; return nil }, "ack", "success"},
+		{"retry", 1, func(context.Context, *Task) error { return errors.New("temporary") }, "release", "retry"},
+		{"exhausted", 3, func(context.Context, *Task) error { return errors.New("temporary") }, "retry_exhausted", "failed"},
+		{"crashed repeatedly", 4, func(context.Context, *Task) error { panic("must not run") }, "retry_exhausted", "failed"},
+		{"permanent", 1, func(context.Context, *Task) error { return Permanent(errors.New("invalid")) }, "permanent", "failed"},
+		{"unknown type", 1, nil, "permanent", "failed"},
+		{"panic", 1, func(context.Context, *Task) error { panic("private panic data") }, "release", "retry"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			obs, _ := testObservability(t)
@@ -45,8 +46,14 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 			if outcome != tc.want || string(r.Task.Payload) != "data" {
 				t.Fatalf("outcome %s snapshot %s", outcome, r.Task.Payload)
 			}
+			logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+			if !strings.Contains(logs, "eventtask.execution.started") ||
+				!strings.Contains(logs, "eventtask.execution.finished") ||
+				!strings.Contains(logs, "result"+tc.result) ||
+				!strings.Contains(logs, "duration") {
+				t.Fatalf("incomplete execution lifecycle log: %s", logs)
+			}
 			if tc.name != "success" {
-				logs := strings.Join(obs.Logger.(*testLog).events, "\n")
 				cause := map[string]string{"retry": "handler_error", "exhausted": "handler_error", "crashed repeatedly": "attempts_exhausted", "permanent": "handler_error", "unknown type": "handler_missing", "panic": "panic"}[tc.name]
 				if !strings.Contains(logs, "cause"+cause) || !strings.Contains(logs, "task.message_versionemail") || strings.Contains(logs, "private panic data") {
 					t.Fatalf("unsafe or incomplete failure log: %s", logs)
@@ -78,6 +85,10 @@ func TestExecutionTimeoutAndCancellation(t *testing.T) {
 		if err = worker.execute(ctx, r, time.Now()); !errors.Is(err, context.Canceled) || released {
 			t.Fatalf("cancel %v released=%v", err, released)
 		}
+		logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+		if !strings.Contains(logs, "resultstopped") || !strings.Contains(logs, "duration") {
+			t.Fatalf("canceled lifecycle log: %s", logs)
+		}
 		if err = worker.execute(context.Background(), &Reservation{}, time.Now()); err == nil {
 			t.Fatal("accepted invalid reservation")
 		}
@@ -99,6 +110,10 @@ func TestExecutionStorageFailureAndBackoff(t *testing.T) {
 	}
 	if err = w.execute(context.Background(), &Reservation{Task: &Task{MessageVersion: "x"}, Token: "t", Attempts: 2}, time.Now()); !errors.Is(err, failure) {
 		t.Fatalf("lost failure %v", err)
+	}
+	logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+	if !strings.Contains(logs, "resultstorage_error") || !strings.Contains(logs, "duration") {
+		t.Fatalf("storage failure lifecycle log: %s", logs)
 	}
 }
 

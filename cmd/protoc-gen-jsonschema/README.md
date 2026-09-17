@@ -274,6 +274,8 @@ flowchart LR
 
 远程 `merge` URL 的完整请求最多等待 30 秒，只接受 2xx 响应，并限制响应体为 8 MiB。读取失败、超时、状态码异常或超限时，生成器报告错误并停止；本地文件读取保持原有行为。
 
+合并时，生成 schema 与外部 schema 作为两个 `allOf` 分支共同生效；外部根级 `required`、`properties`、组合关键字及其他约束不会被丢弃。外部根 `$ref` 会转换为该分支内的首个 `allOf` 项，避免旧 draft 忽略 `$ref` 同级约束。外部 `$schema` 由当前输出 draft 统一决定；外部 `$id` 与其分支内 definitions 一起保留，使相对引用仍以原资源为解析基准。同时把 definitions 提升到输出的统一容器，兼容没有独立 `$id` 的 fragment 引用。同名 definition 按 JSON 数据模型比较：语义相同可复用，不同则报告 definition 名称并停止生成，避免引用静默指向错误定义。
+
 ```mermaid
 flowchart TD
     A([读取 merge 配置]) --> B{HTTP 或 HTTPS URL?}
@@ -288,6 +290,9 @@ flowchart TD
     C --> H
     H --> I{格式与 draft 有效?}
     I -- 否 --> X
-    I -- 是 --> J([交给现有合并流程])
+    I -- 是 --> J[检查同名 definition 是否语义一致]
+    J -- 冲突 --> X
+    J -- 一致或无冲突 --> L[提升 definitions 并保留外部根约束]
+    L --> M([两个 schema 作为 allOf 分支输出])
     X --> K([停止生成])
 ```

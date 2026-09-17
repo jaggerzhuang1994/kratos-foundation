@@ -43,7 +43,7 @@ client:
 
 `AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，`discovery` 省略或为空时继承 `client.discovery`，根配置也省略或为空时使用 `default`，需注入包含该实例的 DiscoveryResolver；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。获取未配置的名称时同样继承根级 discovery；实例缺失或不可用时返回发现解析错误。官方默认 merge 保留更新中省略的字段，不能通过从源中删除条目移除有效配置。
 
-当前 Factory 的 gRPC 使用 `DialInsecure`，不提供 gRPC TLS/mTLS 配置，`GRPCS` 已移除；目标 URL 和单次调用选项不能启用 gRPC TLS。HTTPS 使用 TLS，标准 Transport 至少要求 TLS 1.2，并保留其已有 TLS 配置；自定义 RoundTripper/TLS 拨号函数须自行实现安全与取消策略。需要 gRPC TLS 时应由应用单独构造并管理原生客户端。
+当前 Factory 的 gRPC 使用 `DialInsecure`，不提供 gRPC TLS/mTLS 配置，`GRPCS` 已移除；这是平台网关或 Service Mesh 终止并认证 TLS/mTLS 后的受信任内部明文链路，目标 URL 和单次调用选项不能启用 gRPC TLS。不得将该连接跨越不可信网络。HTTPS 仍使用 TLS，标准 Transport 至少要求 TLS 1.2，并保留其已有 TLS 配置；自定义 RoundTripper/TLS 拨号函数须自行实现安全与取消策略。需要应用自行管理 gRPC TLS 的例外场景，应单独构造和管理原生客户端，不改变 Factory 的平台责任边界。
 
 Factory 在构造时读取 `appInfo.Metadata()` 中的环境和主机名并保存独立快照。后续修改进程环境或原始 Metadata 不影响该 Factory 的路由。非 local 环境只匹配同环境节点；local 环境依次优先同环境同主机、同环境，均无匹配时保留全部节点。协议过滤和目标 URL 中的元数据过滤仍会继续应用。
 
@@ -186,6 +186,8 @@ flowchart TD
 ## 模块日志
 
 工厂生命周期日志和 HTTP/gRPC 访问日志使用 module=client，禁用、级别和字段过滤统一由 `log.modules` 热更新；不再提供 `client.log`。单个客户端的 `middleware.logging.disable` 仍可独立关闭访问日志。
+
+单个客户端设置 `middleware.tracing.disable: true` 或全局 `tracing.disable: true` 时，不记录、采样或导出客户端 Span，但仍创建或延续非采样 SpanContext，并向下游传播 TraceID/SpanID。这使同一请求中的业务日志继续包含 `trace.id`、`span.id`；不会创建 exporter。全局 Provider 在构造期禁用后，修改客户端中间件开关只能改变配置快照，不能恢复记录与导出，恢复真实 tracing 需要重启。
 
 ```mermaid
 flowchart TD

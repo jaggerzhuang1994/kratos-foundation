@@ -68,9 +68,6 @@ func validateDatabaseConfig(
 	if interval := metricsConfig.GetRefreshInterval(); interval != nil && interval.AsDuration() <= 0 {
 		return errors.New("validate database config: metrics refresh interval must be positive")
 	}
-	if interval := metricsConfig.GetMysql().GetInterval(); interval != nil && interval.AsDuration() <= 0 {
-		return errors.New("validate database config: MySQL metrics interval must be positive")
-	}
 	return nil
 }
 

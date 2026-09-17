@@ -75,7 +75,7 @@ func NewJobBootstrap(
 	if !manager.HasJobs() {
 		return JobBootstrap{}, nil
 	}
-	application.RegisterRuntime(&jobRuntime{Manager: manager})
+	application.RegisterRuntime(&jobRuntime{Manager: manager, application: application})
 	return JobBootstrap{}, nil
 }
 
@@ -83,9 +83,14 @@ func NewJobBootstrap(
 type jobRuntime struct {
 	// Manager 借用任务管理器，将任务生命周期适配为应用运行时。
 	*job.Manager
+	// application 提供 Kratos 进入 AfterStart 且启动后钩子完成后的 ready 屏障。
+	application *app.Spec
 }
 
 func (r *jobRuntime) Start(ctx context.Context) error {
+	if err := r.application.WaitReady(ctx); err != nil {
+		return err
+	}
 	err := r.Manager.Start(ctx)
 	// Manager 的完成信号为独立哨兵；包含该哨兵的任务错误仍应原样传播。
 	if errors.Is(err, job.ErrCompleted) {

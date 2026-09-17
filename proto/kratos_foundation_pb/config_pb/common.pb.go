@@ -251,7 +251,7 @@ type Middleware_Tracing struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// 是否禁用
+	// 禁用 Span 记录、采样和导出；仍生成或传播日志关联所需的 TraceID/SpanID。
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 }
 

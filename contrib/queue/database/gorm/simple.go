@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
-	"gorm.io/gorm"
 )
 
 // SimpleConfig 配置仅保存框架队列字段的仓储。
@@ -51,11 +50,6 @@ func (r *SimpleRepo) Migrate(ctx context.Context) error {
 	}
 	if err := db.AutoMigrate(&simpleModel{}); err != nil {
 		return fmt.Errorf("migrate queue simple table: %w", err)
-	}
-	// 兼容旧表：Failed 和租约列保留，迁移时补齐可查询状态；已完成行不回退。
-	// 部署期间须停用旧 Worker，避免其忽略 completed 状态重新领取。
-	if err := db.Where("status <> ?", StatusCompleted).Update("status", gorm.Expr("CASE WHEN failed = ? THEN ? WHEN reserved_until <> 0 THEN ? ELSE ? END", true, StatusFailed, StatusRunning, StatusPending)).Error; err != nil {
-		return fmt.Errorf("backfill queue task status: %w", err)
 	}
 	return nil
 }

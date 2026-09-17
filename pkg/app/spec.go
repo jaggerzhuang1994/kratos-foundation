@@ -17,6 +17,8 @@ import (
 type Spec struct {
 	// application 原子发布已构造应用，供就绪探针读取。
 	application atomic.Pointer[App]
+	// readySignal 在 Kratos 进入 AfterStart 且启动后钩子成功后关闭，供 Job 等后台运行时等待。
+	readySignal chan struct{}
 	// mu 保护组装声明及冻结状态。
 	mu sync.Mutex
 	// frozen 记录声明是否已冻结。
@@ -52,6 +54,8 @@ type Spec struct {
 type appSnapshot struct {
 	// context 保存装饰完成的应用父上下文。
 	context context.Context
+	// readySignal 与 Spec 共享，只由 App 在首次成功 ready 时关闭。
+	readySignal chan struct{}
 
 	// appInfo 保存应用身份引用。
 	appInfo AppInfo
@@ -79,7 +83,8 @@ type appSnapshot struct {
 // NewSpec 创建可登记的应用组装状态。
 func NewSpec() *Spec {
 	return &Spec{
-		metadata: make(map[string]string),
+		metadata:    make(map[string]string),
+		readySignal: make(chan struct{}),
 	}
 }
 
@@ -194,6 +199,7 @@ func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
 	}
 	s.frozen = true
 	snapshot := appSnapshot{
+		readySignal: s.readySignal,
 		appInfo:     s.appInfo,
 		logger:      s.logger,
 		metadata:    maps.Clone(s.metadata),
@@ -233,8 +239,21 @@ func (s *Spec) checkMutable() {
 	}
 }
 
-// Ready 在全部启动后钩子成功且尚未请求停机时返回 true，可并发用于就绪探针。
+// Ready 在 Kratos 进入 AfterStart、启动后钩子成功且尚未请求停机时返回 true，可并发用于就绪探针。
 func (s *Spec) Ready() bool {
 	application := s.application.Load()
 	return application != nil && application.ready.Load() && !application.isStopping()
+}
+
+// WaitReady 等待 Kratos 进入 AfterStart 且启动后钩子成功；就绪前停机时由调用方 Context 解除等待。
+func (s *Spec) WaitReady(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("ready context is nil")
+	}
+	select {
+	case <-s.readySignal:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

@@ -298,7 +298,7 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 		for i := 0; i+1 < len(fields); i += 2 {
 			event[fields[i].(string)] = fields[i+1]
 		}
-		if event["msg"] == "poll | config.notify | Configuration subscription update" {
+		if event["msg"] == "Configuration subscription update" {
 			event["level"] = level
 			events <- event
 		}

@@ -8,7 +8,7 @@
 
 ## 文件组织
 
-实现按职责归并为以下七个文件；每个实现最多对应一个同名测试文件，不按单个类型拆文件。
+实现按职责归并为以下八个文件；每个实现最多对应一个同名测试文件，不按单个类型拆文件。
 
 | 文件 | 职责 |
 | --- | --- |
@@ -18,6 +18,7 @@
 | [worker_execution.go](worker_execution.go) | 单次任务执行、超时与 panic、Ack/Release/Fail、归档成功后的失败通知 |
 | [retry.go](retry.go) | 重试策略、退避计算和等待、Permanent 错误标记 |
 | [task.go](task.go) | Task、Reservation、FailedTask、Store、Stats 与存储错误契约 |
+| [operations.go](operations.go) | 可选运维查询、状态变更、游标和有界清理契约 |
 | [observability.go](observability.go) | 应用观测依赖及积压统计指标注册 |
 
 `internal/telemetry` 保留独立的指标与追踪实现，`testdata/wireassembly` 保留真实 Wire 生成验证。运行流程见下方“执行、延迟与失败”；文件归属不改变调用顺序或资源所有权。
@@ -56,7 +57,38 @@ Worker 每次从 Store 原子领取一个任务并持久增加 Attempts，再在
 
 Retry 的第一次等待使用 MinBackoff，后续按两倍增长并受 MaxBackoff 限制；沿用已有 RetryPolicy 的显式零语义：MinBackoff 为零始终不等待，MinBackoff 非零而 MaxBackoff 为零时仅第一次使用 MinBackoff，后续不等待。重试配置在构造时固化，不热更新。
 
-成功后按当前 Token 确认完成；默认后端删除任务，GORM 可通过 [RetainCompleted](../../contrib/queue/database/gorm/README.md#保留执行记录) 保留成功记录与状态。普通错误、panic 和执行超时进入重试；`queue.Permanent(err)` 或未匹配的消息版本进入永久失败，次数耗尽进入 `retry_exhausted`。失败持久化成功后 Worker 继续处理其他任务。`Store.Failed(ctx, limit)` 查询最多 1–1000 条独立失败快照；`Store.Retry(ctx, id, at)` 人工重新投递失败任务并清零次数；找不到返回 `ErrNotFound`。失败记录不会自动过期，无分页、删除或管理界面。
+成功后按当前 Token 确认完成；默认后端删除任务，GORM 可通过 [RetainCompleted](../../contrib/queue/database/gorm/README.md#保留执行记录) 保留成功记录与状态。普通错误、panic 和执行超时进入重试；`queue.Permanent(err)` 或未匹配的消息版本进入永久失败，次数耗尽进入 `retry_exhausted`。失败持久化成功后 Worker 继续处理其他任务。`Store.Failed(ctx, limit)` 查询最多 1–1000 条独立失败快照；`Store.Retry(ctx, id, at)` 保留兼容的人工重投入口。支持运维扩展的 Store 还可通过下述 `Operations` 分页和清理；框架不提供统一管理界面或 HTTP API。
+
+## 可选运维契约
+
+`q.Operations()` 仅在底层 Store 支持时返回 `queue.Operations`。业务可据此开发自己的运维 API、CLI 或面板，但必须自行实现身份认证、权限、审计、限流和正文脱敏；不要把 `Payload`、`Headers`、失败原文或任务 ID 放入指标标签。`List` 只返回元数据，`Get` 才返回包含正文的独立快照；Cursor 由后端生成且不透明，调用方不得解析或跨 Store 复用。
+
+| 操作 | 允许状态 | 结果边界 |
+| --- | --- | --- |
+| `List` | pending、scheduled、running、failed、completed | `limit` 为 1–1000；状态筛选可选；正文不返回 |
+| `Get` | 任意仍存在状态 | 返回完整独立快照；不存在为 `ErrNotFound` |
+| `Delete` | failed、completed | 其他状态为 `ErrStateConflict` |
+| `Cancel` | pending、scheduled | running 或终态为 `ErrStateConflict` |
+| `Retry` | failed | 清零尝试次数并重新排期；其他状态为 `ErrStateConflict` |
+| `Cleanup` | 截止时间之前的 failed、completed | 每次最多 1000 条；返回实际删除数 |
+
+Redis 成功确认后立即删除，因而不会列出或清理 completed；Database GORM 只有开启 `RetainCompleted` 才存在 completed。所有变更必须由存储层原子检查状态和有效租约，进程内不另加锁；并发 Worker 已取得有效租约时不能被取消或删除。清理是调用方显式触发的有界操作，不启动后台 goroutine，也不自动按保留期运行。
+
+```mermaid
+flowchart TD
+    A([业务运维入口]) --> B[认证 授权 审计与限流]
+    B -- 拒绝 --> X([返回业务权限错误])
+    B -- 通过 --> C{Queue 暴露 Operations?}
+    C -- 否 --> Y([能力不可用])
+    C -- 是 --> D{查询还是变更?}
+    D -- List --> E[Store 返回元数据页和不透明 Cursor]
+    D -- Get --> F[Store 返回完整独立快照]
+    D -- Delete Cancel Retry Cleanup --> G[存储原子检查状态和租约]
+    G -- 不允许 --> H([ErrStateConflict 或 ErrNotFound])
+    G -- 允许 --> I[提交单条变更或有界清理]
+    E & F & I --> J[业务层脱敏后返回正文]
+    J --> K([结束])
+```
 
 多 Worker 通过 Redis Lua 或业务 Repo 的原子操作竞争领取；Token 防止旧 Worker 确认、释放或失败归档已被重新分配的任务，冲突返回 `ErrLeaseLost`，Worker 记录 WARN 并继续。Token 到期但尚未重新分配时仍可确认。Handler 执行不在 Redis Lua、领取事务或 Go 互斥锁内；Repo 的具体同步机制由业务实现；竞争可能有饥饿，不保证领取公平。
 
@@ -78,24 +110,29 @@ flowchart TD
     J --> H
     I -- 是 --> Z([停止并等待循环退出])
     H -- 成功 --> K[原子边界结束 新token与attempts已保存]
-    K --> L{消息版本匹配且未超次数?}
+    K --> KS[INFO task.execution.started]
+    KS --> L{消息版本匹配且未超次数?}
     L -- 是 --> M[原子边界外执行Handler 带超时Context]
     L -- 否 --> R[按token持久化失败]
     M -- 成功 --> N[按token确认完成 由后端删除或保留]
     M -- 可重试错误或超时 --> O[按token释放 写下次可执行时间]
     M -- 永久失败或次数耗尽 --> R
-    M -- 应用取消 --> Z
-    N -- 成功 --> P[DEBUG Worker task.completed]
+    M -- 应用取消 --> P[INFO task.execution.finished result=stopped duration]
+    N -- 成功 --> P[INFO task.execution.finished result=success duration]
     O -- 成功 --> Q[WARN Worker retry.scheduled]
     R -- 成功 --> S[ERROR Worker task.failed]
-    P & Q & S --> H
+    Q --> Q1[INFO task.execution.finished result=retry duration]
+    S --> S1[INFO task.execution.finished result=failed duration]
+    P --> H
+    Q1 & S1 --> H
     N & O & R -- 纯租约冲突 --> T[WARN Worker lease.lost]
     T --> H
     H & N & O & R -- 存储故障 --> U[ERROR Worker storage.failed]
-    U --> V([取消同实例循环 等待退出 返回错误])
+    U --> U1[INFO task.execution.finished result=storage_error duration]
+    U1 --> V([取消同实例循环 等待退出 返回错误])
 ```
 
-日志记录队列、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
+每个有效领取在 Handler 调度前记录 `INFO event=task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `INFO event=task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
 
 Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Post 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
 

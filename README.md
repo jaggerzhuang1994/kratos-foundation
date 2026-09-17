@@ -2,7 +2,9 @@
 
 `kratos-foundation` 是基于 [go-kratos](https://github.com/go-kratos/kratos) 的 Go 应用基础库，统一组装日志、配置、服务端、客户端、数据库、缓存、队列、任务与可观测性能力。
 
-> 项目尚未正式发布，公开 API 仍可能在首个稳定版本前调整。
+当前开发线面向下一版本 `v2.1.0`，尚未发布；已发布版本仍以 Git tag 为准。业务应固定到经过验证的 tag 或已推送 commit，并按 [v2 迁移清单](MIGRATION_V2.md) 核对兼容性；不要根据分支名、本地工作树或本文的规划描述推断发布状态。计划变更见 [CHANGELOG](CHANGELOG.md)。
+
+项目希望收敛到的能力边界、当前完成度和后续优先级见[项目目标形态与演进路线](PROJECT_VISION.md)。
 
 ## 环境要求
 
@@ -79,9 +81,23 @@ flowchart TD
 
 ### 健康检查与配置观测
 
-默认业务 HTTP 端口提供 `/metrics`、`/healthz` 和 `/readyz`。`/healthz` 表示 HTTP 能响应；`/readyz` 在全部启动后钩子完成、关键依赖检查通过且未停机时返回 200，否则返回 503。`bootstrap.NewServerBootstrap` 自动绑定应用就绪状态；直接使用 Runtime 时需要显式绑定，否则 readiness 保持 503。
+默认业务 HTTP 端口提供 `/metrics`、`/healthz` 和 `/readyz`。`/healthz` 表示 HTTP 能响应；`/readyz` 在 Kratos 进入 AfterStart、Foundation 启动后钩子完成、关键依赖检查通过且未停机时返回 200，否则返回 503。该 Ready 信号不表示任意自定义 Runtime 的阻塞 `Start` 已返回成功；Runtime 通常应持续阻塞到停止，异步启动失败仍会触发应用收敛。`bootstrap.NewServerBootstrap` 自动绑定应用就绪状态；直接使用 Runtime 时需要显式绑定，否则 readiness 保持 503。
 
 设置 `server.http.metrics.addr` 和 `server.http.health.addr` 可独立监听，例如同时设为 `127.0.0.1:9001` 会共享一个管理监听。空地址复用业务 HTTP；业务 HTTP 禁用时，管理端点只有显式设置地址才会启动。管理端点独立于业务路由前缀、Filter 和鉴权；独立监听使用普通 HTTP，不继承业务 TLS，也不进入业务服务发现。完整地址规则、探针流程及停机边界见 [`pkg/server`](pkg/server/README.md)。
+
+### TLS/mTLS 责任边界
+
+Foundation 配置管理的业务 HTTP、gRPC 和独立管理监听默认使用明文，通用 gRPC Factory 也只提供内部明文拨号；TLS/mTLS 由入口网关、Service Mesh 或同类平台层终止与认证。原生 `HTTPBuilder.Option` / `GRPCBuilder.Option` 是不受配置约束的底层扩展口，可以注入自定义 Listener 或 TLS，使用后由业务自行承担完整安全和生命周期责任，不再属于这条平台基线；HTTP Client 的 HTTPS 用于确需 TLS 的外部目标。默认应用监听和内部调用只能位于受信任网络，管理端口必须通过网络策略或仅本机绑定限制访问；不得把明文端口直接暴露到互联网或其他不可信网络。Kafka、数据库等基础设施客户端仍按各自驱动配置安全连接。
+
+```mermaid
+flowchart LR
+    A([外部或跨信任域请求]) --> B[平台网关或 Sidecar: TLS/mTLS 认证与终止]
+    B --> C{进入受信任网络?}
+    C -- 否 --> D([拒绝访问])
+    C -- 是 --> E[明文 HTTP/gRPC 内部调用]
+    E --> F[Foundation 应用业务监听]
+    E --> G[受网络策略保护的管理监听]
+```
 
 业务 HTTP 默认开启，gRPC 按有效服务注册默认开启；显式 `server.http.disable` / `server.grpc.disable` 优先，修改需要重启。`spec.Http()` 仅声明业务 HTTP，不控制独立管理监听。依赖检查通过 `spec.Health().Checks(...)` 追加；健康端点地址、路径、开关和总检查期限统一由配置管理，不提供代码覆盖入口。
 
@@ -177,7 +193,7 @@ Job 仅提供本进程、同一 Manager 内的 AllowOverlap、SkipIfRunning、De
 完整包分类见 [`pkg/README.md`](pkg/README.md)，新增工具、契约、资源组件、Runtime、Bootstrap 或第三方适配时，参考[包开发模式指南](pkg/DEVELOPMENT.md)。指南包含 watchdog 看门狗锁的包归属、生命周期与开发示例。
 
 ```text
-api/                              对外 Protocol Buffers 定义及生成产物
+api/                              未来对外 Protocol Buffers 目录约定；当前尚未创建
 pkg/<domain>/                     公共契约、构造入口与同领域实现
 pkg/<domain>/internal/<capability>/ 按需拆出的独立私有子能力
 contrib/<domain>/<driver>/        业务 App/Wire 可选择的公共第三方实现

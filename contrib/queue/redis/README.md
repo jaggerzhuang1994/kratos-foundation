@@ -2,7 +2,7 @@
 
 本 Store 可直接注入 [类型化 Queue](../../../pkg/queue/typed.md)，业务无需编写 JSON 编解码或启停转发；物理 key 前缀仍由应用入口配置。
 
-本包实现 `pkg/queue.Store`，支持立即或延迟执行、租约回收、失败记录和人工重试。旧 Redis Streams Producer/Consumer API 已移除；本包不提供 Consumer Group、广播或 Kafka 兼容接口。
+本包实现 `pkg/queue.Store` 和可选 `pkg/queue.Operations`，支持立即或延迟执行、租约回收、失败记录、人工重试和有界运维清理。旧 Redis Streams Producer/Consumer API 已移除；本包不提供 Consumer Group、广播或 Kafka 兼容接口。
 
 ## 构造与所有权
 
@@ -29,8 +29,8 @@ if err != nil {
 - 每个脚本在写入前检查五个键的类型，类型冲突直接返回错误且不改变队列状态；修复冲突后可重试。迁移先写目标再移除源，领取先读取、编码并写租约再弹出 ready；失败重投先写 delayed 再移除 failed，避免先删除唯一调度入口。Lua 原子脚本保护同队列共享状态；每次领取增加 Attempts 并产生新 token。Ack、Release、Fail 比较 token 和 reserved 成员关系，不允许旧 owner 确认已重新领取的任务。没有进程内锁，没有后台心跳。
 - 租约过期但尚未回收时，原 owner 仍可能完成任务；一旦被重新领取，旧 token 返回 `queue.ErrLeaseLost`。业务处理可能因租约超时或确认失败而重复执行，Handler 应自行实现业务幂等。
 - Release 保留 Attempts 并更新调度时间；Fail 保存不超过 128 字节的原因分类与失败时间；Retry 仅接受失败任务，清零 Attempts 并按指定时间重新调度。Task.AvailableAt 随 Release/Retry 更新，返回快照与调度索引一致。
-- 任务 ID 必须为 1–128 字节且不能全为空白。同队列内已有待执行、已领取或失败 ID 时，Enqueue 返回 `queue.ErrDuplicate`；Ack 后删除记录，允许复用 ID。Retry 找不到失败 ID 返回 `queue.ErrNotFound`。
-- Failed 要求 limit 在 1–1000 之间，按失败时间升序返回最多 limit 条记录。不存在失败自动删除、过期清理或容量限制；运维应监控 Redis 容量。
+- 任务 ID 必须为 1–128 字节且不能全为空白。同队列内已有待执行、已领取或失败 ID 时，Enqueue 返回 `queue.ErrDuplicate`；Ack 后删除记录，允许复用 ID。Retry 找不到任务返回 `queue.ErrNotFound`，任务存在但不是 failed 时返回 `queue.ErrStateConflict`。
+- Failed 要求 limit 在 1–1000 之间，按失败时间升序返回最多 limit 条记录。Store 不启动自动过期任务；运维应监控 Redis 容量并通过业务调度显式调用 Cleanup。
 - 领取时遇到损坏 envelope 或任务正文，转入失败索引并报错，保留原始记录，不持续占据 ready 或 reserved。Failed 遇到损坏记录或失败索引对应的正文缺失会返回错误，不能静默跳过；需运维修复保存的原始数据后再人工 Retry。
 
 业务负责分配前缀；同一 Redis 中相同前缀共享队列，不同前缀隔离队列。驱动只追加固定后缀，不散列、不添加框架命名空间或 hash tag。以 `app:queue:email` 为例：
@@ -80,6 +80,12 @@ flowchart TD
 ```
 
 Lua 执行期间无需显式获取/释放锁，原子边界即同步边界；每次增加五次本地 TYPE 检查，没有额外网络往返，脚本执行期间其他 Redis 操作仍会等待。Lua 错误不会回滚已完成的命令：这里防止的是已验证的 key 类型冲突及提前删除源索引导致的丢失，不承诺在任意 ACL 变更、存储损坏、淘汰或主从故障下自动恢复。历史版本已产生的孤立记录需要人工对账修复，不自动扫描或猜测执行状态。队列前缀应专用，禁止外部修改类型或设置 TTL；队列 Redis 不应配置会淘汰这些键的策略，持久化和复制仍需按业务可靠性要求部署。Redis 脚本已开始执行后，客户端取消不能撤销已提交状态；这类不确定结果可能导致重试，业务必须具备幂等性。底层 Store 只返回错误，由 Worker/应用边界记录日志，图中没有虚构 Store 日志节点。
+
+## 可选运维能力
+
+`Queue.Operations()` 可直接发现本 Store。List 使用 HSCAN 分批读取任务 ID，再查询四个状态索引；每次请求最多检查 `max(64, limit*4)` 且不超过 4000 条候选，Cursor 会保存扫描位置和本批未消费 ID，因此无遗漏但在大量过滤不命中时可能返回不足一页。Cursor 解码上限为 1 MiB、最多保留 4000 个非空且不超过 128 字节的任务 ID，超限或畸形输入直接拒绝。并发状态变化意味着跨页结果不是全局快照。List 仅返回元数据，Get 返回正文。
+
+Delete 只允许 failed，Cancel 只允许 pending/scheduled，Retry 只允许 failed；状态检查与修改在 Lua 中原子完成，有有效租约的 running 返回 `ErrStateConflict`。Ack 会删除成功记录，所以 Redis 不存在 completed 历史，按 completed 查询或清理返回空。Cleanup 只删除截止时间之前的 failed，单次上限 1000；业务负责定时触发、鉴权和审计。
 
 ## 验证
 

@@ -50,6 +50,8 @@ type App struct {
 
 	// ready 原子记录启动后钩子已全部成功；就绪判断还须排除 stopping。
 	ready atomic.Bool
+	// readySignal 在首次成功 ready 时关闭并广播，不由停止路径重复关闭。
+	readySignal chan struct{}
 	// stopping 原子标记已请求停止。
 	stopping atomic.Bool
 	// stopOnce 保证停机状态与预算只初始化一次。
@@ -208,6 +210,10 @@ func NewApp(
 
 // newApp 从冻结快照初始化应用状态，并保留可热更新的停机策略引用。
 func newApp(snapshot appSnapshot, stopPolicy *StopPolicy) *App {
+	readySignal := snapshot.readySignal
+	if readySignal == nil {
+		readySignal = make(chan struct{})
+	}
 	return &App{
 		parent:      snapshot.context,
 		parentDone:  make(chan struct{}),
@@ -216,6 +222,7 @@ func newApp(snapshot appSnapshot, stopPolicy *StopPolicy) *App {
 		beforeStop:  append([]HookFunc(nil), snapshot.beforeStop...),
 		afterStop:   append([]HookFunc(nil), snapshot.afterStop...),
 		stopPolicy:  stopPolicy,
+		readySignal: readySignal,
 	}
 }
 

@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
@@ -18,11 +20,18 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 			reply, err := next(ctx, req)
 			err = foundationerrors.Normalize(err)
 			if err != nil && foundationerrors.Code(err) >= 500 {
+				summary := error(err)
+				if cause := errors.Unwrap(err); cause != nil {
+					summary = cause
+				}
 				logger.WithContext(ctx).With(
 					"operation", requestOperation(ctx),
 					"code", foundationerrors.Code(err),
 					"reason", foundationerrors.Reason(err),
-					"error", fmt.Sprintf("%+v", err),
+					"error", summary,
+					"error.detail", log.DebugOnly(kratoslog.Valuer(func(context.Context) any {
+						return fmt.Sprintf("%+v", err)
+					})),
 				).Error("Request failed with a server error")
 			}
 			return reply, err
@@ -31,7 +40,7 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 }
 
 // recoverRequests 防止请求 panic 终止服务，不记录可能包含认证材料的请求和 panic 原文。
-// panic 会越过内层错误边界，因此只在此处记录类型与堆栈。
+// panic 会越过内层错误边界，因此只在此处记录类型，并按请求 debug 展开堆栈。
 func recoverRequests(logger log.Logger) middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (reply any, err error) {
@@ -41,7 +50,7 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 					logger.WithContext(ctx).With(
 						"operation", requestOperation(ctx),
 						"panic_type", fmt.Sprintf("%T", recovered),
-						"stack", stack,
+						"stack", log.DebugOnly(stack),
 					).Error("Recovered from a panic while handling a request")
 					reply = nil
 					err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithMetadata(map[string]string{"err_stack": stack})

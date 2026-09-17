@@ -2,9 +2,11 @@ package gorm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,7 +176,7 @@ func TestRepoRejectsModelOverrides(t *testing.T) {
 	}
 }
 
-func TestRepoFactoryAndIdentity(t *testing.T) {
+func TestRepoFactoryAndCanonicalID(t *testing.T) {
 	repo, db := testRepo(t)
 	ctx := context.Background()
 	record := &databasequeue.TaskRecord{Task: queue.Task{ID: "id", MessageVersion: "test"}}
@@ -191,7 +193,8 @@ func TestRepoFactoryAndIdentity(t *testing.T) {
 		r.Task.MessageVersion = "changed"
 		return &testTask{}, nil
 	}
-	for _, id := range []string{"id", "ID", "id ", "é", "e"} {
+	ids := []string{"id", "ID", "id ", "é", "e", "1", "01", "1e2", "100"}
+	for _, id := range ids {
 		record.Task.ID = id
 		if err := repo.Insert(ctx, record); err != nil {
 			t.Fatal(err)
@@ -201,12 +204,90 @@ func TestRepoFactoryAndIdentity(t *testing.T) {
 	if err := db.Model(&testTask{}).Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
-	if count != 5 {
+	if count != int64(len(ids)) {
 		t.Fatal(count)
+	}
+	for _, id := range ids {
+		var stored testTask
+		if err := db.Where("id = ?", id).Take(&stored).Error; err != nil || string(stored.ID) != id {
+			t.Fatalf("stored ID %q = %q, %v", id, stored.ID, err)
+		}
 	}
 	got, err := repo.Claim(ctx, time.Now(), time.Now().Add(time.Hour), "t")
 	if err != nil || got == nil || got.Task.MessageVersion != "test" {
 		t.Fatalf("factory changed payload: %v %v", got, err)
+	}
+}
+
+func TestRepoStoresOneTaskIDAndTimestampColumns(t *testing.T) {
+	repo, db := testRepo(t)
+	now := time.Unix(1700000000, 123456789).UTC()
+	task := queue.Task{
+		ID:             "Case-sensitive ID ",
+		MessageVersion: "mail.v1",
+		Payload:        []byte("body"),
+		AvailableAt:    now,
+		CreatedAt:      now.Add(-time.Minute),
+	}
+	if err := repo.Insert(context.Background(), &databasequeue.TaskRecord{Task: task}); err != nil {
+		t.Fatal(err)
+	}
+
+	var row testTask
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if string(row.ID) != task.ID || row.Generation == "" {
+		t.Fatalf("stored identifiers = id %q generation %q", row.ID, row.Generation)
+	}
+	if !row.AvailableAt.Equal(time.Unix(1700000000, 124000000).UTC()) {
+		t.Fatalf("available_at = %s", row.AvailableAt)
+	}
+	if row.FailedAt != nil || row.CompletedAt != nil {
+		t.Fatalf("terminal timestamps = failed %v completed %v", row.FailedAt, row.CompletedAt)
+	}
+	var data map[string]any
+	if err := json.Unmarshal(row.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := data["id"]; exists {
+		t.Fatalf("data duplicates task id: %s", row.Data)
+	}
+	if _, exists := data["available_at"]; exists {
+		t.Fatalf("data duplicates available_at: %s", row.Data)
+	}
+}
+
+func TestRepoValidatesMySQLTimestampRange(t *testing.T) {
+	repo, _ := testRepo(t)
+	repo.retainCompleted = true
+	repo.timestampPrecision = time.Second
+	repo.timestampMin = time.Date(1970, time.January, 1, 0, 0, 1, 0, time.UTC)
+	repo.timestampMax = time.Date(2038, time.January, 19, 3, 14, 7, 0, time.UTC)
+	for _, value := range []time.Time{repo.timestampMin, repo.timestampMax} {
+		if err := repo.validateTimestamp("available_at", value); err != nil {
+			t.Fatalf("valid timestamp %s rejected: %v", value, err)
+		}
+	}
+	for _, value := range []time.Time{time.Time{}, repo.timestampMin.Add(-time.Second), repo.timestampMax.Add(time.Second)} {
+		if err := repo.validateTimestamp("available_at", value); err == nil {
+			t.Fatalf("invalid timestamp %s accepted", value)
+		}
+	}
+	invalid := repo.timestampMax.Add(time.Second)
+	operations := []func() error{
+		func() error {
+			return repo.Insert(context.Background(), &databasequeue.TaskRecord{Task: queue.Task{ID: "future", MessageVersion: "test", AvailableAt: invalid}})
+		},
+		func() error { return repo.CompleteReserved(context.Background(), "future", "token", invalid) },
+		func() error { return repo.ReleaseReserved(context.Background(), "future", "token", invalid) },
+		func() error { return repo.FailReserved(context.Background(), "future", "token", "test", invalid) },
+		func() error { return repo.RetryTask(context.Background(), "future", invalid) },
+	}
+	for index, operation := range operations {
+		if err := operation(); err == nil || !strings.Contains(err.Error(), "timestamp range") {
+			t.Fatalf("operation %d error = %v", index, err)
+		}
 	}
 }
 
@@ -398,7 +479,7 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				if err := db.First(&row).Error; err != nil {
 					t.Fatal(err)
 				}
-				if row.Status != StatusCompleted || row.CompletedAt <= 0 || row.Attempts != tc.wantRuns {
+				if row.Status != StatusCompleted || row.CompletedAt == nil || row.Attempts != tc.wantRuns {
 					t.Fatalf("completion record: %+v", row.Model)
 				}
 			}

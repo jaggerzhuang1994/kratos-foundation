@@ -178,17 +178,7 @@ func (s *Store) Failed(ctx context.Context, limit int) ([]queue.FailedTask, erro
 
 // Retry 将失败任务重新排期，并重置领取次数。
 func (s *Store) Retry(ctx context.Context, id string, at time.Time) error {
-	if strings.TrimSpace(id) == "" || len(id) > 128 {
-		return queue.ErrNotFound
-	}
-	result, err := s.client.Eval(ctx, retryScript, s.keys, id, scheduledMillis(at), at.Format(time.RFC3339Nano)).Int()
-	if err != nil {
-		return fmt.Errorf("retry redis task: %w", err)
-	}
-	if result == 0 {
-		return queue.ErrNotFound
-	}
-	return nil
+	return s.mutate(ctx, "retry", id, at)
 }
 
 // scheduledMillis 将截止时间向上取整；与向下取整的查询时钟比较，避免提前执行或回收租约。

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,26 @@ func TestSimpleRepoIsolationAndMigration(t *testing.T) {
 		}
 		if err := repo.Migrate(ctx); err != nil {
 			t.Fatal(err)
+		}
+		columns, err := db.Table(repo.table).Migrator().ColumnTypes(&simpleModel{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		columnTypes := make(map[string]string, len(columns))
+		for _, column := range columns {
+			columnTypes[column.Name()] = column.DatabaseTypeName()
+		}
+		if _, ok := columnTypes["generation"]; !ok {
+			t.Fatal("missing internal generation column")
+		}
+		if _, ok := columnTypes["identity"]; ok {
+			t.Fatal("legacy identity column still exists")
+		}
+		for _, name := range []string{"available_at", "failed_at", "completed_at"} {
+			dataType := strings.ToLower(columnTypes[name])
+			if !strings.HasPrefix(dataType, "timestamp") {
+				t.Fatalf("%s type = %q, want timestamp", name, columnTypes[name])
+			}
 		}
 		// 验证实际落库的列顺序和按表命名，覆盖嵌入模型、多表及重复迁移。
 		indexes, err := db.Table(repo.table).Migrator().GetIndexes(&simpleModel{})
@@ -194,7 +215,7 @@ func TestSimpleRepoRetainsCompletedTasks(t *testing.T) {
 	}
 	var row struct {
 		Status        string
-		CompletedAt   int64
+		CompletedAt   *time.Time
 		Token         string
 		ReservedUntil int64
 		Attempts      int
@@ -205,7 +226,7 @@ func TestSimpleRepoRetainsCompletedTasks(t *testing.T) {
 	if err := repo.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if row.Status != "completed" || row.CompletedAt <= 0 || row.Token != "" || row.ReservedUntil != 0 || row.Attempts != 1 {
+	if row.Status != "completed" || row.CompletedAt == nil || row.Token != "" || row.ReservedUntil != 0 || row.Attempts != 1 {
 		t.Fatalf("completed state: %+v", row)
 	}
 	if got, err := store.Reserve(ctx, now.Add(time.Hour), time.Minute); err != nil || got != nil {
@@ -217,73 +238,5 @@ func TestSimpleRepoRetainsCompletedTasks(t *testing.T) {
 	stats, err := repo.Stats(ctx, now.Add(time.Hour))
 	if err != nil || stats.Ready != 0 || stats.Scheduled != 0 || stats.Running != 0 || stats.Failed != 0 || !stats.OldestReadyAt.IsZero() {
 		t.Fatalf("completed task counted as backlog: %+v %v", stats, err)
-	}
-}
-
-func TestSimpleRepoMigratesLegacyStates(t *testing.T) {
-	_, db := testRepo(t)
-	ctx := context.Background()
-	// 旧版表结构保留所有原列；测试实际补列与回填，避免仅验证空表迁移。
-	type legacyModel struct {
-		ID            string `gorm:"column:id;primaryKey;size:256"`
-		Identity      string `gorm:"column:identity;size:36;not null"`
-		Data          []byte `gorm:"column:data;not null"`
-		Attempts      int    `gorm:"column:attempts;not null"`
-		Token         string `gorm:"column:token;size:36;not null"`
-		AvailableAt   int64  `gorm:"column:available_at;not null;index"`
-		ReservedUntil int64  `gorm:"column:reserved_until;not null"`
-		Failed        bool   `gorm:"column:failed;not null;index"`
-		FailureReason string `gorm:"column:failure_reason;size:128;not null"`
-		FailedAt      int64  `gorm:"column:failed_at;not null"`
-	}
-	const table = "legacy_tasks"
-	if err := db.Table(table).AutoMigrate(&legacyModel{}); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Migrator().DropTable(table); err != nil {
-			t.Error(err)
-		}
-	})
-	rows := []legacyModel{
-		{ID: "pending", Identity: "one", Data: []byte("pending")},
-		{ID: "running", Identity: "two", Data: []byte("running"), Token: "lease", ReservedUntil: 123, Attempts: 2},
-		{ID: "failed", Identity: "three", Data: []byte("failed"), Failed: true, FailureReason: "permanent", FailedAt: 456, Attempts: 3},
-	}
-	if err := db.Table(table).Create(&rows).Error; err != nil {
-		t.Fatal(err)
-	}
-	repo, err := NewSimpleRepo(ctx, connectionFunc(func(ctx context.Context) *gorm.DB { return db.WithContext(ctx) }), SimpleConfig{Table: table, RetainCompleted: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 模拟 DDL 已成功、回填失败；恢复后重跑必须补齐状态且保留原数据。
-	sentinel := errors.New("backfill unavailable")
-	if err := db.Callback().Update().Before("gorm:update").Register("test:backfill_failure", func(tx *gorm.DB) {
-		if tx.Statement.Table == table {
-			tx.AddError(sentinel)
-		}
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.Migrate(ctx); !errors.Is(err, sentinel) {
-		t.Fatalf("backfill error not preserved: %v", err)
-	}
-	if err := db.Callback().Update().Remove("test:backfill_failure"); err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		if err := repo.Migrate(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, before := range rows {
-		var after simpleModel
-		if err := db.Table(table).Where("id = ?", before.ID).Take(&after).Error; err != nil {
-			t.Fatal(err)
-		}
-		if string(after.Status) != before.ID || after.CompletedAt != 0 || string(after.Data) != string(before.Data) || after.Token != before.Token || after.Attempts != before.Attempts || after.FailureReason != before.FailureReason {
-			t.Fatalf("migration changed task or lost state: %+v", after)
-		}
 	}
 }

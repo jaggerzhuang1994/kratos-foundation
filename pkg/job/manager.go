@@ -34,6 +34,8 @@ type Manager struct {
 	onceJobs []*managedJob
 	// daemonJobs 随运行上下文取消而退出的常驻任务集合。
 	daemonJobs []*managedJob
+	// registrations 保存启动前逐条输出的最终任务定义。
+	registrations []jobRegistration
 
 	// mu 保护启停状态与周期配置更新。
 	mu sync.Mutex
@@ -66,6 +68,11 @@ type scheduledJob struct {
 	gate *executionGate
 }
 
+type jobRegistration struct {
+	name, kind, schedule, caller string
+	enabled                      bool
+}
+
 // NewManager 把任务定义解析为一个运行时，调度器和观测中间件不会作为独立生命周期暴露。
 // configManager 为 nil 时只使用注册和 Task 声明；否则读取 job.cron，并在 Start/Stop 管理订阅。
 func NewManager(
@@ -87,7 +94,7 @@ func NewManager(
 	}
 	options := newManagerOptions(spec)
 	jobLogger := newJobLog(logger, options)
-	middlewares, err := newMiddlewares(
+	middlewares, admissionMetrics, err := newMiddlewaresWithMetrics(
 		jobLogger,
 		options,
 		tracingProvider,
@@ -112,6 +119,7 @@ func NewManager(
 		scheduler,
 		parser,
 		&initial,
+		admissionMetrics,
 	)
 	if err != nil {
 		return nil, err
@@ -129,6 +137,7 @@ func newManager(
 	cron cronScheduler,
 	parser scheduleParserContract,
 	configuration *config_pb.Job,
+	optionalAdmissionMetrics ...jobAdmissionMetrics,
 ) (*Manager, error) {
 	if options.ErrorHandler == nil {
 		options.ErrorHandler = func(ctx context.Context, name string, err error) {
@@ -142,6 +151,10 @@ func newManager(
 		options:      options,
 		cron:         cron,
 		done:         make(chan struct{}),
+	}
+	admissionMetrics := jobAdmissionMetrics(&jobMetricsProvider{disabled: true})
+	if len(optionalAdmissionMetrics) > 0 && optionalAdmissionMetrics[0] != nil {
+		admissionMetrics = optionalAdmissionMetrics[0]
 	}
 
 	baseMiddlewares := append(middlewareChain(nil), middlewares...)
@@ -162,22 +175,25 @@ func newManager(
 			if err != nil {
 				return nil, fmt.Errorf("parse cron job %q: %w", definition.name, err)
 			}
-			gate := newExecutionGate(log, definition.name, resolved, definition.cron.delayOverflowHandler)
+			gate := newExecutionGate(log, definition.name, resolved, definition.cron.delayOverflowHandler, admissionMetrics)
 			jobMiddlewares := append([]Middleware{gate.middleware}, baseMiddlewares...)
 			manager.cronJobs = append(manager.cronJobs, scheduledJob{
 				managedJob:   newManagedJob(definition.name, definition.job, jobMiddlewares),
 				scheduleSpec: schedule, base: base, resolved: resolved, gate: gate,
 			})
+			manager.registrations = append(manager.registrations, jobRegistration{name: definition.name, kind: "cron", schedule: resolved.schedule, caller: definition.caller, enabled: !resolved.disabled})
 		case kindOnce:
 			manager.onceJobs = append(
 				manager.onceJobs,
 				newManagedJob(definition.name, definition.job, baseMiddlewares),
 			)
+			manager.registrations = append(manager.registrations, jobRegistration{name: definition.name, kind: "once", schedule: "once", caller: definition.caller, enabled: true})
 		case kindDaemon:
 			manager.daemonJobs = append(
 				manager.daemonJobs,
 				newManagedJob(definition.name, definition.job, baseMiddlewares),
 			)
+			manager.registrations = append(manager.registrations, jobRegistration{name: definition.name, kind: "daemon", schedule: "daemon", caller: definition.caller, enabled: true})
 		}
 	}
 	if err := manager.validateConfigNames(configuration); err != nil {

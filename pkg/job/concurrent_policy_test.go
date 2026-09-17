@@ -5,10 +5,136 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 )
+
+func TestExecutionGateReportsSkipAndBalancedWaitMetrics(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		metrics := &admissionMetricsRecorder{}
+		gate := newExecutionGate(testModuleLog(t), "metrics", cronConfig{policy: DelayIfRunning, pending: 1}, nil, metrics)
+		release := make(chan struct{})
+		run := gate.middleware(func(context.Context) error { <-release; return nil })
+		done := make(chan error, 2)
+		go func() { done <- run(context.Background()) }()
+		go func() { done <- run(context.Background()) }()
+		synctest.Wait()
+		if got := metrics.pendingValue(); got != 1 {
+			t.Fatalf("pending metric = %d, want 1", got)
+		}
+		if err := run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := metrics.skippedReason("pending_full"); got != 1 {
+			t.Fatalf("pending_full skips = %d, want 1", got)
+		}
+		close(release)
+		synctest.Wait()
+		for range 2 {
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := metrics.pendingValue(); got != 0 || metrics.waitResult("admitted") != 1 {
+			t.Fatalf("final metrics pending=%d admitted=%d", got, metrics.waitResult("admitted"))
+		}
+
+		cancelGate := newExecutionGate(testModuleLog(t), "cancel", cronConfig{policy: DelayIfRunning, pending: 1}, nil, metrics)
+		cancelBlock := make(chan struct{})
+		cancelRun := cancelGate.middleware(func(context.Context) error { <-cancelBlock; return nil })
+		go func() { done <- cancelRun(context.Background()) }()
+		synctest.Wait()
+		waitCtx, cancelWait := context.WithCancel(context.Background())
+		waitDone := make(chan error, 1)
+		go func() { waitDone <- cancelRun(waitCtx) }()
+		synctest.Wait()
+		cancelWait()
+		synctest.Wait()
+		if err := <-waitDone; !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled waiter error = %v", err)
+		}
+		if got := metrics.pendingValue(); got != 0 || metrics.waitResult("canceled") != 1 {
+			t.Fatalf("canceled metrics pending=%d canceled=%d", got, metrics.waitResult("canceled"))
+		}
+		close(cancelBlock)
+		synctest.Wait()
+		<-done
+
+		gate.update(cronConfig{policy: SkipIfRunning})
+		block := make(chan struct{})
+		skipRun := gate.middleware(func(context.Context) error { <-block; return nil })
+		go func() { done <- skipRun(context.Background()) }()
+		synctest.Wait()
+		if err := skipRun(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := metrics.skippedReason("already_running"); got != 1 {
+			t.Fatalf("already_running skips = %d, want 1", got)
+		}
+		close(block)
+		synctest.Wait()
+		<-done
+		gate.update(cronConfig{disabled: true, policy: SkipIfRunning})
+		if err := skipRun(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := metrics.skippedReason("disabled"); got != 1 {
+			t.Fatalf("disabled skips = %d, want 1", got)
+		}
+	})
+}
+
+type admissionMetricsRecorder struct {
+	mu      sync.Mutex
+	skipped map[string]int
+	pending int
+	waits   map[string]int
+}
+
+func (r *admissionMetricsRecorder) reportSkipped(_ context.Context, _ string, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.skipped == nil {
+		r.skipped = make(map[string]int)
+	}
+	r.skipped[reason]++
+}
+
+func (r *admissionMetricsRecorder) reportPending(_ context.Context, _ string, delta int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pending += int(delta)
+}
+
+func (r *admissionMetricsRecorder) reportWait(_ context.Context, _ string, result string, _ time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.waits == nil {
+		r.waits = make(map[string]int)
+	}
+	r.waits[result]++
+}
+
+func (r *admissionMetricsRecorder) pendingValue() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.pending
+}
+
+func (r *admissionMetricsRecorder) skippedReason(reason string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.skipped[reason]
+}
+
+func (r *admissionMetricsRecorder) waitResult(result string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.waits[result]
+}
 
 func TestDelayPendingCapacityThroughManager(t *testing.T) {
 	for _, tc := range []struct {

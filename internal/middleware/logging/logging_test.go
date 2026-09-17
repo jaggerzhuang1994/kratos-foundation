@@ -18,55 +18,66 @@ import (
 	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-func TestDeadlineFieldsRecordSelectedLimits(t *testing.T) {
+func TestDeadlineFieldsDeclareDiagnosticKeys(t *testing.T) {
+	fields := deadlineFields()
+	if len(fields) != 4 || fields[0] != "deadline.source" || fields[2] != "deadline.remaining" {
+		t.Fatalf("deadline fields = %#v", fields)
+	}
+}
+
+func TestDeadlineDiagnosticsStayEmptyWithoutBudget(t *testing.T) {
+	logger, path := newTestLogger(t)
+	middleware := Client(logger, nil)
+	ctx := request.WithDebug(context.Background())
+	if _, err := middleware(func(context.Context, any) (any, error) { return nil, nil })(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "deadline.source=") || strings.Contains(string(data), "deadline.remaining=") {
+		t.Fatalf("deadline diagnostics without budget: %s", data)
+	}
+}
+
+func TestDeadlineDiagnosticsOnlyAppearForRequestDebug(t *testing.T) {
 	store, err := deadline.NewStore(&config_pb.Middleware_Deadline{
-		FallbackTimeout: durationpb.New(2 * time.Second),
-		MaxTimeout:      durationpb.New(800 * time.Millisecond),
-		MinBudget:       durationpb.New(20 * time.Millisecond),
+		FallbackTimeout: durationpb.New(time.Second),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel, err := store.Derive(context.Background(), "/logging.Test/Call")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cancel()
-
-	fields := deadlineFields()
-	values := make(map[string]any, len(fields)/2)
-	for index := 0; index < len(fields); index += 2 {
-		key := fields[index].(string)
-		valuer := fields[index+1].(kratoslog.Valuer)
-		values[key] = valuer(ctx)
-	}
-
-	if got := values["deadline.source"]; got != deadline.SourceMax {
-		t.Fatalf("deadline.source = %#v", got)
-	}
-	//if got := values["deadline.fallback_ms"]; got != int64(2000) {
-	//	t.Fatalf("deadline.fallback_ms = %#v", got)
-	//}
-	//if got := values["deadline.max_ms"]; got != int64(800) {
-	//	t.Fatalf("deadline.max_ms = %#v", got)
-	//}
-	//if got := values["deadline.min_budget_ms"]; got != int64(20) {
-	//	t.Fatalf("deadline.min_budget_ms = %#v", got)
-	//}
-	if got := values["deadline.remaining"]; got == nil {
-		t.Fatal("deadline.remaining is nil")
-	}
-}
-
-func TestDeadlineFieldsReturnNilWithoutBudget(t *testing.T) {
-	for index := 1; index < len(deadlineFields()); index += 2 {
-		valuer := deadlineFields()[index].(kratoslog.Valuer)
-		if got := valuer(context.Background()); got != nil {
-			t.Fatalf("deadline field %d without budget = %#v", index/2, got)
+	logger, path := newTestLogger(t)
+	middleware := Client(logger, nil)
+	for index, debug := range []bool{false, true} {
+		ctx, cancel, err := store.Derive(context.Background(), "/logging.Test/Call")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if debug {
+			ctx = request.WithDebug(ctx)
+		}
+		if _, err := middleware(func(context.Context, any) (any, error) { return nil, nil })(ctx, nil); err != nil {
+			cancel()
+			t.Fatal(err)
+		}
+		cancel()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		line := lines[len(lines)-1]
+		for _, field := range []string{"deadline.source=", "deadline.remaining="} {
+			if got := strings.Contains(line, field); got != debug {
+				t.Fatalf("case %d debug=%v %s present=%v: %s", index, debug, field, got, line)
+			}
 		}
 	}
 }
@@ -159,8 +170,9 @@ func newTestLogger(t *testing.T) (foundationlog.Logger, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "access.log")
 	shared, cleanup, err := testlog.New(testlog.Config{
-		Level:      kratoslog.LevelInfo,
-		TimeFormat: time.RFC3339,
+		Level:       kratoslog.LevelInfo,
+		FilterEmpty: true,
+		TimeFormat:  time.RFC3339,
 		Std: testlog.OutputConfig{
 			Disable: true,
 			Level:   kratoslog.LevelInfo,

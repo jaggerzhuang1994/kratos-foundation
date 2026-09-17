@@ -133,10 +133,16 @@ func (m *manager) poll() {
 			if !initial {
 				paths, truncated = changedPaths(sub.key, previous, existed, value, exists)
 			}
-			log.WithModule("config").With("key", key, "subscription_id", sub.id,
-				"observer", sub.observerName, "target_type", sub.targetType,
-				"changed_paths", paths, "paths_truncated", truncated, "initial", initial, "found", exists).
-				Info("poll | config.notify | Configuration subscription update")
+			log.WithModule("config").With(
+				"key", key,
+				"subscription_id", sub.id,
+				"observer", sub.observerName,
+				"target_type", sub.targetType,
+				"changed_paths", paths,
+				"paths_truncated", truncated,
+				"initial", initial,
+				"found", exists).
+				Info("Configuration subscription update")
 			sub.notify(value, exists)
 		}
 	}

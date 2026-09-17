@@ -50,7 +50,7 @@ tracing:
   disable: true
 ```
 
-`NewProvider` 读取到禁用配置后会返回内部 no-op Provider，`NewTracing` 因此返回可安全调用的 no-op Tracer，业务代码无需增加分支。
+`NewProvider` 读取到禁用配置后会返回内部 `NeverSample` Provider。它不记录、不采样、不导出 Span，也不创建 exporter 或后台批处理资源，但仍生成有效的 TraceID/SpanID；`NewTracing` 和业务代码无需增加分支。server/client 的 tracing 中间件开关关闭时采用同样的仅关联模式，因此请求日志中的 `trace.id`、`span.id` 仍可用，跨服务调用也会继续传播上下文。关闭开关不是隐私边界：若不希望向下游发送 trace 上下文，需要在传输边界另行配置传播策略。
 
 启用并连接 OTLP HTTP 接收端的最小配置如下；接收端需要由部署环境另行提供：
 
@@ -83,13 +83,27 @@ tracer := provider.Tracer(
 
 业务和 Wire 只需要依赖本包的 `Provider`、`NewProvider`、`Tracing`、`NewTracing` 与 `Trace`，并负责调用 `NewProvider` 返回的幂等 cleanup。公共契约和业务 Span 辅助函数位于 `tracing.go`；`provider.go` 管理 OpenTelemetry SDK Resource、实例和关闭状态；`config.go`、`sampler.go` 分别负责配置和动态采样，导出器构造也位于 `provider.go`。实现与契约位于同包，具体 Provider、Sampler 类型和组装辅助函数不导出。构造、生命周期和热更新测试随实现放在同一包内。
 
-组装期调用 `bootstrap.NewTracingBootstrap()` 会同步通过 `log.RegisterFields` 加入进程共享的 Kratos TraceID 和 SpanID 的动态字段，键固定为 `trace.id` 和 `span.id`：
+组装期调用 `bootstrap.NewTracingBootstrap()` 会同步通过 `log.RegisterFields` 加入进程共享的 Kratos TraceID 和 SpanID 的动态字段，键固定为 `trace.id` 和 `span.id`。启用或关闭 tracing 都从当前请求 SpanContext 读取；请求外没有有效上下文时字段为空，并由日志 `filter_empty` 规则处理：
 
 ```go
 contribution, err := bootstrap.NewTracingBootstrap()
 ```
 
 它不创建 Runtime 或资源，也不返回 cleanup；TracerProvider 的 cleanup 仍由 `NewProvider` 的调用方/Wire 持有。
+
+```mermaid
+flowchart TD
+    A([server/client 请求进入 tracing 中间件]) --> B{全局 Provider 或当前中间件禁用?}
+    B -- 否 --> C[使用真实 Provider 创建或延续 SpanContext]
+    B -- 是 --> D[使用 NeverSample Provider 创建或延续 SpanContext]
+    C --> E[执行后续中间件与业务 日志读取 trace.id/span.id]
+    D --> E
+    E --> F{真实 Provider 且采样策略记录?}
+    F -- 是 --> G[记录并由 exporter 批量导出 Span]
+    F -- 否 --> H[只传播关联 ID 不记录不导出]
+    G --> I([请求结束])
+    H --> I
+```
 
 ## 动态采样配置
 
@@ -102,7 +116,7 @@ contribution, err := bootstrap.NewTracingBootstrap()
 ```mermaid
 flowchart TD
     A([开始：NewProvider]) --> B{tracing 禁用?}
-    B -- 是 --> N([返回 no-op Provider])
+    B -- 是 --> N([返回 NeverSample Provider 只生成和传播关联 ID])
     B -- 否 --> C[NewHotReloadValue 加载并订阅 tracing]
     C --> D{初始配置及资源构造成功?}
     D -- 否 --> E[取消已建立的订阅并返回错误]

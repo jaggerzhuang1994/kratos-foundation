@@ -160,15 +160,4 @@ message GormMetrics {
   map<string, string> labels = 2;
   // 刷新间隔 默认15s
   optional google.protobuf.Duration refresh_interval = 3;
-  // MySQL 状态指标配置
-  optional Mysql mysql = 4;
-
-  message Mysql {
-    // 指标前缀，默认 gorm_status_
-    optional string prefix = 1;
-    // 间隔 默认 refresh_interval
-    optional google.protobuf.Duration interval = 2;
-    // 采集哪些指标，默认所有
-    repeated string variable_names = 3;
-  }
 }

@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 )
 
@@ -175,6 +176,16 @@ type definition struct {
 	job Task
 	// cron 单个周期任务的显式选项。
 	cron cronOptions
+	// caller 保存业务注册调用点，供启动日志定位任务来源。
+	caller string
+}
+
+func registrationCaller() string {
+	_, file, line, ok := runtime.Caller(2)
+	if !ok {
+		return "unknown"
+	}
+	return fmt.Sprintf("%s:%d", file, line)
 }
 
 // NewSpec 返回空的任务定义。
@@ -214,6 +225,7 @@ func (s *Spec) RegisterCron(name, schedule string, job Task, options ...CronOpti
 		schedule: schedule,
 		job:      job,
 		cron:     cron,
+		caller:   registrationCaller(),
 	})
 	return s
 }
@@ -221,9 +233,10 @@ func (s *Spec) RegisterCron(name, schedule string, job Task, options ...CronOpti
 // RegisterOnce 向 Spec 注册启动后执行一次的任务。
 func (s *Spec) RegisterOnce(name string, job Task) Builder {
 	s.definitions = append(s.definitions, definition{
-		name: name,
-		kind: kindOnce,
-		job:  job,
+		name:   name,
+		kind:   kindOnce,
+		job:    job,
+		caller: registrationCaller(),
 	})
 	return s
 }
@@ -231,9 +244,10 @@ func (s *Spec) RegisterOnce(name string, job Task) Builder {
 // RegisterDaemon 向 Spec 注册常驻任务。
 func (s *Spec) RegisterDaemon(name string, job Task) Builder {
 	s.definitions = append(s.definitions, definition{
-		name: name,
-		kind: kindDaemon,
-		job:  job,
+		name:   name,
+		kind:   kindDaemon,
+		job:    job,
+		caller: registrationCaller(),
 	})
 	return s
 }

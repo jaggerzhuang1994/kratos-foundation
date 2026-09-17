@@ -197,10 +197,10 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 	}
 	logs := string(written)
 	for _, line := range strings.Split(logs, "\n") {
-		if strings.Contains(line, "job=canceled-failure") && strings.Contains(line, "job execution stopped") {
+		if strings.Contains(line, "job=canceled-failure") && strings.Contains(line, "result=stopped") {
 			t.Fatalf("business failure logged as normal cancellation: %s", line)
 		}
-		if (strings.Contains(line, "job=panic") || strings.Contains(line, "job=middleware-panic")) && strings.Contains(line, "job execution done") {
+		if (strings.Contains(line, "job=panic") || strings.Contains(line, "job=middleware-panic")) && strings.Contains(line, "result=success") {
 			t.Fatalf("panic logged as success: %s", line)
 		}
 	}
@@ -208,9 +208,12 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 		t.Fatalf("middleware duplicated final error logging: %s", logs)
 	}
 	for _, fragment := range []string{
-		"job execution started",
-		"job execution done",
-		"job execution stopped",
+		"msg=job.execution.started",
+		"msg=job.execution.finished",
+		"result=success",
+		"result=failure",
+		"result=stopped",
+		"duration=",
 		"job=success",
 		"job=failure",
 		"job=canceled",

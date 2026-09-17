@@ -74,7 +74,10 @@ $defs:
 			assertDefinition(t, definitions, ".Merge_0", map[string]any{
 				"allOf": []any{
 					map[string]any{"$ref": "#/$defs/.contract.v1.Config"},
-					map[string]any{"$ref": "#/$defs/External"},
+					map[string]any{
+						"$defs": map[string]any{"External": map[string]any{"type": "object"}},
+						"allOf": []any{map[string]any{"$ref": "#/$defs/External"}},
+					},
 				},
 			})
 		})

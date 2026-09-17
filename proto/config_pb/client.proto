@@ -49,6 +49,7 @@ enum Protocol {
 // 客户端中间件配置
 message ClientMiddleware {
   optional Middleware.Metadata metadata = 1;
+  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。
   optional Middleware.Tracing tracing = 2;
   optional Middleware.Metrics metrics = 3;
   optional Middleware.Logging logging = 4;

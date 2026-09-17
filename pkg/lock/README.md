@@ -1,6 +1,6 @@
 # lock
 
-本包定义 `Locker`、`Lease`、`ErrNotAcquired`、`ErrNotHeld`，并提供可选的 `WithMetrics` 观测包装；不创建连接、不启动后台续租、不管理应用生命周期。实现由调用方注入；Redis 实现见 `contrib/lock/redis`，带自动续租的任务协调见 `pkg/job`。
+本包定义 `Locker`、`Lease`、`ErrNotAcquired`、`ErrNotHeld`，并提供可选的 `WithMetrics` 观测包装；不创建连接、不启动后台续租、不管理应用生命周期。实现由调用方注入；Redis 实现见 `contrib/lock/redis`。Job 只提供本进程并发策略，不再提供锁租约或自动续租；长任务由业务显式调用 `Lease.Refresh`，跨 Job、请求和消费者复用的 watchdog 仅是[开发指南中的候选设计](../DEVELOPMENT.md#watchdog-开发示例)，当前尚未实现。
 
 `Lock(ctx, key, ttl)` 等待租约，`TryLock` 只尝试一次。调用方应传入有界 Context 与正 TTL；用 `errors.Is` 判断稳定错误。租约操作均需处理错误，失去租约后不能假设仍有执行权。
 

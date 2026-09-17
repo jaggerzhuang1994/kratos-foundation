@@ -224,14 +224,24 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 	}
 	fields := append([]any(nil), cache.fields...)
 	for i := 1; i < len(fields); i += 2 {
-		if value, ok := fields[i].(kratoslog.Valuer); ok {
+		switch value := fields[i].(type) {
+		case levelValue:
+			fields[i] = value.resolve(ctx, level)
+		case kratoslog.Valuer:
 			fields[i] = value(ctx)
 		}
 	}
 	if withMsgKey {
 		fields = append(fields, cache.msgKey)
 	}
+	callFieldsStart := len(fields)
 	fields = append(fields, keyvals...)
+	// 单次 Log/*w 的普通 Valuer 沿用 Kratos 原始语义；只有显式级别包装值由本包求值。
+	for i := callFieldsStart + 1; i < len(fields); i += 2 {
+		if value, ok := fields[i].(levelValue); ok {
+			fields[i] = value.resolve(ctx, level)
+		}
+	}
 	owned, internal := l.config.output.(*outputLogger)
 	if internal {
 		// 内置端最终使用 %s/%v 编码。为用户格式化方法建立延迟缓存，

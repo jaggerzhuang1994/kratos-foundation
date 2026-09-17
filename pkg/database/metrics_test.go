@@ -1,11 +1,14 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
-	"maps"
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,7 +18,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func TestMergeMetricLabelsValidatesNamesReservationsAndIdentityConflicts(t *testing.T) {
@@ -64,9 +66,9 @@ func TestMergeMetricLabelsValidatesNamesReservationsAndIdentityConflicts(t *test
 }
 
 func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
-	db, _ := newMySQLMetricsScriptDB(t)
+	db, _ := newNoStatusQueryDB(t)
 	factory := &connectionFactory{connections: map[*sql.DB]connectionPool{
-		db: {db: db, name: "primary", driver: "sqlite3"},
+		db: {db: db, name: "primary", driver: "mysql"},
 	}}
 	provider := newManagerMetricsProvider()
 	config := &config_pb.Database{
@@ -78,13 +80,12 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 		factory,
 		config,
 		managerTestAppInfo{},
-		newManagerTestLogger(t),
 		provider,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if collector == nil || len(collector.dbStats) != 1 || collector.mysql != nil {
+	if collector == nil || len(collector.dbStats) != 1 {
 		t.Fatalf("database stats collector = %#v", collector)
 	}
 	if families, err := provider.registry.Gather(); err != nil || len(families) == 0 {
@@ -101,7 +102,6 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 		factory,
 		&config_pb.Database{Metrics: &config_pb.GormMetrics{Disable: &disabled}},
 		managerTestAppInfo{},
-		newManagerTestLogger(t),
 		provider,
 	); err != nil || collector != nil {
 		t.Fatalf("disabled metrics collector = (%v, %v)", collector, err)
@@ -110,103 +110,72 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 		factory,
 		config,
 		managerTestAppInfo{},
-		newManagerTestLogger(t),
 		nilDatabaseMetricsProvider{},
 	); collector != nil || err == nil || !strings.Contains(err.Error(), "registerer is nil") {
 		t.Fatalf("nil registry metrics collector = (%v, %v)", collector, err)
 	}
 }
 
-func TestNewMetricsCollectorIntegratesMySQLSnapshotAndDatabaseLabel(t *testing.T) {
-	db, script := newMySQLMetricsScriptDB(t, mysqlMetricsQueryStep{
-		rows: [][]driver.Value{{"Uptime", "30"}},
-	})
+func TestNewMetricsCollectorDoesNotQueryMySQLStatus(t *testing.T) {
+	db, queries := newNoStatusQueryDB(t)
 	factory := &connectionFactory{connections: map[*sql.DB]connectionPool{
 		db: {db: db, name: "primary", driver: "mysql"},
 	}}
 	provider := newManagerMetricsProvider()
-	config := &config_pb.Database{
-		Default: proto.String("primary"),
-		Metrics: &config_pb.GormMetrics{
-			RefreshInterval: durationpb.New(time.Hour),
-			Mysql: &config_pb.GormMetrics_Mysql{
-				Prefix:        proto.String("mysql_"),
-				VariableNames: []string{"Uptime"},
-			},
-		},
-	}
 	collector, err := newMetricsCollector(
 		factory,
-		config,
+		&config_pb.Database{Default: proto.String("primary")},
 		managerTestAppInfo{},
-		newManagerTestLogger(t),
 		provider,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if collector == nil || collector.mysql == nil {
-		t.Fatalf("MySQL metrics collector = %#v", collector)
+	if collector == nil {
+		t.Fatal("database metrics collector is nil")
 	}
 	t.Cleanup(collector.close)
-	if query := receiveMySQLMetricsQuery(t, script.calls); query != "SHOW STATUS" {
-		t.Fatalf("initial MySQL metrics query = %q", query)
+	select {
+	case query := <-queries:
+		t.Fatalf("application metrics executed MySQL status query %q", query)
+	case <-time.After(20 * time.Millisecond):
 	}
-	waitForMySQLMetricsValues(t, collector.mysql, map[string]float64{"Uptime": 30})
+}
 
-	families, err := provider.registry.Gather()
+var noStatusDriverID atomic.Uint64
+
+func newNoStatusQueryDB(t testing.TB) (*sql.DB, <-chan string) {
+	t.Helper()
+	queries := make(chan string, 1)
+	name := fmt.Sprintf("database_no_status_%d", noStatusDriverID.Add(1))
+	sql.Register(name, noStatusDriver{queries: queries})
+	db, err := sql.Open(name, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, family := range families {
-		if family.GetName() != "mysql_Uptime" {
-			continue
-		}
-		found = true
-		if len(family.Metric) != 1 || family.Metric[0].Gauge.GetValue() != 30 {
-			t.Fatalf("MySQL metric family = %#v", family)
-		}
-		labels := make(map[string]string, len(family.Metric[0].Label))
-		for _, label := range family.Metric[0].Label {
-			labels[label.GetName()] = label.GetValue()
-		}
-		if labels["db_name"] != "primary" || labels["service_name"] != "database-test" {
-			t.Fatalf("MySQL metric labels = %#v", labels)
-		}
-	}
-	if !found {
-		t.Fatalf("mysql_Uptime not found in %d metric families", len(families))
-	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db, queries
 }
 
-func waitForMySQLMetricsValues(
-	t testing.TB,
-	collector *mysqlMetricsCollector,
-	want map[string]float64,
-) {
-	t.Helper()
-	deadline := time.NewTimer(time.Second)
-	defer deadline.Stop()
-	ticker := time.NewTicker(time.Millisecond)
-	defer ticker.Stop()
-	for {
-		collector.mu.RLock()
-		got := make(map[string]float64, len(collector.values))
-		maps.Copy(got, collector.values)
-		collector.mu.RUnlock()
-		if reflect.DeepEqual(got, want) {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatalf("timed out waiting for MySQL metrics values: got %#v want %#v", got, want)
-		}
-	}
+type noStatusDriver struct{ queries chan<- string }
+
+func (d noStatusDriver) Open(string) (driver.Conn, error) {
+	return noStatusConn(d), nil
 }
 
-var _ prometheus.Collector = (*mysqlStatusMetric)(nil)
+type noStatusConn struct{ queries chan<- string }
+
+func (noStatusConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("prepare unsupported")
+}
+func (noStatusConn) Close() error              { return nil }
+func (noStatusConn) Begin() (driver.Tx, error) { return nil, errors.New("transaction unsupported") }
+func (c noStatusConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	c.queries <- query
+	return nil, errors.New("query unsupported")
+}
+
+var _ driver.QueryerContext = noStatusConn{}
 
 type nilDatabaseMetricsProvider struct{}
 

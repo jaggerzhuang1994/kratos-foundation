@@ -103,7 +103,7 @@ func TestHTTPHealthPrecedesBusinessFiltersAndPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configureMonitoring(config, srv, health, testMetricsProvider{registry: prometheus.NewRegistry()}); err != nil {
+	if _, _, err := configureMonitoring(config, srv, health, testMetricsProvider{registry: prometheus.NewRegistry()}); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
@@ -117,7 +117,7 @@ func TestHTTPHealthPrecedesBusinessFiltersAndPrefix(t *testing.T) {
 		}
 	}
 	health.config.LivenessPath = config.GetHttp().GetMetrics().GetPath()
-	if _, err := configureMonitoring(config, srv, health, testMetricsProvider{registry: prometheus.NewRegistry()}); err == nil {
+	if _, _, err := configureMonitoring(config, srv, health, testMetricsProvider{registry: prometheus.NewRegistry()}); err == nil {
 		t.Fatal("metrics conflict accepted")
 	}
 }
