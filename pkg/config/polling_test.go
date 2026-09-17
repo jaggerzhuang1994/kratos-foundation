@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -353,6 +354,16 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 				if event["level"] != kratoslog.LevelInfo || event["module"] != "config" ||
 					event["key"] != key || event["initial"] != step.initial || event["found"] != found {
 					t.Fatalf("unexpected event: %v", event)
+				}
+				if event["subscription_id"] != uint64(i+1) || !strings.Contains(event["observer"].(string), "TestPollingSubscriptionUpdateLogs") || event["target_type"] == "" {
+					t.Fatalf("missing subscription identity: %v", event)
+				}
+				wantPaths := []string{}
+				if !step.initial {
+					wantPaths = []string{"/key"}
+				}
+				if !reflect.DeepEqual(event["changed_paths"], wantPaths) || event["paths_truncated"] != false {
+					t.Fatalf("unexpected paths: %v", event)
 				}
 				for _, value := range event {
 					if reflect.DeepEqual(value, "secret-value") || reflect.DeepEqual(value, "new-secret-value") {

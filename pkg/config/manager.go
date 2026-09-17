@@ -113,6 +113,8 @@ type manager struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 	closeErr  error
+
+	nextSubscriptionID uint64 // 由 mu 保护，仅用于本 Manager 内的日志关联。
 }
 
 func newManager(sources Sources) (*manager, error) {

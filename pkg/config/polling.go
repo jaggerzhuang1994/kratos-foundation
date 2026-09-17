@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
 	"slices"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 )
 
 type subscription struct {
+	id             uint64
+	observerName   string
+	targetType     string
 	key            string
 	decoder        *decoder.Decoder
 	observer       Observer
@@ -41,12 +45,18 @@ func (m *manager) Subscribe(key string, prototype any, observer Observer, defaul
 	if err != nil {
 		return nil, err
 	}
+	// 登记时解析回调身份，轮询时复用；不记录函数捕获的业务数据。
+	observerName := "<unknown>"
+	if fn := runtime.FuncForPC(reflect.ValueOf(observer).Pointer()); fn != nil {
+		observerName = fn.Name()
+	}
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return nil, ErrManagerClosed
 	}
-	sub := &subscription{key: key, decoder: valueDecoder, observer: observer, previous: m.snapshot, pendingInitial: true}
+	m.nextSubscriptionID++
+	sub := &subscription{id: m.nextSubscriptionID, observerName: observerName, targetType: reflect.TypeOf(prototype).String(), key: key, decoder: valueDecoder, observer: observer, previous: m.snapshot, pendingInitial: true}
 	m.subs = append(m.subs, sub)
 	m.mu.Unlock()
 	return func() {
@@ -109,7 +119,14 @@ func (m *manager) poll() {
 			if key == "" {
 				key = "<root>" // 整份配置订阅使用非空标识，避免被日志空值过滤器移除。
 			}
-			log.WithModule("config").With("key", key, "initial", initial, "found", exists).
+			paths := []string{}
+			truncated := false
+			if !initial {
+				paths, truncated = changedPaths(sub.key, previous, existed, value, exists)
+			}
+			log.WithModule("config").With("key", key, "subscription_id", sub.id,
+				"observer", sub.observerName, "target_type", sub.targetType,
+				"changed_paths", paths, "paths_truncated", truncated, "initial", initial, "found", exists).
 				Info("poll | config.notify | Configuration subscription update")
 			sub.notify(value, exists)
 		}
@@ -120,7 +137,7 @@ func (s *subscription) notify(value any, found bool) {
 	// 单个业务回调 panic 不应终止整个 Manager 的轮询，也不重试本次通知。
 	defer func() {
 		if recover() != nil {
-			log.WithModule("config").With("key", s.key).
+			log.WithModule("config").With("key", s.key, "subscription_id", s.id, "observer", s.observerName).
 				Error("Configuration observer panicked; continuing polling")
 		}
 	}()
