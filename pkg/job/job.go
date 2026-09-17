@@ -16,7 +16,7 @@ type ScheduleProvider interface{ Schedule() string }
 // ConcurrentPolicyProvider 为 Task 提供默认本进程并发策略。
 type ConcurrentPolicyProvider interface{ ConcurrentPolicy() ConcurrentPolicy }
 
-// RunImmediatelyProvider 为 Task 提供默认的启动立即执行行为。
+// RunImmediatelyProvider 为 Task 提供默认的首次 Start 立即执行行为；仅启用的 Cron 生效，重新启用不补跑。
 type RunImmediatelyProvider interface{ RunImmediately() bool }
 
 // MaxPendingRunsProvider 为 Task 提供默认 Delay 等待容量。

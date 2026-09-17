@@ -9,17 +9,20 @@ message Job {
   map<string, CronJob> cron = 1;
 }
 
-// CronJob 各字段独立按配置、注册声明、Task 声明、框架默认值的顺序解析。
+// CronJob 调度字段独立按配置、注册声明、Task 声明、框架默认值的顺序解析。
+// disabled 仅由配置控制，省略时为 false（启用）。
 // optional 保留 false、0 和 ALLOW_OVERLAP 的显式覆盖语义。
 message CronJob {
   // Cron 表达式，支持可选秒字段和标准描述符。[热更新]
   optional string schedule = 1;
   // 本进程内同一任务的重叠策略。[热更新]
   optional JobConcurrentPolicy concurrent_policy = 2;
-  // 是否在启动时立即执行。Start 前读取最新值；运行中修改不补触发，下次启动生效。
+  // 是否在首次 Start 时立即执行（仅 disabled=false）。热更新或重新启用不补触发；进程重启重新判断。
   optional bool run_immediately = 3;
   // Delay 等待容量，默认 1；0 不等待，-1 无界等待。[热更新]
   optional int32 max_pending_runs = 4;
+  // 是否禁用，默认 false；禁用阻止新触发，已执行或排队调用继续完成。[热更新]
+  optional bool disabled = 5;
 }
 
 // JobConcurrentPolicy 仅作用于本 Manager 中同一注册任务，不提供跨进程协调。

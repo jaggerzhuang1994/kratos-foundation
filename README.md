@@ -41,7 +41,7 @@
 | `client` | 具名服务客户端、调用中间件与清理预算 | 仅 `clients`；`cleanup_timeout` 需重启，日志由 log.modules 管理 |
 | `kafka` | 具名 broker 连接、TLS/SASL、生产/消费参数 | 无 |
 | `oss` | 按逻辑名配置 bucket 和驱动参数 | 无 |
-| `job` | 已注册 Cron 的调度与本进程并发策略 | schedule、concurrent_policy、max_pending_runs；run_immediately 只在启动时触发 |
+| `job` | 已注册 Cron 的调度与本进程并发策略 | disabled、schedule、concurrent_policy、max_pending_runs；run_immediately 只在启动时触发 |
 
 热更新按组件生效，不能视为整份应用配置同时切换。Server 中间件会先校验组合再逐项发布；Database 同次更新若含需重启字段，会跳过整次数据库更新，连接池参数也不应用；Client 的日志或 cleanup 预算变更只提示需重启，不阻止有效的 `clients` 更新。配置 Manager 接受快照也不代表每个组件都已应用，具体边界见各包 README。
 
@@ -169,7 +169,7 @@ flowchart LR
 
 ## Job 调度与并发
 
-Job 仅提供本进程、同一 Manager 内的 AllowOverlap、SkipIfRunning、DelayIfRunning。`job.cron` 按注册名称热更新表达式、并发策略和等待容量；run_immediately 只在启动时触发。四项均按配置、注册声明、Task 默认值的顺序解析，详见 [Job 文档](pkg/job/README.md)。Bootstrap 注入 config.Manager，无需 Coordinator provider。
+Job 仅提供本进程、同一 Manager 内的 AllowOverlap、SkipIfRunning、DelayIfRunning。`job.cron` 按注册名称热更新启用状态（disabled 默认 false）、表达式、并发策略和等待容量；run_immediately 只在启动时触发。除仅由配置控制的 disabled 外，四项调度参数按配置、注册声明、Task 默认值的顺序解析；重新启用不补跑立即执行，详见 [Job 文档](pkg/job/README.md)。Bootstrap 注入 config.Manager，无需 Coordinator provider。
 
 
 ## 主要目录

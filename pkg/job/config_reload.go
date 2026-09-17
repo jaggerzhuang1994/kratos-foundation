@@ -97,8 +97,12 @@ func (m *Manager) applyConfig(config *config_pb.Job) error {
 		changed = true
 		task.gate.update(next)
 		if m.cronStarted {
-			if task.resolved.schedule != next.schedule {
-				m.cron.reschedule(task.name, plans[i])
+			if task.resolved.schedule != next.schedule || task.resolved.disabled != next.disabled {
+				plan := plans[i]
+				if next.disabled {
+					plan = nil
+				}
+				m.cron.reschedule(task.name, plan)
 			}
 		} else {
 			// 尚未启动时保留最新 runImmediately；运行期修改绝不补触发。

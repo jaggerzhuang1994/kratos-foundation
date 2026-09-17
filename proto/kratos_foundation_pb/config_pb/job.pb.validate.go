@@ -216,6 +216,10 @@ func (m *CronJob) validate(all bool) error {
 		// no validation rules for MaxPendingRuns
 	}
 
+	if m.Disabled != nil {
+		// no validation rules for Disabled
+	}
+
 	if len(errors) > 0 {
 		return CronJobMultiError(errors)
 	}

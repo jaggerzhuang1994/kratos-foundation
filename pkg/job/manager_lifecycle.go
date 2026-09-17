@@ -121,7 +121,12 @@ func (m *Manager) startJobs(
 	}
 
 	for _, cronJob := range m.cronJobs {
-		m.cron.schedule(ctx, cronJob.name, cronJob.job, cronJob.scheduleSpec)
+		plan := cronJob.scheduleSpec
+		if cronJob.resolved.disabled {
+			// 启动时禁用也消耗首次启动机会，后续启用不得补跑 immediate。
+			plan = nil
+		}
+		m.cron.schedule(ctx, cronJob.name, cronJob.job, plan)
 	}
 	if len(m.cronJobs) > 0 {
 		m.cronStarted = true

@@ -24,6 +24,7 @@ func (p ConcurrentPolicy) valid() bool { return p <= SkipIfRunning }
 // mu 只保护状态转移；任务、等待、日志与通知均在锁外执行。
 type executionGate struct {
 	mu       sync.Mutex
+	disabled bool
 	policy   ConcurrentPolicy
 	limit    int
 	running  int
@@ -35,13 +36,13 @@ type executionGate struct {
 }
 
 func newExecutionGate(log moduleLog, name string, config cronConfig, overflow func(context.Context, DelayOverflow) error) *executionGate {
-	return &executionGate{policy: config.policy, limit: config.pending, changed: make(chan struct{}), name: name, log: log, overflow: overflow}
+	return &executionGate{disabled: config.disabled, policy: config.policy, limit: config.pending, changed: make(chan struct{}), name: name, log: log, overflow: overflow}
 }
 
 func (g *executionGate) update(config cronConfig) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.policy, g.limit = config.policy, config.pending
+	g.disabled, g.policy, g.limit = config.disabled, config.policy, config.pending
 }
 
 func (g *executionGate) middleware(next Handler) Handler {
@@ -60,6 +61,11 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		g.mu.Unlock()
 		return false, err
+	}
+	// 禁用与准入共用现有锁，阻止尚未移除的调度条目发起新调用；已排队调用不重查开关。
+	if g.disabled {
+		g.mu.Unlock()
+		return false, nil
 	}
 	if g.policy == AllowOverlap || (g.running == 0 && g.pending == 0) {
 		g.running++

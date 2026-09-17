@@ -87,7 +87,7 @@ tracing.sampler、job.cron 和数据库连接池参数。DSN、驱动、连接�
 
 此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 已移除；Registrar 由 app.NewApp 或 bootstrap.NewKratosApp 显式注入。
 
-Job 的 Coordinator、ExecutionGuard、锁租约实现、Redis Job 适配和两种分布式并发策略全部删除。移除对应 Wire provider，统一使用 BaseProviderSet；NewJobBootstrap 第三个参数和 job.NewManager 最后一个参数改为 config.Manager。`RunImmediately()` 改为 `RunImmediately(true)`，可用 false 显式覆盖 Task 声明。重新生成 Wire。配置 `job.cron` 支持逐字段覆盖及热更新，优先级为配置 > 注册 > Task > 框架默认值；运行中修改立即执行标志不补触发。完整示例见 [Job 文档](pkg/job/README.md)。
+Job 的 Coordinator、ExecutionGuard、锁租约实现、Redis Job 适配和两种分布式并发策略全部删除。移除对应 Wire provider，统一使用 BaseProviderSet；NewJobBootstrap 第三个参数和 job.NewManager 最后一个参数改为 config.Manager。`RunImmediately()` 改为 `RunImmediately(true)`，可用 false 显式覆盖 Task 声明。重新生成 Wire。配置 `job.cron` 支持逐字段覆盖及热更新，优先级为配置 > 注册 > Task > 框架默认值；disabled 默认 false，可热更新禁用/启用已注册 Cron，禁用不取消已执行或排队的调用。run_immediately 仅在首次 Start 且启用时生效，运行中修改或重新启用不补触发；进程重启重新判断。完整示例见 [Job 文档](pkg/job/README.md)。
 
 ### CallOptions 迁移示例
 

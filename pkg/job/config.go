@@ -8,6 +8,7 @@ import (
 
 // cronConfig 是已合并的执行规则；没有指针，不与外部配置快照共享可变字段。
 type cronConfig struct {
+	disabled  bool
 	schedule  string
 	policy    ConcurrentPolicy
 	immediate bool
@@ -47,6 +48,9 @@ func taskCronConfig(def definition) cronConfig {
 // resolveCronConfig 每次都从注册快照重新合并；删除覆盖字段恢复下层值。
 func resolveCronConfig(base cronConfig, override *config_pb.CronJob) (cronConfig, error) {
 	if override != nil {
+		if override.Disabled != nil {
+			base.disabled = *override.Disabled
+		}
 		if override.Schedule != nil {
 			base.schedule = *override.Schedule
 		}

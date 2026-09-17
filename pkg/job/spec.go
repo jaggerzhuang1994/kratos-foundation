@@ -81,7 +81,8 @@ type cronOptions struct {
 	delayOverflowHandler func(context.Context, DelayOverflow) error
 }
 
-// RunImmediately 显式设置启动时是否立即执行，可用 false 覆盖 Task 默认值。
+// RunImmediately 显式设置首次 Start 且任务启用时是否立即执行，可用 false 覆盖 Task 默认值。
+// 运行中重新启用不补跑；进程重启创建新 Manager 后重新判断。
 func RunImmediately(enabled bool) CronOption {
 	return func(options *cronOptions) {
 		options.runImmediately = enabled

@@ -26,6 +26,7 @@ func TestCronConfigurationPriority(t *testing.T) {
 		override *config_pb.CronJob
 		want     cronConfig
 	}{
+		{name: "explicit disabled", task: defaultsTask{}, override: &config_pb.CronJob{Disabled: proto.Bool(true)}, want: cronConfig{disabled: true, schedule: "@hourly", policy: DelayIfRunning, immediate: true, pending: 8}},
 		{name: "framework defaults", task: TaskFunc(func(context.Context) error { return nil }), schedule: "@daily", want: cronConfig{schedule: "@daily", policy: AllowOverlap, pending: 1}},
 		{name: "task defaults", task: defaultsTask{}, want: cronConfig{schedule: "@hourly", policy: DelayIfRunning, immediate: true, pending: 8}},
 		{name: "registration including zero", task: defaultsTask{}, schedule: "@daily", options: []CronOption{RunImmediately(false), WithConcurrentPolicy(AllowOverlap), WithMaxPendingRuns(0)}, want: cronConfig{schedule: "@daily", policy: AllowOverlap, pending: 0}},
@@ -58,6 +59,7 @@ func TestManagerValidatesMergedCronConfiguration(t *testing.T) {
 		valid    bool
 	}{
 		{name: "config supplies missing expression", cfg: &config_pb.Job{Cron: map[string]*config_pb.CronJob{"task": {Schedule: proto.String("@hourly")}}}, valid: true},
+		{name: "disabled still validates schedule", schedule: "broken", cfg: &config_pb.Job{Cron: map[string]*config_pb.CronJob{"task": {Disabled: proto.Bool(true)}}}},
 		{name: "invalid cron", schedule: "broken"},
 		{name: "missing expression"},
 		{name: "invalid registration policy", schedule: "@hourly", options: []CronOption{WithConcurrentPolicy(255)}},

@@ -373,14 +373,21 @@
         },
         "max_pending_runs": {
           "$ref": "#/definitions/.kratos_foundation_pb.CronJob.max_pending_runs"
+        },
+        "disabled": {
+          "$ref": "#/definitions/.kratos_foundation_pb.CronJob.disabled"
         }
       },
       "type": "object",
-      "description": "CronJob 各字段独立按配置、注册声明、Task 声明、框架默认值的顺序解析。\n optional 保留 false、0 和 ALLOW_OVERLAP 的显式覆盖语义。"
+      "description": "CronJob 调度字段独立按配置、注册声明、Task 声明、框架默认值的顺序解析。\n disabled 仅由配置控制，省略时为 false（启用）。\n optional 保留 false、0 和 ALLOW_OVERLAP 的显式覆盖语义。"
     },
     ".kratos_foundation_pb.CronJob.concurrent_policy": {
       "$ref": "#/definitions/.kratos_foundation_pb.JobConcurrentPolicy",
       "description": "本进程内同一任务的重叠策略。[热更新]"
+    },
+    ".kratos_foundation_pb.CronJob.disabled": {
+      "type": "boolean",
+      "description": "是否禁用，默认 false；禁用阻止新触发，已执行或排队调用继续完成。[热更新]"
     },
     ".kratos_foundation_pb.CronJob.max_pending_runs": {
       "type": "integer",
@@ -388,7 +395,7 @@
     },
     ".kratos_foundation_pb.CronJob.run_immediately": {
       "type": "boolean",
-      "description": "是否在启动时立即执行。Start 前读取最新值；运行中修改不补触发，下次启动生效。"
+      "description": "是否在首次 Start 时立即执行（仅 disabled=false）。热更新或重新启用不补触发；进程重启重新判断。"
     },
     ".kratos_foundation_pb.CronJob.schedule": {
       "type": "string",

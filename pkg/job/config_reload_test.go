@@ -37,7 +37,7 @@ func TestConfigReloadIsAtomicAndDoesNotRepeatImmediateRun(t *testing.T) {
 	}()
 	prior := manager.cronJobs[0].resolved
 	invalid := &config_pb.Job{Cron: map[string]*config_pb.CronJob{
-		"first":  {Schedule: proto.String("@every 1m"), ConcurrentPolicy: config_pb.JobConcurrentPolicy_SKIP_IF_RUNNING.Enum()},
+		"first":  {Disabled: proto.Bool(true), Schedule: proto.String("@every 1m"), ConcurrentPolicy: config_pb.JobConcurrentPolicy_SKIP_IF_RUNNING.Enum()},
 		"second": {Schedule: proto.String("invalid")},
 	}}
 	if err := manager.applyConfig(invalid); err == nil {
@@ -227,6 +227,78 @@ func TestConfigStartupFailuresStopManager(t *testing.T) {
 			if err := manager.Stop(context.Background()); err != nil {
 				t.Fatal(err)
 			}
+		})
+	}
+}
+
+func TestConfigDisabledLifecycleDoesNotRepeatImmediateRun(t *testing.T) {
+	t.Setenv("CONFIG_POLL_INTERVAL", "100ms")
+	for _, initiallyDisabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("initially_disabled_%v", initiallyDisabled), func(t *testing.T) {
+			logger, tracing, metrics := newTestObservability(t)
+			synctest.Test(t, func(t *testing.T) {
+				configuration := func(disabled *bool) *config_pb.Job {
+					return &config_pb.Job{Cron: map[string]*config_pb.CronJob{"task": {Disabled: disabled, RunImmediately: proto.Bool(true)}}}
+				}
+				source := testconfig.NewMutableSource(t, "job", configuration(proto.Bool(initiallyDisabled)))
+				cfg, cleanup, err := config.NewManager(config.Sources{source})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer cleanup()
+				var runs atomic.Int32
+				spec := NewSpec()
+				spec.RegisterCron("task", "@every 10s", TaskFunc(func(context.Context) error { runs.Add(1); return nil }))
+				manager, err := NewManager(logger, spec, tracing, metrics, cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				done := make(chan error, 1)
+				go func() { done <- manager.Start(context.Background()) }()
+				synctest.Wait()
+				defer func() {
+					if err := manager.Stop(context.Background()); err != nil {
+						t.Error(err)
+					}
+					if err := <-done; err != nil {
+						t.Error(err)
+					}
+				}()
+				var expected int32
+				if !initiallyDisabled {
+					expected = 1
+				}
+				if runs.Load() != expected {
+					t.Fatalf("startup runs=%d, want %d", runs.Load(), expected)
+				}
+				// 热禁用阻止新周期；初始禁用也不能留下首次立即执行机会。
+				source.Update(t, configuration(proto.Bool(true)))
+				time.Sleep(200 * time.Millisecond)
+				synctest.Wait()
+				time.Sleep(20 * time.Second)
+				synctest.Wait()
+				if runs.Load() != expected {
+					t.Fatal("disabled task ran")
+				}
+				for range 2 {
+					// 多次启用都只恢复后续周期，不得补跑 immediate。
+					source.Update(t, configuration(proto.Bool(false)))
+					time.Sleep(200 * time.Millisecond)
+					synctest.Wait()
+					if runs.Load() != expected {
+						t.Fatal("reenabling repeated immediate run")
+					}
+					time.Sleep(10 * time.Second)
+					synctest.Wait()
+					expected++
+					if runs.Load() != expected {
+						t.Fatal("reenabling did not resume schedule")
+					}
+					source.Update(t, configuration(proto.Bool(true)))
+					time.Sleep(200 * time.Millisecond)
+					synctest.Wait()
+				}
+			})
 		})
 	}
 }

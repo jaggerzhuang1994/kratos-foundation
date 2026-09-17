@@ -11,9 +11,9 @@ import (
 
 // cronScheduler 只由 Manager 持有，避免出现第二套调度生命周期。
 type cronScheduler interface {
-	// schedule 注册已经解析的调度计划。
+	// schedule 注册已经解析的调度计划；nil 保留任务但不安装调度条目。
 	schedule(context.Context, string, Task, scheduleSpec)
-	// reschedule 发布新的后续计划，保留任务与执行上下文。
+	// reschedule 发布新的后续计划，保留任务与执行上下文；nil 表示禁用。
 	reschedule(string, scheduleSpec)
 	// start 启动调度循环。
 	start()
@@ -135,8 +135,12 @@ func (c *cron_) run() {
 				}
 				if id, ok := ids[name]; ok {
 					c.cron.Remove(id)
+					delete(ids, name)
 				}
-				ids[name] = c.cron.Schedule(entry.schedule, entry.job)
+				// 禁用仍保留任务和上下文，重新启用使用新的非立即执行计划。
+				if entry.schedule != nil {
+					ids[name] = c.cron.Schedule(entry.schedule, entry.job)
+				}
 				applied[name] = entry
 			}
 		}

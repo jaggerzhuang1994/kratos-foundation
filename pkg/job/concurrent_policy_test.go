@@ -198,7 +198,13 @@ func TestPolicyReloadPreservesRunningAndPendingCalls(t *testing.T) {
 		if runs.Load() != 2 {
 			t.Fatal("shrinking queue admitted another call")
 		}
-		gate.update(cronConfig{policy: SkipIfRunning})
+		gate.update(cronConfig{disabled: true, policy: SkipIfRunning})
+		if err := run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if runs.Load() != 2 {
+			t.Fatal("disabled gate admitted new invocation")
+		}
 		close(release)
 		synctest.Wait()
 		for range 4 {

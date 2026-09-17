@@ -4,7 +4,7 @@
 
 ## 声明与优先级
 
-Cron 四项参数逐字段按 **配置 > 注册时显式指定 > Task 自身声明 > 框架默认值** 解析。Task 可分别实现以下可选接口，不必全部实现；方法只在 Manager 构造时调用一次，后续热更新复用这份基线。
+Cron 的定时、并发策略、启动立即执行和等待容量四项参数逐字段按 **配置 > 注册时显式指定 > Task 自身声明 > 框架默认值** 解析。Task 可分别实现以下可选接口，不必全部实现；方法只在 Manager 构造时调用一次，后续热更新复用这份基线。
 
 | 参数 | 配置字段 | 注册声明 | Task 可选方法 | 框架默认值 |
 | --- | --- | --- | --- | --- |
@@ -12,6 +12,8 @@ Cron 四项参数逐字段按 **配置 > 注册时显式指定 > Task 自身声�
 | 并发策略 | `concurrent_policy` | `WithConcurrentPolicy(...)` | `ConcurrentPolicy() job.ConcurrentPolicy` | `AllowOverlap` |
 | 启动立即执行 | `run_immediately` | `RunImmediately(bool)` | `RunImmediately() bool` | false |
 | Delay 容量 | `max_pending_runs` | `WithMaxPendingRuns(int)` | `MaxPendingRuns() int` | 1 |
+
+`disabled` 仅由配置控制，省略或 null 时默认 false（启用），没有对应的注册选项或 Task 默认方法；它只适用于已注册 Cron。
 
 下面是可放入业务组装包的完整声明示例。Task 的 Run 承担业务工作，Boot 只登记已注入的 Task。
 
@@ -43,6 +45,7 @@ func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, task *Refre
 job:
   cron:
     refresh:
+      disabled: false
       schedule: "*/10 * * * * *"
       concurrent_policy: DELAY_IF_RUNNING
       run_immediately: false
@@ -57,7 +60,9 @@ job:
 
 每次更新先完整校验全部任务，任一表达式、策略、容量或名称无效则整批拒绝，记录 `ERROR job.config.rejected` 并保留上一份有效规则；初次构造或启动时无效则返回错误。合法变更记录 `INFO job.config.applied`。Config Manager 按轮询快照通知，短时间多次更新可能合并。
 
-新表达式重新计算后续调度，旧周期不补跑。调度控制循环通过替换 robfig 条目应用更新，不等待正在执行的 Task。运行中修改 run_immediately 不额外触发：它只影响下一次进程启动；构造后、Start 前的配置变化仍会影响本次启动。
+新表达式重新计算后续调度，旧周期不补跑。调度控制循环通过替换 robfig 条目应用更新，不等待正在执行的 Task。`run_immediately` 仅在 Manager 首次 Start 且任务启用时生效；构造后、Start 前的配置变化仍会影响本次启动。启动时禁用则跳过立即执行，运行中修改此字段、重新启用或修改定时规则都不会补触发。进程重启创建新的 Manager 后重新判断，不是跨进程生命周期只执行一次。
+
+`disabled: true` 先在现有 gate 锁内关闭新调用准入，再由调度控制循环移除条目；与禁用同时发生的调用，以是否已经取得执行或等待名额为界。已经执行和已经排队的调用继续完成，不取消任务 Context。有效配置快照中将 disabled 设为 false、删除覆盖或设为 null 后从当前时间恢复后续周期（源文件省略字段是否能删除旧值仍遵循 Config 合并语义），不补跑停用期间的周期。禁用时仍校验表达式、并发策略和容量，不能借此隐藏非法配置。配置变更仍通过 `job.config.applied` / `job.config.rejected` 记录。
 
 并发规则与容量作用于后续触发；正在执行的任务继续，已经排队的调用仍等待串行执行。切换策略保留运行计数，AllowOverlap 改成 Skip/Delay 时不会丢失旧调用。缩容不丢弃已有等待，只限制新增等待；切到 AllowOverlap 后，新调用可能先于旧等待执行，不保证严格 FIFO 或公平性。容量只限制 Delay 的等待数，不限制 AllowOverlap 的并行数。
 
@@ -74,11 +79,14 @@ flowchart TD
  V -- 有效 --> L[获取 Manager 状态锁]
  L --> S{正在停机?}
  S -- 是 --> Z[释放锁 忽略更新]
- S -- 否 --> G[逐任务获取 gate 锁 更新策略并释放 gate 锁]
+ S -- 否 --> G[逐任务获取 gate 锁 更新启用状态和策略 释放 gate 锁]
  G --> H[发布新调度声明 释放 Manager 锁]
  H --> I[INFO job.config.applied]
- I --> J[控制循环锁外替换 robfig 条目]
- J --> E
+ I --> J{控制循环锁外检查 disabled}
+ J -- 是 --> J1[移除 robfig 条目 保留任务和上下文]
+ J -- 否 --> J2[替换后续调度 不补触发 immediate]
+ J1 --> E
+ J2 --> E
  W --> E
  E --> K([Stop 或父 Context 取消])
  K --> M[状态锁内标记停止 取出取消函数 释放锁]
@@ -100,7 +108,10 @@ flowchart TD
  A([Cron 并发触发]) --> B[获取本任务 gate 互斥锁]
  B --> C{Context 已取消?}
  C -- 是 --> R[释放锁 返回取消]
- C -- 否 --> D{允许重叠 或没有运行和等待?}
+ C -- 否 --> C1{已禁用?}
+ C1 -- 是 --> C2[释放锁 跳过本轮]
+ C2 --> Z
+ C1 -- 否 --> D{允许重叠 或没有运行和等待?}
  D -- 是 --> E[增加运行数 释放锁]
  D -- 否 --> F{Skip 策略?}
  F -- 是 --> S[释放锁 WARN job skipped]
