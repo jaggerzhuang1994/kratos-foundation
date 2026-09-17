@@ -6,10 +6,15 @@ import (
 	"fmt"
 
 	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
+	"gorm.io/gorm"
 )
 
 // SimpleConfig 为只保存队列数据的模式指定独立物理表，不支持运行时换表。
-type SimpleConfig struct{ Table string }
+type SimpleConfig struct {
+	Table string `json:"table"`
+	// RetainCompleted 保留成功任务，默认 false；与 Config 中同名字段语义一致。
+	RetainCompleted bool `json:"retain_completed"`
+}
 
 type simpleModel struct{ Model }
 
@@ -24,7 +29,7 @@ func NewSimpleRepo(ctx context.Context, provider ConnectionProvider, config Simp
 	if config.Table == "" {
 		return nil, errors.New("queue simple table is required")
 	}
-	repo, err := newRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*simpleModel, error) { return &simpleModel{}, nil }, config.Table)
+	repo, err := newRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*simpleModel, error) { return &simpleModel{}, nil }, config.Table, Config{RetainCompleted: config.RetainCompleted})
 	if err != nil {
 		return nil, err
 	}
@@ -40,6 +45,11 @@ func (r *SimpleRepo) Migrate(ctx context.Context) error {
 	}
 	if err := db.AutoMigrate(&simpleModel{}); err != nil {
 		return fmt.Errorf("migrate queue simple table: %w", err)
+	}
+	// 兼容旧表：Failed 和租约列保留，迁移时补齐可查询状态；已完成行不回退。
+	// 部署期间须停用旧 Worker，避免其忽略 completed 状态重新领取。
+	if err := db.Where("status <> ?", StatusCompleted).Update("status", gorm.Expr("CASE WHEN failed = ? THEN ? WHEN reserved_until <> 0 THEN ? ELSE ? END", true, StatusFailed, StatusRunning, StatusPending)).Error; err != nil {
+		return fmt.Errorf("backfill queue task status: %w", err)
 	}
 	return nil
 }

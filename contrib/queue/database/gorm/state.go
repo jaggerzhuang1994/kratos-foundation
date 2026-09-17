@@ -11,7 +11,7 @@ import (
 )
 
 func (r *Repo[T]) reserved(ctx context.Context, id, token string) *gorm.DB {
-	return r.consumerDB(ctx).Where("id = ? AND token = ? AND token <> '' AND failed = ? AND reserved_until <> 0", taskKey(id), token, false)
+	return r.consumerDB(ctx).Where("id = ? AND token = ? AND token <> '' AND failed = ? AND reserved_until <> 0 AND status <> ?", taskKey(id), token, false, StatusCompleted)
 }
 
 func transitionResult(result *gorm.DB, operation string, missing error) error {
@@ -24,19 +24,24 @@ func transitionResult(result *gorm.DB, operation string, missing error) error {
 	return nil
 }
 
-// DeleteReserved 仅删除当前 token 持有的记录；业务模型不得启用软删除。
-func (r *Repo[T]) DeleteReserved(ctx context.Context, id, token string) error {
-	return transitionResult(r.reserved(ctx, id, token).Delete(r.entity()), "delete", queue.ErrLeaseLost)
+// CompleteReserved 按当前 token 确认成功；保留模式清空租约并写入终态，默认物理删除。
+func (r *Repo[T]) CompleteReserved(ctx context.Context, id, token string, at time.Time) error {
+	reserved := r.reserved(ctx, id, token)
+	if r.retainCompleted {
+		// 终态和租约在同一次条件更新中提交，旧 owner 和重复确认不能改写完成记录。
+		return transitionResult(reserved.Updates(map[string]any{"status": StatusCompleted, "completed_at": at.UnixMilli(), "reserved_until": 0, "token": ""}), "complete", queue.ErrLeaseLost)
+	}
+	return transitionResult(reserved.Delete(r.entity()), "complete", queue.ErrLeaseLost)
 }
 
 // ReleaseReserved 原子释放租约并排期，保留自定义字段与领取次数。
 func (r *Repo[T]) ReleaseReserved(ctx context.Context, id, token string, at time.Time) error {
-	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"available_at": deadlineMillis(at), "reserved_until": 0, "token": ""}), "release", queue.ErrLeaseLost)
+	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"status": StatusPending, "available_at": deadlineMillis(at), "reserved_until": 0, "token": ""}), "release", queue.ErrLeaseLost)
 }
 
 // FailReserved 保留任务和自定义字段，在同一行记录失败状态。
 func (r *Repo[T]) FailReserved(ctx context.Context, id, token, reason string, at time.Time) error {
-	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"failed": true, "failure_reason": reason, "failed_at": at.UnixMilli(), "reserved_until": 0, "token": ""}), "fail", queue.ErrLeaseLost)
+	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": reason, "failed_at": at.UnixMilli(), "reserved_until": 0, "token": ""}), "fail", queue.ErrLeaseLost)
 }
 
 // ListFailed 按失败时间和任务 ID 返回独立快照；损坏正文返回错误而不静默跳过。
@@ -61,5 +66,5 @@ func (r *Repo[T]) ListFailed(ctx context.Context, limit int) ([]databasequeue.Ta
 
 // RetryFailed 原子重置失败状态、次数和租约，保留正文及自定义字段。
 func (r *Repo[T]) RetryFailed(ctx context.Context, id string, at time.Time) error {
-	return transitionResult(r.consumerDB(ctx).Where("id = ? AND failed = ?", taskKey(id), true).Updates(map[string]any{"failed": false, "failure_reason": "", "failed_at": 0, "attempts": 0, "token": "", "reserved_until": 0, "available_at": deadlineMillis(at)}), "retry", queue.ErrNotFound)
+	return transitionResult(r.consumerDB(ctx).Where("id = ? AND failed = ?", taskKey(id), true).Updates(map[string]any{"status": StatusPending, "completed_at": 0, "failed": false, "failure_reason": "", "failed_at": 0, "attempts": 0, "token": "", "reserved_until": 0, "available_at": deadlineMillis(at)}), "retry", queue.ErrNotFound)
 }

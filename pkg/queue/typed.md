@@ -128,7 +128,7 @@ flowchart TD
 - Queue 的发布与处理共享定义；默认 `JSONCodec`，可替换 `Codec[T]`。发布校验/编码失败直接返回，不访问 Store。JSON 本身不拒绝未知字段，`null`/零值是否有效由 Validate 决定。
 - 消费解码/校验失败调用现有永久归档路径，`Reason=permanent`，`Cause=decode_error/validation_error`；未知类型或版本是 `handler_missing`。损坏 Store 外层记录仍由 Store 报错，不等于业务消息解码失败。
 - `Store` 保持底层存储契约，投递统一使用 Queue.Post/PostWith；旧的公开 Worker 构造与 Handler 表已移除。旧 `send-email` 任务不会自动变成 `send-email.v1`。部署新版本前须由旧版本应用排空，或使用独立物理队列；不能让只识别新版本的 Worker 竞争旧积压。
-- 发布成功仍可能只是写入尚未提交的业务事务。网络错误也可能发生在实际提交之后。需要识别重复投递时使用 `PostWith` 的稳定 ID；完成后不保留永久去重记录。
+- 发布成功仍可能只是写入尚未提交的业务事务。网络错误也可能发生在实际提交之后。需要识别重复投递时使用 `PostWith` 的稳定 ID；默认完成后删除；GORM 开启 RetainCompleted 时，完成记录保留期间仍拒绝相同 ID，详见 [保留执行记录](../../contrib/queue/database/gorm/README.md#保留执行记录)。
 
 ## 配置与投递信息
 

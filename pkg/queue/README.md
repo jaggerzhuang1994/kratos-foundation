@@ -26,7 +26,7 @@
 
 - Task 只存任务类型、可序列化 Payload、Header、ID 与时间；业务依赖通过 Handler 闭包或方法注入，不序列化服务对象。Type 必须非空，须匹配 Definition 的显式消息类型与版本。
 - Queue 编码消息并复制 Header，补齐 ID、CreatedAt、AvailableAt 并传播 W3C trace context/baggage；不修改调用者对象。消息处理器收到独立解码结果，修改它不会更改待重试记录。返回的 Reservation/FailedTask 也为独立快照；Reservation 的 Task ID、Token、Attempts 应只读。
-- Redis Store 用业务提供的 `KeyPrefix` 隔离，前缀原样保留且不得为空或全为空白；Database Store 由业务绑定单个队列的 Repo 隔离，可为每个队列使用不同表。任务 ID 为 1–128 字节且不能全为空白。相同 ID 的待执行、已领取、失败记录不能重复入队，返回 `ErrDuplicate`；完成删除后允许复用 ID。这不是永久业务去重。
+- Redis Store 用业务提供的 `KeyPrefix` 隔离，前缀原样保留且不得为空或全为空白；Database Store 由业务绑定单个队列的 Repo 隔离，可为每个队列使用不同表。任务 ID 为 1–128 字节且不能全为空白。相同 ID 的待执行、已领取、失败记录不能重复入队，返回 `ErrDuplicate`；完成删除后允许复用 ID；GORM 开启 RetainCompleted 时，完成记录也占用 ID。这不是永久业务去重。
 - Post 返回实际 ID；存储提交后响应丢失时可能同时返回 ID 和错误。需要跨重试识别同一任务时，业务应在投递前设置稳定 ID。调用成功表示后端已接受，耐久性仍依赖 Redis AOF/RDB/复制或数据库刷盘配置。
 - Store 借用 Redis Manager 或业务 Repo，无独立 cleanup。先停止 Worker 并等待 Handler 退出，再由原拥有者释放连接。Queue、Worker 均不关闭 Store 连接；没有全局 Registry、隐式启动或顶层 queue 配置。
 
@@ -56,7 +56,7 @@ Worker 每次从 Store 原子领取一个任务并持久增加 Attempts，再在
 
 Retry 的第一次等待使用 MinBackoff，后续按两倍增长并受 MaxBackoff 限制；沿用已有 RetryPolicy 的显式零语义：MinBackoff 为零始终不等待，MinBackoff 非零而 MaxBackoff 为零时仅第一次使用 MinBackoff，后续不等待。重试配置在构造时固化，不热更新。
 
-成功后按当前 Token 确认删除。普通错误、panic 和执行超时进入重试；`queue.Permanent(err)` 或未注册的任务类型进入永久失败，次数耗尽进入 `retry_exhausted`。失败持久化成功后 Worker 继续处理其他任务。`Store.Failed(ctx, limit)` 查询最多 1–1000 条独立失败快照；`Store.Retry(ctx, id, at)` 人工重新投递失败任务并清零次数；找不到返回 `ErrNotFound`。失败记录不会自动过期，无分页、删除或管理界面。
+成功后按当前 Token 确认完成；默认后端删除任务，GORM 可通过 [RetainCompleted](../../contrib/queue/database/gorm/README.md#保留执行记录) 保留成功记录与状态。普通错误、panic 和执行超时进入重试；`queue.Permanent(err)` 或未注册的任务类型进入永久失败，次数耗尽进入 `retry_exhausted`。失败持久化成功后 Worker 继续处理其他任务。`Store.Failed(ctx, limit)` 查询最多 1–1000 条独立失败快照；`Store.Retry(ctx, id, at)` 人工重新投递失败任务并清零次数；找不到返回 `ErrNotFound`。失败记录不会自动过期，无分页、删除或管理界面。
 
 多 Worker 通过 Redis Lua 或业务 Repo 的原子操作竞争领取；Token 防止旧 Worker 确认、释放或失败归档已被重新分配的任务，冲突返回 `ErrLeaseLost`，Worker 记录 WARN 并继续。Token 到期但尚未重新分配时仍可确认。Handler 执行不在 Redis Lua、领取事务或 Go 互斥锁内；Repo 的具体同步机制由业务实现；竞争可能有饥饿，不保证领取公平。
 
@@ -81,7 +81,7 @@ flowchart TD
     K --> L{类型已注册且未超次数?}
     L -- 是 --> M[原子边界外执行Handler 带超时Context]
     L -- 否 --> R[按token持久化失败]
-    M -- 成功 --> N[按token确认删除]
+    M -- 成功 --> N[按token确认完成 由后端删除或保留]
     M -- 可重试错误或超时 --> O[按token释放 写下次可执行时间]
     M -- 永久失败或次数耗尽 --> R
     M -- 应用取消 --> Z

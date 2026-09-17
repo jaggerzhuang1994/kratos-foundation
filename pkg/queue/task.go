@@ -8,7 +8,7 @@ import (
 )
 
 // Task 是持久化任务；Type 选择业务 Handler，Payload 只保存可序列化数据。
-// ID 为 1–128 字节，在同一队列的待执行/失败集合内唯一；完成后不保留去重记录。
+// ID 为 1–128 字节，在同一队列的存储记录内唯一；完成后是否保留由 Store 实现与配置决定。
 type Task struct {
 	ID          string
 	Type        string
@@ -58,12 +58,12 @@ var (
 // Ack/Release/Fail 必须比较 token，不能删除或覆盖其他领取者的状态。
 // 输入在调用期间只读，返回值为独立副本。Store 不拥有借用的数据库连接。
 type Store interface {
-	// Enqueue 保存准备好的任务，ID 与 Type 必填；重复未完成 ID 返回 ErrDuplicate。
+	// Enqueue 保存准备好的任务，ID 与 Type 必填；重复的已存储 ID 返回 ErrDuplicate（包括后端保留的完成记录）。
 	// 支持业务事务的后端可复用 ctx 中的事务，成功不代表外层已提交；最终以提交结果为准。
 	Enqueue(context.Context, *Task) error
 	// Reserve 使用传入时钟领取任务；lease 至少 1ms，截止时间向上取整。
 	Reserve(context.Context, time.Time, time.Duration) (*Reservation, error)
-	// Ack 删除当前租约任务；过期但未重新分配的 token 仍可确认。
+	// Ack 确认当前租约任务完成；后端可删除或保留记录，过期但未重新分配的 token 仍可确认。
 	Ack(context.Context, *Reservation) error
 	// Release 保留尝试次数并保存最早下次执行时间。
 	Release(context.Context, *Reservation, time.Time) error

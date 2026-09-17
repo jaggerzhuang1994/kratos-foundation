@@ -3,11 +3,9 @@ package gorm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -68,118 +66,11 @@ func testRepo(t *testing.T) (*Repo[*testTask], *gorm.DB) {
 	}
 	repo, err := NewRepo(context.Background(), connectionFunc(func(ctx context.Context) *gorm.DB { return db.WithContext(ctx) }), func(_ context.Context, r *databasequeue.TaskRecord) (*testTask, error) {
 		return &testTask{TenantID: "tenant", OrderID: r.Task.ID}, nil
-	})
+	}, Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return repo, db
-}
-
-func TestRepoLifecycle(t *testing.T) {
-	repo, db := testRepo(t)
-	var _ databasequeue.Repo = repo
-	store := databasequeue.NewStore(repo)
-	ctx := context.Background()
-	now := time.Unix(1700000000, 123456)
-	task := &queue.Task{ID: "任务A ", Type: "email", Payload: []byte{0, 255}, Headers: map[string]string{"k": "v"}, AvailableAt: now}
-	if err := store.Enqueue(ctx, task); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Enqueue(ctx, task); !errors.Is(err, queue.ErrDuplicate) {
-		t.Fatalf("duplicate: %v", err)
-	}
-	if r, err := store.Reserve(ctx, now, time.Second); err != nil || r != nil {
-		t.Fatalf("early claim: %v %v", r, err)
-	}
-	now = now.Add(time.Millisecond)
-	first, err := store.Reserve(ctx, now, time.Second)
-	if err != nil || first == nil {
-		t.Fatalf("claim: %v %v", first, err)
-	}
-	if first.Attempts != 1 || string(first.Task.Payload) != string(task.Payload) {
-		t.Fatal(first)
-	}
-	if r, err := store.Reserve(ctx, now, time.Second); err != nil || r != nil {
-		t.Fatalf("active lease claimed: %v %v", r, err)
-	}
-	second, err := store.Reserve(ctx, now.Add(2*time.Second), time.Second)
-	if err != nil || second == nil || second.Attempts != 2 {
-		t.Fatalf("reclaim: %v %v", second, err)
-	}
-	for _, operation := range []func() error{func() error { return store.Ack(ctx, first) }, func() error { return store.Release(ctx, first, now) }, func() error { return store.Fail(ctx, first, "old", now) }} {
-		if err := operation(); !errors.Is(err, queue.ErrLeaseLost) {
-			t.Fatalf("stale token: %v", err)
-		}
-	}
-	if err := store.Release(ctx, second, now.Add(5*time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	third, err := store.Reserve(ctx, now.Add(6*time.Second), time.Second)
-	if err != nil || third == nil || third.Attempts != 3 {
-		t.Fatalf("release: %v %v", third, err)
-	}
-	if err := store.Fail(ctx, third, "test", now); err != nil {
-		t.Fatal(err)
-	}
-	failed, err := store.Failed(ctx, 10)
-	if err != nil || len(failed) != 1 || failed[0].Reason != "test" {
-		t.Fatalf("failed: %v %v", failed, err)
-	}
-	if err := store.Retry(ctx, task.ID, now); err != nil {
-		t.Fatal(err)
-	}
-	last, err := store.Reserve(ctx, now.Add(time.Second), time.Second)
-	if err != nil || last == nil || last.Attempts != 1 {
-		t.Fatalf("retry: %v %v", last, err)
-	}
-	var saved testTask
-	if err := db.First(&saved).Error; err != nil {
-		t.Fatal(err)
-	}
-	if saved.TenantID != "tenant" || saved.OrderID != task.ID {
-		t.Fatal("custom columns changed")
-	}
-	if err := store.Ack(ctx, last); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Retry(ctx, task.ID, now); !errors.Is(err, queue.ErrNotFound) {
-		t.Fatal(err)
-	}
-	if err := store.Enqueue(ctx, task); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Ack(ctx, last); !errors.Is(err, queue.ErrLeaseLost) {
-		t.Fatal("old owner deleted new task")
-	}
-}
-
-func TestRepoConcurrentClaim(t *testing.T) {
-	repo, _ := testRepo(t)
-	ctx := context.Background()
-	now := time.Now().UTC()
-	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "one", Type: "test", AvailableAt: now}}); err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	results := make(chan *databasequeue.TaskRecord, 16)
-	for i := range 16 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			record, err := repo.Claim(ctx, now.Add(time.Second), now.Add(time.Hour), fmt.Sprint(i))
-			if err != nil {
-				t.Error(err)
-			}
-			if record != nil {
-				results <- record
-			}
-		}()
-	}
-	wg.Wait()
-	close(results)
-	if len(results) != 1 {
-		t.Fatalf("owners: %d", len(results))
-	}
 }
 
 func TestRepoTransactionsAndErrors(t *testing.T) {
@@ -188,7 +79,7 @@ func TestRepoTransactionsAndErrors(t *testing.T) {
 	sentinel := errors.New("rollback")
 	for _, rollback := range []bool{true, false} {
 		err := db.Transaction(func(tx *gorm.DB) error {
-			transactional, err := NewRepo(ctx, connectionFunc(func(context.Context) *gorm.DB { return tx }), repo.factory)
+			transactional, err := NewRepo(ctx, connectionFunc(func(context.Context) *gorm.DB { return tx }), repo.factory, Config{})
 			if err != nil {
 				return err
 			}
@@ -236,34 +127,6 @@ func TestRepoTransactionsAndErrors(t *testing.T) {
 	}
 }
 
-func TestRepoCorruptPayload(t *testing.T) {
-	repo, db := testRepo(t)
-	ctx := context.Background()
-	now := time.Now().UTC()
-	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "bad", Type: "test"}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Model(&testTask{}).Where("id = ?", taskKey("bad")).Update("data", []byte("broken")).Error; err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.Claim(ctx, now, now.Add(time.Second), "t"); err == nil {
-		t.Fatal("corrupt payload accepted")
-	}
-	if record, err := repo.Claim(ctx, now, now.Add(time.Second), "t2"); err != nil || record != nil {
-		t.Fatalf("quarantine: %v %v", record, err)
-	}
-	if _, err := repo.ListFailed(ctx, 1); err == nil {
-		t.Fatal("corruption hidden")
-	}
-	var stored testTask
-	if err := db.First(&stored).Error; err != nil {
-		t.Fatal(err)
-	}
-	if string(stored.Data) != "broken" || !stored.Failed {
-		t.Fatal("corrupt data discarded")
-	}
-}
-
 type shadowTask struct {
 	Model
 	ID string
@@ -295,19 +158,19 @@ func TestRepoRejectsModelOverrides(t *testing.T) {
 	_, db := testRepo(t)
 	ctx := context.Background()
 	provider := connectionFunc(func(context.Context) *gorm.DB { return db })
-	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*shadowTask, error) { return &shadowTask{}, nil }); err == nil {
+	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*shadowTask, error) { return &shadowTask{}, nil }, Config{}); err == nil {
 		t.Fatal("shadow accepted")
 	}
-	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*prefixTask, error) { return &prefixTask{}, nil }); err == nil {
+	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*prefixTask, error) { return &prefixTask{}, nil }, Config{}); err == nil {
 		t.Fatal("prefix accepted")
 	}
-	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*softTask, error) { return &softTask{}, nil }); err == nil {
+	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*softTask, error) { return &softTask{}, nil }, Config{}); err == nil {
 		t.Fatal("soft delete accepted")
 	}
-	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*extraKeyTask, error) { return &extraKeyTask{}, nil }); err == nil {
+	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*extraKeyTask, error) { return &extraKeyTask{}, nil }, Config{}); err == nil {
 		t.Fatal("second key accepted")
 	}
-	if _, err := NewRepo[*testTask](ctx, provider, nil); err == nil {
+	if _, err := NewRepo[*testTask](ctx, provider, nil, Config{}); err == nil {
 		t.Fatal("nil factory accepted")
 	}
 }
@@ -345,38 +208,6 @@ func TestRepoFactoryAndIdentity(t *testing.T) {
 	got, err := repo.Claim(ctx, time.Now(), time.Now().Add(time.Hour), "t")
 	if err != nil || got == nil || got.Task.Type != "test" {
 		t.Fatalf("factory changed payload: %v %v", got, err)
-	}
-}
-
-func TestRepoClaimRejectsRecreatedTask(t *testing.T) {
-	repo, db := testRepo(t)
-	ctx := context.Background()
-	now := time.Now().UTC()
-	record := &databasequeue.TaskRecord{Task: queue.Task{ID: "same", Type: "test"}}
-	if err := repo.Insert(ctx, record); err != nil {
-		t.Fatal(err)
-	}
-	replaced := false
-	if err := db.Callback().Update().Before("gorm:begin_transaction").Register("test:recreate", func(tx *gorm.DB) {
-		if replaced {
-			return
-		}
-		replaced = true
-		if err := db.Where("id = ?", taskKey("same")).Delete(&testTask{}).Error; err != nil {
-			t.Error(err)
-			return
-		}
-		if err := repo.Insert(ctx, record); err != nil {
-			t.Error(err)
-		}
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := repo.Claim(ctx, now, now.Add(time.Hour), "old"); err != nil || got != nil {
-		t.Fatalf("stale snapshot claimed new task: %v %v", got, err)
-	}
-	if got, err := repo.Claim(ctx, now, now.Add(time.Hour), "new"); err != nil || got == nil || got.Attempts != 1 {
-		t.Fatalf("new task unavailable: %v %v", got, err)
 	}
 }
 
@@ -429,8 +260,11 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 		name     string
 		wantRuns int
 		reason   string
+		retain   bool
 	}{
 		{name: "success", wantRuns: 1},
+		{name: "success_retained", wantRuns: 1, retain: true},
+		{name: "transient_then_success_retained", wantRuns: 2, retain: true},
 		{name: "transient_then_success", wantRuns: 2},
 		{name: "retry_exhausted", wantRuns: 2, reason: "retry_exhausted"},
 		{name: "permanent", wantRuns: 1, reason: "permanent"},
@@ -441,6 +275,10 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 			// 独立 SQLite 文件避免借用开发机器的 MySQL，测试不依赖外部基础设施。
 			t.Setenv("FOUNDATION_TEST_QUEUE_MYSQL_DSN", "")
 			repo, db := testRepo(t)
+			repo, err := NewRepo(context.Background(), repo.provider, repo.factory, Config{RetainCompleted: tc.retain})
+			if err != nil {
+				t.Fatal(err)
+			}
 			store := &integrationQueueStore{Store: databasequeue.NewStore(repo), settled: make(chan error, 1)}
 			obs := integrationQueueObservability(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -470,7 +308,7 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				// Handler 的写入不能污染下一次重试或失败归档的数据。
 				payload[0] = 'Y'
 				switch tc.name {
-				case "transient_then_success":
+				case "transient_then_success", "transient_then_success_retained":
 					if runs == 1 {
 						return errors.New("temporary service failure")
 					}
@@ -548,8 +386,21 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				t.Fatalf("successful task archived: %+v", failed)
 			}
 			var count int64
-			if err := db.Model(&testTask{}).Count(&count).Error; err != nil || count != 0 {
-				t.Fatalf("completed task not deleted: count=%d error=%v", count, err)
+			wantCount := int64(0)
+			if tc.retain {
+				wantCount = 1
+			}
+			if err := db.Model(&testTask{}).Count(&count).Error; err != nil || count != wantCount {
+				t.Fatalf("completed tasks count=%d want=%d error=%v", count, wantCount, err)
+			}
+			if tc.retain {
+				var row testTask
+				if err := db.First(&row).Error; err != nil {
+					t.Fatal(err)
+				}
+				if row.Status != StatusCompleted || row.CompletedAt <= 0 || row.Attempts != tc.wantRuns {
+					t.Fatalf("completion record: %+v", row.Model)
+				}
 			}
 			if err := store.Retry(ctx, original.ID, time.Now()); !errors.Is(err, queue.ErrNotFound) {
 				t.Fatalf("retry completed task = %v", err)

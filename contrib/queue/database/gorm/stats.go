@@ -26,7 +26,7 @@ func (r *Repo[T]) Stats(ctx context.Context, now time.Time) (queue.Stats, error)
  COALESCE(SUM(CASE WHEN failed = ? THEN 1 ELSE 0 END), 0) AS failed,
  MIN(CASE WHEN failed = ? AND available_at <= ? AND (reserved_until = 0 OR reserved_until <= ?) THEN available_at END) AS oldest`
 	at := now.UnixMilli()
-	if err := r.consumerDB(ctx).Select(query, false, at, at, false, at, at, false, at, true, false, at, at).Scan(&row).Error; err != nil {
+	if err := r.consumerDB(ctx).Where("status <> ?", StatusCompleted).Select(query, false, at, at, false, at, at, false, at, true, false, at, at).Scan(&row).Error; err != nil {
 		return queue.Stats{}, fmt.Errorf("read queue database stats: %w", err)
 	}
 	result := queue.Stats{Ready: row.Ready, Scheduled: row.Scheduled, Running: row.Running, Failed: row.Failed, OldestReadyKnown: true}

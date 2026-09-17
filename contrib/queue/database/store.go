@@ -48,12 +48,12 @@ func validReservation(r *queue.Reservation) bool {
 	return r != nil && r.Task != nil && strings.TrimSpace(r.Task.ID) != "" && len(r.Task.ID) <= 128 && r.Token != ""
 }
 
-// Ack 请求 Repo 按 token 删除当前任务。
+// Ack 请求 Repo 按 token 确认完成，由 Repo 决定删除或保留完成记录。
 func (s *Store) Ack(ctx context.Context, r *queue.Reservation) error {
 	if !validReservation(r) {
 		return queue.ErrLeaseLost
 	}
-	return s.repo.DeleteReserved(ctx, r.Task.ID, r.Token)
+	return s.repo.CompleteReserved(ctx, r.Task.ID, r.Token, time.Now().UTC())
 }
 
 // Release 请求 Repo 保留次数并保存下次执行时间。

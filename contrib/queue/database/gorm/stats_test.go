@@ -14,6 +14,21 @@ func TestStats(t *testing.T) {
 	repo, _ := testRepo(t)
 	ctx := context.Background()
 	now := time.Unix(1800000000, 0).UTC()
+	repo, err := NewRepo(ctx, repo.provider, repo.factory, Config{RetainCompleted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "completed", Type: "job", AvailableAt: now.Add(-time.Hour)}}); err != nil {
+		t.Fatal(err)
+	}
+	record, err := repo.Claim(ctx, now, now.Add(time.Minute), "complete")
+	if err != nil || record == nil {
+		t.Fatalf("claim completion fixture: %v %v", record, err)
+	}
+	if err := repo.CompleteReserved(ctx, record.Task.ID, record.Token, now); err != nil {
+		t.Fatal(err)
+	}
+
 	empty, err := repo.Stats(ctx, now)
 	if err != nil || empty.Ready != 0 || !empty.OldestReadyKnown {
 		t.Fatalf("empty: %+v, %v", empty, err)

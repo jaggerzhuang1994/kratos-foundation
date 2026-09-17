@@ -511,3 +511,23 @@ flowchart LR
 ## 基础 ProviderSet 命名与默认 Spec
 
 旧驱动 provider set 统一为 `BaseProviderSet`；自定义 Job Coordinator 的变体已删除，不保留别名。默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 NewConfigSources 只组装 ConfigSources；环境选择、校验和延迟加载由 bootstrap.NewSpec 实现。业务显式注入 `bootstrap.RemoteConfigDirName` 和 `bootstrap.LocalConfigPath`，没有默认远程目录。两种 PathsProvider 契约也位于 bootstrap，前两个参数依次为 `appinfo.AppInfo` 和 `environment string`；远程名称参数为 `RemoteConfigName`，本地移除名称参数，通过 AppInfo.Name() 获取。旧 consulconfig.NewSpec 移除；`bootstrap.RemoteConfigName` 默认由 `consulconfig.NewDefaultRemoteConfigName` 取 AppInfo.Name()，自定义名称使用 `consulconfig.ProviderSetWithCustomRemoteConfigName` 并由业务注入。`NewConfigSources` 增加名称参数。configs/secrets 环境路径改为 `{dir}/{env}/{name}.yaml` 和 `{dir}/{name}/{env}/*.yaml`，需迁移旧的 `{dir}/{env}/{app}/*.yaml` 片段键；默认远程改为十二层，configs 先于 secrets，每组公共先于应用、基础先于环境、单文件先于片段目录。本地目录只取应用单文件和环境应用单文件，普通文件只加载自身，否则使用 glob。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire。
+
+
+## 数据库队列完成记录保留
+
+GORM 简单模式新增 `SimpleConfig.RetainCompleted`，扩展模式的构造签名改为 `NewRepo(ctx, provider, factory, Config)`，传 `Config{}` 保持成功删除，传 `Config{RetainCompleted: true}` 保留完成记录。开关固定于仓储实例，不支持热更新，不影响 Redis 后端。
+
+自定义 database.Repo 须把 `DeleteReserved(ctx, id, token)` 替换为 `CompleteReserved(ctx, id, token, completedAt)`；Store.Ack 会传入当前 UTC 时间。默认实现可继续按 token 删除；保留实现必须原子记录完成、清除租约、排除再次领取和积压统计，并保持完成记录 ID 唯一。旧 token 或重复确认仍返回 ErrLeaseLost。
+
+GORM Model 新增 status、completed_at；原 failed/租约字段保留。无论是否开启保留均需先迁移表。简单模式使用显式 Migrate，扩展模式由业务迁移；旧 Worker 不能与保留模式混跑，已保留完成记录时也不能直接切回旧消费版本。配置、状态含义、SQL 回填和完整升级流程见 [GORM 队列迁移](contrib/queue/database/gorm/README.md#已有表迁移)。
+
+```mermaid
+flowchart LR
+    A([开始升级]) --> B[更新 Repo 接口与 NewRepo 调用]
+    B --> C[停止旧进程 显式迁移和回填任务表]
+    C -- 错误或超时 --> D([保持停机 修复后重试])
+    C -- 成功 --> E[统一保留配置 启用新 Worker]
+    E --> F([检查状态与完成记录])
+```
+
+GORM 任务表查询优化增加 `(failed, failed_at, id)`、`(status, failed, available_at, reserved_until)` 非唯一联合索引。简单模式由部署命令重新执行 Migrate，扩展模式由业务迁移添加；原单列索引保留。领取仅接受 pending/running，升级前应完成旧状态回填。索引作用、迁移流程与容量边界见 [GORM 仓储文档](contrib/queue/database/gorm/README.md#查询索引与容量边界)。

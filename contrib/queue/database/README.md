@@ -8,7 +8,7 @@
 
 Store 负责任务校验、领取 token 生成、任务副本及仓储结果校验。Repo 负责实际存储、原子操作、错误转换、索引、迁移和连接生命周期。Store 构造不调用 Repo，不启动 goroutine，无 cleanup；应用先停止 Worker，再由业务释放 Repo 所用资源。
 
-可选的 [GORM 泛型 Repo](gorm/README.md) 提供基础存储 Model 和默认仓储实现，业务通过嵌入模型、定义表名及工厂填充自定义字段；不影响本包的 ORM 无关边界。
+可选的 [GORM 泛型 Repo](gorm/README.md) 支持 `RetainCompleted`，可保留成功任务的执行记录（默认关闭），并提供基础存储 Model 和默认仓储实现，业务通过嵌入模型、定义表名及工厂填充自定义字段；不影响本包的 ORM 无关边界。
 
 ## 业务组装
 
@@ -32,9 +32,9 @@ func NewTaskStores(emailRepo, reportRepo databasequeue.Repo) (*databasequeue.Sto
 
 | 方法 | 必须保证的原子行为 | 冲突语义 |
 | --- | --- | --- |
-| Insert | 在当前 Repo 插入完整 TaskRecord；待执行/已领取/失败 Task.ID 唯一，禁止覆盖式 upsert | `queue.ErrDuplicate` |
-| Claim | 选取 Failed=false、Task.AvailableAt ≤ now、租约为空或到期 的一条记录；写入给定 token/截止并增加 Attempts，返回更新后快照 | 无候选返回 nil, nil；竞争失败可重选或返回空 |
-| DeleteReserved | Task.ID/Token 匹配、Failed=false、租约非空时删除 | `queue.ErrLeaseLost` |
+| Insert | 在当前 Repo 插入完整 TaskRecord；待执行/已领取/失败及保留的已完成 Task.ID 唯一，禁止覆盖式 upsert | `queue.ErrDuplicate` |
+| Claim | 选取未完成、Failed=false、Task.AvailableAt ≤ now、租约为空或到期 的一条记录；写入给定 token/截止并增加 Attempts，返回更新后快照 | 无候选返回 nil, nil；竞争失败可重选或返回空 |
+| CompleteReserved | Task.ID/Token 匹配、非终态、租约非空时确认完成；由 Repo 删除或保留终态及完成时间，保留时清空租约/token 并禁止再领取 | `queue.ErrLeaseLost` |
 | ReleaseReserved | 使用同一所有权条件，设置 Task.AvailableAt，清空 ReservedUntil/Token，保留其余任务数据和 Attempts | `queue.ErrLeaseLost` |
 | FailReserved | 同一所有权条件，设置 Failed/FailureReason/FailedAt，清空 ReservedUntil/Token，保留任务和 Attempts | `queue.ErrLeaseLost` |
 | ListFailed | 当前 Repo 的失败记录，按 FailedAt、Task.ID 升序，最多 limit 条 | 无记录返回空切片 |
@@ -42,7 +42,7 @@ func NewTaskStores(emailRepo, reportRepo databasequeue.Repo) (*databasequeue.Sto
 
 多个 Worker 可能竞争同一个 Repo。Claim 的读取候选与更新必须通过事务/行锁或包含旧身份、token、到期状态的条件更新保证原子性；无条件更新会重复领取。业务 Handler 必须在数据库原子操作完成后执行，不跨业务执行持锁。具体同步机制、索引、竞争重试及公平性由业务实现，本包不提供数据库特定策略。
 
-过期重领必须增加 Attempts 并更换 token；旧 Worker 的确认、释放及失败归档必须被拒绝。完成后可复用 Task.ID，但新领取不能复用旧 token。任务允许重投且领取次数有限：业务完成后、确认前崩溃仍可能重投；领取后执行前反复崩溃也可能耗尽次数并进入失败状态，因此不保证 Handler 至少实际执行一次或最终成功，业务 Handler 必须幂等。底层只返回错误，由 Worker 记录受控日志，不重复暴露 SQL、参数或凭据。
+过期重领必须增加 Attempts 并更换 token；旧 Worker 的确认、释放及失败归档必须被拒绝。仅完成并删除后可复用 Task.ID；保留的完成记录继续占用 ID，新领取不能复用旧 token。任务允许重投且领取次数有限：业务完成后、确认前崩溃仍可能重投；领取后执行前反复崩溃也可能耗尽次数并进入失败状态，因此不保证 Handler 至少实际执行一次或最终成功，业务 Handler 必须幂等。底层只返回错误，由 Worker 记录受控日志，不重复暴露 SQL、参数或凭据。
 
 ## 与业务事务一起投递
 
@@ -142,7 +142,7 @@ flowchart TD
     G -- 快照无效 --> H([返回错误 不继续写入])
     G -- 有效 --> J[原子操作外执行业务Handler]
     J --> K{结果}
-    K -- 成功 --> L[Repo按token删除]
+    K -- 成功 --> L[Repo按token确认完成 依配置删除或保留终态]
     K -- 可重试 --> M[Repo按token释放并排期]
     K -- 最终失败 --> N[Repo按token保存失败]
     K -- 崩溃 --> O[租约到期后重新Claim]
@@ -160,7 +160,7 @@ flowchart TD
 
 框架用 Repo 替身验证任务状态、参数传递、时间保留、独立快照、无效仓储结果及错误链；还验证独立 Store 使用各自绑定的 Repo。根入口为 `make verify` 和 `make lint`；局部诊断使用 `go test -race ./contrib/queue/database`。本包测试不导入具体 ORM/驱动，也不宣称证明业务 Repo 的原子性。`pkg/database/transaction_test.go` 使用真实 SQLite 验证业务写入与任务投递一起提交、一起回滚，以及提交前独立连接不可见；不替代业务完整 Repo 的并发契约测试。
 
-业务 Repo 的真实存储测试须覆盖：不同 Repo/表隔离；同任务并发领取只有一个有效持有者；到期边界与过期重领；旧 token 的确认/释放/失败写入拒绝；完成后 ID 复用；重复入队；Release/Fail/Retry 及重启恢复；取消和提交不确定性；标识比较；失败列表范围/排序/限制和独立快照。
+业务 Repo 的真实存储测试须覆盖：不同 Repo/表隔离；同任务并发领取只有一个有效持有者；到期边界与过期重领；旧 token 的确认/释放/失败写入拒绝；默认完成删除后 ID 复用、保留模式下拒绝重复 ID 及再次领取；重复入队；Release/Fail/Retry 及重启恢复；取消和提交不确定性；标识比较；失败列表范围/排序/限制和独立快照。
 
 ## 可选统计
 

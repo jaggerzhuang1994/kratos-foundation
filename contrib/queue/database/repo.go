@@ -13,23 +13,24 @@ import (
 // 存储精度不足时，可执行时间和租约截止必须向上取整，不得提前执行或回收。
 // 持久化数据损坏时应保留原文并隔离失败，返回诊断错误，不得静默丢弃或伪造合法记录。
 type Repo interface {
-	// Insert 保存记录；已有待执行/领取/失败 Task.ID 时返回 queue.ErrDuplicate。
+	// Insert 保存记录；已有待执行/领取/失败或保留的已完成 Task.ID 时返回 queue.ErrDuplicate。
 	// 可复用 Context 中业务显式开启的同库事务；此时成功只表示已写入事务，
 	// 最终持久化由外层提交决定，回滚必须同时撤销任务与业务数据。
 	// 无外层事务时成功返回必须已提交；不得自行提交调用方事务。
 	// 不允许覆盖式 upsert；Task.ID 必须逐字节比较，保留大小写及尾随空格。
 	Insert(context.Context, *TaskRecord) error
 
-	// Claim 原子选取非失败、Task.AvailableAt<=now，且租约为空或已到期的一条记录，
+	// Claim 原子选取未完成且非失败、Task.AvailableAt<=now，且租约为空或已到期的一条记录，
 	// 写入 token、reservedUntil 并增加 Attempts，返回更新后的完整快照。
 	// 无候选返回 nil,nil；竞争失败可重选或返回空，不能伪造成功领取。
 	// 必须通过事务或包含旧身份/token/到期状态的条件更新保证原子性。
 	// 过期重领也增加次数，不能覆盖仍有效的租约。
 	Claim(ctx context.Context, now, reservedUntil time.Time, token string) (*TaskRecord, error)
 
-	// DeleteReserved 仅在 Task.ID/Token 匹配、非失败且租约非空时原子删除。
-	// 不匹配返回 queue.ErrLeaseLost；完成后 ID 可以复用，新领取必须使用新 token。
-	DeleteReserved(ctx context.Context, taskID, token string) error
+	// CompleteReserved 仅在 Task.ID/Token 匹配、非失败且租约非空时原子确认完成。
+	// Repo 按构造配置删除或保留完成记录；保留时保存 completedAt、清空租约/token，禁止再次领取。
+	// 不匹配返回 queue.ErrLeaseLost；仅删除后 ID 可复用，新领取必须使用新 token。
+	CompleteReserved(ctx context.Context, taskID, token string, completedAt time.Time) error
 
 	// ReleaseReserved 使用同一所有权条件，原子设置 Task.AvailableAt，清空租约/token，
 	// 保留任务其余数据和 Attempts。不匹配返回 queue.ErrLeaseLost。

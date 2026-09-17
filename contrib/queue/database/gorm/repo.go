@@ -26,23 +26,30 @@ type ConnectionProvider interface {
 // 输入是独立快照；工厂不得启动事务、保留模型引用或执行外部副作用。
 type Factory[T Entity] func(context.Context, *databasequeue.TaskRecord) (T, error)
 
+// Config 控制单个仓储的完成记录保留策略，在构造时复制，不支持热更新。
+type Config struct {
+	// RetainCompleted 为 true 时保留成功任务及完成时间；false 时成功即删除。
+	RetainCompleted bool `json:"retain_completed"`
+}
+
 // Repo 为一个业务模型和表提供队列仓储。借用连接，表迁移与 cleanup 由业务负责。
 type Repo[T Entity] struct {
-	provider   ConnectionProvider
-	factory    Factory[T]
-	table      string
-	modelTable string
-	entityType reflect.Type
+	provider        ConnectionProvider
+	factory         Factory[T]
+	table           string
+	modelTable      string
+	entityType      reflect.Type
+	retainCompleted bool
 }
 
 // NewRepo 校验模型和方言，不查询或迁移表，不启动后台任务。
 // T 必须为按值匿名嵌入 Model 的结构体指针；目前支持 SQLite 和 MySQL。
-func NewRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory Factory[T]) (*Repo[T], error) {
-	return newRepo(ctx, provider, factory, "")
+func NewRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory Factory[T], config Config) (*Repo[T], error) {
+	return newRepo(ctx, provider, factory, "", config)
 }
 
 // table 仅供框架简单模式选择物理表；扩展模式始终使用业务模型的固定 TableName。
-func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory Factory[T], table string) (*Repo[T], error) {
+func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory Factory[T], table string, config Config) (*Repo[T], error) {
 	typ := reflect.TypeFor[T]()
 	if typ.Kind() != reflect.Pointer || typ.Elem().Kind() != reflect.Struct || factory == nil {
 		return nil, errors.New("queue model must be a struct pointer with a factory")
@@ -76,7 +83,7 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 		return nil, fmt.Errorf("parse queue model: %w", err)
 	}
 	// 固定基础列的映射和唯一主键，防止自定义字段遮蔽租约或改变任务身份。
-	for _, name := range []string{"ID", "Identity", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt"} {
+	for _, name := range []string{"Status", "CompletedAt", "ID", "Identity", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt"} {
 		f := statement.Schema.LookUpField(name)
 		base, _ := reflect.TypeFor[Model]().FieldByName(name)
 		if f == nil || len(f.BindNames) != 2 || f.BindNames[0] != "Model" || f.StructField.Tag != base.Tag || f.DBName != strings.Split(strings.TrimPrefix(base.Tag.Get("gorm"), "column:"), ";")[0] || !f.Creatable || !f.Updatable || !f.Readable {
@@ -91,7 +98,7 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 	if len(statement.Schema.PrimaryFields) != 1 || statement.Schema.PrimaryFields[0].Name != "ID" || len(statement.Schema.QueryClauses) != 0 || len(statement.Schema.DeleteClauses) != 0 {
 		return nil, errors.New("queue model cannot change primary key or use soft delete")
 	}
-	return &Repo[T]{provider: provider, factory: factory, table: table, modelTable: modelTable, entityType: typ.Elem()}, nil
+	return &Repo[T]{provider: provider, factory: factory, table: table, modelTable: modelTable, entityType: typ.Elem(), retainCompleted: config.RetainCompleted}, nil
 }
 
 func (r *Repo[T]) entity() T { return reflect.New(r.entityType).Interface().(T) }
@@ -131,12 +138,14 @@ func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) 
 	if reflect.ValueOf(entity).IsNil() || entity.QueueModel() == nil || entity.TableName() != r.modelTable {
 		return errors.New("factory returned an invalid queue model")
 	}
-	model := Model{ID: taskKey(record.Task.ID), Identity: uuid.NewString(), Data: data, AvailableAt: deadlineMillis(record.Task.AvailableAt), Attempts: record.Attempts, Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason}
+	model := Model{Status: StatusPending, ID: taskKey(record.Task.ID), Identity: uuid.NewString(), Data: data, AvailableAt: deadlineMillis(record.Task.AvailableAt), Attempts: record.Attempts, Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason}
 	if !record.ReservedUntil.IsZero() {
 		model.ReservedUntil = deadlineMillis(record.ReservedUntil)
+		model.Status = StatusRunning
 	}
 	if record.Failed {
 		model.FailedAt = record.FailedAt.UnixMilli()
+		model.Status = StatusFailed
 	}
 	*entity.QueueModel() = model
 	result := r.db(ctx).Omit(clause.Associations).Create(entity)

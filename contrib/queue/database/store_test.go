@@ -12,20 +12,22 @@ import (
 
 type repoStub struct {
 	Repo
-	insert  func(context.Context, *TaskRecord) error
-	claim   func(context.Context, time.Time, time.Time, string) (*TaskRecord, error)
-	delete  func(context.Context, string, string) error
-	release func(context.Context, string, string, time.Time) error
-	fail    func(context.Context, string, string, string, time.Time) error
-	list    func(context.Context, int) ([]TaskRecord, error)
-	retry   func(context.Context, string, time.Time) error
+	insert   func(context.Context, *TaskRecord) error
+	claim    func(context.Context, time.Time, time.Time, string) (*TaskRecord, error)
+	complete func(context.Context, string, string, time.Time) error
+	release  func(context.Context, string, string, time.Time) error
+	fail     func(context.Context, string, string, string, time.Time) error
+	list     func(context.Context, int) ([]TaskRecord, error)
+	retry    func(context.Context, string, time.Time) error
 }
 
 func (r repoStub) Insert(c context.Context, m *TaskRecord) error { return r.insert(c, m) }
 func (r repoStub) Claim(c context.Context, n, u time.Time, t string) (*TaskRecord, error) {
 	return r.claim(c, n, u, t)
 }
-func (r repoStub) DeleteReserved(c context.Context, i, t string) error { return r.delete(c, i, t) }
+func (r repoStub) CompleteReserved(c context.Context, i, t string, at time.Time) error {
+	return r.complete(c, i, t, at)
+}
 func (r repoStub) ReleaseReserved(c context.Context, i, t string, a time.Time) error {
 	return r.release(c, i, t, a)
 }
@@ -133,7 +135,13 @@ func TestStoreOwnedTransitions(t *testing.T) {
 		}
 	}
 	s := NewStore(repoStub{
-		delete: func(c context.Context, id, token string) error { check(c, id, token); return queue.ErrLeaseLost },
+		complete: func(c context.Context, id, token string, completedAt time.Time) error {
+			check(c, id, token)
+			if completedAt.IsZero() {
+				t.Error("missing completion time")
+			}
+			return queue.ErrLeaseLost
+		},
 		release: func(c context.Context, id, token string, n time.Time) error {
 			check(c, id, token)
 			if !n.Equal(at) {
