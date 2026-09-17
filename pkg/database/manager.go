@@ -28,18 +28,27 @@ type Manager interface {
 	TransactionManager
 }
 
-// manager 保存各连接独立的 GORM 根实例和关闭状态。
+// manager 管理具名数据库连接及其生命周期。
 type manager struct {
-	db                *gorm.DB
-	log               log.Logger
-	connections       map[string]*gorm.DB
+	// db 默认连接使用的 GORM 实例。
+	db *gorm.DB
+	// log 数据库组件日志。
+	log log.Logger
+	// connections 构造期建立的具名连接，各自拥有独立的 GORM 根实例。
+	connections map[string]*gorm.DB
+	// connectionFactory 负责跟踪和关闭底层连接池。
 	connectionFactory *connectionFactory
-	metricsCollector  *metricsCollector
+	// metricsCollector 当前 Manager 拥有的指标采集器。
+	metricsCollector *metricsCollector
 
-	stateMu   sync.RWMutex
-	closed    bool
+	// stateMu 保护关闭状态及清理时的资源快照。
+	stateMu sync.RWMutex
+	// closed 是否已关闭，受 stateMu 保护。
+	closed bool
+	// closeOnce 保证资源清理仅执行一次。
 	closeOnce sync.Once
-	closeErr  error
+	// closeErr 首次清理的结果。
+	closeErr error
 }
 
 // newManagerWithDrivers 使用固定驱动快照组装连接、插件与指标。

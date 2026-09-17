@@ -59,8 +59,10 @@ func stoppedByContext(ctx context.Context, err error) bool {
 }
 
 type managedJob struct {
+	// name 任务名称，用于绑定执行上下文。
 	name string
-	job  Task
+	// job 已应用中间件的任务实现。
+	job Task
 }
 
 // newManagedJob 固化任务名称和中间件链，使运行阶段不再重复组装。

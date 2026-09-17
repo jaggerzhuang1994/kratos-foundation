@@ -11,8 +11,10 @@ import (
 )
 
 type SerializerImpl struct {
+	// pluginOptions 提供输出文件后缀等序列化参数。
 	pluginOptions *proto.PluginOptions
-	prettyJSON    bool
+	// prettyJSON 为 true 时使用缩进输出 JSON，不影响 YAML。
+	prettyJSON bool
 }
 
 func NewSerializerImpl(pluginOptions *proto.PluginOptions, prettyJSON bool) *SerializerImpl {

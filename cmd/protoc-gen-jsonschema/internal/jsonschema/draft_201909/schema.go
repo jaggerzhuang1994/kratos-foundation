@@ -9,69 +9,124 @@ import (
 )
 
 type Schema struct {
-	Version         string                 `json:"$schema,omitempty"`
-	ID              string                 `json:"$id,omitempty"`
-	Anchor          string                 `json:"$anchor,omitempty"`
-	RecursiveAnchor string                 `json:"$recursiveAnchor,omitempty"`
-	Ref             string                 `json:"$ref,omitempty"`
-	RecursiveRef    string                 `json:"$recursiveRef,omitempty"`
-	Definitions     *orderedmap.OrderedMap `json:"$defs,omitempty"`
-	Comments        string                 `json:"$comment,omitempty"`
+	// Version 标识输出采用的 JSON Schema 方言 URI。
+	Version string `json:"$schema,omitempty"`
+	// ID 保存 Schema 资源标识。
+	ID string `json:"$id,omitempty"`
+	// Anchor 保存供引用定位的锚点。
+	Anchor string `json:"$anchor,omitempty"`
+	// RecursiveAnchor 接收中间 Schema.DynamicAnchor；当前按字符串直接输出，不转换类型。
+	RecursiveAnchor string `json:"$recursiveAnchor,omitempty"`
+	// Ref 指向被复用的 Schema 定义。
+	Ref string `json:"$ref,omitempty"`
+	// RecursiveRef 保存递归引用目标。
+	RecursiveRef string `json:"$recursiveRef,omitempty"`
+	// Definitions 按稳定顺序保存可复用的子 Schema。
+	Definitions *orderedmap.OrderedMap `json:"$defs,omitempty"`
+	// Comments 保存面向维护者的 Schema 注释。
+	Comments string `json:"$comment,omitempty"`
 
+	// AllOf 要求同时满足所有子 Schema。
 	AllOf []*Schema `json:"allOf,omitempty"`
+	// AnyOf 要求至少满足一个子 Schema。
 	AnyOf []*Schema `json:"anyOf,omitempty"`
+	// OneOf 要求恰好满足一个子 Schema。
 	OneOf []*Schema `json:"oneOf,omitempty"`
-	Not   *Schema   `json:"not,omitempty"`
+	// Not 指定不得满足的子 Schema。
+	Not *Schema `json:"not,omitempty"`
 
-	If               *Schema                `json:"if,omitempty"`
-	Then             *Schema                `json:"then,omitempty"`
-	Else             *Schema                `json:"else,omitempty"`
+	// If 保存条件判断 Schema。
+	If *Schema `json:"if,omitempty"`
+	// Then 在满足 If 时应用。
+	Then *Schema `json:"then,omitempty"`
+	// Else 在不满足 If 时应用。
+	Else *Schema `json:"else,omitempty"`
+	// DependentSchemas 按属性是否存在决定应用的对象 Schema。
 	DependentSchemas *orderedmap.OrderedMap `json:"dependentSchemas,omitempty"`
 
-	Items           any     `json:"items,omitempty"`
+	// Items 保存单个元素 Schema 或按位置排列的 Schema 列表。
+	Items any `json:"items,omitempty"`
+	// AdditionalItems 约束位置式 Items 之外的数组元素。
 	AdditionalItems *Schema `json:"additionalItems,omitempty"`
-	Contains        *Schema `json:"contains,omitempty"`
+	// Contains 约束数组中需要匹配的元素。
+	Contains *Schema `json:"contains,omitempty"`
 
-	Properties           *orderedmap.OrderedMap `json:"properties,omitempty"`
-	PatternProperties    *orderedmap.OrderedMap `json:"patternProperties,omitempty"`
-	AdditionalProperties *Schema                `json:"additionalProperties,omitempty"`
-	PropertyNames        *Schema                `json:"propertyNames,omitempty"`
+	// Properties 按属性名保存字段 Schema。
+	Properties *orderedmap.OrderedMap `json:"properties,omitempty"`
+	// PatternProperties 按正则表达式匹配属性名并施加约束。
+	PatternProperties *orderedmap.OrderedMap `json:"patternProperties,omitempty"`
+	// AdditionalProperties 约束未被属性名或正则规则匹配的属性。
+	AdditionalProperties *Schema `json:"additionalProperties,omitempty"`
+	// PropertyNames 约束对象的属性名。
+	PropertyNames *Schema `json:"propertyNames,omitempty"`
 
-	Type              string              `json:"type,omitempty"`
-	Enum              []any               `json:"enum,omitempty"`
-	Const             *any                `json:"const,omitempty"`
-	MultipleOf        *int                `json:"multipleOf,omitempty"`
-	Maximum           *float64            `json:"maximum,omitempty"`
-	ExclusiveMaximum  *float64            `json:"exclusiveMaximum,omitempty"`
-	Minimum           *float64            `json:"minimum,omitempty"`
-	ExclusiveMinimum  *float64            `json:"exclusiveMinimum,omitempty"`
-	MaxLength         *int                `json:"maxLength,omitempty"`
-	MinLength         *int                `json:"minLength,omitempty"`
-	Pattern           string              `json:"pattern,omitempty"`
-	MaxItems          *int                `json:"maxItems,omitempty"`
-	MinItems          *int                `json:"minItems,omitempty"`
-	UniqueItems       *bool               `json:"uniqueItems,omitempty"`
-	MaxContains       *int                `json:"maxContains,omitempty"`
-	MinContains       *int                `json:"minContains,omitempty"`
-	MaxProperties     *int                `json:"maxProperties,omitempty"`
-	MinProperties     *int                `json:"minProperties,omitempty"`
-	Required          []string            `json:"required,omitempty"`
+	// Type 保存 JSON 值类型。
+	Type string `json:"type,omitempty"`
+	// Enum 列出允许的取值。
+	Enum []any `json:"enum,omitempty"`
+	// Const 指定唯一允许值；nil 表示未设置此约束。
+	Const *any `json:"const,omitempty"`
+	// MultipleOf 为数值倍数约束；nil 表示未设置。
+	MultipleOf *int `json:"multipleOf,omitempty"`
+	// Maximum 为含边界的数值上限；nil 表示未设置。
+	Maximum *float64 `json:"maximum,omitempty"`
+	// ExclusiveMaximum 为不含边界的数值上限；nil 表示未设置。
+	ExclusiveMaximum *float64 `json:"exclusiveMaximum,omitempty"`
+	// Minimum 为含边界的数值下限；nil 表示未设置。
+	Minimum *float64 `json:"minimum,omitempty"`
+	// ExclusiveMinimum 为不含边界的数值下限；nil 表示未设置。
+	ExclusiveMinimum *float64 `json:"exclusiveMinimum,omitempty"`
+	// MaxLength 为字符串最大字符数；nil 表示未设置。
+	MaxLength *int `json:"maxLength,omitempty"`
+	// MinLength 为字符串最小字符数；nil 表示未设置。
+	MinLength *int `json:"minLength,omitempty"`
+	// Pattern 为字符串正则表达式约束。
+	Pattern string `json:"pattern,omitempty"`
+	// MaxItems 为数组元素数上限；nil 表示未设置。
+	MaxItems *int `json:"maxItems,omitempty"`
+	// MinItems 为数组元素数下限；nil 表示未设置。
+	MinItems *int `json:"minItems,omitempty"`
+	// UniqueItems 表示数组元素是否必须唯一；nil 表示未设置。
+	UniqueItems *bool `json:"uniqueItems,omitempty"`
+	// MaxContains 为匹配 Contains 的元素数上限；nil 表示未设置。
+	MaxContains *int `json:"maxContains,omitempty"`
+	// MinContains 为匹配 Contains 的元素数下限；nil 表示未设置。
+	MinContains *int `json:"minContains,omitempty"`
+	// MaxProperties 为对象属性数上限；nil 表示未设置。
+	MaxProperties *int `json:"maxProperties,omitempty"`
+	// MinProperties 为对象属性数下限；nil 表示未设置。
+	MinProperties *int `json:"minProperties,omitempty"`
+	// Required 列出对象必须包含的属性名。
+	Required []string `json:"required,omitempty"`
+	// DependentRequired 保存某属性存在时必须同时出现的其他属性。
 	DependentRequired map[string][]string `json:"dependentRequired,omitempty"`
 
+	// Format 保存日期、地址等语义格式提示。
 	Format string `json:"format,omitempty"`
 
-	ContentEncoding  string  `json:"contentEncoding,omitempty"`
-	ContentMediaType string  `json:"contentMediaType,omitempty"`
-	ContentSchema    *Schema `json:"contentSchema,omitempty"`
+	// ContentEncoding 描述字符串内容的编码方式。
+	ContentEncoding string `json:"contentEncoding,omitempty"`
+	// ContentMediaType 描述解码后内容的媒体类型。
+	ContentMediaType string `json:"contentMediaType,omitempty"`
+	// ContentSchema 描述解码后内容的 Schema。
+	ContentSchema *Schema `json:"contentSchema,omitempty"`
 
-	Title       string `json:"title,omitempty"`
+	// Title 为面向使用者的简短标题。
+	Title string `json:"title,omitempty"`
+	// Description 为面向使用者的说明文字。
 	Description string `json:"description,omitempty"`
-	Default     *any   `json:"default,omitempty"`
-	Deprecated  *bool  `json:"deprecated,omitempty"`
-	ReadOnly    *bool  `json:"readOnly,omitempty"`
-	WriteOnly   *bool  `json:"writeOnly,omitempty"`
-	Examples    []any  `json:"examples,omitempty"`
+	// Default 保存默认值注解；不会在生成阶段替业务配置填充值。
+	Default *any `json:"default,omitempty"`
+	// Deprecated 标记是否弃用；nil 表示未设置。
+	Deprecated *bool `json:"deprecated,omitempty"`
+	// ReadOnly 标记只读语义；nil 表示未设置。
+	ReadOnly *bool `json:"readOnly,omitempty"`
+	// WriteOnly 标记只写语义；nil 表示未设置。
+	WriteOnly *bool `json:"writeOnly,omitempty"`
+	// Examples 保存说明用的示例值。
+	Examples []any `json:"examples,omitempty"`
 
+	// Extras 复制生成过程的辅助标记；json:"-" 使其不进入 JSON/YAML 输出。
 	Extras map[string]any `json:"-"`
 }
 

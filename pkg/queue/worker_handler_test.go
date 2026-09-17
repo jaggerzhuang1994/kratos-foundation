@@ -15,11 +15,11 @@ func TestQueueExecutionAndOutcomes(t *testing.T) {
 		name, payload, taskType, want string
 		attempt                       int
 	}{
-		{"valid", `"hello"`, "message.v1", "ack", 2},
-		{"decode", `{`, "message.v1", "permanent", 1},
-		{"validate", `""`, "message.v1", "permanent", 1},
-		{"version", `"hello"`, "message.v2", "permanent", 1},
-		{"exhausted", `"hello"`, "message.v1", "retry_exhausted", 4},
+		{"valid", `"hello"`, "string.v1", "ack", 2},
+		{"decode", `{`, "string.v1", "permanent", 1},
+		{"validate", `""`, "string.v1", "permanent", 1},
+		{"version", `"hello"`, "string.v2", "permanent", 1},
+		{"exhausted", `"hello"`, "string.v1", "retry_exhausted", 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			obs, _ := testObservability(t)
@@ -32,7 +32,7 @@ func TestQueueExecutionAndOutcomes(t *testing.T) {
 						cancel()
 						return nil, context.Canceled
 					}
-					return &Reservation{Task: &Task{ID: "id", Type: tc.taskType, Payload: []byte(tc.payload), Headers: map[string]string{"attempt": "999"}}, Token: "token", Attempts: tc.attempt}, nil
+					return &Reservation{Task: &Task{ID: "id", MessageVersion: tc.taskType, Payload: []byte(tc.payload), Headers: map[string]string{"attempt": "999"}}, Token: "token", Attempts: tc.attempt}, nil
 				},
 				ack: func(context.Context, *Reservation) error { outcome = "ack"; return nil },
 				fail: func(_ context.Context, _ *Reservation, reason string, _ time.Time) error {
@@ -40,7 +40,7 @@ func TestQueueExecutionAndOutcomes(t *testing.T) {
 					return nil
 				},
 			}
-			definition := Definition[string]{Queue: "mail", MessageType: "message", Version: 1, Validate: func(message string) error {
+			definition := Definition[string]{Queue: "mail", Version: 1, Validate: func(message string) error {
 				if message == "" {
 					return errors.New("empty")
 				}
@@ -98,7 +98,7 @@ func TestQueueHooksAndMiddleware(t *testing.T) {
 				}
 				return Permanent(err)
 			}}
-			q, err := buildTestWorker(Definition[string]{Queue: "q", MessageType: "m", Version: 1}, store, func(context.Context, string) error {
+			q, err := buildTestWorker(Definition[string]{Queue: "q", Version: 1}, store, func(context.Context, string) error {
 				order = append(order, "handle")
 				if mode == "permanent" {
 					return Permanent(failure)
@@ -108,7 +108,7 @@ func TestQueueHooksAndMiddleware(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = q.execute(context.Background(), &Reservation{Task: &Task{ID: "id", Type: "m.v1", Payload: []byte(`"hello"`)}, Token: "token", Attempts: 1}, time.Now())
+			err = q.execute(context.Background(), &Reservation{Task: &Task{ID: "id", MessageVersion: "string.v1", Payload: []byte(`"hello"`)}, Token: "token", Attempts: 1}, time.Now())
 			want := []string{"before", "outer", "inner", "handle", "classify"}
 			if mode == "before" || mode == "cancel" {
 				want = []string{"before", "classify"}
@@ -129,7 +129,7 @@ func TestQueueHooksAndMiddleware(t *testing.T) {
 
 func TestConfiguration(t *testing.T) {
 	obs, _ := testObservability(t)
-	d := Definition[string]{Queue: "mail", MessageType: "message", Version: 1}
+	d := Definition[string]{Queue: "mail", Version: 1}
 	handler := func(context.Context, string) error { return nil }
 	for _, config := range []WorkerConfig{
 		{Concurrency: -1}, {Timeout: -1}, {MaxAttempts: -1}, {Lease: time.Second},
@@ -168,14 +168,14 @@ func TestQueueWaitTimeoutDoesNotExecuteBusiness(t *testing.T) {
 		obs, _ := testObservability(t)
 		released := false
 		store := &storeStub{release: func(context.Context, *Reservation, time.Time) error { released = true; return nil }}
-		q, err := buildTestWorker(Definition[string]{Queue: "q", MessageType: "m", Version: 1}, store, func(context.Context, string) error { t.Error("business ran after waiting timeout"); return nil }, WorkerConfig{
+		q, err := buildTestWorker(Definition[string]{Queue: "q", Version: 1}, store, func(context.Context, string) error { t.Error("business ran after waiting timeout"); return nil }, WorkerConfig{
 			Timeout:      time.Second,
 			BeforeHandle: func(ctx context.Context) error { <-ctx.Done(); return nil },
 		}, obs)
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = q.execute(context.Background(), &Reservation{Task: &Task{ID: "id", Type: "m.v1", Payload: []byte(`"message"`)}, Token: "token", Attempts: 1}, time.Now())
+		err = q.execute(context.Background(), &Reservation{Task: &Task{ID: "id", MessageVersion: "string.v1", Payload: []byte(`"message"`)}, Token: "token", Attempts: 1}, time.Now())
 		if err != nil || !released {
 			t.Fatalf("timeout err=%v released=%v", err, released)
 		}
@@ -187,7 +187,7 @@ func TestQueueDisabledLifecycle(t *testing.T) {
 		obs, _ := testObservability(t)
 		published := false
 		store := &storeStub{enqueue: func(context.Context, *Task) error { published = true; return nil }}
-		producer, err := NewQueue(Definition[string]{Queue: "mail", MessageType: "message", Version: 1}, store, obs)
+		producer, err := NewQueue(Definition[string]{Queue: "mail", Version: 1}, store, obs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -228,7 +228,7 @@ func TestQueueSharesDefinitionAndStore(t *testing.T) {
 		ack: func(context.Context, *Reservation) error { cancel(); return nil },
 	}
 	got := ""
-	producer, err := NewQueue(Definition[string]{Queue: "mail", MessageType: "message", Version: 1}, store, obs)
+	producer, err := NewQueue(Definition[string]{Queue: "mail", Version: 1}, store, obs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func buildTestExecutionWorker[T any](d Definition[T], store Store, handler Execu
 func TestWorkersHaveIndependentLifecycles(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		obs, _ := testObservability(t)
-		q, err := NewQueue(Definition[string]{Queue: "mail", MessageType: "message", Version: 1}, &storeStub{}, obs)
+		q, err := NewQueue(Definition[string]{Queue: "mail", Version: 1}, &storeStub{}, obs)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -13,11 +13,16 @@ import (
 )
 
 type registryConfig struct {
-	disableHealthCheck             bool
-	disableHeartbeat               bool
-	healthCheckIntervalSeconds     int
+	// disableHealthCheck 控制是否省略 TCP 健康检查，默认 false。
+	disableHealthCheck bool
+	// disableHeartbeat 控制是否关闭 TTL 心跳检查与后台续报，默认 false。
+	disableHeartbeat bool
+	// healthCheckIntervalSeconds 指定检查及心跳间隔，默认 10 秒，必须为正整数秒；TTL 为其两倍。
+	healthCheckIntervalSeconds int
+	// deregisterCriticalAfterSeconds 指定持续异常后自动注销的等待秒数，默认 600，必须为正整数秒。
 	deregisterCriticalAfterSeconds int
-	tags                           []string
+	// tags 保存附加服务标签的独立副本，不允许空白、首尾空白或重复项。
+	tags []string
 }
 
 // loadConfig 一次完成注册配置的默认值合并、protobuf 校验和运行时归一化。

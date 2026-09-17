@@ -34,10 +34,14 @@ const leaveGroupTimeout = 5 * time.Second
 type consumerClientFactory func(context.Context, string, string, ...kgo.Opt) (consumerClient, error)
 
 type consumer struct {
+	// createClient 为各消费并发实例创建独立客户端。
 	createClient consumerClientFactory
-	logger       log.Logger
-	config       ConsumerConfig
-	running      atomic.Bool
+	// logger 消费过程日志。
+	logger log.Logger
+	// config 经过默认值展开和校验的消费配置。
+	config ConsumerConfig
+	// running 原子标记当前 Consume 是否运行，阻止并发启动。
+	running atomic.Bool
 }
 
 var _ Consumer = (*consumer)(nil)

@@ -10,9 +10,12 @@ import (
 )
 
 type watcher struct {
+	// events 传递最新服务快照；新快照会替换尚未读取的旧快照。
 	events chan []*registry.ServiceInstance
+	// cancel 取消发现查询与重试等待。
 	cancel context.CancelFunc
-	done   chan struct{}
+	// done 工作协程退出后关闭，用于等待结束并同步错误读取。
+	done chan struct{}
 	// err 仅工作协程写入，读取方必须先观察 done 关闭。
 	err error
 }

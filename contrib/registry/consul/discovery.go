@@ -38,8 +38,11 @@ func newDiscovery(
 }
 
 type discovery struct {
+	// client 借用进程共享的 Consul 客户端，不由驱动关闭。
 	client baseconsul.Client
+	// config 保存构造时解析的发现配置。
 	config discoveryConfig
+	// logger 记录服务发现查询与恢复事件。
 	logger log.Logger
 }
 

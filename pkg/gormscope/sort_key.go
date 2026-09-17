@@ -10,9 +10,12 @@ import (
 )
 
 type sortKey struct {
-	name      string
+	// name 为模型排序字段名。
+	name string
+	// direction 为 true 时升序，为 false 时降序。
 	direction bool
-	kind      sortKind
+	// kind 决定游标值的编码和解码方式。
+	kind sortKind
 }
 
 type sortKind uint8

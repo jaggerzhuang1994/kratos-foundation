@@ -13,10 +13,15 @@ import (
 )
 
 type clientSpec struct {
-	name       string
-	discovery  string
-	protocol   config_pb.Protocol
-	target     string
+	// name 客户端连接名称。
+	name string
+	// discovery 已解析的服务发现实例名；依次继承连接、根配置，最终默认 default。
+	discovery string
+	// protocol 客户端传输协议。
+	protocol config_pb.Protocol
+	// target 连接目标；省略时使用 discovery:/// 加连接名。
+	target string
+	// middleware 已复制并归一化的中间件配置，作为版本比较依据。
 	middleware *config_pb.ClientMiddleware
 }
 

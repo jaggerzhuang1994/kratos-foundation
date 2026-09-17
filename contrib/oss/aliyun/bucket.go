@@ -26,15 +26,22 @@ const (
 	OptionSecurityToken = "security_token"
 )
 
-// Config contains the provider-specific settings needed by Alibaba Cloud OSS.
+// Config 描述阿里云 OSS 驱动配置。
 type Config struct {
-	Region          string
-	Endpoint        string
-	Bucket          string
-	Domain          string
-	AccessKeyID     string
+	// Region 指定 OSS 区域，不能为空。
+	Region string
+	// Endpoint 可选自定义服务端点；为空时由 SDK 解析。
+	Endpoint string
+	// Bucket 指定目标存储桶名称，不能为空。
+	Bucket string
+	// Domain 可选公开访问域名，用于生成对象 URL。
+	Domain string
+	// AccessKeyID 指定访问密钥 ID，与 AccessKeySecret 配套提供。
+	AccessKeyID string
+	// AccessKeySecret 保存访问密钥，不应写入日志。
 	AccessKeySecret string
-	SecurityToken   string
+	// SecurityToken 可选 STS 临时凭据令牌，不应写入日志。
+	SecurityToken string
 }
 
 type objectClient interface {
@@ -48,8 +55,11 @@ type objectClient interface {
 
 // Bucket 封装一个阿里云 OSS bucket 的通用对象操作。
 type Bucket struct {
+	// client 执行 OSS 对象操作的 SDK 客户端。
 	client objectClient
-	name   string
+	// name 保存实际访问的存储桶名称。
+	name string
+	// domain 解析并生成公开 URL；未配置公开域名时为 nil。
 	domain *foundationoss.BucketDomainHelper
 }
 

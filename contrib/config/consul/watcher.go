@@ -12,10 +12,14 @@ const watchWait = 30 * time.Second
 
 // kvWatcher 的 Next 由调用方顺序调用；Stop 可并发取消请求和退避，不需要后台发送协程。
 type kvWatcher struct {
+	// source 提供配置前缀的完整快照查询。
 	source *kvSource
-	ctx    context.Context
+	// ctx 控制阻塞查询及重试等待的生命周期。
+	ctx context.Context
+	// cancel 由 Stop 调用以取消查询和等待。
 	cancel context.CancelFunc
-	index  uint64
+	// index 保存 Consul 阻塞查询索引，回滚或恢复时重置。
+	index uint64
 }
 
 func (w *kvWatcher) Next() ([]*kratosconfig.KeyValue, error) {

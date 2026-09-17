@@ -22,13 +22,18 @@ const (
 	maximumPHCFieldLen = 64
 )
 
-// Argon2idParams controls Argon2id cost and output sizes.
+// Argon2idParams 控制计算成本及输出长度；零值无效，默认参数由 DefaultArgon2idParams 显式提供。
 type Argon2idParams struct {
-	MemoryKiB   uint32
-	Iterations  uint32
+	// MemoryKiB 为内存成本，单位 KiB；至少为并行度的 8 倍，最多 256 MiB。
+	MemoryKiB uint32
+	// Iterations 为计算轮数，范围为 1–20。
+	Iterations uint32
+	// Parallelism 为并行度，范围为 1–16。
 	Parallelism uint8
-	SaltLength  uint32
-	KeyLength   uint32
+	// SaltLength 为随机盐的字节数，范围为 8–64。
+	SaltLength uint32
+	// KeyLength 为派生密钥的字节数，范围为 16–64。
+	KeyLength uint32
 }
 
 // DefaultArgon2idParams 返回 RFC 9106 面向内存受限场景的推荐参数。

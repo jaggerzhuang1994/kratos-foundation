@@ -10,17 +10,25 @@ import (
 
 // preparedOutput 是准备完成的一代输出；发布后只读。
 type preparedOutput struct {
-	output      kratoslog.Logger
-	file        kratoslog.Logger
-	config      envConfig
+	// output 合并过滤与级别策略后的输出链。
+	output kratoslog.Logger
+	// file 文件输出资源；未启用时为 nil。
+	file kratoslog.Logger
+	// config 本代输出采用的完整配置快照。
+	config envConfig
+	// releaseFile 文件资源释放函数；复用文件时随新代转移。
 	releaseFile func()
-	ready       chan struct{}
+	// ready 关闭后允许本代写入，确保前代资源退役完成。
+	ready chan struct{}
 }
 
 // outputLogger 保持实例入口稳定，派生 Logger 不持有即将退役的文件句柄。
 type outputLogger struct {
+	// preparedOutput 当前生效的输出代，由 mu 保护切换。
 	*preparedOutput
-	mu     sync.RWMutex
+	// mu 协调日志写入、输出切换与关闭。
+	mu sync.RWMutex
+	// closed 入口是否已关闭；关闭后拒绝写入。
 	closed bool
 }
 

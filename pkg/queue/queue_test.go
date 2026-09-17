@@ -25,12 +25,12 @@ func TestQueueDispatch(t *testing.T) {
 	obs, _ := testObservability(t)
 	var stored *Task
 	store := &storeStub{enqueue: func(_ context.Context, task *Task) error { stored = task; return nil }}
-	publisher, err := NewQueue(Definition[string]{Queue: "mail", MessageType: "message", Version: 1}, store, obs)
+	publisher, err := NewQueue(Definition[string]{Queue: "mail", Version: 1}, store, obs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	id, err := publisher.Post(context.Background(), "hello")
-	if err != nil || id == "" || stored.Type != "message.v1" || string(stored.Payload) != `"hello"` {
+	if err != nil || id == "" || stored.MessageVersion != "string.v1" || string(stored.Payload) != `"hello"` {
 		t.Fatalf("publish: %s %v %+v", id, err, stored)
 	}
 	at := time.Now().Add(time.Hour)
@@ -90,8 +90,8 @@ func TestQueueRejectsBeforeStorage(t *testing.T) {
 	obs, _ := testObservability(t)
 	failure := errors.New("invalid message")
 	for _, definition := range []Definition[string]{
-		{Queue: "q", MessageType: "m", Version: 1, Validate: func(string) error { return failure }},
-		{Queue: "q", MessageType: "m", Version: 1, Codec: stringCodec{err: failure}},
+		{Queue: "q", Version: 1, Validate: func(string) error { return failure }},
+		{Queue: "q", Version: 1, Codec: stringCodec{err: failure}},
 	} {
 		publisher, err := NewQueue(definition, &storeStub{}, obs)
 		if err != nil {
@@ -104,13 +104,13 @@ func TestQueueRejectsBeforeStorage(t *testing.T) {
 }
 
 func TestDefinitionValidationAndJSON(t *testing.T) {
-	for _, d := range []Definition[string]{{}, {Queue: "q", MessageType: "m"}, {Queue: " q", MessageType: "m", Version: 1}, {Queue: "q", MessageType: "m ", Version: 1}} {
+	for _, d := range []Definition[string]{{}, {Queue: "q", Version: -1}, {Queue: " q", Version: 1}} {
 		if _, err := d.resolve(); err == nil {
 			t.Fatalf("accepted %+v", d)
 		}
 	}
-	d, err := (Definition[string]{Queue: "q", MessageType: "m", Version: 2}).resolve()
-	if err != nil || d.taskType() != "m.v2" {
+	d, err := (Definition[string]{Queue: "q", Version: 2}).resolve()
+	if err != nil || d.messageVersion() != "string.v2" {
 		t.Fatalf("definition: %+v %v", d, err)
 	}
 	data, err := d.Codec.Encode("hello")
@@ -135,7 +135,7 @@ func (c stringCodec) Encode(message string) ([]byte, error) { return []byte(mess
 func (c stringCodec) Decode(data []byte) (string, error)    { return string(data), c.err }
 
 func TestDefinitionCustomCodec(t *testing.T) {
-	d, err := (Definition[string]{Queue: "q", MessageType: "m", Version: 1, Codec: stringCodec{}}).resolve()
+	d, err := (Definition[string]{Queue: "q", Version: 1, Codec: stringCodec{}}).resolve()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestDispatchOwnsSnapshotAndPropagatesTrace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := &Task{Type: "email", Payload: []byte("hello"), Headers: map[string]string{"custom": "value"}, AvailableAt: time.Now().Add(time.Hour)}
+	original := &Task{MessageVersion: "email", Payload: []byte("hello"), Headers: map[string]string{"custom": "value"}, AvailableAt: time.Now().Add(time.Hour)}
 	id, err := dispatcher.dispatch(context.Background(), original)
 	if err != nil || id == "" || stored.ID != id || stored.Headers["traceparent"] == "" {
 		t.Fatalf("dispatch %q %v %#v", id, err, stored)
@@ -244,7 +244,7 @@ func TestDispatchOwnsSnapshotAndPropagatesTrace(t *testing.T) {
 	}
 	failure := errors.New("backend failure")
 	store.enqueue = func(context.Context, *Task) error { return failure }
-	id, err = dispatcher.dispatch(context.Background(), &Task{ID: "stable", Type: "email"})
+	id, err = dispatcher.dispatch(context.Background(), &Task{ID: "stable", MessageVersion: "email"})
 	if id != "stable" || !errors.Is(err, failure) {
 		t.Fatalf("identity/cause %q %v", id, err)
 	}
@@ -261,7 +261,7 @@ func TestPrepareTaskValidation(t *testing.T) {
 		name string
 		task *Task
 	}{
-		{"nil", nil}, {"type", &Task{}}, {"blank id", &Task{ID: " ", Type: "x"}}, {"long id", &Task{ID: strings.Repeat("x", 129), Type: "x"}}, {"header", &Task{Type: "x", Headers: map[string]string{" ": "v"}}},
+		{"nil", nil}, {"type", &Task{}}, {"blank id", &Task{ID: " ", MessageVersion: "x"}}, {"long id", &Task{ID: strings.Repeat("x", 129), MessageVersion: "x"}}, {"header", &Task{MessageVersion: "x", Headers: map[string]string{" ": "v"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := prepareTask(tc.task, time.Now()); err == nil {
@@ -270,8 +270,68 @@ func TestPrepareTaskValidation(t *testing.T) {
 		})
 	}
 	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
-	task, err := prepareTask(&Task{Type: " x "}, now)
-	if err != nil || task.Type != "x" || !task.AvailableAt.Equal(now) || !task.CreatedAt.Equal(now) {
+	task, err := prepareTask(&Task{MessageVersion: " x "}, now)
+	if err != nil || task.MessageVersion != "x" || !task.AvailableAt.Equal(now) || !task.CreatedAt.Equal(now) {
 		t.Fatalf("defaults %#v %v", task, err)
+	}
+}
+
+func TestQueueDefinitionDefaults(t *testing.T) {
+	obs, _ := testObservability(t)
+	for _, tc := range []struct {
+		name       string
+		definition Definition[string]
+		want       string
+	}{
+		{"default version", Definition[string]{Queue: "mail"}, "string.v1"},
+		{"explicit version", Definition[string]{Queue: "mail", Version: 2}, "string.v2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stored *Task
+			q, err := NewQueue(tc.definition, &storeStub{enqueue: func(_ context.Context, task *Task) error { stored = task; return nil }}, obs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.Post(context.Background(), "hello"); err != nil {
+				t.Fatal(err)
+			}
+			if stored.MessageVersion != tc.want {
+				t.Fatalf("task type=%q, want %q", stored.MessageVersion, tc.want)
+			}
+		})
+	}
+}
+
+// namedQueueMessage 与其别名验证名称来自 T，而非值或包路径。
+type namedQueueMessage struct{ Body string }
+type queueMessageAlias = namedQueueMessage
+type recursiveQueuePointer *recursiveQueuePointer
+
+func TestQueueInferredTaskType(t *testing.T) {
+	t.Run("named recursive pointer", func(t *testing.T) { checkInferredTaskType(t, recursiveQueuePointer(nil), "recursiveQueuePointer.v1") })
+	t.Run("named", func(t *testing.T) { checkInferredTaskType(t, namedQueueMessage{}, "namedQueueMessage.v1") })
+	t.Run("alias", func(t *testing.T) { checkInferredTaskType(t, queueMessageAlias{}, "namedQueueMessage.v1") })
+	t.Run("pointer", func(t *testing.T) { checkInferredTaskType(t, &namedQueueMessage{}, "namedQueueMessage.v1") })
+	t.Run("nil pointer", func(t *testing.T) { checkInferredTaskType(t, (*namedQueueMessage)(nil), "namedQueueMessage.v1") })
+	t.Run("pointer chain", func(t *testing.T) { p := &namedQueueMessage{}; checkInferredTaskType(t, &p, "namedQueueMessage.v1") })
+	t.Run("anonymous struct", func(t *testing.T) { checkInferredTaskType(t, struct{ Body string }{}, "mail.v1") })
+	t.Run("slice", func(t *testing.T) { checkInferredTaskType(t, []byte("body"), "mail.v1") })
+	t.Run("map", func(t *testing.T) { checkInferredTaskType(t, map[string]string{}, "mail.v1") })
+	t.Run("interface uses static T", func(t *testing.T) { checkInferredTaskType[any](t, namedQueueMessage{}, "mail.v1") })
+}
+
+func checkInferredTaskType[T any](t *testing.T, message T, want string) {
+	t.Helper()
+	obs, _ := testObservability(t)
+	var stored *Task
+	q, err := NewQueue(Definition[T]{Queue: "mail"}, &storeStub{enqueue: func(_ context.Context, task *Task) error { stored = task; return nil }}, obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = q.Post(context.Background(), message); err != nil {
+		t.Fatal(err)
+	}
+	if stored.MessageVersion != want {
+		t.Fatalf("type=%q, want %q", stored.MessageVersion, want)
 	}
 }

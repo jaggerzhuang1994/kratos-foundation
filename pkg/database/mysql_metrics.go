@@ -24,20 +24,31 @@ const (
 
 var prometheusMetricNamePattern = regexp.MustCompile(`^[a-zA-Z_:][a-zA-Z0-9_:]*$`)
 
-// mysqlMetricsCollector 周期读取 MySQL 状态变量，并只暴露最近一次完整成功的快照。
+// mysqlMetricsCollector 周期采集并暴露 MySQL 状态变量。
 type mysqlMetricsCollector struct {
-	log        log.Logger
-	db         *sql.DB
-	interval   time.Duration
-	prefix     string
-	variables  map[string]struct{}
+	// log 刷新与指标登记失败的日志器。
+	log log.Logger
+	// db 借用的 SQL 连接池，由连接工厂负责关闭。
+	db *sql.DB
+	// interval 有效刷新间隔，依次取 MySQL 专用配置、公共刷新间隔和 15s 默认值。
+	interval time.Duration
+	// prefix MySQL 指标名称前缀，空配置解析为 gorm_status_。
+	prefix string
+	// variables 变量白名单；空集合允许所有合法数值变量。
+	variables map[string]struct{}
+	// registerer 登记和注销当前刷新器指标的注册器。
 	registerer prometheus.Registerer
-	metrics    map[string]*mysqlStatusMetric
+	// metrics 已成功登记的指标，构造期及单个刷新循环维护，循环退出后注销。
+	metrics map[string]*mysqlStatusMetric
 
+	// values 最近一次完整成功的数值快照，刷新失败保留旧值；受 mu 保护。
 	values map[string]float64
+	// cancel 停止后台刷新；尚未启动时为 nil。
 	cancel context.CancelFunc
-	done   chan struct{}
-	mu     sync.RWMutex
+	// done 刷新循环退出时关闭，供清理等待。
+	done chan struct{}
+	// mu 保护快照读取和替换。
+	mu sync.RWMutex
 }
 
 // newMySQLMetricsCollector 校验动态指标名并构造尚未启动的 MySQL 采集器。
@@ -103,11 +114,14 @@ func newMySQLMetricsCollector(
 	return collector, nil
 }
 
-// mysqlStatusMetric 为单个变量提供稳定描述符；快照中已消失的变量不再输出值。
+// mysqlStatusMetric 暴露单个 MySQL 状态变量；快照中已消失的变量不再输出值。
 type mysqlStatusMetric struct {
+	// collector 提供最近一次数值快照的采集器。
 	collector *mysqlMetricsCollector
-	variable  string
-	desc      *prometheus.Desc
+	// variable 对应的 MySQL 状态变量名。
+	variable string
+	// desc 该变量的固定指标描述符。
+	desc *prometheus.Desc
 }
 
 func (metric *mysqlStatusMetric) Describe(ch chan<- *prometheus.Desc) { ch <- metric.desc }

@@ -66,7 +66,7 @@ func TestSimpleRepoIsolationAndMigration(t *testing.T) {
 	}
 	store := databasequeue.NewStore(first)
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	if err := store.Enqueue(ctx, &queue.Task{ID: "one", Type: "mail.v1", AvailableAt: now}); err != nil {
+	if err := store.Enqueue(ctx, &queue.Task{ID: "one", MessageVersion: "mail.v1", AvailableAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := databasequeue.NewStore(second).Reserve(ctx, now, time.Second); err != nil || got != nil {
@@ -129,7 +129,7 @@ func TestSimpleRepoTransactionOwnership(t *testing.T) {
 		if err := repo.Migrate(txCtx); err == nil {
 			return errors.New("migration accepted outer transaction")
 		}
-		if err := store.Enqueue(txCtx, &queue.Task{ID: "one", Type: "message.v1", AvailableAt: time.Now()}); err != nil {
+		if err := store.Enqueue(txCtx, &queue.Task{ID: "one", MessageVersion: "message.v1", AvailableAt: time.Now()}); err != nil {
 			return err
 		}
 		var count int64
@@ -174,7 +174,7 @@ func TestSimpleRepoRetainsCompletedTasks(t *testing.T) {
 	})
 	store := databasequeue.NewStore(repo)
 	now := time.Unix(1700000000, 0).UTC()
-	task := &queue.Task{ID: "retained", Type: "mail", Payload: []byte("body"), AvailableAt: now}
+	task := &queue.Task{ID: "retained", MessageVersion: "mail", Payload: []byte("body"), AvailableAt: now}
 	if err := store.Enqueue(ctx, task); err != nil {
 		t.Fatal(err)
 	}

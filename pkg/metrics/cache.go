@@ -11,11 +11,15 @@ import (
 )
 
 // CacheMetrics 记录业务缓存语义，不执行缓存读写或自动判定 redis.Nil。
-// 名称应为固定缓存类别；指标和底层 Provider 可并发使用，不保存请求状态。
+// 指标和底层 Provider 可并发使用，不保存请求状态。
 type CacheMetrics struct {
-	name     string
-	lookups  metric.Int64Counter
-	loads    metric.Int64Counter
+	// name 固定缓存类别名，避免高基数标签。
+	name string
+	// lookups 按命中、未命中和错误累计查找次数。
+	lookups metric.Int64Counter
+	// loads 实际回源次数。
+	loads metric.Int64Counter
+	// duration 实际回源耗时。
 	duration metric.Float64Histogram
 }
 

@@ -22,16 +22,26 @@ type cronScheduler interface {
 }
 
 type cron_ struct {
-	mu      sync.Mutex
+	// mu 保护期望注册表与启停状态。
+	mu sync.Mutex
+	// desired 按任务名保存的最新调度声明。
 	desired map[string]*cronRegistration
-	wake    chan struct{}
-	stopCh  chan struct{}
-	done    chan struct{}
+	// wake 唤醒控制循环以应用最新声明，重复通知可合并。
+	wake chan struct{}
+	// stopCh 关闭后请求控制循环停止调度。
+	stopCh chan struct{}
+	// done 控制循环及已启动 Cron 调用结束的完成信号。
+	done chan struct{}
+	// started 控制循环是否已经启动。
 	started bool
+	// stopped 调度器是否已进入停止状态。
 	stopped bool
 
-	log          moduleLog
-	cron         *cron.Cron
+	// log 调度器生命周期日志入口。
+	log moduleLog
+	// cron 底层周期调度器，由控制循环协调注册变更。
+	cron *cron.Cron
+	// errorHandler 任务最终失败回调，可能被并发调用。
 	errorHandler func(context.Context, string, error)
 }
 
@@ -65,9 +75,11 @@ func newCron(
 	}
 }
 
-// cronRegistration 一旦发布即只读；Next 的可变状态仅由 robfig 调度协程访问。
+// cronRegistration 保存一次发布后只读的任务注册。
 type cronRegistration struct {
-	job      *cronJob
+	// job 可复用的任务与执行上下文包装。
+	job *cronJob
+	// schedule 本次发布的调度计划；nil 表示停用，Next 的可变状态仅由调度协程访问。
 	schedule scheduleSpec
 }
 
@@ -161,9 +173,13 @@ func (c *cron_) stop() {
 }
 
 type cronJob struct {
-	ctx          context.Context
-	name         string
-	job          Task
+	// ctx 由 Manager 生命周期控制的任务上下文。
+	ctx context.Context
+	// name 任务名称，用于错误定位。
+	name string
+	// job 包含中间件的可执行任务。
+	job Task
+	// errorHandler 非正常取消错误的统一处理回调。
 	errorHandler func(context.Context, string, error)
 }
 
@@ -185,14 +201,20 @@ type scheduleParserContract interface {
 }
 
 type schedule struct {
-	log                  cronLog
-	immediately          bool
-	schedule             scheduleSpec
+	// log 绑定任务名的调度日志入口。
+	log cronLog
+	// immediately 是否允许将首次触发提前至当前时刻。
+	immediately bool
+	// schedule 基础周期计划。
+	schedule scheduleSpec
+	// immediatelyScheduled 是否已消费首次立即执行机会，仅由调度协程访问。
 	immediatelyScheduled bool
 }
 
 type scheduleParser struct {
-	log    cronLog
+	// log 调度计划的日志入口。
+	log cronLog
+	// parser 支持可选秒与标准描述符的表达式解析器。
 	parser cron.ScheduleParser
 }
 

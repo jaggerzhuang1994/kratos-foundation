@@ -13,42 +13,67 @@ import (
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// Spec 保存 Bootstrap 阶段的可变组装状态；公开登记方法在冻结后调用会 panic(ErrSpecFrozen)。
+// Spec 收集 Bootstrap 阶段的应用声明；构造应用后冻结，公开登记调用会 panic(ErrSpecFrozen)。
 type Spec struct {
+	// application 原子发布已构造应用，供就绪探针读取。
 	application atomic.Pointer[App]
-	mu          sync.Mutex
-	frozen      bool
+	// mu 保护组装声明及冻结状态。
+	mu sync.Mutex
+	// frozen 记录声明是否已冻结。
+	frozen bool
 
-	runtimes   []Runtime
+	// runtimes 保存按登记顺序排列的运行时引用；资源 cleanup 仍由组装层管理。
+	runtimes []Runtime
+	// decorators 按登记顺序装饰应用上下文。
 	decorators []ContextDecorator
 
-	appInfo   AppInfo
-	logger    kratoslog.Logger
-	metadata  map[string]string
+	// appInfo 保存应用身份引用。
+	appInfo AppInfo
+	// logger 保存供 Kratos 使用的日志视图。
+	logger kratoslog.Logger
+	// metadata 保存应用元数据快照，同名键以后登记值为准。
+	metadata map[string]string
+	// endpoints 保存对外端点；URL 对象共享，调用方须保持只读。
 	endpoints []*url.URL
-	signals   []os.Signal
+	// signals 保存触发应用停止的系统信号。
+	signals []os.Signal
 
+	// beforeStart 保存启动前执行的钩子。
 	beforeStart []HookFunc
-	afterStart  []HookFunc
-	beforeStop  []HookFunc
-	afterStop   []HookFunc
+	// afterStart 保存启动后执行的钩子。
+	afterStart []HookFunc
+	// beforeStop 保存停止前执行的钩子。
+	beforeStop []HookFunc
+	// afterStop 保存停止后执行的钩子。
+	afterStop []HookFunc
 }
 
 // appSnapshot 是冻结 Spec 后供应用生命周期消费的不可变组装输入。
 type appSnapshot struct {
+	// context 保存装饰完成的应用父上下文。
 	context context.Context
 
-	appInfo   AppInfo
-	logger    kratoslog.Logger
-	metadata  map[string]string
+	// appInfo 保存应用身份引用。
+	appInfo AppInfo
+	// logger 保存供 Kratos 使用的日志视图。
+	logger kratoslog.Logger
+	// metadata 保存应用元数据快照，同名键以后登记值为准。
+	metadata map[string]string
+	// endpoints 保存对外端点；URL 对象共享，调用方须保持只读。
 	endpoints []*url.URL
-	signals   []os.Signal
-	runtimes  []Runtime
+	// signals 保存触发应用停止的系统信号。
+	signals []os.Signal
+	// runtimes 保存按登记顺序排列的运行时引用；资源 cleanup 仍由组装层管理。
+	runtimes []Runtime
 
+	// beforeStart 保存启动前执行的钩子。
 	beforeStart []HookFunc
-	afterStart  []HookFunc
-	beforeStop  []HookFunc
-	afterStop   []HookFunc
+	// afterStart 保存启动后执行的钩子。
+	afterStart []HookFunc
+	// beforeStop 保存停止前执行的钩子。
+	beforeStop []HookFunc
+	// afterStop 保存停止后执行的钩子。
+	afterStop []HookFunc
 }
 
 // NewSpec 创建可登记的应用组装状态。

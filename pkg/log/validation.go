@@ -39,7 +39,9 @@ func validateFilterKeys(filterKeys []string) error {
 // validateConfig 校验环境变量和程序化构造共用的配置约束。
 func validateConfig(config envConfig) error {
 	levels := []struct {
-		name  string
+		// name 标识待校验的级别配置项。
+		name string
+		// level 保存该配置项解析后的日志级别。
 		level kratoslog.Level
 	}{
 		{name: "level", level: config.Level},

@@ -16,21 +16,36 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// WorkerConfig 控制 Worker 的任务处理，构造时固化；零值启用处理并使用默认参数。
-// 发布不受 DisableProcessing 影响；配置不支持热更新。
+// WorkerConfig 控制任务处理，构造时固化，不支持热更新；零值启用处理并使用默认参数。
+// 回调由并发消费循环共享，须并发安全；带 Context 的回调必须响应取消。
 type WorkerConfig struct {
-	Name              string                                    // 空值使用 Definition.Queue。
-	DisableProcessing bool                                      // 禁用时 Start 等待停止，不领取任务；仍校验配置和依赖。
-	Concurrency       int                                       // 默认 1，最大 1024。
-	Timeout           time.Duration                             // 默认 30s，包含领取、限流等待和处理耗时。
-	MaxAttempts       int                                       // 默认 3；Retry 非 nil 时必须为零，避免两处定义冲突。
-	PollInterval      time.Duration                             // 默认 200ms。
-	StorageTimeout    time.Duration                             // 默认 5s。
-	Lease             time.Duration                             // 默认 max(60s, Timeout + StorageTimeout + 1s)。
-	Retry             *RetryPolicy                              // 可选高级退避配置，沿用 Worker 的显式零值语义。
-	BeforeHandle      func(context.Context) error               // 解码校验后、处理中间件前等待共享限流器；失败消耗本次领取。
-	ClassifyError     func(error) error                         // 将执行错误映射为 Permanent 或普通可重试错误；返回 nil 保留原错误。
-	OnFailed          func(context.Context, FailureEvent) error // 仅归档成功后通知，非可靠消息。
+	// Name 为 Worker 的观测名称；空值使用 Definition.Queue。
+	Name string
+	// DisableProcessing 禁止领取任务，Start 仅等待停止；仍校验配置和依赖，不影响发布。
+	DisableProcessing bool
+	// Concurrency 为并发领取循环数，默认 1，最大 1024。
+	Concurrency int
+	// Timeout 为从领取开始的协作执行预算，零值默认 30s，负值无效。
+	// 包含解码、校验、限流和处理，不含确认/归档；不能强制终止不响应取消的 Handler。
+	Timeout time.Duration
+	// MaxAttempts 为总领取次数上限，零值默认 3，有效范围 1–1000；Retry 非 nil 时必须为零。
+	MaxAttempts int
+	// PollInterval 为未领取到任务后的等待间隔，零值默认 200ms，负值无效。
+	PollInterval time.Duration
+	// StorageTimeout 为单次存储操作及失败通知的协作超时，零值默认 5s，负值无效。
+	StorageTimeout time.Duration
+	// Lease 为领取租约时长，至少 1ms 且须大于 Timeout + StorageTimeout，不自动续租。
+	// 零值默认 max(60s, Timeout + StorageTimeout + 1s)。
+	Lease time.Duration
+	// Retry 可选；nil 使用 MaxAttempts 和 500ms/30s 退避，非 nil 时不补齐其中的零值。
+	Retry *RetryPolicy
+	// BeforeHandle 在解码校验后、处理中间件前执行，可用于等待限流器；失败消耗本次领取。
+	BeforeHandle func(context.Context) error
+	// ClassifyError 分类 BeforeHandle/Handler 的非永久错误；返回 nil 保留原错误。
+	// 解码、校验失败和 panic 不经过分类器；执行上下文超时或取消仍优先于分类结果。
+	ClassifyError func(error) error
+	// OnFailed 在归档成功后同步通知，独立使用 StorageTimeout 预算；失败不重试通知或回滚归档。
+	OnFailed func(context.Context, FailureEvent) error
 }
 
 func (c WorkerConfig) workerConfig(queue string) (workerConfig, error) {
@@ -62,16 +77,24 @@ func (c WorkerConfig) workerConfig(queue string) (workerConfig, error) {
 	return workerConfig{Name: c.Name, Queue: queue, Concurrency: c.Concurrency, PollInterval: c.PollInterval, Timeout: c.Timeout, StorageTimeout: c.StorageTimeout, Lease: c.Lease, Retry: c.Retry}, nil
 }
 
-// workerConfig 固化单队列 Worker 配置，零值使用注释中的默认值。
+// workerConfig 保存供底层消费循环解析和校验的参数。
 type workerConfig struct {
-	Name           string
-	Queue          string
-	Concurrency    int           // 默认 1，范围 1..1024。
-	PollInterval   time.Duration // 默认 200ms；没有到期任务时的轮询间隔。
-	Timeout        time.Duration // 默认 30s，从领取请求开始计算的协作执行窗口，包含领取耗时。
-	Lease          time.Duration // 默认 60s，必须大于 Timeout + StorageTimeout。
-	StorageTimeout time.Duration // 默认 5s，每个存储操作的最长等待。
-	Retry          *RetryPolicy  // nil 使用 3 次领取、500ms 初始退避和 30s 最大退避。
+	// Name 为日志和指标中的 Worker 名称。
+	Name string
+	// Queue 为当前 Worker 消费的逻辑队列名称。
+	Queue string
+	// Concurrency 为并发领取循环数，默认 1，范围 1–1024。
+	Concurrency int
+	// PollInterval 为没有到期任务时的轮询间隔，默认 200ms。
+	PollInterval time.Duration
+	// Timeout 为从领取开始计算的协作执行窗口，默认 30s。
+	Timeout time.Duration
+	// Lease 为领取租约时长，默认 60s，须大于 Timeout + StorageTimeout。
+	Lease time.Duration
+	// StorageTimeout 为单次存储操作及失败通知的协作超时，零值默认 5s，负值无效。
+	StorageTimeout time.Duration
+	// Retry 为重试策略；nil 使用 3 次领取、500ms 初始退避和 30s 最大退避。
+	Retry *RetryPolicy
 }
 
 func (config workerConfig) resolve() (workerConfig, error) {
@@ -107,18 +130,30 @@ type taskHandler func(context.Context, *Task) error
 // 实现应用 Runtime 的 Start/Stop 契约，消息类型使不同 Worker 可由 Wire 区分。
 // 一个实例只启动一次，关闭由应用组装层负责，Store 的连接仍由原拥有者释放。
 type Worker[T any] struct {
-	config    workerConfig
-	store     Store
-	handlers  map[string]taskHandler
-	retry     retryPolicy
-	log       log.Logger
+	// config 保存已解析的消费参数。
+	config workerConfig
+	// store 为并发领取循环共享的存储后端。
+	store Store
+	// handlers 按完整消息版本匹配处理器，构造时复制后只读。
+	handlers map[string]taskHandler
+	// retry 保存已校验的领取次数与退避策略。
+	retry retryPolicy
+	// log 为队列模块日志入口。
+	log log.Logger
+	// telemetry 记录处理、重试和归档的追踪及指标。
 	telemetry *internaltelemetry.Telemetry
-	started   atomic.Bool
-	stop      chan struct{}
-	done      chan struct{}
-	stopOnce  sync.Once
-	disabled  bool
-	onFailed  func(context.Context, FailureEvent) error
+	// started 原子标记是否已启动，阻止重复调用 Start。
+	started atomic.Bool
+	// stop 关闭后通知协调循环取消运行上下文。
+	stop chan struct{}
+	// done 在 Start 退出时关闭，供 Stop 等待运行结束。
+	done chan struct{}
+	// stopOnce 保证停止信号只关闭一次。
+	stopOnce sync.Once
+	// disabled 在构造期固化；为 true 时不领取任务。
+	disabled bool
+	// onFailed 为归档成功后的可选通知回调，不保证可靠投递。
+	onFailed func(context.Context, FailureEvent) error
 }
 
 // newWorker 复制 Handler 表并校验执行窗口，构造阶段不调用 Store。

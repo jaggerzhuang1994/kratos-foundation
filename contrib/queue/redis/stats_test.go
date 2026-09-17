@@ -13,7 +13,7 @@ import (
 
 func TestStats(t *testing.T) {
 	now := time.Unix(1800000000, 0).UTC()
-	task, err := json.Marshal(&queue.Task{ID: "id", Type: "job", AvailableAt: now.Add(-time.Minute)})
+	task, err := json.Marshal(&queue.Task{ID: "id", MessageVersion: "job", AvailableAt: now.Add(-time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestStatsRedis(t *testing.T) {
 		{"running", now.Add(-time.Minute), now.Add(-1500 * time.Millisecond), time.Minute, false},
 		{"failed", now.Add(-30 * time.Second), now.Add(-1400 * time.Millisecond), time.Minute, true},
 	} {
-		if err := store.Enqueue(ctx, &queue.Task{ID: item.id, Type: "job", AvailableAt: item.available}); err != nil {
+		if err := store.Enqueue(ctx, &queue.Task{ID: item.id, MessageVersion: "job", AvailableAt: item.available}); err != nil {
 			t.Fatal(err)
 		}
 		r, err := store.Reserve(ctx, item.clock, item.lease)
@@ -98,7 +98,7 @@ func TestStatsRedis(t *testing.T) {
 		id string
 		at time.Time
 	}{{"ready", now.Add(-10 * time.Second)}, {"scheduled", now.Add(time.Second)}} {
-		if err := store.Enqueue(ctx, &queue.Task{ID: item.id, Type: "job", AvailableAt: item.at}); err != nil {
+		if err := store.Enqueue(ctx, &queue.Task{ID: item.id, MessageVersion: "job", AvailableAt: item.at}); err != nil {
 			t.Fatal(err)
 		}
 	}

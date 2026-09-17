@@ -12,11 +12,16 @@ import (
 )
 
 type retiredClient struct {
-	name     string
+	// name 退役客户端的连接名称。
+	name string
+	// revision 退役配置版本号。
 	revision uint64
+	// protocol 退役客户端使用的协议。
 	protocol config_pb.Protocol
-	reason   retireReason
-	result   clientResult
+	// reason 触发退役的原因。
+	reason retireReason
+	// result 已从共享状态分离的资源，在锁外释放。
+	result clientResult
 }
 
 // AcquireClient 返回当前配置版本的客户端和调用级幂等 release。
@@ -228,9 +233,12 @@ func (f *factory) closeAndLog(retired retiredClient) {
 }
 
 type clientResult struct {
+	// httpClient HTTP 客户端；成功构建时与 grpcClient 恰有一个非 nil。
 	httpClient *kratoshttp.Client
+	// grpcClient gRPC 连接；成功构建时与 httpClient 恰有一个非 nil。
 	grpcClient *stdgrpc.ClientConn
-	closeFn    func() error
+	// closeFn 释放本次构建资源的函数。
+	closeFn func() error
 }
 
 func (r clientResult) validate() error {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -86,7 +85,7 @@ func TestRepoTransactionsAndErrors(t *testing.T) {
 			if _, err := transactional.Claim(ctx, time.Now(), time.Now().Add(time.Hour), "t"); err == nil {
 				t.Fatal("uncommitted lease allowed")
 			}
-			if err := transactional.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "tx", Type: "test"}}); err != nil {
+			if err := transactional.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "tx", MessageVersion: "test"}}); err != nil {
 				return err
 			}
 			var count int64
@@ -178,7 +177,7 @@ func TestRepoRejectsModelOverrides(t *testing.T) {
 func TestRepoFactoryAndIdentity(t *testing.T) {
 	repo, db := testRepo(t)
 	ctx := context.Background()
-	record := &databasequeue.TaskRecord{Task: queue.Task{ID: "id", Type: "test"}}
+	record := &databasequeue.TaskRecord{Task: queue.Task{ID: "id", MessageVersion: "test"}}
 	sentinel := errors.New("factory failed")
 	repo.factory = func(context.Context, *databasequeue.TaskRecord) (*testTask, error) { return nil, sentinel }
 	if err := repo.Insert(ctx, record); !errors.Is(err, sentinel) {
@@ -189,7 +188,7 @@ func TestRepoFactoryAndIdentity(t *testing.T) {
 		t.Fatal("nil model accepted")
 	}
 	repo.factory = func(_ context.Context, r *databasequeue.TaskRecord) (*testTask, error) {
-		r.Task.Type = "changed"
+		r.Task.MessageVersion = "changed"
 		return &testTask{}, nil
 	}
 	for _, id := range []string{"id", "ID", "id ", "é", "e"} {
@@ -206,7 +205,7 @@ func TestRepoFactoryAndIdentity(t *testing.T) {
 		t.Fatal(count)
 	}
 	got, err := repo.Claim(ctx, time.Now(), time.Now().Add(time.Hour), "t")
-	if err != nil || got == nil || got.Task.Type != "test" {
+	if err != nil || got == nil || got.Task.MessageVersion != "test" {
 		t.Fatalf("factory changed payload: %v %v", got, err)
 	}
 }
@@ -283,11 +282,12 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 			obs := integrationQueueObservability(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			original := &queue.Task{ID: "order-123", Type: "email.v1", Payload: []byte("invoice"), Headers: map[string]string{"tenant": "acme"}}
+			original := &queue.Task{ID: "order-123", MessageVersion: "email.v1", Payload: []byte("invoice"), Headers: map[string]string{"tenant": "acme"}}
+			version := 1
 			if tc.name == "unknown_type" {
-				original.Type = "missing.v1"
+				version = 2
 			}
-			publisher, err := queue.NewQueue(queue.Definition[[]byte]{Queue: "email", MessageType: strings.TrimSuffix(original.Type, ".v1"), Version: 1, Codec: payloadCodec{}}, store, obs)
+			publisher, err := queue.NewQueue(queue.Definition[[]byte]{Queue: "email", Version: version, Codec: payloadCodec{}}, store, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -321,9 +321,9 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				}
 				return nil
 			}
-			runWorker := func(messageType string, handle func(context.Context, []byte) error) {
+			runWorker := func(version int, handle func(context.Context, []byte) error) {
 				t.Helper()
-				q, err := queue.NewQueue(queue.Definition[[]byte]{Queue: "email", MessageType: messageType, Version: 1, Codec: payloadCodec{}}, store, obs)
+				q, err := queue.NewQueue(queue.Definition[[]byte]{Queue: "email", Version: version, Codec: payloadCodec{}}, store, obs)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -366,7 +366,7 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 					t.Fatal("worker did not persist terminal state")
 				}
 			}
-			runWorker("email", handler)
+			runWorker(1, handler)
 			if runs != tc.wantRuns {
 				t.Fatalf("handler runs=%d want=%d", runs, tc.wantRuns)
 			}
@@ -381,7 +381,7 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 				if err := store.Retry(ctx, original.ID, time.Now().Add(-time.Second)); err != nil {
 					t.Fatal(err)
 				}
-				runWorker(strings.TrimSuffix(original.Type, ".v1"), func(context.Context, []byte) error { return nil })
+				runWorker(version, func(context.Context, []byte) error { return nil })
 			} else if len(failed) != 0 {
 				t.Fatalf("successful task archived: %+v", failed)
 			}

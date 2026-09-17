@@ -111,7 +111,7 @@ flowchart TD
 ```go
 // 业务仓储和框架交换的状态，不是数据库行结构。
 record := databasequeue.TaskRecord{
-    Task: queue.Task{ID: "welcome-42", Type: "send-email", Payload: payload},
+    Task: queue.Task{ID: "welcome-42", MessageVersion: "send-email", Payload: payload},
     Attempts: 0,
 }
 ```
@@ -120,7 +120,7 @@ record := databasequeue.TaskRecord{
 
 | 字段 | 含义 |
 | --- | --- |
-| Task | 完整 queue.Task，包含 ID、Type、Payload、Headers、AvailableAt、CreatedAt |
+| Task | 完整 queue.Task，包含 ID、MessageVersion、Payload、Headers、AvailableAt、CreatedAt |
 | Attempts | 累计领取次数 |
 | Token / ReservedUntil | 当前领取标识及租约截止时间 |
 | Failed / FailureReason / FailedAt | 失败状态、受控分类及失败时间 |

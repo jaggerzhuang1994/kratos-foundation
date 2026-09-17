@@ -34,11 +34,17 @@ type Config struct {
 
 // Repo 为一个业务模型和表提供队列仓储。借用连接，表迁移与 cleanup 由业务负责。
 type Repo[T Entity] struct {
-	provider        ConnectionProvider
-	factory         Factory[T]
-	table           string
-	modelTable      string
-	entityType      reflect.Type
+	// provider 按上下文借用数据库连接；消费操作不允许使用外层事务。
+	provider ConnectionProvider
+	// factory 创建独立业务模型并填充自定义字段。
+	factory Factory[T]
+	// table 保存实际访问的物理表名。
+	table string
+	// modelTable 保存模型声明的表名，用于校验工厂返回模型。
+	modelTable string
+	// entityType 保存模型指针指向的类型，用于分配独立查询实例。
+	entityType reflect.Type
+	// retainCompleted 固定成功记录保留策略；构造后不热更新。
 	retainCompleted bool
 }
 
@@ -121,7 +127,7 @@ func (r *Repo[T]) consumerDB(ctx context.Context) *gorm.DB {
 
 // Insert 将任务和工厂自定义字段写入同一行，可复用业务 Context 中的事务。
 func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) error {
-	if record == nil || record.Task.ID == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.Type) == "" || strings.TrimSpace(record.Task.ID) == "" || record.Attempts < 0 || len(record.Token) > 36 || len(record.FailureReason) > 128 {
+	if record == nil || record.Task.ID == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.MessageVersion) == "" || strings.TrimSpace(record.Task.ID) == "" || record.Attempts < 0 || len(record.Token) > 36 || len(record.FailureReason) > 128 {
 		return errors.New("invalid queue task")
 	}
 	snapshot := *record

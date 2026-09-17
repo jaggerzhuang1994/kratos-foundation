@@ -99,8 +99,10 @@ func mergeConstantsMd(constantsList ...map[string]string) metadata2.Metadata {
 type option func(*options)
 
 type options struct {
+	// prefix 保存允许透传的服务端元数据键前缀，默认 x-md-；显式客户端元数据不受前缀限制。
 	prefix []string
-	md     metadata2.Metadata
+	// md 保存每个请求携带的常量元数据，构造时剔除框架保留键，服务端使用时复制。
+	md metadata2.Metadata
 }
 
 // hasPrefix 判断元数据键是否属于允许透传的前缀，并排除框架保留键。

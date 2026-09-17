@@ -99,8 +99,10 @@ func configPatternPrefix(pattern string) (string, bool, error) {
 const loadTimeout = 10 * time.Second
 
 type kvSource struct {
+	// client 借用进程共享的 Consul 客户端读取配置，配置源不负责关闭。
 	client *consulapi.Client
-	path   string
+	// path 指定配置键、目录或 glob，查询后按路径规则筛选。
+	path string
 }
 
 // Load 有界地读取完整前缀，暂时错误在同一请求预算内重试。

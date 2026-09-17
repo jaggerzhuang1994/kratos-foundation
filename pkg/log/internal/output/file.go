@@ -12,9 +12,11 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 )
 
-// FileConfig 描述文件路径以及可选的轮转策略。
+// FileConfig 描述文件输出配置。
 type FileConfig struct {
-	Path     string
+	// Path 非空日志文件路径，不得指向目录；普通追加模式不自动创建父目录。
+	Path string
+	// Rotating 轮转配置；nil 使用普通追加写入。
 	Rotating *RotatingFileConfig
 }
 
@@ -69,7 +71,7 @@ func NewFile(config FileConfig) (log.Logger, func(), error) {
 
 // RotatingFileConfig 描述文件轮转和保留策略。
 type RotatingFileConfig struct {
-	// MaxSize 是触发轮转的文件大小上限，单位为 MB。
+	// MaxSize 是触发轮转的文件大小上限，单位为 MB；0 使用底层默认 100 MB。
 	MaxSize int
 	// MaxFileAge 是旧日志文件的最长保留天数；0 表示不限制。
 	MaxFileAge int
@@ -82,8 +84,11 @@ type RotatingFileConfig struct {
 }
 
 type fileWriter struct {
-	mu     sync.Mutex
+	// mu 保护写入与关闭，避免句柄释放时仍被写入。
+	mu sync.Mutex
+	// writer 由本包装器负责关闭的文件或轮转写入器。
 	writer io.WriteCloser
+	// closed 是否已经关闭，用于拒绝后续写入。
 	closed bool
 }
 

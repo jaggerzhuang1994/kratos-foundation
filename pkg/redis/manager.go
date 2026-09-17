@@ -30,21 +30,32 @@ type Manager interface {
 
 // todo 想让 Manager 默认实现 redis Client 的一些方法
 
-// manager 持有全部 Redis client、配置快照和关闭状态。
+// manager 管理具名 Redis 客户端及其生命周期。
 type manager struct {
+	// Logger Redis 组件日志。
 	log.Logger
+	// tracing 为客户端安装追踪能力的 Provider。
 	tracing tracing.Provider
+	// metrics 为客户端安装指标能力的 Provider。
 	metrics metrics.Provider
 
-	conf        componentConfig
+	// conf 构造期复制的只读组件配置，不支持热更新。
+	conf componentConfig
+	// connOptions 按连接名保存的客户端配置。
 	connOptions map[string]connectionOption
 
-	mu          sync.Mutex
+	// mu 保护客户端缓存和关闭状态。
+	mu sync.Mutex
+	// connections 受管客户端缓存，默认连接在构造期创建，其他连接延迟创建；受 mu 保护。
 	connections map[string]*redis.Client
+	// defaultConn 与 connections 共享的默认客户端；受 mu 保护，仅由 Manager 关闭。
 	defaultConn *redis.Client
-	closed      bool
-	closeOnce   sync.Once
-	closeErr    error
+	// closed 关闭后拒绝创建客户端，受 mu 保护。
+	closed bool
+	// closeOnce 保证客户端清理仅执行一次。
+	closeOnce sync.Once
+	// closeErr 首次清理的聚合错误。
+	closeErr error
 }
 
 // NewManager 初始化默认连接，并返回可关闭全部连接的幂等 cleanup。

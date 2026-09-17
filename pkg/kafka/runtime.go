@@ -14,26 +14,41 @@ import (
 
 // RuntimeConfig 描述一个业务消费者及其统一重试和死信策略。
 type RuntimeConfig struct {
-	Name                  string
-	Destination           string
-	Retry                 *RetryPolicy
-	DeadLetter            Producer
+	// Name 必填的消费者观测名称，用于日志和指标，不替代 Kafka Group 配置。
+	Name string
+	// Destination 必填的消费目标观测名称，不改变 Consumer 实际订阅的 Topic。
+	Destination string
+	// Retry 进程内重试策略；nil 默认尝试 3 次、初始退避 500ms、上限 30s，构造后固定。
+	Retry *RetryPolicy
+	// DeadLetter 不可重试或重试耗尽后的死信生产者；nil 时直接返回失败，由调用方管理其资源。
+	DeadLetter Producer
+	// DeadLetterDestination 死信观测名称，须与 DeadLetter 一起配置，不改变其实际投递目标。
 	DeadLetterDestination string
 }
 
 // ConsumerRuntime 将外部 Consumer 绑定到业务 Handler，并实现统一生命周期、重试、死信与观测策略。
 type ConsumerRuntime struct {
-	config    RuntimeConfig
-	consumer  Consumer
-	handler   Handler
-	log       log.Logger
+	// config 构造期校验后的运行配置。
+	config RuntimeConfig
+	// consumer 负责拉取消息，Start/Stop 控制其消费 Context，不额外关闭外部资源。
+	consumer Consumer
+	// handler 接收消息的业务处理函数。
+	handler Handler
+	// log 消费运行时日志。
+	log log.Logger
+	// telemetry 消息、尝试和死信的追踪及指标。
 	telemetry *internaltelemetry.Telemetry
-	retry     retryPolicy
+	// retry 已展开默认值并校验的重试策略。
+	retry retryPolicy
 
-	started  atomic.Bool
-	stop     chan struct{}
+	// started 原子标记首次启动，禁止重复启动。
+	started atomic.Bool
+	// stop Stop 关闭此通道以发出停止信号。
+	stop chan struct{}
+	// stopOnce 保证停止通道只关闭一次。
 	stopOnce sync.Once
-	done     chan struct{}
+	// done Start 返回时关闭，供 Stop 等待退出。
+	done chan struct{}
 }
 
 // NewConsumerRuntime 校验配置并创建只能启动一次的受管消费者运行时。
@@ -190,11 +205,13 @@ func channelClosed(channel <-chan struct{}) bool {
 	}
 }
 
-// consumerRunState 在线性化点记录 Consumer 返回与 Runtime 发起取消的先后关系。
-// 互斥区只保护本地布尔状态，不包含 Handler、网络调用或 Context 取消回调。
+// consumerRunState 记录 Consumer 返回与 Runtime 发起取消的先后关系。
 type consumerRunState struct {
-	mu                     sync.Mutex
-	returned               bool
+	// mu 仅保护本地状态，不包含 Handler、网络调用或 Context 取消回调。
+	mu sync.Mutex
+	// returned 底层 Consume 是否已经返回，受 mu 保护。
+	returned bool
+	// cancellationWasStarted 运行时是否先于 Consume 返回发起取消，受 mu 保护。
 	cancellationWasStarted bool
 }
 
@@ -252,8 +269,10 @@ func cancellationOnlyErrorTree(err error) bool {
 }
 
 type consumerCancellationSource struct {
+	// context 本次启动的原始父 Context，用于识别取消来源。
 	context context.Context
-	state   *consumerRunState
+	// state 本次消费运行的取消顺序状态。
+	state *consumerRunState
 }
 
 type consumerSourceContextKey struct{}

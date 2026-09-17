@@ -31,11 +31,13 @@ const (
 	MiddlewarePriorityLimit = 800
 )
 
-// MiddlewareSpec 用名称和优先级描述中间件；同名业务配置会替换默认实现，便于定点
-// 定制而不用复制整条中间件链。
+// MiddlewareSpec 声明可参与排序和替换的中间件。
 type MiddlewareSpec struct {
-	Name       string
-	Priority   int
+	// Name 中间件身份，同名业务项替换已有项；空名只追加。
+	Name string
+	// Priority 链内顺序，数值越小越靠外层；相同优先级保留登记顺序。
+	Priority int
+	// Middleware 实际中间件；nil 配合同名项可移除已有实现。
 	Middleware middleware.Middleware
 }
 

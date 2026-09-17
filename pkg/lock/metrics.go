@@ -12,11 +12,16 @@ import (
 )
 
 type observedLocker struct {
+	// Locker 被观测包装的底层锁实现。
 	Locker
-	name       string
+	// name 用于指标标签的固定锁类别名。
+	name string
+	// operations 锁操作结果计数。
 	operations metric.Int64Counter
-	duration   metric.Float64Histogram
-	held       metric.Float64Histogram
+	// duration 锁操作耗时。
+	duration metric.Float64Histogram
+	// held 底层 Unlock 成功时的持有时长，单位秒；过期或解锁失败不产生样本。
+	held metric.Float64Histogram
 }
 
 // WithMetrics 包装 Locker，按固定业务名称记录操作结果；name 不得包含业务 ID 或锁键。
@@ -85,10 +90,13 @@ func (l *observedLocker) record(ctx context.Context, operation string, err error
 	l.duration.Record(ctx, time.Since(started).Seconds(), attrs)
 }
 
-// observedLease 只保存不可变获取时间；同步和所有者校验仍由底层租约负责。
+// observedLease 记录租约观测数据；同步和所有者校验由底层租约负责。
 type observedLease struct {
+	// Lease 底层已取得的租约。
 	Lease
+	// observer 共享的锁指标及名称。
 	observer *observedLocker
+	// acquired 成功取得租约的时间，创建后不变，用于计算持有时长。
 	acquired time.Time
 }
 

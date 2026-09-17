@@ -38,9 +38,11 @@ func NewMetrics(provider Provider, appInfo appinfo.AppInfo) Metrics {
 	return provider.Meter(appInfo.Name())
 }
 
-// provider 持有实例私有的 OpenTelemetry MeterProvider 和 Prometheus Registry。
+// provider 提供实例隔离的指标采集与导出能力。
 type provider struct {
-	mp   metric.MeterProvider
+	// mp 当前实例私有的指标 Provider，用于创建业务 Meter。
+	mp metric.MeterProvider
+	// prom Prometheus 导出使用的独立注册器。
 	prom *clientprometheus.Registry
 }
 

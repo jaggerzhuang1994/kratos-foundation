@@ -22,7 +22,7 @@ type Subscriber interface {
 type SubscribeEvent[T any] struct {
 	// Message 是解析结果；Err 非 nil 时它可以是零值。
 	Message T
-	// Err 表示解析失败、解析器 panic 或订阅关闭失败。
+	// Err 表示无效消息流/消息、解析失败、解析器 panic 或订阅关闭失败。
 	Err error
 }
 
@@ -232,6 +232,7 @@ func emitFinalSubscribeEvent[T any](
 const defaultSubscribeBufferSize = 100
 
 type subscribeOption struct {
+	// bufferSize 事件通道容量，默认 100；零表示无缓冲，负值会被拒绝。
 	bufferSize int
 }
 

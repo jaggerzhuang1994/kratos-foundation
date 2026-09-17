@@ -20,20 +20,27 @@ func RegisterFields(values ...any) { processState.WithKV(values...) }
 
 // customState 保存一份不可变的进程级自定义配置快照。
 type customState struct {
+	// version 共享策略版本，用于使派生 Logger 缓存失效。
 	version uint64
-	policy  *RuntimeConfig
+	// policy 已复制的运行期策略。
+	policy *RuntimeConfig
 
+	// filterKeys 共享根过滤覆盖；nil 使用实例配置。
 	filterKeys []string
-	kv         []any
+	// kv 进程共享日志字段；仅复制切片，字段值引用的对象不深拷贝。
+	kv []any
 }
 
 // sharedState 保存共享策略并借用活动输出，资源仍由每个实例的 cleanup 释放。
 type sharedState struct {
+	// custom 原子发布的共享策略与字段快照。
 	custom atomic.Pointer[customState]
 	// gate 保护输出登记与提交，并让一条日志使用同一代策略和输出。
-	gate   sync.RWMutex
+	gate sync.RWMutex
+	// owners 活动输出入口及各自启动环境，由 gate 保护。
 	owners map[*outputLogger]envConfig
-	epoch  uint64
+	// epoch 输出登记及策略提交序号，用于拒绝过期准备结果，由 gate 保护。
+	epoch uint64
 }
 
 // WithKV 增加进程级字段；重复字符串 key 使用后声明的值，module 在输出组装时忽略。

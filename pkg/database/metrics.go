@@ -21,11 +21,16 @@ var prometheusLabelNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // metricsCollector 只管理数据库指标的注册与释放，不参与连接池生命周期。
 type metricsCollector struct {
+	// registerer 登记和注销当前实例指标的注册器。
 	registerer prometheus.Registerer
-	dbStats    []prometheus.Collector
-	mysql      *mysqlMetricsCollector
-	sql        *sqlMetrics
-	closeOnce  sync.Once
+	// dbStats 当前实例登记的连接池指标。
+	dbStats []prometheus.Collector
+	// mysql 仅当默认连接使用 MySQL 时创建的状态刷新器；不逐连接采集。
+	mysql *mysqlMetricsCollector
+	// sql 可选的 SQL 操作指标。
+	sql *sqlMetrics
+	// closeOnce 保证刷新器关闭和指标注销仅执行一次。
+	closeOnce sync.Once
 }
 
 // newMetricsCollector 为所有具名连接注册标准连接池指标，并可选采集 MySQL 状态。

@@ -9,6 +9,7 @@ import (
 )
 
 type stackLogger struct {
+	// loggers 独立复制的输出列表；依次写入，遇 os.ErrClosed 停止后续输出。
 	loggers []log.Logger
 }
 

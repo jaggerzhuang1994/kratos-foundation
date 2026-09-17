@@ -3,6 +3,7 @@ package output
 import "github.com/go-kratos/kratos/v2/log"
 
 type dedupeLogger struct {
+	// logger 字段去重后转发的输出目标。
 	logger log.Logger
 }
 

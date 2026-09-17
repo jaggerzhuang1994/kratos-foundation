@@ -18,15 +18,22 @@ import (
 )
 
 type demoOrder struct {
-	ID     string `gorm:"primaryKey"`
+	// ID 保存订单主键。
+	ID string `gorm:"primaryKey"`
+	// Status 保存演示订单状态。
 	Status string
 }
 
 type dataService struct {
+	// logger 记录数据库与缓存演示事件。
 	logger log.Logger
-	db     database.Manager
-	cache  *redis.Client
+	// db 提供数据库连接与事务能力。
+	db database.Manager
+	// cache 借用 Redis 客户端读写演示缓存。
+	cache *redis.Client
+	// counts 记录缓存命中、未命中、错误及回源耗时。
 	counts *metrics.CacheMetrics
+	// locker 提供演示业务的分布式锁。
 	locker lock.Locker
 }
 

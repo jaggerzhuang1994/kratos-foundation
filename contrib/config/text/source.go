@@ -11,8 +11,11 @@ import (
 )
 
 type source struct {
-	key     string
-	format  string
+	// key 标识该文本配置来源。
+	key string
+	// format 指定文本解码格式。
+	format string
+	// content 保存不可变配置正文；加载时复制为字节切片。
 	content string
 }
 
@@ -53,7 +56,9 @@ func (*source) Watch() (config.Watcher, error) {
 }
 
 type idleWatcher struct {
+	// done Stop 时关闭，唤醒等待中的 Next。
 	done chan struct{}
+	// once 保证停止信号只关闭一次。
 	once sync.Once
 }
 

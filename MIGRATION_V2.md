@@ -531,3 +531,7 @@ flowchart LR
 ```
 
 GORM 任务表查询优化增加 `(failed, failed_at, id)`、`(status, failed, available_at, reserved_until)` 非唯一联合索引。简单模式由部署命令重新执行 Migrate，扩展模式由业务迁移添加；原单列索引保留。领取仅接受 pending/running，升级前应完成旧状态回填。索引作用、迁移流程与容量边界见 [GORM 仓储文档](contrib/queue/database/gorm/README.md#查询索引与容量边界)。
+
+Queue Definition 移除 MessageType，改为从静态泛型 T 去掉未命名指针后的类型名称推导，无名称时使用 Queue；Version 为 0 默认 1，负数无效。最终 Task.MessageVersion 为 `类型名.v版本`，不包含包路径。旧显式类型不会自动转换；升级前须排空旧积压或使用独立物理队列，见[契约与兼容性](pkg/queue/typed.md#契约与兼容性)。
+
+Task 的 Go 字段 Type 改名为 MessageVersion；Worker 日志字段改为 task.message_version。持久化 JSON 同步改为 MessageVersion，不兼容旧 Type 字段。升级前须排空旧积压或使用新的物理队列，标识值变化同样遵循上述队列契约迁移规则。

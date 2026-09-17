@@ -8,11 +8,16 @@ import (
 
 // cronConfig 是已合并的执行规则；没有指针，不与外部配置快照共享可变字段。
 type cronConfig struct {
-	disabled  bool
-	schedule  string
-	policy    ConcurrentPolicy
+	// disabled 是否禁止新触发；不取消已经运行或排队的调用。
+	disabled bool
+	// schedule 周期调度表达式。
+	schedule string
+	// policy 同一 Manager 内的并发执行策略。
+	policy ConcurrentPolicy
+	// immediate 首次启动且启用时是否立即执行。
 	immediate bool
-	pending   int
+	// pending Delay 等待容量，默认 1；0 不等待，-1 无界，不得小于 -1 或等于最大 int。
+	pending int
 }
 
 // taskCronConfig 只在构造期读取 Task 默认值，避免热更新回调执行业务方法。

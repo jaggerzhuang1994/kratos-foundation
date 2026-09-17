@@ -7,8 +7,9 @@ import (
 	"strings"
 )
 
-// BucketDomainHelper maps object keys to and from a bucket's public base URL.
+// BucketDomainHelper 在对象键与公开访问 URL 之间转换。
 type BucketDomainHelper struct {
+	// base 解析后的公开访问基址，用于拼接对象 URL。
 	base *url.URL
 }
 

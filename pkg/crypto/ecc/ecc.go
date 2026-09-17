@@ -109,7 +109,9 @@ func validatePublicKey(publicKey *ecdsa.PublicKey) error {
 var errInvalidCiphertext = errors.New("invalid ECIES ciphertext")
 
 type eciesParams struct {
-	hash   func() hash.Hash
+	// hash 创建该曲线使用的摘要实例，用于密钥派生和 HMAC。
+	hash func() hash.Hash
+	// keyLen 为该曲线对应的 AES 密钥字节数。
 	keyLen int
 }
 

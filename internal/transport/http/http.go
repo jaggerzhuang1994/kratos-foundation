@@ -12,10 +12,15 @@ import (
 )
 
 type errResponse struct {
-	Code     int               `json:"code"`
-	Message  string            `json:"message"`
-	Data     any               `json:"data"`
-	Reason   string            `json:"reason"`
+	// Code 保存业务原因码，区别于 HTTP 响应状态码。
+	Code int `json:"code"`
+	// Message 保存对外展示的错误消息。
+	Message string `json:"message"`
+	// Data 保存错误附加数据；未指定时可使用校验错误明细。
+	Data any `json:"data"`
+	// Reason 保存稳定错误原因标识。
+	Reason string `json:"reason"`
+	// Metadata 保存允许对外返回的错误元数据。
 	Metadata map[string]string `json:"metadata"`
 }
 

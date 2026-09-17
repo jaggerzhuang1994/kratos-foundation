@@ -17,7 +17,10 @@ import (
 
 const objectPayload = "Foundation components demo: real OSS bytes.\n"
 
-type objectStorage struct{ bucket oss.Bucket }
+type objectStorage struct {
+	// bucket 借用 OSS Manager 管理的演示存储桶。
+	bucket oss.Bucket
+}
 
 func newObjectStorage(cfg config.Manager, logger log.Logger, provider metrics.Provider) (*objectStorage, func(), error) {
 	manager, cleanup, err := oss.NewManager(cfg, logger)

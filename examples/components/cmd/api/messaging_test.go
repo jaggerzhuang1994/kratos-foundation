@@ -151,11 +151,11 @@ func TestMessagingRun(t *testing.T) {
 				reports.err = errDemoFailure
 			}
 			obs := queue.Observability{Logger: messagingLogger{}, Metrics: messagingMetrics{}, Tracing: messagingTracing{}}
-			dispatcher, err := queue.NewQueue(queue.Definition[string]{Queue: taskQueue, MessageType: "demo", Version: 1, Codec: taskTextCodec{}}, tasks, obs)
+			dispatcher, err := queue.NewQueue(queue.Definition[string]{Queue: taskQueue, Version: 1, Codec: taskTextCodec{}}, tasks, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
-			backlogDispatcher, err := queue.NewQueue(queue.Definition[string]{Queue: backlogQueue, MessageType: "demo", Version: 1, Codec: taskTextCodec{}}, backlog, obs)
+			backlogDispatcher, err := queue.NewQueue(queue.Definition[string]{Queue: backlogQueue, Version: 1, Codec: taskTextCodec{}}, backlog, obs)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -167,7 +167,7 @@ func TestMessagingRun(t *testing.T) {
 				{emailQueue, "email.render", "welcome", emails},
 				{reportQueue, "report.summarize", "daily", reports},
 			} {
-				dispatcher, createErr := queue.NewQueue(queue.Definition[string]{Queue: business.name, MessageType: business.taskType, Version: 1, Codec: taskTextCodec{}}, business.store, obs)
+				dispatcher, createErr := queue.NewQueue(queue.Definition[string]{Queue: business.name, Version: 1, Codec: taskTextCodec{}}, business.store, obs)
 				if createErr != nil {
 					t.Fatal(createErr)
 				}
@@ -207,7 +207,7 @@ func TestMessagingRun(t *testing.T) {
 					t.Fatalf("%s tasks = %d", business.name, len(store.tasks))
 				}
 				task := store.tasks[0]
-				if task.ID != "run-one-"+business.taskType || task.Type != business.taskType+".v1" || string(task.Payload) != business.payload {
+				if task.ID != "run-one-"+business.taskType || task.MessageVersion != "string.v1" || string(task.Payload) != business.payload {
 					t.Fatalf("unexpected business task: %+v", task)
 				}
 			}

@@ -14,33 +14,56 @@ import (
 
 // Manager 持有 Spec 中任务启动的全部 goroutine，并统一处理停止和等待。
 type Manager struct {
-	config       config.Manager
-	unsubscribe  func()
-	parser       scheduleParserContract
-	log          moduleLog
+	// config 可选配置管理器；nil 时仅使用代码声明。
+	config config.Manager
+	// unsubscribe 停止配置热更新订阅的取消函数。
+	unsubscribe func()
+	// parser Cron 表达式解析器。
+	parser scheduleParserContract
+	// log 任务运行日志入口。
+	log moduleLog
+	// exitWhenDone 是否在全部单次任务结束后退出。
 	exitWhenDone bool
-	options      managerOptions
-	cron         cronScheduler
-	cronJobs     []scheduledJob
-	onceJobs     []*managedJob
-	daemonJobs   []*managedJob
+	// options 构造时解析的共享运行策略。
+	options managerOptions
+	// cron 由 Manager 管理生命周期的周期调度器。
+	cron cronScheduler
+	// cronJobs 周期任务及其基础、当前配置。
+	cronJobs []scheduledJob
+	// onceJobs 启动后执行一次的任务集合。
+	onceJobs []*managedJob
+	// daemonJobs 随运行上下文取消而退出的常驻任务集合。
+	daemonJobs []*managedJob
 
-	mu          sync.Mutex
-	cancel      context.CancelFunc
+	// mu 保护启停状态与周期配置更新。
+	mu sync.Mutex
+	// cancel 停止时取消所有任务的运行上下文。
+	cancel context.CancelFunc
+	// cronStarted 周期调度器是否已实际启动。
 	cronStarted bool
-	started     bool
-	stopping    bool
-	workers     sync.WaitGroup
-	stopOnce    sync.Once
-	done        chan struct{}
+	// started 是否已经执行首次 Start，防止重复启动。
+	started bool
+	// stopping 是否正在停止，阻止新的启动或配置更新。
+	stopping bool
+	// workers 等待启动登记、单次/常驻任务及单次错误汇总协程退出。
+	workers sync.WaitGroup
+	// stopOnce 确保停止收尾仅执行一次。
+	stopOnce sync.Once
+	// done 所有受管任务和调度器结束的完成信号。
+	done chan struct{}
 }
 
 type scheduledJob struct {
+	// managedJob 已应用中间件的周期任务。
 	*managedJob
+	// scheduleSpec 启动时使用的解析计划；运行中后续计划由 cron.reschedule 更新。
 	scheduleSpec
-	base     cronConfig
+	// base 代码声明形成的基础配置，配置删除时回退至此。
+	base cronConfig
+	// resolved 合并动态覆盖后生效的完整配置。
 	resolved cronConfig
-	gate     *executionGate
+	// gate 热更新期间保留计数的并发准入控制。
+	gate *executionGate
 }
 
 // NewManager 把任务定义解析为一个运行时，调度器和观测中间件不会作为独立生命周期暴露。

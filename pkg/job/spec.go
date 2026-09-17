@@ -20,11 +20,16 @@ const (
 
 // managerOptions 保存整个 Spec 解析后的运行策略。
 type managerOptions struct {
-	Location       *time.Location
+	// Location Cron 表达式使用的时区，默认 time.Local。
+	Location *time.Location
+	// TracingEnabled 是否启用任务链路追踪，默认启用。
 	TracingEnabled bool
+	// MetricsEnabled 是否启用任务指标，默认启用。
 	MetricsEnabled bool
+	// LoggingEnabled 是否启用任务生命周期日志，默认启用。
 	LoggingEnabled bool
-	ErrorHandler   func(context.Context, string, error)
+	// ErrorHandler 任务最终失败回调；可能并发调用，nil 使用默认错误日志。
+	ErrorHandler func(context.Context, string, error)
 }
 
 // ManagerOption 调整 Spec 中所有任务共享的运行策略。
@@ -72,12 +77,19 @@ func WithErrorHandler(handler func(ctx context.Context, name string, err error))
 type CronOption func(*cronOptions)
 
 type cronOptions struct {
-	runImmediately       bool
-	runImmediatelySet    bool
-	concurrentPolicySet  bool
-	maxPendingRunsSet    bool
-	concurrentPolicy     ConcurrentPolicy
-	maxPendingRuns       int
+	// runImmediately 首次启动且启用时是否立即执行。
+	runImmediately bool
+	// runImmediatelySet 是否显式覆盖 Task 的立即执行设置。
+	runImmediatelySet bool
+	// concurrentPolicySet 是否显式覆盖 Task 的并发策略。
+	concurrentPolicySet bool
+	// maxPendingRunsSet 是否显式提供等待容量，区分未设置与零。
+	maxPendingRunsSet bool
+	// concurrentPolicy 本 Manager 内同名周期任务的并发策略。
+	concurrentPolicy ConcurrentPolicy
+	// maxPendingRuns Delay 等待容量；0 不等待，-1 不限制。
+	maxPendingRuns int
+	// delayOverflowHandler 等待满额时的同步通知；可能并发调用，nil 仅告警并跳过。
 	delayOverflowHandler func(context.Context, DelayOverflow) error
 }
 
@@ -106,10 +118,12 @@ func WithMaxPendingRuns(limit int) CronOption {
 }
 
 // DelayOverflow 描述被本进程 Delay 容量限制拒绝的一次 Cron 触发。
-// MaxPendingRuns 是配置的等待容量，不是全局队列长度。
 type DelayOverflow struct {
-	Name           string
-	Policy         ConcurrentPolicy
+	// Name 被拒绝触发的任务名称。
+	Name string
+	// Policy 拒绝本轮触发时采用的并发策略。
+	Policy ConcurrentPolicy
+	// MaxPendingRuns 本 Manager 内配置的等待容量，不是当前等待数或全局队列长度。
 	MaxPendingRuns int
 }
 
@@ -140,18 +154,27 @@ type Builder interface {
 
 // Spec 保存 Manager 构造前收集的任务定义和运行策略。
 type Spec struct {
-	middlewares  []Middleware
-	options      []ManagerOption
-	definitions  []definition
+	// middlewares 按登记顺序收集的共享任务中间件。
+	middlewares []Middleware
+	// options 构造 Manager 时应用的运行策略选项。
+	options []ManagerOption
+	// definitions 待编译为运行时任务的注册声明。
+	definitions []definition
+	// exitWhenDone 是否在全部 Once 任务完成后结束应用，仅允许纯 Once 任务。
 	exitWhenDone bool
 }
 
 type definition struct {
-	name     string
-	kind     kind
+	// name 本 Spec 内唯一的任务名。
+	name string
+	// kind 周期、单次或常驻任务分类。
+	kind kind
+	// schedule 周期任务的调度表达式。
 	schedule string
-	job      Task
-	cron     cronOptions
+	// job 业务提供的任务实现。
+	job Task
+	// cron 单个周期任务的显式选项。
+	cron cronOptions
 }
 
 // NewSpec 返回空的任务定义。

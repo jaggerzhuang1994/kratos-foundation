@@ -8,11 +8,15 @@ import (
 
 // FrontendVisitor generate intermediate jsonschema from protobuf
 type FrontendVisitor struct {
+	// Visitor 提供 protobuf 节点遍历的默认委托行为。
 	pgs.Visitor
 
+	// debugger 保留构造时传入的诊断接口，当前遍历逻辑未调用。
 	debugger pgs.DebuggerCommon
 
-	registry      *jsonschema.Registry
+	// registry 保存本次遍历生成的中间 Schema。
+	registry *jsonschema.Registry
+	// pluginOptions 控制可见性过滤和字段生成策略。
 	pluginOptions *proto.PluginOptions
 }
 

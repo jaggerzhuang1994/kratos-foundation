@@ -16,19 +16,22 @@ import (
 
 // samplerSnapshot 固化一次配置编译出的采样策略。
 type samplerSnapshot struct {
-	version     uint64
-	config      *config_pb.Tracing
-	sampler     tracesdk.Sampler
+	// version 已处理的配置版本，含被拒绝的版本；防止并发回退及反复编译无效配置。
+	version uint64
+	// config 最近成功编译的采样配置。
+	config *config_pb.Tracing
+	// sampler 当前有效的采样策略。
+	sampler tracesdk.Sampler
+	// description 有效策略的描述，供排障查看。
 	description string
 }
 
-// dynamicSampler 让采样策略可以在运行期替换。
-//
-// OTel 的 TracerProvider 在构造后不能更换 Sampler，因此这里插入一层间接引用，把
-// 采样决策推迟到每个 span 开始时读取，从而支持在不重启进程、不重建 provider 和
-// exporter 的情况下调整采样率。
+// dynamicSampler 在每个 span 开始时读取采样策略，支持热更新而无需重建 Provider 或 exporter。
+// OTel Provider 构造后不能替换 Sampler，因此通过此包装间接更新策略。
 type dynamicSampler struct {
-	config  *foundationconfig.HotReloadValue[config_pb.Tracing]
+	// config 追踪配置订阅，仅采样策略可热更新；exporter 和禁用状态变更需重启。
+	config *foundationconfig.HotReloadValue[config_pb.Tracing]
+	// current 原子发布的采样快照，发布后只读。
 	current atomic.Pointer[samplerSnapshot]
 }
 

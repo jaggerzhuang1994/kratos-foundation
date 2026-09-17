@@ -10,7 +10,10 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-type greetingService struct{ greetings metric.Int64Counter }
+type greetingService struct {
+	// greetings 累计问候请求次数。
+	greetings metric.Int64Counter
+}
 
 func newGreetingService(provider metrics.Provider) (*greetingService, error) {
 	counter, err := provider.Meter("minimal.business").Int64Counter("business_greetings_total")

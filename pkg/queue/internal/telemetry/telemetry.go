@@ -15,16 +15,26 @@ const instrumentationName = "github.com/jaggerzhuang1994/kratos-foundation/v2/pk
 
 // Telemetry 在对应能力启用时记录队列的 trace 和低基数 metrics。
 type Telemetry struct {
-	tracer                  trace.Tracer
-	consumerMessages        metric.Int64Counter
-	consumerDuration        metric.Float64Histogram
-	attempts                metric.Int64Counter
-	attemptDuration         metric.Float64Histogram
-	retries                 metric.Int64Counter
-	failedTasks             metric.Int64Counter
+	// tracer 创建队列投递与消费 Span。
+	tracer trace.Tracer
+	// consumerMessages 记录完成处理阶段的消息数量。
+	consumerMessages metric.Int64Counter
+	// consumerDuration 记录执行阶段耗时，含状态落库及失败通知，不含领取请求，单位为秒。
+	consumerDuration metric.Float64Histogram
+	// attempts 记录进入执行阶段的次数，含未调用 Handler 的超限或缺少处理器等情况。
+	attempts metric.Int64Counter
+	// attemptDuration 记录单次处理尝试耗时，单位为秒。
+	attemptDuration metric.Float64Histogram
+	// retries 记录已安排的重试次数。
+	retries metric.Int64Counter
+	// failedTasks 记录最终失败归档操作次数。
+	failedTasks metric.Int64Counter
+	// consumerRuntimeFailures 记录消费运行时故障次数。
 	consumerRuntimeFailures metric.Int64Counter
-	producerMessages        metric.Int64Counter
-	producerDuration        metric.Float64Histogram
+	// producerMessages 按结果记录已尝试入队的消息数，不含准备任务时即失败的请求。
+	producerMessages metric.Int64Counter
+	// producerDuration 记录投递耗时，单位为秒。
+	producerDuration metric.Float64Histogram
 }
 
 // New 在启动阶段创建固定指标，使命名错误能阻止应用以残缺观测能力启动。

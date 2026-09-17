@@ -11,11 +11,15 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// BucketConfig 是 Manager 传给具体驱动的不可变配置快照。
+// BucketConfig 是 Manager 为每次驱动构造提供的独立配置快照。
 type BucketConfig struct {
-	Name    string
-	Bucket  string
-	Domain  string
+	// Name 应用使用的逻辑 bucket 名。
+	Name string
+	// Bucket 存储服务中的实际 bucket 名。
+	Bucket string
+	// Domain 可选的绝对 HTTP(S) 公开访问地址，可带基础路径，不是签名 URL。
+	Domain string
+	// Options 驱动专属配置的独立副本，可能包含凭据，不应整体记录。
 	Options map[string]string
 }
 
@@ -24,9 +28,12 @@ type BucketConfig struct {
 type DriverFactory func(BucketConfig) (Bucket, error)
 
 type driverRegistry struct {
-	mu        sync.RWMutex
+	// mu 保护工厂注册表和冻结状态。
+	mu sync.RWMutex
+	// factories 按驱动名称保存的无状态工厂。
 	factories map[string]DriverFactory
-	frozen    bool
+	// frozen 取得快照后禁止继续注册。
+	frozen bool
 }
 
 var ossDrivers = newDriverRegistry()

@@ -37,21 +37,33 @@ const writeWait = time.Second
 const defaultWebSocketMaxMessageBytes int64 = 1 << 20
 
 type websocketClient struct {
+	// Logger 当前连接的日志入口。
 	log.Logger
 
-	request         *http.Request
-	conn            *websocket.Conn
+	// request 握手请求的派生副本，Context 脱离 HTTP 请求取消并随连接关闭取消。
+	request *http.Request
+	// conn 升级后的 WebSocket 连接，由本对象管理关闭。
+	conn *websocket.Conn
+	// maxMessageBytes 已归一化的消息字节上限，同时限制传输和解压后载荷；非正值不限制。
 	maxMessageBytes int64
-	cancel          context.CancelFunc
+	// cancel 连接结束时取消其上下文。
+	cancel context.CancelFunc
 
+	// onConnectHandler 连接建立回调。
 	onConnectHandler OnConnectHandler
+	// onMessageHandler 接收业务消息的回调。
 	onMessageHandler OnMessageHandler
-	onCloseHandler   OnCloseHandler
-	onErrorHandler   OnErrorHandler
+	// onCloseHandler 读循环退出时的关闭回调，主动 Close 不保证其已完成。
+	onCloseHandler OnCloseHandler
+	// onErrorHandler 连接异常回调。
+	onErrorHandler OnErrorHandler
 
+	// writeLock 串行化连接写入，满足底层单写者约束。
 	writeLock sync.Mutex
+	// closeOnce 确保连接关闭流程只执行一次。
 	closeOnce sync.Once
-	closeErr  error
+	// closeErr 首次关闭连接的错误结果。
+	closeErr error
 }
 
 // upgrade 依次执行应用握手校验和协议升级，再解析处理器支持的事件接口。

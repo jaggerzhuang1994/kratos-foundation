@@ -14,15 +14,24 @@ import (
 )
 
 type subscription struct {
-	id             uint64
-	observerName   string
-	targetType     string
-	key            string
-	decoder        *decoder.Decoder
-	observer       Observer
-	previous       map[string]any // 仅由单个轮询任务更新，始终指向不可变快照。
-	pendingInitial bool           // 仅由轮询任务消费，首次扫描即通知当前值。
-	canceled       bool           // 由 Manager.mu 保护。
+	// id 本 Manager 内的订阅编号，用于日志关联。
+	id uint64
+	// observerName 用于日志标识的订阅回调名称。
+	observerName string
+	// targetType 用于日志标识的解码目标类型。
+	targetType string
+	// key 订阅路径；空串表示根配置。
+	key string
+	// decoder 按订阅目标类型及默认值构造的解码器。
+	decoder *decoder.Decoder
+	// observer 接收配置值或解码错误的回调；同 Manager 串行执行，慢回调会阻塞后续通知。
+	observer Observer
+	// previous 保存上次扫描的不可变快照，即使未通知也推进，仅由轮询任务更新。
+	previous map[string]any
+	// pendingInitial 标记首次通知待发送，仅由轮询任务消费。
+	pendingInitial bool
+	// canceled 标记订阅已取消，由 Manager.mu 保护。
+	canceled bool
 }
 
 func pollInterval() (time.Duration, error) {

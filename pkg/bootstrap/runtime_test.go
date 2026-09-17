@@ -281,7 +281,7 @@ func (s *taskStore) Reserve(context.Context, time.Time, time.Duration) (*queue.R
 	if s.acknowledged {
 		return nil, s.failure
 	}
-	return &queue.Reservation{Task: &queue.Task{ID: "one", Type: "test.v1", Payload: []byte(`"test"`)}, Token: "lease", Attempts: 1}, nil
+	return &queue.Reservation{Task: &queue.Task{ID: "one", MessageVersion: "string.v1", Payload: []byte(`"test"`)}, Token: "lease", Attempts: 1}, nil
 }
 
 func (s *taskStore) Ack(context.Context, *queue.Reservation) error { s.acknowledged = true; return nil }
@@ -311,7 +311,7 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 				}
 				register = func() *bootstrap.Spec { return components.RegisterKafkaConsumer(runtime) }
 			case "queue":
-				q, err := queue.NewQueue(queue.Definition[string]{Queue: "test", MessageType: "test", Version: 1}, &taskStore{failure: failure}, queue.NewObservability(logger, tracing, metrics))
+				q, err := queue.NewQueue(queue.Definition[string]{Queue: "test", Version: 1}, &taskStore{failure: failure}, queue.NewObservability(logger, tracing, metrics))
 				if err != nil {
 					t.Fatal(err)
 				}

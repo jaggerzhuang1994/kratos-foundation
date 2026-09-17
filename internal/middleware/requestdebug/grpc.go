@@ -43,7 +43,9 @@ func StreamClient(config *config_pb.Middleware_RequestDebug) grpc.StreamClientIn
 }
 
 type serverStream struct {
+	// ServerStream 保留底层 gRPC 流的收发能力。
 	grpc.ServerStream
+	// ctx 保存应用调试策略后的流上下文，供整个流生命周期复用。
 	ctx context.Context
 }
 

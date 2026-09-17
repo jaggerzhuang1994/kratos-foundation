@@ -8,22 +8,29 @@ import (
 
 // Header 表示一个二进制队列消息 Header。
 type Header struct {
-	Key   string
+	// Key 消息头名称，不允许为空白。
+	Key string
+	// Value 消息头的二进制值。
 	Value []byte
 }
 
 // Message 是与驱动无关的队列载荷与传输元数据。
 type Message struct {
-	ID        string
-	Key       []byte
-	Body      []byte
-	Headers   []Header
+	// ID 消息标识；受管生产者为空值生成 UUID，消费时缺失则使用 Topic/分区/位点标识。
+	ID string
+	// Key Kafka 分区路由使用的消息键。
+	Key []byte
+	// Body 业务消息的二进制载荷。
+	Body []byte
+	// Headers 传输元数据，可携带追踪上下文。
+	Headers []Header
+	// Timestamp 消息时间戳；受管生产者在零值时补为当前 UTC 时间。
 	Timestamp time.Time
 }
 
 // headerCarrier 将消息 Header 暴露给 OpenTelemetry 文本传播器。
-// 它只操作已经由 Producer 复制后的消息，因此不会改写调用方持有的 Header。
 type headerCarrier struct {
+	// message 承载传播上下文；发送端传入副本供注入，消费端只提取 Header。
 	message *Message
 }
 

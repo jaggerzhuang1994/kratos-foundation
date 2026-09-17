@@ -20,18 +20,27 @@ const (
 
 func (p ConcurrentPolicy) valid() bool { return p <= SkipIfRunning }
 
-// executionGate 在热更新期间保留执行与等待计数，禁止替换中间件后丢失独占状态。
-// mu 只保护状态转移；任务、等待、日志与通知均在锁外执行。
+// executionGate 控制任务准入，并在热更新期间保留执行与等待状态。
 type executionGate struct {
-	mu       sync.Mutex
+	// mu 保护准入策略、计数及唤醒信号；任务执行、阻塞等待、日志与业务通知均在锁外。
+	mu sync.Mutex
+	// disabled 是否拒绝新的调用准入，已排队调用不重新检查。
 	disabled bool
-	policy   ConcurrentPolicy
-	limit    int
-	running  int
-	pending  int
-	changed  chan struct{}
-	name     string
-	log      moduleLog
+	// policy 后续触发使用的并发策略。
+	policy ConcurrentPolicy
+	// limit Delay 等待容量；负数表示不限制。
+	limit int
+	// running 已经准入且尚未返回的调用数。
+	running int
+	// pending 等待执行名额的调用数。
+	pending int
+	// changed 执行结束时关闭并重建，用于唤醒等待者。
+	changed chan struct{}
+	// name 受控任务名称。
+	name string
+	// log 跳过和等待满额事件的日志入口。
+	log moduleLog
+	// overflow 满额时在锁外同步调用的通知，可为 nil。
 	overflow func(context.Context, DelayOverflow) error
 }
 

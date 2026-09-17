@@ -16,7 +16,7 @@ func TestRepoConcurrentClaim(t *testing.T) {
 	repo, _ := testRepo(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "one", Type: "test", AvailableAt: now}}); err != nil {
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "one", MessageVersion: "test", AvailableAt: now}}); err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
@@ -45,7 +45,7 @@ func TestRepoCorruptPayload(t *testing.T) {
 	repo, db := testRepo(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "bad", Type: "test"}}); err != nil {
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "bad", MessageVersion: "test"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Model(&testTask{}).Where("id = ?", taskKey("bad")).Update("data", []byte("broken")).Error; err != nil {
@@ -73,7 +73,7 @@ func TestRepoClaimRejectsRecreatedTask(t *testing.T) {
 	repo, db := testRepo(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	record := &databasequeue.TaskRecord{Task: queue.Task{ID: "same", Type: "test"}}
+	record := &databasequeue.TaskRecord{Task: queue.Task{ID: "same", MessageVersion: "test"}}
 	if err := repo.Insert(ctx, record); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestRepoClaimOnlyExecutableStates(t *testing.T) {
 		{"pending", StatusPending, now, time.Time{}},
 	}
 	for _, f := range fixtures {
-		if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: f.id, Type: "test", AvailableAt: f.available}}); err != nil {
+		if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: f.id, MessageVersion: "test", AvailableAt: f.available}}); err != nil {
 			t.Fatal(err)
 		}
 		var reserved int64

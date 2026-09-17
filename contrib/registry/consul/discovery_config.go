@@ -13,7 +13,9 @@ import (
 )
 
 type discoveryConfig struct {
-	timeout    time.Duration
+	// timeout 指定一次发现查询的总超时，默认 10 秒，必须为正数。
+	timeout time.Duration
+	// datacenter 指定单数据中心或跨数据中心发现策略，默认单数据中心。
 	datacenter kratosconsul.Datacenter
 }
 

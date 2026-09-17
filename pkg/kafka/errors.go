@@ -6,6 +6,7 @@ import (
 )
 
 type permanentError struct {
+	// err 标记为不可重试的原始业务错误。
 	err error
 }
 
@@ -41,13 +42,17 @@ func IsPermanent(err error) bool {
 
 // BatchFailure 标识一次批量发布中失败的单个输入。
 type BatchFailure struct {
-	Index     int
+	// Index 失败消息在原始批次中的零基下标。
+	Index int
+	// MessageID 失败消息的标识。
 	MessageID string
-	Err       error
+	// Err 该消息发送失败的原因。
+	Err error
 }
 
 // BatchError 报告一次批量发布中的逐条失败。
 type BatchError struct {
+	// Failures 批次中失败的消息及错误，不代表整个批次均未发送。
 	Failures []BatchFailure
 }
 

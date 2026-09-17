@@ -13,8 +13,10 @@ import (
 
 // ClientFactory 根据具名连接配置创建 Kafka client；返回的 client 由调用方持有和关闭。
 type ClientFactory struct {
+	// connections 构造期复制的具名连接配置，只读使用，不随配置热更新。
 	connections map[string]connectionConfig
-	logger      kgo.Logger
+	// logger 供 Kafka 客户端使用的日志适配器。
+	logger kgo.Logger
 }
 
 // NewClientFactory 在启动阶段校验并索引全部连接，使运行期建连不再重复解析配置。

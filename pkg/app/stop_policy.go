@@ -13,15 +13,20 @@ import (
 )
 
 type stopTimeoutSnapshot struct {
+	// version 记录已处理的配置版本，非法更新也会推进版本。
 	version uint64
+	// timeout 保存最近一次校验通过的停机预算。
 	timeout time.Duration
 }
 
-// StopPolicy 读取热更新超时，并保留最近一次校验通过的预算。
+// StopPolicy 为应用提供经校验的热更新停机预算。
 type StopPolicy struct {
-	value        *foundationconfig.HotReloadValue[durationpb.Duration]
+	// value 持有停机超时订阅，构造返回的 cleanup 负责取消。
+	value *foundationconfig.HotReloadValue[durationpb.Duration]
+	// currentValue 原子保存已处理版本和有效预算，防止旧版本覆盖新值。
 	currentValue atomic.Pointer[stopTimeoutSnapshot]
-	logger       stopPolicyLogger
+	// logger 记录预算更新及非法配置拒绝结果。
+	logger stopPolicyLogger
 }
 
 // stopPolicyLogger 保留消息方法，让 Foundation 实例按当前 msgKey 输出，同时兼容外部 Kratos Logger。

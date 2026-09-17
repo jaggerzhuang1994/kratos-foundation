@@ -21,10 +21,14 @@ type formattedKey string
 // formattedField 延迟并记忆单字段格式化，策略重试时保留尚未放行的原始值。
 // 仅在当前日志调用内使用，不会交给输出端或并发共享。
 type formattedField struct {
-	value  any
+	// value 尚未格式化的原始字段值。
+	value any
+	// format 字段使用的格式化模板。
 	format string
-	text   string
-	done   bool
+	// text 首次格式化后的缓存文本。
+	text string
+	// done 标记文本已生成，避免重复调用字段格式化方法。
+	done bool
 }
 
 func (f *formattedField) String() string {
@@ -82,10 +86,14 @@ func (l *logger) currentCache() *loggerCache {
 
 // loggerCache 保存指定共享版本的不可变字段与过滤规则。
 type loggerCache struct {
+	// customVersion 构造缓存时的共享策略版本，用于检测失效。
 	customVersion uint64
-	msgKey        string
-	fields        []any
-	filterKeys    map[string]struct{}
+	// msgKey 消息正文的字段名。
+	msgKey string
+	// fields 已合并的预置及上下文字段；保留原始值和 Valuer，不是已格式化文本。
+	fields []any
+	// filterKeys 当前版本的字段过滤集合。
+	filterKeys map[string]struct{}
 }
 
 func (l *logger) expired(custom *customState) bool {

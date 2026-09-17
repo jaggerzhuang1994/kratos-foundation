@@ -19,7 +19,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	spanCtx, span := w.telemetry.Tracer().Start(parent, "queue.execute", trace.WithSpanKind(trace.SpanKindConsumer))
 	defer span.End()
 	started := time.Now()
-	handler := w.handlers[task.Type]
+	handler := w.handlers[task.MessageVersion]
 	var handlerErr error
 	cause := "handler_error"
 	switch {
@@ -29,7 +29,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		handlerErr = errors.New("queue attempts exhausted before execution")
 	case handler == nil:
 		cause = "handler_missing"
-		handlerErr = Permanent(errors.New("queue task type is not registered"))
+		handlerErr = Permanent(errors.New("queue task message version is not registered"))
 	default:
 		handlerCtx, cancel := context.WithDeadline(spanCtx, claimedAt.Add(w.config.Timeout))
 		if handlerCtx.Err() == nil {
@@ -81,7 +81,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		}
 		w.telemetry.RecordFailure(spanCtx, span, w.config.Queue, w.config.Name, failureResult)
 		if err == nil {
-			w.log.WithContext(spanCtx).Errorw("event", "task.failed", "queue", w.config.Queue, "task.id", task.ID, "reason", reason, "cause", cause, "task.type", task.Type, "attempts", reservation.Attempts)
+			w.log.WithContext(spanCtx).Errorw("event", "task.failed", "queue", w.config.Queue, "task.id", task.ID, "reason", reason, "cause", cause, "task.message_version", task.MessageVersion, "attempts", reservation.Attempts)
 			w.notifyFailure(spanCtx, FailureEvent{Queue: w.config.Queue, FailedTask: FailedTask{Task: task.Clone(), Attempts: reservation.Attempts, Reason: reason, FailedAt: failedAt}, Cause: cause, MaxAttempts: w.retry.MaxAttempts})
 		}
 	default:
@@ -93,7 +93,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		err = w.store.Release(operationCtx, reservation, time.Now().UTC().Add(delay))
 		if err == nil {
 			w.telemetry.RecordRetry(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts)
-			w.log.WithContext(spanCtx).Warnw("event", "retry.scheduled", "queue", w.config.Queue, "task.id", task.ID, "task.type", task.Type, "cause", cause, "attempts", reservation.Attempts, "retry_after", delay)
+			w.log.WithContext(spanCtx).Warnw("event", "retry.scheduled", "queue", w.config.Queue, "task.id", task.ID, "task.message_version", task.MessageVersion, "cause", cause, "attempts", reservation.Attempts, "retry_after", delay)
 		}
 	}
 	if err != nil {
@@ -117,13 +117,16 @@ func invokeHandler(ctx context.Context, handler taskHandler, task *Task) (err er
 	return handler(ctx, task.Clone())
 }
 
-// FailureEvent 表示已成功归档的最终失败，包含独立任务副本。
-// Cause 是受控分类，Reason 沿用 Store 分类；坏消息可能不能解码为业务类型。
+// FailureEvent 表示已成功归档的最终失败；坏消息可能不能解码为业务类型。
 // 普通回调不保证崩溃时必达，可靠通知须另用持久化事件或可靠任务。
 type FailureEvent struct {
+	// FailedTask 嵌入归档信息及独立任务副本。
 	FailedTask
-	Queue       string
-	Cause       string
+	// Queue 为失败任务所属逻辑队列。
+	Queue string
+	// Cause 为执行失败的受控分类，区别于存储层 Reason。
+	Cause string
+	// MaxAttempts 为该 Worker 的领取次数上限。
 	MaxAttempts int
 }
 

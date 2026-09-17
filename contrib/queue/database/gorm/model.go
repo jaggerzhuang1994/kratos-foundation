@@ -27,12 +27,11 @@ const (
 )
 
 // Model 是队列管理的存储字段。业务须按值匿名嵌入，不得覆盖字段、列名或添加软删除。
-// 不定义 TableName；表名由业务模型提供。ID 是任务 ID 的十六进制编码，避免数据库
-// 大小写、音调和尾随空格排序规则改变任务唯一性。Identity 隔离删除后重新插入的同 ID。
+// 不定义 TableName；表名由业务模型提供。
 // 联合索引分别覆盖失败列表的筛选/排序与统计列；composite 按实际表名生成，避免多表迁移冲突。
-// Status 随失败/租约字段一起更新；CompletedAt 是确认完成时的 UTC Unix 毫秒，未完成为 0。
 type Model struct {
-	// ID 是 Task.ID 的十六进制编码主键；保留的完成记录继续占用该 ID，防止重复入队。
+	// ID 是 Task.ID 的十六进制编码主键，避免排序规则改变大小写、音调或尾随空格的唯一性。
+	// 保留的完成记录继续占用该 ID，防止重复入队。
 	ID string `gorm:"column:id;primaryKey;size:256;index:,composite:queue_failed,priority:3"`
 	// Identity 在每次插入时生成，用于区分删除后重新入队的同 ID，避免旧领取快照误更新新记录。
 	Identity string `gorm:"column:identity;size:36;not null"`
@@ -40,7 +39,7 @@ type Model struct {
 	Data []byte `gorm:"column:data;not null"`
 	// Attempts 是本轮累计领取次数，包含过期重领；人工 Retry 时清零。
 	Attempts int `gorm:"column:attempts;not null"`
-	// Token 是当前领取凭据，用于确认、释放及失败写入的所有权校验；无租约时为空。
+	// Token 是当前领取凭据，确认、释放及失败写入须匹配；到期未重领时仍可使用，释放后为空。
 	Token string `gorm:"column:token;size:36;not null"`
 	// AvailableAt 是最早可执行时间的 UTC Unix 毫秒；写入时向上取整，释放或人工 Retry 时更新。
 	AvailableAt int64 `gorm:"column:available_at;not null;index;index:,composite:queue_stats,priority:3"`
@@ -83,7 +82,7 @@ func (m *Model) record() (*databasequeue.TaskRecord, error) {
 	if err := json.Unmarshal(m.Data, &task); err != nil {
 		return nil, errors.New("decode queue task: invalid stored payload")
 	}
-	if strings.TrimSpace(task.Type) == "" || strings.TrimSpace(task.ID) == "" || len(task.ID) > 128 || taskKey(task.ID) != m.ID || m.Identity == "" || m.Attempts < 0 {
+	if strings.TrimSpace(task.MessageVersion) == "" || strings.TrimSpace(task.ID) == "" || len(task.ID) > 128 || taskKey(task.ID) != m.ID || m.Identity == "" || m.Attempts < 0 {
 		return nil, errors.New("decode queue task: invalid stored state")
 	}
 	task.AvailableAt = time.UnixMilli(m.AvailableAt).UTC()

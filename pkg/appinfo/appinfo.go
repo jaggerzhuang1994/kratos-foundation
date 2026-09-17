@@ -31,9 +31,13 @@ type AppInfo interface {
 }
 
 type info struct {
-	id       string
-	name     string
-	version  string
+	// id 为主机名与 UUID 组成的进程实例标识。
+	id string
+	// name 为进程可执行文件名称。
+	name string
+	// version 保存构造时注入的应用版本。
+	version string
+	// metadata 为构造时固化的环境信息，访问时返回副本。
 	metadata map[string]string
 }
 

@@ -102,19 +102,29 @@ func NewManager(sources Sources) (Manager, func(), error) {
 	}, nil
 }
 
-// manager 持有最近一次完整扫描快照；来源加载和合并仍由官方 Config 管理。
+// manager 管理配置扫描与订阅通知。
 type manager struct {
-	backend   kratosconfig.Config
-	sources   []*preprocessedSource
-	mu        sync.Mutex
-	closed    bool
-	snapshot  map[string]any
-	subs      []*subscription
-	cancel    context.CancelFunc
+	// backend 合并和加载配置的 Kratos 后端。
+	backend kratosconfig.Config
+	// sources 经过复制及模板预处理的来源，由 Manager 负责停止。
+	sources []*preprocessedSource
+	// mu 保护关闭状态、订阅集合及共享快照。
+	mu sync.Mutex
+	// closed 是否已关闭，阻止后续加载和订阅。
+	closed bool
+	// snapshot 最近一次轮询发布的不可变配置树。
+	snapshot map[string]any
+	// subs 已登记的配置订阅。
+	subs []*subscription
+	// cancel 请求轮询任务退出；关闭不等待已开始的业务回调。
+	cancel context.CancelFunc
+	// closeOnce 确保关闭流程只执行一次。
 	closeOnce sync.Once
-	closeErr  error
+	// closeErr 关闭流程的结果，供重复关闭返回。
+	closeErr error
 
-	nextSubscriptionID uint64 // 由 mu 保护，仅用于本 Manager 内的日志关联。
+	// nextSubscriptionID 为本 Manager 分配日志关联编号，由 mu 保护。
+	nextSubscriptionID uint64
 }
 
 func newManager(sources Sources) (*manager, error) {

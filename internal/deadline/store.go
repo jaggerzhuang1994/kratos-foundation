@@ -13,21 +13,24 @@ import (
 type Config = *config_pb.Middleware_Deadline
 
 type compiledPolicy struct {
+	// defaults 保存未命中路由时使用的默认策略。
 	defaults policy
-	paths    map[string]policy
+	// paths 按完整操作名保存精确匹配策略，优先于前缀规则。
+	paths map[string]policy
+	// prefixes 保存最长前缀匹配索引；无前缀规则时为 nil。
 	prefixes *prefixIndex
 }
 
 type routePolicy struct {
+	// prefix 指定待编译的路由前缀。
 	prefix string
+	// policy 保存该路由继承默认值后的完整策略。
 	policy policy
 }
 
-// Store 保存按路由选择的 Deadline 策略快照。
-//
-// Update 先完整编译新配置，再原子替换快照。Derive 的调用方无需加锁，且一次请求
-// 只会取得一个完整版本。
+// Store 编译并发布按路由选择的 Deadline 策略，更新失败时保留旧配置。
 type Store struct {
+	// current 原子发布完整只读策略快照，单次请求只读取一个版本。
 	current atomic.Pointer[compiledPolicy]
 }
 

@@ -18,7 +18,7 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "completed", Type: "job", AvailableAt: now.Add(-time.Hour)}}); err != nil {
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "completed", MessageVersion: "job", AvailableAt: now.Add(-time.Hour)}}); err != nil {
 		t.Fatal(err)
 	}
 	record, err := repo.Claim(ctx, now, now.Add(time.Minute), "complete")
@@ -44,7 +44,7 @@ func TestStats(t *testing.T) {
 		{"scheduled", now.Add(time.Second), time.Time{}, false},
 		{"failed", now.Add(-4 * time.Minute), time.Time{}, true},
 	} {
-		err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: item.name, Type: "job", AvailableAt: item.at}, ReservedUntil: item.until, Failed: item.failed})
+		err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: item.name, MessageVersion: "job", AvailableAt: item.at}, ReservedUntil: item.until, Failed: item.failed})
 		if err != nil {
 			t.Fatal(err)
 		}

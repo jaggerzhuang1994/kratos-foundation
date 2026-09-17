@@ -45,22 +45,32 @@ type GRPCBuilder interface {
 
 // Spec 保存业务 HTTP、gRPC 和独立健康检查声明，仅在组装前串行修改。
 type Spec struct {
-	http   httpSpec
-	grpc   grpcSpec
+	// http 构造期收集的 HTTP 注册信息。
+	http httpSpec
+	// grpc 构造期收集的 gRPC 注册信息。
+	grpc grpcSpec
+	// health 构造期收集的就绪检查。
 	health HealthBuilder
 }
 
 type httpSpec struct {
+	// middlewares 业务声明的 HTTP 中间件及优先级。
 	middlewares []MiddlewareSpec
-	options     []http.ServerOption
-	endpoints   []HTTPEndpoint
-	websockets  []websocketEndpoint
+	// options 传给 HTTP 服务构造函数的选项。
+	options []http.ServerOption
+	// endpoints HTTP 路由注册回调。
+	endpoints []HTTPEndpoint
+	// websockets WebSocket 路由与处理配置。
+	websockets []websocketEndpoint
 }
 
 type grpcSpec struct {
+	// middlewares 业务声明的 gRPC 中间件及优先级。
 	middlewares []MiddlewareSpec
-	options     []grpc.ServerOption
-	services    []GRPCService
+	// options 传给 gRPC 服务构造函数的选项。
+	options []grpc.ServerOption
+	// services gRPC 服务注册回调。
+	services []GRPCService
 }
 
 // WebSocketConfig 控制单个端点的握手与接收限制，构造时读取，不热更新。
@@ -72,10 +82,14 @@ type WebSocketConfig struct {
 }
 
 type websocketEndpoint struct {
+	// maxMessageBytes 单条消息字节上限；0 使用 1 MiB，-1 不限制，覆盖传输及解压后载荷。
 	maxMessageBytes int64
-	path            string
-	handler         any
-	upgrader        []Upgrader
+	// path WebSocket 握手路由路径，须以 / 开头且不可重复。
+	path string
+	// handler 非 nil 业务对象，须至少实现一种受支持的 WebSocket 回调接口。
+	handler any
+	// upgrader 可选握手升级器，最多一个；省略时采用默认升级器。
+	upgrader []Upgrader
 }
 
 // NewSpec 返回一个空服务定义；零值 Spec 也可以安全使用。
@@ -246,6 +260,7 @@ func (s *Spec) Health() *HealthBuilder { return &s.health }
 
 // HealthBuilder 在组装阶段串行声明关键依赖检查，不配置业务 HTTP。
 type HealthBuilder struct {
+	// checks 按注册顺序执行的关键依赖就绪检查。
 	checks []ReadinessCheck
 }
 

@@ -9,13 +9,18 @@ import (
 	"github.com/compose-spec/compose-go/v2/template"
 )
 
-// preprocessedSource 不改变来源格式与合并语义，只复制并展开业务源模板。
-// watcher 在构造完成前记录，之后只读；停止由 Manager 的 closeOnce 串行驱动。
+// preprocessedSource 复制并展开业务源模板，保留来源格式与合并语义。
+// 停止由 Manager 的 closeOnce 串行驱动。
 type preprocessedSource struct {
-	source  Source
-	expand  bool
+	// source 原始配置来源。
+	source Source
+	// expand 是否展开配置键与内容中的环境变量模板。
+	expand bool
+	// watcher 原始来源的监听器，构造阶段绑定后只读。
 	watcher Watcher
-	once    sync.Once
+	// once 确保监听器只停止一次。
+	once sync.Once
+	// stopErr 首次停止监听器的结果，供重复调用返回。
 	stopErr error
 }
 
@@ -72,7 +77,10 @@ func (s *preprocessedSource) stop() error {
 	return s.stopErr
 }
 
-type preprocessedWatcher struct{ source *preprocessedSource }
+type preprocessedWatcher struct {
+	// source 统一执行配置预处理并负责监听器的幂等停止。
+	source *preprocessedSource
+}
 
 func (w *preprocessedWatcher) Next() ([]*KeyValue, error) {
 	values, err := w.source.watcher.Next()

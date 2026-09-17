@@ -2,9 +2,12 @@ package log
 
 // outputChange 保存锁外准备的候选和资源复用关系。
 type outputChange struct {
-	owner          *outputLogger
+	// owner 需要切换输出代的实例入口。
+	owner *outputLogger
+	// previous、next 切换前后的输出代，用于提交或回滚资源准备。
 	previous, next *preparedOutput
-	reused         bool
+	// reused 新代是否复用前代文件，决定是否释放旧文件。
+	reused bool
 }
 
 // applyRuntimeConfig 乐观准备资源，再在统一提交边界发布；登记或策略变化时重试。

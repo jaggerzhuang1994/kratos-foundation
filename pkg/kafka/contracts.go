@@ -7,10 +7,12 @@ import (
 // Handler 在 Consumer 提供的 Context 中处理一条消息。
 type Handler func(context.Context, *Message) error
 
-// Delivery 携带已解码消息或驱动解码错误，使损坏记录仍能进入统一失败或死信流程。
+// Delivery 将驱动投递结果交给统一处理流程，包括损坏记录。
 type Delivery struct {
+	// Message 解码后的消息；解码失败时可能为 nil。
 	Message *Message
-	Err     error
+	// Err 本次投递的解码错误，可进入失败或死信流程。
+	Err error
 }
 
 // DeliveryHandler 处理一次驱动投递，包括解码失败。

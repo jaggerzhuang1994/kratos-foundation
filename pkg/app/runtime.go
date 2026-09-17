@@ -11,15 +11,19 @@ import (
 
 // serverCallbacks 仅适配 Kratos Server 接口，启动与停止行为由 App 提供。
 type serverCallbacks struct {
+	// start 执行运行时启动逻辑。
 	start func(context.Context) error
-	stop  func(context.Context) error
+	// stop 执行运行时停止逻辑。
+	stop func(context.Context) error
 }
 
 func (s *serverCallbacks) Start(ctx context.Context) error { return s.start(ctx) }
 func (s *serverCallbacks) Stop(ctx context.Context) error  { return s.stop(ctx) }
 
 type endpointServer struct {
+	// Server 提供被包装运行时的启停能力。
 	transport.Server
+	// Endpointer 保留被包装服务器的端点声明能力。
 	transport.Endpointer
 }
 

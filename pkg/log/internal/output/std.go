@@ -7,7 +7,9 @@ import (
 )
 
 type stdLogger struct {
+	// stdout 承接普通级别事件的标准输出。
 	stdout log.Logger
+	// stderr 承接错误及以上级别事件的标准错误输出。
 	stderr log.Logger
 }
 

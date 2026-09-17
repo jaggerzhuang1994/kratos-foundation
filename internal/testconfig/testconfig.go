@@ -54,13 +54,16 @@ func Empty(t testing.TB) config.Manager {
 	return manager
 }
 
-// MutableSource 是可以在测试中主动推送新快照的配置源，用于验证组件的热更新路径。
-// 静态 fixture 无法覆盖 Subscribe 分支，因此需要一个能被测试精确驱动的实现。
+// MutableSource 提供测试主动推送的配置源，用于验证组件热更新。
 type MutableSource struct {
-	key     string
+	// key 标识 fixture 的顶层配置字段。
+	key string
+	// updates 传递测试配置快照，缓冲容量为 1；多个观察器竞争消费，不广播。
 	updates chan []*kratosconfig.KeyValue
 
-	mu    sync.RWMutex
+	// mu 保护当前序列化快照的并发读写。
+	mu sync.RWMutex
+	// value 保存当前 JSON 配置正文，加载时复制后返回。
 	value []byte
 }
 
@@ -76,7 +79,7 @@ func NewMutableSource(t testing.TB, key string, value proto.Message) *MutableSou
 	}
 }
 
-// Update 推送一份新的 protobuf 快照，并阻塞直到 watcher 取走它。
+// Update 更新当前 protobuf 快照并投递通知；仅在通知缓冲已满时等待观察器消费。
 func (s *MutableSource) Update(t testing.TB, value proto.Message) {
 	t.Helper()
 	next := marshalSection(t, s.key, value)
@@ -111,9 +114,12 @@ func (s *MutableSource) keyValues(value []byte) []*kratosconfig.KeyValue {
 }
 
 type mutableWatcher struct {
+	// updates 传递测试配置快照，缓冲容量为 1；多个观察器竞争消费，不广播。
 	updates <-chan []*kratosconfig.KeyValue
-	done    chan struct{}
-	once    sync.Once
+	// done 观察器停止时关闭，唤醒等待中的 Next。
+	done chan struct{}
+	// once 保证观察器停止信号只关闭一次。
+	once sync.Once
 }
 
 // Next 等待下一次配置更新或观察器停止。

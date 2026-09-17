@@ -22,7 +22,9 @@ var (
 )
 
 type bucketDefinition struct {
+	// driver 此 bucket 选用的驱动名。
 	driver string
+	// config 创建此 bucket 所需的配置。
 	config BucketConfig
 }
 
@@ -32,15 +34,22 @@ type Manager interface {
 	BucketNames() []string
 }
 
-// manager 持有逻辑 bucket 定义、缓存实例和关闭状态。
+// manager 延迟创建并管理具名 bucket。
 type manager struct {
+	// definitions 构造期固定的逻辑 bucket 定义，不随配置热更新。
 	definitions map[string]bucketDefinition
-	drivers     map[string]DriverFactory
+	// drivers 构造时固定的驱动工厂快照。
+	drivers map[string]DriverFactory
 
-	mu       sync.Mutex
-	buckets  map[string]Bucket
-	closed   bool
-	pending  map[string]chan struct{}
+	// mu 保护实例缓存、创建通知和关闭状态。
+	mu sync.Mutex
+	// buckets 已创建的 bucket 缓存，受 mu 保护。
+	buckets map[string]Bucket
+	// closed 关闭后拒绝所有 Bucket 调用，包括已有缓存；受 mu 保护。
+	closed bool
+	// pending 各 bucket 正在创建的完成通知，受 mu 保护。
+	pending map[string]chan struct{}
+	// creating 追踪未完成的创建操作，供清理等待。
 	creating sync.WaitGroup
 }
 

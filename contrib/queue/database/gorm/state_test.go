@@ -36,7 +36,7 @@ func TestRepoLifecycle(t *testing.T) {
 			store := databasequeue.NewStore(repo)
 			ctx := context.Background()
 			now := time.Unix(1700000000, 123456)
-			task := &queue.Task{ID: "任务A ", Type: "email", Payload: []byte{0, 255}, Headers: map[string]string{"k": "v"}, AvailableAt: now}
+			task := &queue.Task{ID: "任务A ", MessageVersion: "email", Payload: []byte{0, 255}, Headers: map[string]string{"k": "v"}, AvailableAt: now}
 			if err := store.Enqueue(ctx, task); err != nil {
 				t.Fatal(err)
 			}
@@ -159,7 +159,7 @@ func TestCompleteReservedRejectsDuplicateAndFailedWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Unix(1700000000, 0).UTC()
-	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "complete", Type: "job", AvailableAt: now}}); err != nil {
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "complete", MessageVersion: "job", AvailableAt: now}}); err != nil {
 		t.Fatal(err)
 	}
 	record, err := repo.Claim(ctx, now, now.Add(time.Minute), "owner")

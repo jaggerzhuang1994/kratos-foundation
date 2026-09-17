@@ -2,12 +2,16 @@ package consul
 
 import "sync"
 
-// singleton 固定首次初始化结果；Once 同时保证其他调用看到完整结果。
+// singleton 管理进程共享的 Consul 客户端初始化结果。
 type singleton struct {
-	once     sync.Once
-	client   Client
+	// once 保证进程客户端仅初始化一次，并同步发布初始化结果。
+	once sync.Once
+	// client 保存共享客户端，调用方仅借用，不单独关闭。
+	client Client
+	// disabled 缓存首次读取的禁用状态，不支持运行时切换。
 	disabled bool
-	err      error
+	// err 缓存首次初始化错误，失败后不会重新初始化。
+	err error
 }
 
 var process singleton

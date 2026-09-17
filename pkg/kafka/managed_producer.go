@@ -23,10 +23,13 @@ var messagePropagator = propagation.NewCompositeTextMapPropagator(
 	propagation.Baggage{},
 )
 
-// Observability 定义 Producer 使用的日志、追踪和指标能力。
+// Observability 提供生产者和消费运行时的观测依赖。
 type Observability struct {
-	Logger  log.Logger
+	// Logger 记录消息处理日志。
+	Logger log.Logger
+	// Tracing 消息追踪 Provider。
 	Tracing tracing.Provider
+	// Metrics 消息指标 Provider。
 	Metrics metrics.Provider
 }
 
@@ -44,10 +47,14 @@ func NewManagedProducer(name string, producer Producer, observability Observabil
 }
 
 type managedProducer struct {
+	// Producer 被包装的底层生产者。
 	Producer
+	// destination 用于日志和指标的目标名称。
 	destination string
-	log         log.Logger
-	telemetry   *internaltelemetry.Telemetry
+	// log 受管生产者日志。
+	log log.Logger
+	// telemetry 发送消息的追踪及指标。
+	telemetry *internaltelemetry.Telemetry
 }
 
 // newManagedProducer 复用已创建的观测对象，避免 Manager 兼容路径重复构建指标或递归包装。

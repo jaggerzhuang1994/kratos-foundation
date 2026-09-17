@@ -49,7 +49,9 @@ const (
 // reconnectingConnector 只重试物理建连，不拦截或重放 SQL 与事务。
 // 每次 Connect 使用独立退避次数，成功后后续建连仍从首次尝试开始。
 type reconnectingConnector struct {
+	// Connector 提供底层 MySQL 建连能力。
 	driver.Connector
+	// backoff 控制暂时连接故障的重试等待。
 	backoff reconnect.Backoff
 }
 

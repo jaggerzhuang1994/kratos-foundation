@@ -12,28 +12,39 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// ReadinessCheck 声明关键依赖检查。Check 必须响应 Context，且可以被多个探针并发调用。
+// ReadinessCheck 声明关键依赖的就绪检查。
 type ReadinessCheck struct {
-	Name  string
+	// Name 检查名称，不能为空且不得重复，用于失败定位。
+	Name string
+	// Check 依赖检查回调；须响应取消并支持并发探针调用。
 	Check func(context.Context) error
 }
 
-// healthConfig 配置默认健康端点。零值启用 /healthz、/readyz，检查总超时为一秒。
-// 路径独立于业务 PathPrefix，属于保留路径；Disable 可将路径交还业务路由。
+// healthConfig 配置默认健康端点；路径独立于业务 PathPrefix，属于保留路径。
 type healthConfig struct {
-	Disable       bool
-	Addr          string
-	LivenessPath  string
+	// Disable 是否禁用默认健康端点，禁用后将路径交还业务路由。
+	Disable bool
+	// Addr 独立健康监听地址；留空时仅在业务 HTTP 启用后复用，同址亦复用。
+	Addr string
+	// LivenessPath 存活探针路径，默认 /healthz。
+	LivenessPath string
+	// ReadinessPath 就绪探针路径，默认 /readyz。
 	ReadinessPath string
-	Timeout       time.Duration
-	Checks        []ReadinessCheck
+	// Timeout 一轮就绪检查的 Context 超时，零值使用一秒；无法强制中断不响应取消的 Check。
+	Timeout time.Duration
+	// Checks 顺序执行的依赖检查列表。
+	Checks []ReadinessCheck
 }
 
 type healthState struct {
-	config           healthConfig
+	// config 构造时复制并补齐默认值的健康检查配置。
+	config healthConfig
+	// applicationReady 应用就绪判断，启动 HTTP 前绑定。
 	applicationReady func() bool
-	stopped          atomic.Bool
-	lastStatus       atomic.Int32
+	// stopped 是否进入停机阶段，用于拒绝就绪探针。
+	stopped atomic.Bool
+	// lastStatus 最近一次就绪状态码，用于只在变化时记录日志。
+	lastStatus atomic.Int32
 }
 
 func newHealthState(config healthConfig) *healthState {

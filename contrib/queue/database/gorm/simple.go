@@ -9,20 +9,26 @@ import (
 	"gorm.io/gorm"
 )
 
-// SimpleConfig 为只保存队列数据的模式指定独立物理表，不支持运行时换表。
+// SimpleConfig 配置仅保存框架队列字段的仓储。
 type SimpleConfig struct {
+	// Table 指定独立物理表名，仅允许字母或下划线开头的字母、数字、下划线组合；必填且不热更新。
 	Table string `json:"table"`
 	// RetainCompleted 保留成功任务，默认 false；与 Config 中同名字段语义一致。
 	RetainCompleted bool `json:"retain_completed"`
 }
 
-type simpleModel struct{ Model }
+type simpleModel struct {
+	// Model 提供框架管理的任务及租约字段。
+	Model
+}
 
 func (*simpleModel) TableName() string { return "queue_tasks" }
 
-// SimpleRepo 使用框架模型和工厂，保留 Repo 的事务、租约及失败管理能力。
-// 一个实例对应一张独立表；不拥有连接，构造时不自动迁移。
-type SimpleRepo struct{ *Repo[*simpleModel] }
+// SimpleRepo 使用框架模型和工厂管理一张独立队列表，构造时不自动迁移。
+type SimpleRepo struct {
+	// Repo 提供事务、租约及失败管理能力；借用业务连接，不负责关闭。
+	*Repo[*simpleModel]
+}
 
 // NewSimpleRepo 校验表名和方言，业务无需定义 Model 或 Factory。
 func NewSimpleRepo(ctx context.Context, provider ConnectionProvider, config SimpleConfig) (*SimpleRepo, error) {

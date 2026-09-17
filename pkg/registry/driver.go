@@ -12,17 +12,21 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// Resource 是同一个具名实例提供的能力；不支持的能力保持 nil。
+// Resource 表示同一注册中心实例提供的能力。
 type Resource struct {
 	// Disabled 表示整个实例显式禁用，此时不提供注册与发现能力。
-	Disabled  bool
+	Disabled bool
+	// Registrar 服务注册能力；不支持时为 nil，由工厂 cleanup 释放。
 	Registrar kratosregistry.Registrar
+	// Discovery 服务发现能力；不支持时为 nil，由工厂 cleanup 释放。
 	Discovery kratosregistry.Discovery
 }
 
 // DriverConfig 只允许读取当前实例的 options，驱动不得订阅并替换实例。
 type DriverConfig struct {
-	Name    string
+	// Name 当前注册中心实例的逻辑名称。
+	Name string
+	// manager 供驱动加载本实例配置的配置管理器。
 	manager config.Manager
 }
 
@@ -36,9 +40,12 @@ func (c DriverConfig) Load(key string, target any, defaults ...any) error {
 type DriverFactory func(DriverConfig, log.Logger) (Resource, func(), error)
 
 type driverRegistry struct {
-	mu        sync.Mutex
+	// mu 保护工厂注册表和冻结状态。
+	mu sync.Mutex
+	// factories 按驱动名称保存的无状态工厂。
 	factories map[string]DriverFactory
-	frozen    bool
+	// frozen 取得快照后禁止继续注册。
+	frozen bool
 }
 
 var drivers = driverRegistry{factories: make(map[string]DriverFactory)}

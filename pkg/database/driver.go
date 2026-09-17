@@ -15,13 +15,17 @@ import (
 
 // DriverConfig 是数据库驱动工厂创建连接所需的最小配置。
 type DriverConfig struct {
+	// Name 连接的逻辑名称。
 	Name string
-	DSN  string
+	// DSN 驱动连接串，可能包含凭据，不应写入日志。
+	DSN string
 }
 
 // DriverConnection 是数据库驱动工厂返回的 SQL 连接与 GORM 方言组合。
 type DriverConnection struct {
-	SQLDB     *sql.DB
+	// SQLDB 成功时须非 nil，由连接工厂纳管；构造失败时返回的非 nil 池也会被关闭。
+	SQLDB *sql.DB
+	// Dialector 使用 SQLDB 的 GORM 方言；成功时须非 nil。
 	Dialector gorm.Dialector
 }
 
@@ -29,9 +33,12 @@ type DriverConnection struct {
 type DriverFactory func(DriverConfig) (DriverConnection, error)
 
 type driverRegistry struct {
-	mu        sync.RWMutex
+	// mu 保护工厂注册表和冻结状态。
+	mu sync.RWMutex
+	// factories 按驱动名称保存的无状态工厂。
 	factories map[string]DriverFactory
-	frozen    bool
+	// frozen 取得快照后禁止继续注册。
+	frozen bool
 }
 
 var databaseDrivers = newDriverRegistry()

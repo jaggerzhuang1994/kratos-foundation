@@ -73,7 +73,7 @@ func (s *Store) Stats(ctx context.Context, now time.Time) (queue.Stats, error) {
 		}
 		var stored record
 		var task queue.Task
-		if json.Unmarshal([]byte(raw), &stored) != nil || json.Unmarshal([]byte(stored.Task), &task) != nil || strings.TrimSpace(task.ID) == "" || strings.TrimSpace(task.Type) == "" {
+		if json.Unmarshal([]byte(raw), &stored) != nil || json.Unmarshal([]byte(stored.Task), &task) != nil || strings.TrimSpace(task.ID) == "" || strings.TrimSpace(task.MessageVersion) == "" {
 			return queue.Stats{}, errors.New("decode redis queue stats task")
 		}
 		at := time.UnixMilli(scheduledMillis(task.AvailableAt)).UTC()

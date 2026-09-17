@@ -18,10 +18,15 @@ type protoValidationError interface {
 
 // ValidationError 是单条 protobuf 校验失败的稳定传输表示。
 type ValidationError struct {
-	Field     string
-	Reason    string
-	Cause     error
-	Key       bool
+	// Field 为校验失败的字段路径。
+	Field string
+	// Reason 描述违反的校验规则。
+	Reason string
+	// Cause 保存嵌套校验原因；JSON 传输仅保留其文本。
+	Cause error
+	// Key 为 true 时表示校验失败的是 map 键。
+	Key bool
+	// ErrorName 为生成器提供的校验错误名称。
 	ErrorName string
 }
 
@@ -57,10 +62,15 @@ func (e *ValidationError) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON 恢复校验失败，并把原因文本重建为普通错误。
 func (e *ValidationError) UnmarshalJSON(data []byte) error {
 	v := struct {
-		Field     string `json:"field"`
-		Reason    string `json:"reason"`
-		Cause     string `json:"cause"`
-		Key       bool   `json:"key"`
+		// Field 为校验失败的字段路径。
+		Field string `json:"field"`
+		// Reason 描述违反的校验规则。
+		Reason string `json:"reason"`
+		// Cause 为原因文本；非空时还原为普通错误，不恢复原始错误类型。
+		Cause string `json:"cause"`
+		// Key 为 true 时表示校验失败的是 map 键。
+		Key bool `json:"key"`
+		// ErrorName 为生成器提供的校验错误名称。
 		ErrorName string `json:"error_name"`
 	}{}
 	err := json.Unmarshal(data, &v)

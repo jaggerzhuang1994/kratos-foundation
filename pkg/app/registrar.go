@@ -21,18 +21,29 @@ func NewRegistrar(settings Config, factory *foundationregistry.Factory) (registr
 }
 
 type supervisedRegistrar struct {
+	// Registrar 执行底层服务注册和注销，资源由 Registry Factory 管理。
 	registry.Registrar
-	app     *App
+	// app 关联应用停机协调与错误收敛。
+	app *App
+	// timeout 约束注册完成后补偿注销的时长；非正值不额外设限。
 	timeout time.Duration
 
-	mu              sync.Mutex
-	registered      bool
-	deregistering   bool
-	deregistered    bool
-	deregisterDone  chan struct{}
+	// mu 保护注册、注销状态及错误。
+	mu sync.Mutex
+	// registered 标记服务已成功注册。
+	registered bool
+	// deregistering 标记注销正在执行，其他调用等待同一次操作。
+	deregistering bool
+	// deregistered 标记注销已结束，即使失败也复用其结果。
+	deregistered bool
+	// deregisterDone 在本次注销完成后关闭，唤醒并发等待者。
+	deregisterDone chan struct{}
+	// deregisterError 保存第一次注销的结果。
 	deregisterError error
-	shutdownError   error
-	instance        *registry.ServiceInstance
+	// shutdownError 保留继续清理阶段的附加停机错误。
+	shutdownError error
+	// instance 保存成功注册的实例，供注销复用。
+	instance *registry.ServiceInstance
 }
 
 // Register 执行服务注册；若注册期间已收到停止请求，则立即补偿注销并收敛应用。
@@ -161,6 +172,7 @@ var _ registry.Registrar = (*supervisedRegistrar)(nil)
 // continuingRegistrar 适配 Kratos 的停机顺序。Kratos 遇到注销错误会在取消运行时前
 // 提前返回，因此这里先保留真实错误，再向 Kratos 返回 nil 让其继续释放运行时。
 type continuingRegistrar struct {
+	// registrar 委托受监督注册器执行注册及注销。
 	registrar *supervisedRegistrar
 }
 

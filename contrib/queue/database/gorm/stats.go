@@ -13,11 +13,16 @@ import (
 // 不开启事务、不加锁、不读取载荷；连接须与消费方法一样不包含外层事务。
 func (r *Repo[T]) Stats(ctx context.Context, now time.Time) (queue.Stats, error) {
 	var row struct {
-		Ready     int64
+		// Ready 统计到期且无有效租约的可执行任务数。
+		Ready int64
+		// Scheduled 统计未来到期且无有效租约的任务数。
 		Scheduled int64
-		Running   int64
-		Failed    int64
-		Oldest    sql.NullInt64
+		// Running 统计仍持有有效租约的任务数。
+		Running int64
+		// Failed 统计归档失败任务数。
+		Failed int64
+		// Oldest 保存最早就绪时间的 Unix 毫秒值；无就绪任务时为 NULL。
+		Oldest sql.NullInt64
 	}
 	// 条件与 Claim 一致，过期租约计入 ready，尚未提交的业务写入不对采集可见。
 	query := `COALESCE(SUM(CASE WHEN failed = ? AND available_at <= ? AND (reserved_until = 0 OR reserved_until <= ?) THEN 1 ELSE 0 END), 0) AS ready,

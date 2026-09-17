@@ -21,7 +21,7 @@ import (
 
 // newRegistrar 把共享 Consul 客户端适配为 Kratos 注册实现。
 //
-// 客户端由驱动创建并拥有，调用方不单独构造此适配器。
+// 客户端由进程单例提供；驱动只管理注册心跳，不关闭共享连接。
 func newRegistrar(
 	logger log.Logger,
 	config config.Reader,
@@ -41,17 +41,23 @@ func newRegistrar(
 const requestTimeout = 10 * time.Second
 
 type registration struct {
+	// cancel 终止当前服务的后台心跳。
 	cancel context.CancelFunc
-	done   chan struct{}
+	// done 在后台心跳退出后关闭。
+	done chan struct{}
 }
 
 type registrar struct {
+	// client 借用进程共享的 Consul 客户端，不由驱动关闭。
 	client baseconsul.Client
+	// config 保存构造时解析的注册配置。
 	config registryConfig
+	// logger 记录注册与心跳异常及恢复事件。
 	logger log.Logger
 	// 生命周期操作在实例内串行化，等待可被 ctx 取消；后台心跳不访问此 map。
 	operations chan struct{}
-	services   map[string]*registration
+	// services 按服务 ID 保存已启用的心跳生命周期，访问受 operations 串行化。
+	services map[string]*registration
 }
 
 func (r *registrar) Register(ctx context.Context, service *registry.ServiceInstance) error {

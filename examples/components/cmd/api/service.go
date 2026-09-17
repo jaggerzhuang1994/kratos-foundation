@@ -17,15 +17,22 @@ import (
 )
 
 type demoStep struct {
+	// name 标识演示步骤。
 	name string
-	run  func(context.Context, string) error
+	// run 使用请求上下文和业务键执行演示步骤。
+	run func(context.Context, string) error
 }
 type demoService struct {
-	cache   *redis.Client
-	steps   []demoStep
+	// cache 借用 Redis 客户端演示缓存访问。
+	cache *redis.Client
+	// steps 保存按顺序执行的演示步骤。
+	steps []demoStep
+	// clients 提供下游服务客户端。
 	clients client.Factory
-	logger  log.Logger
-	runs    metric.Int64Counter
+	// logger 记录演示执行结果。
+	logger log.Logger
+	// runs 累计同步演示步骤全部成功的轮数，不代表异步消息已处理完成。
+	runs metric.Int64Counter
 }
 
 func newDemoService(data *dataService, storage *objectStorage, messages *messaging, clients client.Factory, logger log.Logger, provider metrics.Provider) (*demoService, error) {
@@ -38,8 +45,10 @@ func newDemoService(data *dataService, storage *objectStorage, messages *messagi
 
 func (s *demoService) register(srv server.HTTPServer) {
 	routes := []struct {
+		// method 指定 HTTP 方法，path 指定路由路径，operation 标识观测操作名。
 		method, path, operation string
-		handler                 func(context.Context, any) (any, error)
+		// handler 处理对应演示路由请求。
+		handler func(context.Context, any) (any, error)
 	}{
 		{http.MethodPost, "/demo/run", "/example.Components/Run", s.execute},
 		{http.MethodGet, "/demo/catalog", "/example.Components/Catalog", s.catalog},
@@ -103,7 +112,10 @@ func (s *demoService) execute(ctx context.Context, _ any) (any, error) {
 		return nil, err
 	}
 	defer releaseComponents()
-	for _, endpoint := range []struct{ path, operation string }{
+	for _, endpoint := range []struct {
+		// path 指定路由路径，operation 标识观测操作名。
+		path, operation string
+	}{
 		{"/demo/catalog", "/example.Components/Catalog"},
 		{"/demo/inventory", "/example.Components/Inventory"},
 	} {

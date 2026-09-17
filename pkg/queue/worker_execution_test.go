@@ -37,7 +37,7 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := &Reservation{Task: &Task{ID: "one", Type: "email", Payload: []byte("data")}, Token: "token", Attempts: tc.attempt}
+			r := &Reservation{Task: &Task{ID: "one", MessageVersion: "email", Payload: []byte("data")}, Token: "token", Attempts: tc.attempt}
 			before := time.Now()
 			if err = worker.execute(context.Background(), r, before); err != nil {
 				t.Fatal(err)
@@ -48,7 +48,7 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 			if tc.name != "success" {
 				logs := strings.Join(obs.Logger.(*testLog).events, "\n")
 				cause := map[string]string{"retry": "handler_error", "exhausted": "handler_error", "crashed repeatedly": "attempts_exhausted", "permanent": "handler_error", "unknown type": "handler_missing", "panic": "panic"}[tc.name]
-				if !strings.Contains(logs, "cause"+cause) || !strings.Contains(logs, "task.typeemail") || strings.Contains(logs, "private panic data") {
+				if !strings.Contains(logs, "cause"+cause) || !strings.Contains(logs, "task.message_versionemail") || strings.Contains(logs, "private panic data") {
 					t.Fatalf("unsafe or incomplete failure log: %s", logs)
 				}
 			}
@@ -68,7 +68,7 @@ func TestExecutionTimeoutAndCancellation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r := &Reservation{Task: &Task{ID: "one", Type: "email"}, Token: "t", Attempts: 1}
+		r := &Reservation{Task: &Task{ID: "one", MessageVersion: "email"}, Token: "t", Attempts: 1}
 		if err = worker.execute(context.Background(), r, time.Now()); err != nil || !released {
 			t.Fatalf("timeout %v released=%v", err, released)
 		}
@@ -97,7 +97,7 @@ func TestExecutionStorageFailureAndBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = w.execute(context.Background(), &Reservation{Task: &Task{Type: "x"}, Token: "t", Attempts: 2}, time.Now()); !errors.Is(err, failure) {
+	if err = w.execute(context.Background(), &Reservation{Task: &Task{MessageVersion: "x"}, Token: "t", Attempts: 2}, time.Now()); !errors.Is(err, failure) {
 		t.Fatalf("lost failure %v", err)
 	}
 }
@@ -124,7 +124,7 @@ func TestFailureNotificationAfterArchive(t *testing.T) {
 				archived = tc.archiveErr == nil
 				return tc.archiveErr
 			}}
-			q, err := buildTestWorker(Definition[string]{Queue: "q", MessageType: "m", Version: 1}, store, func(context.Context, string) error { return errors.New("temporary") }, WorkerConfig{OnFailed: func(ctx context.Context, event FailureEvent) error {
+			q, err := buildTestWorker(Definition[string]{Queue: "q", Version: 1}, store, func(context.Context, string) error { return errors.New("temporary") }, WorkerConfig{OnFailed: func(ctx context.Context, event FailureEvent) error {
 				notified = true
 				if !archived || event.Task.ID != "id" || event.Attempts != tc.attempt || event.MaxAttempts != 3 || event.FailedAt.IsZero() {
 					t.Errorf("event before archive or wrong event: %+v", event)
@@ -151,7 +151,7 @@ func TestFailureNotificationAfterArchive(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := &Reservation{Task: &Task{ID: "id", Type: "m.v1", Payload: []byte(tc.payload)}, Token: "token", Attempts: tc.attempt}
+			r := &Reservation{Task: &Task{ID: "id", MessageVersion: "string.v1", Payload: []byte(tc.payload)}, Token: "token", Attempts: tc.attempt}
 			err = q.execute(context.Background(), r, time.Now())
 			if !errors.Is(err, tc.archiveErr) || notified != archived || r.Task.ID != "id" {
 				t.Fatalf("err=%v notified=%v archived=%v task=%s", err, notified, archived, r.Task.ID)

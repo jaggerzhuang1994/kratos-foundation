@@ -6,23 +6,30 @@ import (
 	"strings"
 )
 
-// RuntimeConfig 是完整的运行期模块和输出策略。根及输出端过滤的 nil 切片继承 env，空切片清空该层。
-// 使用普通 JSON 结构保留空列表的存在性；固定字段不属于此契约。
+// RuntimeConfig 描述运行期模块和输出策略，不包含固定日志字段。
+// 使用普通 JSON 结构保留空列表的存在性。
 type RuntimeConfig struct {
 	// Level 覆盖根环境级别，并作为未显式配置输出端级别的默认值。
-	Level      *string        `json:"level,omitempty"`
-	FilterKeys []string       `json:"filter_keys"`
-	Std        *OutputPolicy  `json:"std,omitempty"`
-	File       *FilePolicy    `json:"file,omitempty"`
-	Modules    []ModulePolicy `json:"modules,omitempty"`
+	Level *string `json:"level,omitempty"`
+	// FilterKeys 根字段过滤规则；nil 继承环境配置，空切片清空本层；module 字段始终保留。
+	FilterKeys []string `json:"filter_keys"`
+	// Std 标准输出覆盖策略；nil 保留环境设置及根级别继承。
+	Std *OutputPolicy `json:"std,omitempty"`
+	// File 文件输出覆盖策略；nil 保留环境设置及根级别继承。
+	File *FilePolicy `json:"file,omitempty"`
+	// Modules 按顺序匹配的模块策略，仅首个命中项生效。
+	Modules []ModulePolicy `json:"modules,omitempty"`
 }
 
-// ModulePolicy 对首个匹配的模块应用策略；过滤规则只追加，不清除其他层。
-// Module 支持精确名称、末尾 * 前缀表达式和 * 全匹配；级别高于 WithLevel。
+// ModulePolicy 描述单个模块匹配规则的日志策略。
 type ModulePolicy struct {
-	Module     string   `json:"module"`
-	Level      *string  `json:"level,omitempty"`
-	Disable    *bool    `json:"disable,omitempty"`
+	// Module 模块名或末尾带 * 的前缀模式；* 匹配全部模块。
+	Module string `json:"module"`
+	// Level 模块级别覆盖，优先于 WithLevel；nil 保留既有级别。
+	Level *string `json:"level,omitempty"`
+	// Disable 为 true 时禁用该模块；false 或 nil 均不能解除实例整体禁用。
+	Disable *bool `json:"disable,omitempty"`
+	// FilterKeys 追加到该模块的字段过滤规则，不清除其他层规则。
 	FilterKeys []string `json:"filter_keys,omitempty"`
 }
 
@@ -44,30 +51,44 @@ func (c *RuntimeConfig) matchModule(module string) *ModulePolicy {
 	return nil
 }
 
-// OutputPolicy 覆盖标准输出策略；级别省略时先继承根 Level，其他字段继承实例启动环境。
+// OutputPolicy 覆盖标准输出策略。
 type OutputPolicy struct {
-	Level      *string  `json:"level,omitempty"`
-	Disable    *bool    `json:"disable,omitempty"`
+	// Level 标准输出级别；nil 先继承根 Level，再使用环境级别。
+	Level *string `json:"level,omitempty"`
+	// Disable 是否禁用标准输出；nil 继承启动环境。
+	Disable *bool `json:"disable,omitempty"`
+	// FilterKeys 标准输出字段过滤规则；nil 继承环境，空切片清空本层。
 	FilterKeys []string `json:"filter_keys"`
 }
 
-// FilePolicy 覆盖文件输出策略；Enable 可在启动后开启或关闭文件。
+// FilePolicy 覆盖文件输出策略。
 type FilePolicy struct {
-	Enable     *bool           `json:"enable,omitempty"`
-	Level      *string         `json:"level,omitempty"`
-	FilterKeys []string        `json:"filter_keys"`
-	Path       *string         `json:"path,omitempty"`
-	Rotating   *RotatingPolicy `json:"rotating,omitempty"`
+	// Enable 是否启用文件输出，可在启动后切换；nil 继承启动环境。
+	Enable *bool `json:"enable,omitempty"`
+	// Level 文件输出级别；nil 先继承根 Level，再使用环境级别。
+	Level *string `json:"level,omitempty"`
+	// FilterKeys 文件字段过滤规则；nil 继承环境，空切片清空本层。
+	FilterKeys []string `json:"filter_keys"`
+	// Path 日志文件路径覆盖；显式指定时不得为空。
+	Path *string `json:"path,omitempty"`
+	// Rotating 轮转参数覆盖；nil 继承启动环境。
+	Rotating *RotatingPolicy `json:"rotating,omitempty"`
 }
 
-// RotatingPolicy 覆盖文件轮转参数，未指定的字段继承启动环境。
+// RotatingPolicy 覆盖文件轮转参数。
 type RotatingPolicy struct {
-	Disable    *bool `json:"disable,omitempty"`
-	MaxSize    *int  `json:"max_size,omitempty"`
-	MaxFileAge *int  `json:"max_file_age,omitempty"`
-	MaxFiles   *int  `json:"max_files,omitempty"`
-	LocalTime  *bool `json:"local_time,omitempty"`
-	Compress   *bool `json:"compress,omitempty"`
+	// Disable 是否禁用轮转；nil 继承启动环境。
+	Disable *bool `json:"disable,omitempty"`
+	// MaxSize 轮转大小上限，单位 MB；nil 继承启动环境，启用文件及轮转时须大于 0。
+	MaxSize *int `json:"max_size,omitempty"`
+	// MaxFileAge 旧文件最长保留天数；0 不限制，nil 继承启动环境。
+	MaxFileAge *int `json:"max_file_age,omitempty"`
+	// MaxFiles 旧文件保留数量上限；0 不限制，nil 继承启动环境。
+	MaxFiles *int `json:"max_files,omitempty"`
+	// LocalTime 备份文件名是否使用本地时间；nil 继承启动环境。
+	LocalTime *bool `json:"local_time,omitempty"`
+	// Compress 是否压缩轮转文件；nil 继承启动环境。
+	Compress *bool `json:"compress,omitempty"`
 }
 
 // ValidateRuntimeConfig 校验策略语法；与各实例 env 合并后的约束在发布前校验。

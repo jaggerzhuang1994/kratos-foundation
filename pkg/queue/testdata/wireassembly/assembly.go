@@ -23,10 +23,10 @@ type typedQueues struct {
 }
 
 func newEmailQueue(stores queueStores, observability queue.Observability) (*queue.Queue[EmailMessage], error) {
-	return queue.NewQueue(queue.Definition[EmailMessage]{Queue: "mail", MessageType: "send", Version: 1}, stores.email, observability)
+	return queue.NewQueue(queue.Definition[EmailMessage]{Queue: "mail", Version: 1}, stores.email, observability)
 }
 func newBotQueue(stores queueStores, observability queue.Observability) (*queue.Queue[BotMessage], error) {
-	return queue.NewQueue(queue.Definition[BotMessage]{Queue: "bot", MessageType: "send", Version: 1}, stores.bot, observability)
+	return queue.NewQueue(queue.Definition[BotMessage]{Queue: "bot", Version: 1}, stores.bot, observability)
 }
 
 // 服务依赖投递入口，Worker 再依赖服务，构造图不形成循环。

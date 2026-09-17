@@ -8,14 +8,20 @@ import (
 // prefixIndex 是构造后只读的压缩前缀树，边按字节区分，保持 strings.HasPrefix 语义。
 // 单子节点路径压缩成一条边，查询成本取决于 operation 长度而非规则总数。
 type prefixIndex struct {
-	root           *prefixNode
+	// root 指向编译后只读的压缩前缀树根节点。
+	root *prefixNode
+	// emptyOperation 保存原始首条前缀策略，保持空操作名的既有匹配语义。
 	emptyOperation policy
 }
 
 type prefixNode struct {
-	prefix   string
-	value    policy
+	// prefix 保存当前压缩边对应的字符串片段。
+	prefix string
+	// value 保存当前前缀对应的策略，仅 hasValue 为 true 时有效。
+	value policy
+	// hasValue 区分策略节点与仅用于分支的中间节点。
 	hasValue bool
+	// children 按下一个字节索引子节点，编译后只读。
 	children map[byte]*prefixNode
 }
 

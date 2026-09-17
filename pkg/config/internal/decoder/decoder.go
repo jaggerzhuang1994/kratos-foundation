@@ -14,9 +14,12 @@ import (
 
 // Decoder 固定一次加载的 target 类型和可选默认值。
 type Decoder struct {
-	targetType  reflect.Type
+	// targetType 构造时校验的目标类型，用于创建独立解码值。
+	targetType reflect.Type
+	// defaultTree 默认值的配置树快照，用于与来源配置合并。
 	defaultTree any
-	hasDefault  bool
+	// hasDefault 是否显式提供默认值，区别于没有默认配置。
+	hasDefault bool
 }
 
 // New 校验 target，并复制可选默认值。

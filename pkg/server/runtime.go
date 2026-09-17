@@ -15,12 +15,18 @@ import (
 
 // Runtime 持有按同一份配置组装出的 HTTP、gRPC 和停机策略。
 type Runtime struct {
-	health     *healthState
+	// health 业务和管理端口共享的健康状态。
+	health *healthState
+	// management 独立管理 HTTP 服务，由应用统一启停。
 	management []HTTPServer
-	http       HTTPServer
-	grpc       GRPCServer
+	// http 业务 HTTP 服务；禁用时为 nil。
+	http HTTPServer
+	// grpc 业务 gRPC 服务；禁用时为 nil。
+	grpc GRPCServer
+	// websockets 跟踪 WebSocket 连接并协调停机的连接集合。
 	websockets *websocketHub
-	stopDelay  time.Duration
+	// stopDelay 撤销就绪状态后等待流量退出的时长。
+	stopDelay time.Duration
 }
 
 // NewRuntime 创建服务器运行时，供业务与 Wire 组装层使用。
@@ -141,14 +147,20 @@ func withStopLifecycle(
 }
 
 type stopRuntime struct {
+	// health 停机时需要撤销就绪的健康状态，可为 nil。
 	health *healthState
+	// Server 被包装并委托启停的底层服务。
 	transport.Server
-	delay      time.Duration
+	// delay 调用底层停止前的等待时长。
+	delay time.Duration
+	// beforeStop 底层停止前的附加清理回调，可为 nil。
 	beforeStop func(context.Context) error
 }
 
 type endpointStopRuntime struct {
+	// stopRuntime 附加停机策略的服务包装。
 	*stopRuntime
+	// Endpointer 保留底层服务的端点查询能力。
 	transport.Endpointer
 }
 
@@ -188,4 +200,7 @@ func (r *Runtime) ManagementServers() []transport.Server {
 }
 
 // managementRuntime 仅公开启停能力，阻止管理端口进入服务注册的 endpoint 列表。
-type managementRuntime struct{ transport.Server }
+type managementRuntime struct {
+	// Server 被委托启停的管理服务。
+	transport.Server
+}

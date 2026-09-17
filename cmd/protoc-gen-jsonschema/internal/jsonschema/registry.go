@@ -7,6 +7,7 @@ import (
 )
 
 type Registry struct {
+	// schemasByName 按 protobuf 全限定名保存中间 Schema；输出前按名称排序。
 	schemasByName SchemaMap
 }
 
@@ -61,6 +62,7 @@ type SchemaMap interface {
 }
 
 type orderedSchemaMap struct {
+	// memory 保留 Schema 键的插入顺序，保证遍历和输出稳定。
 	memory *orderedmap.OrderedMap
 }
 

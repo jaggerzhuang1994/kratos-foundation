@@ -12,15 +12,18 @@ import (
 )
 
 // Store 校验并转换任务业务契约，数据持久化和原子状态转换由 Repo 实现。
-// Store 不拥有 Repo/连接，没有表名配置、迁移入口或 cleanup。
-type Store struct{ repo Repo }
+// 不提供表名配置、迁移入口或 cleanup。
+type Store struct {
+	// repo 提供持久化与原子租约状态操作；仓储和连接均不由 Store 释放。
+	repo Repo
+}
 
 // NewStore 适配已经绑定单个队列的 Repo，构造阶段不调用 Repo。
 func NewStore(repo Repo) *Store { return &Store{repo: repo} }
 
 // Enqueue 保存独立任务快照，重复 ID 由 Repo 返回 queue.ErrDuplicate。
 func (s *Store) Enqueue(ctx context.Context, task *queue.Task) error {
-	if task == nil || strings.TrimSpace(task.ID) == "" || len(task.ID) > 128 || strings.TrimSpace(task.Type) == "" {
+	if task == nil || strings.TrimSpace(task.ID) == "" || len(task.ID) > 128 || strings.TrimSpace(task.MessageVersion) == "" {
 		return errors.New("database queue requires task id (1 to 128 bytes) and type")
 	}
 	return s.repo.Insert(ctx, &TaskRecord{Task: *task.Clone()})
@@ -38,7 +41,7 @@ func (s *Store) Reserve(ctx context.Context, now time.Time, lease time.Duration)
 		return nil, err
 	}
 	// Repo 是可替换边界；无效领取不能进入 Handler，也不能用不可信 token 改写其他记录。
-	if record.Token != token || record.Failed || record.ReservedUntil.Before(until) || record.Attempts < 1 || strings.TrimSpace(record.Task.ID) == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.Type) == "" || record.Task.AvailableAt.After(now) {
+	if record.Token != token || record.Failed || record.ReservedUntil.Before(until) || record.Attempts < 1 || strings.TrimSpace(record.Task.ID) == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.MessageVersion) == "" || record.Task.AvailableAt.After(now) {
 		return nil, errors.New("database queue repo returned an invalid claim")
 	}
 	return &queue.Reservation{Task: record.Task.Clone(), Token: token, Attempts: record.Attempts}, nil
@@ -89,7 +92,7 @@ func (s *Store) Failed(ctx context.Context, limit int) ([]queue.FailedTask, erro
 	}
 	result := make([]queue.FailedTask, 0, len(records))
 	for _, record := range records {
-		if !record.Failed || strings.TrimSpace(record.Task.ID) == "" || strings.TrimSpace(record.Task.Type) == "" {
+		if !record.Failed || strings.TrimSpace(record.Task.ID) == "" || strings.TrimSpace(record.Task.MessageVersion) == "" {
 			return nil, errors.New("database queue repo returned an invalid failure")
 		}
 		result = append(result, queue.FailedTask{Task: record.Task.Clone(), Attempts: record.Attempts, Reason: record.FailureReason, FailedAt: record.FailedAt})

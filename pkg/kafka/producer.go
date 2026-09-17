@@ -35,7 +35,9 @@ func newProducer(
 }
 
 type producer struct {
+	// client 独占的 Kafka 生产客户端，由构造返回的 cleanup 关闭。
 	client producerClient
+	// config 当前生产者的连接与 Topic 配置。
 	config ProducerConfig
 }
 

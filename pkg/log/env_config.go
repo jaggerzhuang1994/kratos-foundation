@@ -10,40 +10,60 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
-// outputConfig 描述单个日志输出端的启用、级别和字段过滤策略。
+// outputConfig 描述单个日志输出端的策略。
 type outputConfig struct {
-	Disable    bool
-	Level      kratoslog.Level
+	// Disable 是否关闭该输出端。
+	Disable bool
+	// Level 输出端最低日志级别。
+	Level kratoslog.Level
+	// FilterKeys 输出端字段过滤规则。
 	FilterKeys []string
 }
 
 // rotatingConfig 描述文件轮转策略。
 type rotatingConfig struct {
-	Disable    bool
-	MaxSize    int
+	// Disable 是否关闭文件轮转。
+	Disable bool
+	// MaxSize 单文件轮转大小上限，单位 MB；启用文件及轮转时须大于 0。
+	MaxSize int
+	// MaxFileAge 旧文件最长保留天数；0 不限制。
 	MaxFileAge int
-	MaxFiles   int
-	LocalTime  bool
-	Compress   bool
+	// MaxFiles 旧文件保留数量上限；0 不限制。
+	MaxFiles int
+	// LocalTime 备份文件名是否使用本地时间。
+	LocalTime bool
+	// Compress 是否压缩轮转后的日志文件。
+	Compress bool
 }
 
 // fileConfig 描述文件输出端及其轮转策略。
 type fileConfig struct {
+	// outputConfig 文件输出端的开关、级别与过滤规则。
 	outputConfig
-	Path     string
+	// Path 日志文件路径。
+	Path string
+	// Rotating 文件轮转与保留策略。
 	Rotating rotatingConfig
 }
 
 // envConfig 保存从 LOG_* 环境变量解析的实例启动配置。
 type envConfig struct {
-	Level       kratoslog.Level
-	Disable     bool
-	MsgKey      string
+	// Level 根日志级别。
+	Level kratoslog.Level
+	// Disable 是否整体关闭日志。
+	Disable bool
+	// MsgKey 消息正文字段名。
+	MsgKey string
+	// FilterEmpty 是否过滤空值字段。
 	FilterEmpty bool
-	FilterKeys  []string
-	TimeFormat  string
-	Std         outputConfig
-	File        fileConfig
+	// FilterKeys 根字段过滤规则。
+	FilterKeys []string
+	// TimeFormat 时间字段的 Go 格式模板。
+	TimeFormat string
+	// Std 标准输出配置。
+	Std outputConfig
+	// File 文件输出配置。
+	File fileConfig
 }
 
 const (

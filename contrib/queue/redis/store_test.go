@@ -60,7 +60,7 @@ func TestStoreKeyPrefix(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Enqueue(context.Background(), &queue.Task{ID: "id", Type: "email"}); err != nil {
+			if err := s.Enqueue(context.Background(), &queue.Task{ID: "id", MessageVersion: "email"}); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -104,7 +104,7 @@ func TestStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task := &queue.Task{ID: "id", Type: "job", Payload: []byte{0, 255}}
+	task := &queue.Task{ID: "id", MessageVersion: "job", Payload: []byte{0, 255}}
 	r := &queue.Reservation{Task: task, Token: "token"}
 	if err := s.Enqueue(ctx, nil); err == nil {
 		t.Fatal("nil accepted")
@@ -231,7 +231,7 @@ func integrationStore(t *testing.T) (*Store, context.Context) {
 func TestStoreRedisLifecycle(t *testing.T) {
 	s, ctx := integrationStore(t)
 	now := time.Unix(1700000000, 0)
-	task := &queue.Task{ID: "id", Type: "job", Payload: []byte{0, 255}, Headers: map[string]string{"trace": "test"}, AvailableAt: now.Add(time.Second), CreatedAt: now}
+	task := &queue.Task{ID: "id", MessageVersion: "job", Payload: []byte{0, 255}, Headers: map[string]string{"trace": "test"}, AvailableAt: now.Add(time.Second), CreatedAt: now}
 	if err := s.Enqueue(ctx, task); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestStoreRedisLifecycle(t *testing.T) {
 func TestStoreRedisConcurrentReserve(t *testing.T) {
 	s, ctx := integrationStore(t)
 	now := time.Unix(1700000000, 0)
-	if err := s.Enqueue(ctx, &queue.Task{ID: "one", Type: "job", AvailableAt: now}); err != nil {
+	if err := s.Enqueue(ctx, &queue.Task{ID: "one", MessageVersion: "job", AvailableAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
@@ -396,7 +396,7 @@ func TestStoreRedisPrecisionAndPayload(t *testing.T) {
 			s, ctx := integrationStore(t)
 			base := time.Unix(1700000000, 0)
 			at := base.Add(100 * time.Microsecond)
-			original := &queue.Task{ID: "精度", Type: "任务🚀", Headers: tc.headers, Payload: tc.payload, AvailableAt: at, CreatedAt: base}
+			original := &queue.Task{ID: "精度", MessageVersion: "任务🚀", Headers: tc.headers, Payload: tc.payload, AvailableAt: at, CreatedAt: base}
 			if err := s.Enqueue(ctx, original); err != nil {
 				t.Fatal(err)
 			}
@@ -413,7 +413,7 @@ func TestStoreRedisPrecisionAndPayload(t *testing.T) {
 				if err != nil || r == nil {
 					t.Fatalf("missing reservation: %v %v", r, err)
 				}
-				if r.Task.Type != original.Type || !reflect.DeepEqual(r.Task.Payload, original.Payload) || !reflect.DeepEqual(r.Task.Headers, original.Headers) {
+				if r.Task.MessageVersion != original.MessageVersion || !reflect.DeepEqual(r.Task.Payload, original.Payload) || !reflect.DeepEqual(r.Task.Headers, original.Headers) {
 					t.Fatalf("payload changed: %#v", r.Task)
 				}
 				return r
@@ -458,7 +458,7 @@ func TestStoreRedisKeyTypeFailurePreservesState(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/key%d", operation, index), func(t *testing.T) {
 				s, ctx := integrationStore(t)
 				now := time.Unix(1700000000, 0)
-				if err := s.Enqueue(ctx, &queue.Task{ID: "existing", Type: "test", AvailableAt: now}); err != nil {
+				if err := s.Enqueue(ctx, &queue.Task{ID: "existing", MessageVersion: "test", AvailableAt: now}); err != nil {
 					t.Fatal(err)
 				}
 				var r *queue.Reservation
@@ -477,7 +477,7 @@ func TestStoreRedisKeyTypeFailurePreservesState(t *testing.T) {
 				run := func() error {
 					switch operation {
 					case "enqueue":
-						return s.Enqueue(ctx, &queue.Task{ID: "new", Type: "test", AvailableAt: now})
+						return s.Enqueue(ctx, &queue.Task{ID: "new", MessageVersion: "test", AvailableAt: now})
 					case "reserve":
 						value, err := s.Reserve(ctx, now, time.Second)
 						if err == nil && (value == nil || value.Task.ID != "existing" || value.Attempts != 1) {

@@ -37,11 +37,17 @@ func WithMetrics(manager Manager, provider metrics.Provider) (Manager, error) {
 }
 
 type metricsManager struct {
+	// Manager 被包装的对象存储 Manager。
 	Manager
-	requests       metric.Int64Counter
-	duration       metric.Float64Histogram
-	bytes          metric.Int64Counter
-	streams        metric.Int64Counter
+	// requests 对象请求次数。
+	requests metric.Int64Counter
+	// duration 对象请求耗时。
+	duration metric.Float64Histogram
+	// bytes 统计实际读取字节，包括 SDK 重读；不表示远端已确认存储的大小。
+	bytes metric.Int64Counter
+	// streams 下载流结束状态计数。
+	streams metric.Int64Counter
+	// streamDuration 从 GetObject 请求开始到首次 Close 的耗时；不关闭便不产生结束样本。
 	streamDuration metric.Float64Histogram
 }
 
@@ -64,42 +70,61 @@ func (m *metricsManager) Bucket(name string) (Bucket, error) {
 	switch {
 	case hasL && hasC && hasU:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// Lister 保留底层支持的分页枚举能力。
 			Lister
+			// Copier 保留底层支持的复制能力。
 			Copier
+			// URLResolver 保留底层支持的公开 URL 解析能力。
 			URLResolver
 		}{b, l, c, u}, nil
 	case hasL && hasC:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// Lister 保留底层支持的分页枚举能力。
 			Lister
+			// Copier 保留底层支持的复制能力。
 			Copier
 		}{b, l, c}, nil
 	case hasL && hasU:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// Lister 保留底层支持的分页枚举能力。
 			Lister
+			// URLResolver 保留底层支持的公开 URL 解析能力。
 			URLResolver
 		}{b, l, u}, nil
 	case hasC && hasU:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// Copier 保留底层支持的复制能力。
 			Copier
+			// URLResolver 保留底层支持的公开 URL 解析能力。
 			URLResolver
 		}{b, c, u}, nil
 	case hasL:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// Lister 保留底层支持的分页枚举能力。
 			Lister
 		}{b, l}, nil
 	case hasC:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// Copier 保留底层支持的复制能力。
 			Copier
 		}{b, c}, nil
 	case hasU:
 		return struct {
+			// Bucket 保留带指标的基础对象操作能力。
 			Bucket
+			// URLResolver 保留底层支持的公开 URL 解析能力。
 			URLResolver
 		}{b, u}, nil
 	default:
@@ -108,9 +133,12 @@ func (m *metricsManager) Bucket(name string) (Bucket, error) {
 }
 
 type metricsBucket struct {
+	// Bucket 被包装的基础对象操作能力。
 	Bucket
+	// metrics 共享的对象存储指标。
 	metrics *metricsManager
-	name    string
+	// name 用于指标标签的逻辑 bucket 名。
+	name string
 }
 
 func (b *metricsBucket) attrs(operation string) []attribute.KeyValue {
@@ -163,7 +191,9 @@ func (b *metricsBucket) ObjectExists(ctx context.Context, key string) (bool, err
 }
 
 type metricsLister struct {
+	// bucket 提供指标及 bucket 标签的包装实例。
 	bucket *metricsBucket
+	// lister 底层对象分页枚举能力。
 	lister Lister
 }
 
@@ -175,7 +205,9 @@ func (l *metricsLister) ListObjects(ctx context.Context, o ListOptions) (ListRes
 }
 
 type metricsCopier struct {
+	// bucket 提供指标及 bucket 标签的包装实例。
 	bucket *metricsBucket
+	// copier 底层服务端复制能力。
 	copier Copier
 }
 
@@ -187,9 +219,13 @@ func (c *metricsCopier) CopyObject(ctx context.Context, source, target string, o
 }
 
 type metricsBody struct {
-	body                io.ReadCloser
-	reader              metricsReader
-	start               time.Time
+	// body 调用方须关闭的原始下载流。
+	body io.ReadCloser
+	// reader 统计实际读取字节数的包装器。
+	reader metricsReader
+	// start GetObject 请求发起时间，包含取得响应前的等待。
+	start time.Time
+	// eof、failed、closed 分别记录读到末尾、读取失败和已关闭状态，避免重复记录结束指标。
 	eof, failed, closed bool
 }
 

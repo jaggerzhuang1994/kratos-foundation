@@ -76,6 +76,7 @@ func mergeGORMConfig(base, override *config_pb.Gorm) *config_pb.Gorm {
 }
 
 type gormLoggerWriter struct {
+	// logger 接收 GORM 日志的组件日志器。
 	logger log.Logger
 }
 

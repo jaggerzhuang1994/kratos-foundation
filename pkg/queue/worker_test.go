@@ -80,7 +80,7 @@ func TestWorkerLeaseConflictAndStoredOutcome(t *testing.T) {
 					cancel()
 					return nil, context.Canceled
 				}
-				return &Reservation{Task: &Task{Type: "x"}, Token: "t", Attempts: 1}, nil
+				return &Reservation{Task: &Task{MessageVersion: "x"}, Token: "t", Attempts: 1}, nil
 			}, ack: func(context.Context, *Reservation) error {
 				if joined {
 					return errors.Join(ErrLeaseLost, failure)
@@ -108,7 +108,7 @@ func TestWorkerStopDeadline(t *testing.T) {
 		entered := make(chan struct{})
 		release := make(chan struct{})
 		store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
-			return &Reservation{Task: &Task{Type: "x"}, Token: "t", Attempts: 1}, nil
+			return &Reservation{Task: &Task{MessageVersion: "x"}, Token: "t", Attempts: 1}, nil
 		}}
 		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { close(entered); <-release; return nil }}, obs)
 		if err != nil {

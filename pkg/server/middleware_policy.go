@@ -23,20 +23,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// middlewarePolicies 持有服务端全部可热更新的中间件策略，并且是 server.middleware
-// 配置段的唯一订阅者。这里覆盖该段下的每一个字段，避免出现「字段所在配置段已被
-// 订阅、但该字段实际不生效」这种只看日志无法察觉的情况；具体某次更新只重建其中
-// 确实发生变化的项。
+// middlewarePolicies 持有全部可热更新的服务端中间件策略，是 server.middleware 的唯一订阅者。
 type middlewarePolicies struct {
-	logger       log.Logger
-	deadline     *deadline.Store
-	metadata     *dynamicMiddleware
+	// logger 中间件配置更新与失败日志入口。
+	logger log.Logger
+	// deadline 请求超时策略的动态存储。
+	deadline *deadline.Store
+	// metadata 元数据透传中间件。
+	metadata *dynamicMiddleware
+	// requestDebug 请求诊断授权中间件。
 	requestDebug *dynamicMiddleware
-	tracing      *dynamicMiddleware
-	metrics      *dynamicMiddleware
-	logging      *dynamicMiddleware
-	validator    *dynamicMiddleware
-	rateLimit    *dynamicMiddleware
+	// tracing 链路追踪中间件。
+	tracing *dynamicMiddleware
+	// metrics 指标采集中间件。
+	metrics *dynamicMiddleware
+	// logging 请求日志中间件。
+	logging *dynamicMiddleware
+	// validator 请求参数校验中间件。
+	validator *dynamicMiddleware
+	// rateLimit 请求限流中间件。
+	rateLimit *dynamicMiddleware
 
 	// current 保存最近一次生效的配置，用于判断哪些中间件真正需要重建。
 	current *config_pb.ServerMiddleware
@@ -44,13 +50,20 @@ type middlewarePolicies struct {
 
 // dynamicMiddlewares 汇总一次配置对应的全部中间件实现；字段为 nil 表示该项禁用。
 type dynamicMiddlewares struct {
-	metadata     middleware.Middleware
+	// metadata 元数据透传中间件。
+	metadata middleware.Middleware
+	// requestDebug 请求诊断授权中间件。
 	requestDebug middleware.Middleware
-	tracing      middleware.Middleware
-	metrics      middleware.Middleware
-	logging      middleware.Middleware
-	validator    middleware.Middleware
-	rateLimit    middleware.Middleware
+	// tracing 链路追踪中间件。
+	tracing middleware.Middleware
+	// metrics 指标采集中间件。
+	metrics middleware.Middleware
+	// logging 请求日志中间件。
+	logging middleware.Middleware
+	// validator 请求参数校验中间件。
+	validator middleware.Middleware
+	// rateLimit 请求限流中间件。
+	rateLimit middleware.Middleware
 }
 
 // newMiddlewarePolicies 构造全部中间件策略，并订阅 server 段以支持运行期更新。
@@ -235,17 +248,16 @@ func buildDynamicMiddlewares(
 	}, nil
 }
 
-// snapshot 固化一次配置对应的中间件实现；middleware 为 nil 表示该中间件当前禁用。
+// snapshot 固化一次配置对应的中间件实现。
 type snapshot struct {
+	// middleware 当前策略对应的中间件；nil 表示透传。
 	middleware middleware.Middleware
 }
 
-// dynamicMiddleware 持有可原子替换的中间件实现。
-//
-// 它交给 Server 的中间件会常驻调用链，由每次请求读取当前快照来决定执行实现还是
-// 直接透传。这是热更新能够生效的前提：Kratos 的中间件链在 Server 构造时就已固定，
-// 无法在运行期增删，因此「是否启用」必须下沉为运行期判断而不是构造期分支。
+// dynamicMiddleware 作为常驻入口，在每次请求时选择当前实现或透传。
+// Kratos 调用链在构造后固定，热更新通过替换快照实现。
 type dynamicMiddleware struct {
+	// current 原子发布的中间件快照，供请求无锁读取。
 	current atomic.Pointer[snapshot]
 }
 
@@ -266,7 +278,9 @@ func (p *dynamicMiddleware) Set(mw middleware.Middleware) {
 
 // wrapped 缓存某个快照针对固定 handler 包装出的结果。
 type wrapped struct {
-	source  *snapshot
+	// source 构造处理链时使用的策略快照，用于判断缓存是否过期。
+	source *snapshot
+	// handler 该快照包装业务处理器后的可执行链。
 	handler middleware.Handler
 }
 

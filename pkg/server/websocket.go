@@ -26,9 +26,12 @@ const (
 )
 
 type websocketServer struct {
-	log    log.Logger
+	// log WebSocket 服务日志入口。
+	log log.Logger
+	// router 注册握手端点的 HTTP 路由器。
 	router *http.Router
-	hub    *websocketHub
+	// hub 所属运行时共享的连接集合。
+	hub *websocketHub
 }
 
 // newWebSocketServer 把 WebSocket 路由注册与连接生命周期集中到一个服务对象。
@@ -102,10 +105,15 @@ func (s *websocketServer) Handle(path string, handler any, maxMessageBytes int64
 }
 
 type websocketHub struct {
-	mu       sync.Mutex
-	clients  map[*websocketClient]struct{}
+	// mu 保护连接集合与停机状态。
+	mu sync.Mutex
+	// clients 尚未退出的 WebSocket 连接。
+	clients map[*websocketClient]struct{}
+	// stopping 是否已开始停机，阻止登记新连接。
 	stopping bool
-	done     chan struct{}
+	// done 停机后连接全部退出的完成信号。
+	done chan struct{}
+	// doneOnce 确保完成信号只关闭一次。
 	doneOnce sync.Once
 }
 

@@ -7,8 +7,7 @@ import (
 )
 
 // TaskRecord 表示任务及其执行状态，是 Repo 与 Store 之间的业务契约。
-// Task 是完整的投递载荷；数据表、主键、序列化格式及 ORM 实体由业务 Repo 自行定义。
-// 返回的 Task.Payload/Headers 必须是独立副本，不能共享持久化层的可变缓冲区。
+// 数据表、主键、序列化格式及 ORM 实体由业务 Repo 自行定义。
 type TaskRecord struct {
 	// Task 保存完整投递载荷；AvailableAt 是当前最早执行时间，Payload/Headers 为独立副本。
 	Task queue.Task
@@ -16,7 +15,7 @@ type TaskRecord struct {
 	Attempts int
 	// Token 标识本次领取所有权；每次领取重新生成，释放、失败或保留完成记录时清空。
 	Token string
-	// ReservedUntil 是租约截止时间；零值表示无租约，到期后任务可被重新领取。
+	// ReservedUntil 是租约截止时间；零值表示无租约，到期后仍须满足非失败和执行时间条件才能重领。
 	ReservedUntil time.Time
 	// Failed 表示最终失败或损坏数据隔离；普通重试不置为 true，人工 Retry 时清除。
 	Failed bool

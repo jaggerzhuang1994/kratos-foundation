@@ -20,12 +20,18 @@ import (
 )
 
 type Module struct {
+	// ModuleBase 提供 protoc 插件构建上下文、诊断及产物登记。
 	*pgs.ModuleBase
+	// pluginOptions 保存本次生成请求解析后的插件参数。
 	pluginOptions *proto.PluginOptions
-	mergeSchema   jsonschema.Draft
+	// mergeSchema 为可选外部 Schema，合并前要求与输出方言一致。
+	mergeSchema jsonschema.Draft
 
-	optimizer  *OptimizerImpl
-	generator  *MultiDraftGenerator
+	// optimizer 清理并优化入口消息所需的 Schema 集合。
+	optimizer *OptimizerImpl
+	// generator 将中间 Schema 转换为指定方言。
+	generator *MultiDraftGenerator
+	// serializer 根据输出后缀序列化 JSON 或 YAML。
 	serializer *SerializerImpl
 }
 
@@ -64,6 +70,7 @@ func (m *Module) loadMergeSchema() {
 	}
 	m.CheckErr(err, fmt.Sprintf("failed read merge schema from %s", m.pluginOptions.Merge))
 	var detectSchema struct {
+		// Schema 用于从外部文档检测 JSON Schema 方言。
 		Schema string `json:"$schema"`
 	}
 	err = m.serializer.Unserialize(body, &detectSchema, m.pluginOptions.Merge)

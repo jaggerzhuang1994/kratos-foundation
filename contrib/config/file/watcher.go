@@ -17,7 +17,9 @@ import (
 )
 
 type fileSource struct {
+	// Source 提供底层文件读取与格式识别能力。
 	kratosconfig.Source
+	// path 保存待加载配置文件的绝对路径。
 	path string
 }
 
@@ -65,14 +67,22 @@ func (s *fileSource) Watch() (kratosconfig.Watcher, error) {
 }
 
 type fileWatcher struct {
-	source        *fileSource
+	// source 提供监听对应的配置文件加载入口。
+	source *fileSource
+	// notifications 持有文件系统监听器，由 Stop 关闭。
 	notifications *fsnotify.Watcher
-	symlink       bool
-	target        string
-	ctx           context.Context
-	cancel        context.CancelFunc
-	stopOnce      sync.Once
-	stopErr       error
+	// symlink 记录配置入口是否为符号链接，以便重绑真实目标。
+	symlink bool
+	// target 保存当前绑定的真实文件路径，重载时可更新。
+	target string
+	// ctx 控制监听与文件重建等待的生命周期。
+	ctx context.Context
+	// cancel 终止监听及重试等待。
+	cancel context.CancelFunc
+	// stopOnce 保证取消和底层监听器关闭只执行一次。
+	stopOnce sync.Once
+	// stopErr 保存首次关闭监听器的结果。
+	stopErr error
 }
 
 func (w *fileWatcher) Next() ([]*kratosconfig.KeyValue, error) {

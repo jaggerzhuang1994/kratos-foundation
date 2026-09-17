@@ -14,29 +14,29 @@ const (
 	maximumPollRecords = 10_000
 )
 
-// ProducerConfig 描述一个 Kafka Producer 使用的连接与 Topic。
+// ProducerConfig 配置 Kafka 生产者。
 type ProducerConfig struct {
-	// Connection 引用 pkg/kafka.ClientFactory 中的具名连接。
+	// Connection 必填，引用 ClientFactory 中的具名连接。
 	Connection string
-	// Topic 是 Producer 写入的 Kafka Topic。
+	// Topic 必填，指定生产者写入的 Kafka Topic。
 	Topic string
 }
 
-// ConsumerConfig 描述一个 Kafka Consumer Group 及其并发、起始位点和单次 Poll 上限。
+// ConsumerConfig 配置 Kafka 消费者。
 type ConsumerConfig struct {
-	// Connection 引用 pkg/kafka.ClientFactory 中的具名连接。
+	// Connection 必填，引用 ClientFactory 中的具名连接。
 	Connection string
-	// Topic 是 Consumer 订阅的 Kafka Topic。
+	// Topic 必填，指定消费者订阅的 Kafka Topic。
 	Topic string
-	// Group 是 Kafka Consumer Group 名称。
+	// Group 必填，指定 Kafka Consumer Group。
 	Group string
-	// Instance 是单并发实例名或多并发实例名前缀。
+	// Instance 必填；单并发时作为实例名，多并发时追加从 1 开始的槽位编号。
 	Instance string
-	// Concurrency 是每次 Consume 创建的独立 Client 数，零值为 1。
+	// Concurrency 每次 Consume 创建的独立 Client 数；零值为 1，允许 1 至 1024。
 	Concurrency int
-	// StartPosition 是新 Group 的起始位点，零值为 StartEarliest。
+	// StartPosition 无可用提交位点时的起始位置；零值为 StartEarliest，也支持 StartLatest。
 	StartPosition StartPosition
-	// MaxPollRecords 是单次 Poll 的最大记录数，零值为 1。
+	// MaxPollRecords 每个 Client 单次 Poll 的记录上限；零值为 1，允许 1 至 10000。
 	MaxPollRecords int
 }
 

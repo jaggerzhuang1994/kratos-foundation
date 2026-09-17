@@ -14,10 +14,13 @@ import (
 )
 
 // Observability 是任务投递与执行所需的日志、追踪和指标依赖。
-// 借用应用已有实例，不拥有资源；三个依赖均为必需项。
+// 三个依赖均为必需项，借用应用实例，由组装层管理生命周期。
 type Observability struct {
-	Logger  log.Logger
+	// Logger 输出队列运行日志。
+	Logger log.Logger
+	// Tracing 提供投递和消费的链路追踪。
 	Tracing tracing.Provider
+	// Metrics 提供投递和消费的指标记录。
 	Metrics metrics.Provider
 }
 
@@ -68,7 +71,9 @@ func RegisterStats(name string, source StatsProvider, provider metrics.Provider,
 		}
 		observer.ObserveInt64(success, 1, attrs)
 		for _, value := range []struct {
+			// state 为固定任务状态标签，避免使用任务 ID 等高基数值。
 			state string
+			// count 为本次快照中该状态的任务数。
 			count int64
 		}{
 			{"ready", stats.Ready}, {"scheduled", stats.Scheduled}, {"running", stats.Running}, {"failed", stats.Failed},

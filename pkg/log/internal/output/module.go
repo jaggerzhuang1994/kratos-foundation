@@ -13,7 +13,9 @@ func NewModule(logger log.Logger, module string) log.Logger {
 }
 
 type moduleLogger struct {
+	// logger 附加模块字段后的输出目标。
 	logger log.Logger
+	// module 固定模块标识；为空时采用事件最后一个有效 module，仍缺失则使用 unknown。
 	module string
 }
 

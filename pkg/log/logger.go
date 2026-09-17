@@ -63,29 +63,46 @@ type Logger interface {
 
 // logger 是绑定 sharedState 的不可变业务 Logger。
 type logger struct {
+	// shared 所有派生 Logger 共用的进程策略状态。
 	shared *sharedState
+	// config 构造时确定的实例配置，派生对象共享只读。
 	config *configState
 
-	level       *kratoslog.Level
-	filterKeys  []string
-	kv          []any
+	// level 当前派生对象的级别覆盖；nil 使用运行期根级别或实例级别，仍受模块和请求诊断策略影响。
+	level *kratoslog.Level
+	// filterKeys 当前派生对象追加的过滤规则。
+	filterKeys []string
+	// kv 当前派生对象绑定的键值字段；仅复制切片，字段值引用的对象不深拷贝。
+	kv []any
+	// callerDepth 调用栈定位深度；非正值使用默认深度。
 	callerDepth int
-	ctx         context.Context
-	module      string
+	// ctx 绑定的日志上下文，用于提取请求字段。
+	ctx context.Context
+	// module 事件所属模块，供模块策略匹配。
+	module string
 
-	mu    sync.RWMutex
+	// mu 保护本对象缓存的读取与发布。
+	mu sync.RWMutex
+	// cache 当前共享策略版本对应的只读缓存。
 	cache *loggerCache
 }
 
 // configState 是单个 Wire Logger 持有的不可变默认配置及输出，派生 Logger 复用它。
 type configState struct {
-	output      kratoslog.Logger
-	disabled    bool
-	level       kratoslog.Level
+	// output 实例借用的输出入口，由原构造方负责释放。
+	output kratoslog.Logger
+	// disabled 实例是否整体禁用日志。
+	disabled bool
+	// level 实例基础日志级别。
+	level kratoslog.Level
+	// filterEmpty 是否过滤空值字段。
 	filterEmpty bool
-	filterKeys  []string
-	timeFormat  string
-	msgKey      string
+	// filterKeys 实例基础字段过滤规则。
+	filterKeys []string
+	// timeFormat 时间字段的 Go 格式模板。
+	timeFormat string
+	// msgKey 消息正文字段名。
+	msgKey string
 }
 
 // NewLogger 读取 LOG_* 并创建独立输出；cleanup 由对应 Wire 实例持有和释放。

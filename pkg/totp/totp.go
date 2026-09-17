@@ -26,11 +26,16 @@ const (
 
 // Authenticator generates and validates TOTP codes.
 type Authenticator struct {
+	// secret 为标准化的 Base32 密钥，不应写入日志。
 	secret string
-	key    []byte
+	// key 为解码后的 HMAC 密钥字节。
+	key []byte
+	// period 为验证码时间步长，默认 30 秒，必须为正整秒。
 	period time.Duration
+	// digits 为验证码位数，支持 6 或 8，默认 6。
 	digits int
-	skew   int
+	// skew 为前后允许偏移的时间步数，默认 1，范围为 0–2。
+	skew int
 }
 
 // Option configures an Authenticator.

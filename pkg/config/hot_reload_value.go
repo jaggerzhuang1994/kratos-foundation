@@ -7,13 +7,16 @@ import (
 )
 
 type hotReloadValueWrapper[T any] struct {
-	val     *T
+	// val 最近成功解码的配置，只读且包含嵌套字段。
+	val *T
+	// version 本容器成功通知计数，包含首次回放，不是配置中心版本。
 	version uint64
 }
 
-// HotReloadValue 原子发布最近一次成功解码的配置；读取结果为共享只读快照。
+// HotReloadValue 提供可热更新的配置读取，返回共享只读快照。
 // 业务解码错误保留旧值；不报告来源健康状态。提供默认值时可从缺失 key 开始监听，后续新增配置会更新容器。
 type HotReloadValue[T any] struct {
+	// value 原子发布最近一次成功解码的配置与版本对，须经构造函数初始化。
 	value atomic.Pointer[hotReloadValueWrapper[T]]
 }
 

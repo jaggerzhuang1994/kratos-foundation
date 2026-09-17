@@ -33,7 +33,9 @@ func withRequestLifetime(lifetime context.Context, transport http.RoundTripper) 
 		// 协议升级响应可能支持双向读写；包装不能丢失底层已有的 Writer 契约。
 		if writer, ok := response.Body.(io.Writer); ok {
 			response.Body = struct {
+				// lifetimeBody 在关闭响应体时结束关联请求上下文。
 				*lifetimeBody
+				// Writer 保留原始响应体的写入能力。
 				io.Writer
 			}{body, writer}
 		} else {
@@ -44,7 +46,9 @@ func withRequestLifetime(lifetime context.Context, transport http.RoundTripper) 
 }
 
 type lifetimeBody struct {
+	// ReadCloser 原始响应体，调用方仍须显式关闭。
 	io.ReadCloser
+	// release 停止资源生命周期监听并取消请求上下文。
 	release func()
 }
 

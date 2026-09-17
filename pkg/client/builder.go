@@ -26,12 +26,18 @@ import (
 
 // builder 保存创建客户端所需的不可变依赖。
 type builder struct {
-	logger      log.Logger
-	tracing     tracing.Provider
-	metrics     metrics.Provider
+	// logger 客户端构造日志入口。
+	logger log.Logger
+	// tracing 客户端链路观测提供方。
+	tracing tracing.Provider
+	// metrics 客户端指标提供方。
+	metrics metrics.Provider
+	// discoveries 按名称解析服务发现实例的依赖。
 	discoveries DiscoveryResolver
+	// environment 构造时固定的应用环境，用于筛选服务发现节点。
 	environment string
-	hostname    string
+	// hostname 构造时固定的主机名，本地环境选址时优先同主机节点。
+	hostname string
 }
 
 // newBuilder 保存客户端构造依赖，并固定此应用的环境和主机名。

@@ -6,13 +6,15 @@ import (
 	"fmt"
 )
 
-// Execution 是一次已领取任务的处理信息，不表示向队列发布任务，也不暴露租约 Token。
-// Message 是独立解码的业务消息；Attempt 包含本次领取及执行前崩溃的领取次数，
-// 不是实际调用处理方法的次数。MaxAttempts 来自 Worker 的处理配置。
+// Execution 向 Handler 提供已领取任务的处理信息，不暴露租约 Token。
 type Execution[T any] struct {
-	ID          string
-	Message     T
-	Attempt     int
+	// ID 为正在执行的任务标识。
+	ID string
+	// Message 为独立解码的业务消息。
+	Message T
+	// Attempt 为领取次数，包含本次及执行前崩溃的领取，不等于处理函数调用次数。
+	Attempt int
+	// MaxAttempts 为 Worker 配置的领取次数上限。
 	MaxAttempts int
 }
 
@@ -27,7 +29,10 @@ type ExecutionHandler[T any] func(context.Context, Execution[T]) error
 // 装饰器在构造期调用一次；运行时实例须并发安全，并向下游传递 Context 和 Execution。
 type Middleware[T any] func(ExecutionHandler[T]) ExecutionHandler[T]
 
-type executionMetadata struct{ attempt, maxAttempts int }
+type executionMetadata struct {
+	// attempt、maxAttempts 分别为本次领取序号和领取次数上限，仅由 Worker 写入上下文。
+	attempt, maxAttempts int
+}
 type executionMetadataKey struct{}
 
 // Worker 为队列创建独立消费运行时，直接接收业务处理方法。
@@ -90,7 +95,7 @@ func (q *Queue[T]) WorkerWithExecution(handler ExecutionHandler[T], config Worke
 		}
 		return err
 	}
-	worker, err := newWorker[T](workerConfig, q.store, map[string]taskHandler{definition.taskType(): adapted}, q.observability)
+	worker, err := newWorker[T](workerConfig, q.store, map[string]taskHandler{definition.messageVersion(): adapted}, q.observability)
 	if err != nil {
 		return nil, err
 	}

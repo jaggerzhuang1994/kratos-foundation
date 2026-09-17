@@ -27,47 +27,68 @@ type Bucket interface {
 	ObjectExists(context.Context, string) (bool, error)
 }
 
-// Object 是对象元信息和需由调用方关闭的流式内容。
+// Object 表示流式下载结果。
 type Object struct {
+	// ObjectInfo 当前对象的通用元信息。
 	ObjectInfo
+	// Body 对象内容流，使用结束后须由调用方关闭。
 	Body io.ReadCloser
 }
 
 // ObjectInfo 是各厂商均可返回的通用对象元信息。
 type ObjectInfo struct {
-	Key                string
-	Size               int64
-	ETag               string
-	ContentType        string
-	ContentEncoding    string
-	CacheControl       string
+	// Key 对象在 bucket 中的键。
+	Key string
+	// Size 内容字节数；范围读取时可为返回片段大小，驱动无法获知时可为 -1。
+	Size int64
+	// ETag 服务端返回的实体标识，含义由存储服务决定。
+	ETag string
+	// ContentType 内容的 MIME 类型。
+	ContentType string
+	// ContentEncoding 内容编码。
+	ContentEncoding string
+	// CacheControl HTTP 缓存控制信息。
+	CacheControl string
+	// ContentDisposition HTTP 内容展示或下载方式。
 	ContentDisposition string
-	StorageClass       string
-	LastModified       time.Time
-	Metadata           map[string]string
+	// StorageClass 存储服务返回的存储级别。
+	StorageClass string
+	// LastModified 对象最后修改时间。
+	LastModified time.Time
+	// Metadata 对象的自定义元数据。
+	Metadata map[string]string
 }
 
-// PutOptions 描述上传内容和可移植的 HTTP 元数据。
-// Size 为 nil 表示未知；ForbidOverwrite 可用于仅创建语义。
+// PutOptions 配置对象上传。
 type PutOptions struct {
-	Size               *int64
-	ContentType        string
-	ContentEncoding    string
-	CacheControl       string
+	// Size 上传字节数；nil 表示长度未知。
+	Size *int64
+	// ContentType 上传内容的 MIME 类型。
+	ContentType string
+	// ContentEncoding 上传内容的编码。
+	ContentEncoding string
+	// CacheControl 对象的 HTTP 缓存控制信息。
+	CacheControl string
+	// ContentDisposition 对象的 HTTP 展示或下载方式。
 	ContentDisposition string
-	Metadata           map[string]string
-	ForbidOverwrite    bool
+	// Metadata 随对象保存的自定义元数据。
+	Metadata map[string]string
+	// ForbidOverwrite 为 true 时禁止覆盖已有对象。
+	ForbidOverwrite bool
 }
 
-// GetOptions 描述读取选项，Range 为 nil 时读取全部内容。
+// GetOptions 配置对象读取。
 type GetOptions struct {
+	// Range 读取字节范围；nil 表示完整读取。
 	Range *ByteRange
 }
 
-// ByteRange 是包含起止位置的字节范围；End 为 nil 表示读到末尾。
+// ByteRange 表示读取的字节区间。
 type ByteRange struct {
+	// Start 包含在结果内的起始字节偏移，应为非负数。
 	Start int64
-	End   *int64
+	// End 包含在结果内的结束偏移，不得小于 Start；nil 表示读取到末尾。
+	End *int64
 }
 
 // Lister 是支持分页枚举对象的可选能力。
@@ -75,20 +96,28 @@ type Lister interface {
 	ListObjects(context.Context, ListOptions) (ListResult, error)
 }
 
-// ListOptions 描述通用的前缀、分隔符和游标分页。
+// ListOptions 配置对象分页查询。
 type ListOptions struct {
-	Prefix    string
+	// Prefix 只列出具有此前缀的对象。
+	Prefix string
+	// Delimiter 用于归并公共前缀的分隔符。
 	Delimiter string
-	Cursor    string
-	MaxKeys   int32
+	// Cursor 上一页返回的不透明游标。
+	Cursor string
+	// MaxKeys 单页数量上限，默认和限制由驱动处理。
+	MaxKeys int32
 }
 
-// ListResult 是一页对象及下一页游标。
+// ListResult 表示一页对象查询结果。
 type ListResult struct {
-	Objects        []ObjectInfo
+	// Objects 当前页的对象元信息。
+	Objects []ObjectInfo
+	// CommonPrefixes 按分隔符归并的公共前缀。
 	CommonPrefixes []string
-	NextCursor     string
-	Truncated      bool
+	// NextCursor 请求下一页时原样传回的游标。
+	NextCursor string
+	// Truncated 是否仍有未返回的结果。
+	Truncated bool
 }
 
 // Copier 是支持服务端同 bucket 复制的可选能力。
@@ -104,7 +133,10 @@ type URLResolver interface {
 
 // CopyOptions 描述目标对象的覆盖和元数据策略。
 type CopyOptions struct {
-	Metadata        map[string]string
+	// Metadata 启用 ReplaceMetadata 时写入目标的元数据。
+	Metadata map[string]string
+	// ReplaceMetadata 是否替换元数据；false 时沿用源对象元数据。
 	ReplaceMetadata bool
+	// ForbidOverwrite 是否禁止覆盖目标已有对象。
 	ForbidOverwrite bool
 }

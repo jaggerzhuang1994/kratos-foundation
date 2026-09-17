@@ -60,7 +60,9 @@ func SetLogger(target kratoslog.Logger) func() {
 func GetLogger() kratoslog.Logger { return globalBinding.Load().target }
 
 type kratosBridge struct {
+	// target 调用方提供的原始 Logger，仅借用而不接管释放。
 	target kratoslog.Logger
+	// logger 附加 Kratos 模块身份后的实际输出入口。
 	logger kratoslog.Logger
 }
 

@@ -14,18 +14,21 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// Config 选择具名连接和业务提供的队列键前缀；两项均必填。
+// Config 指定 Redis 队列的连接和存储命名空间。
 type Config struct {
+	// Connection 指定 Manager 中已配置的连接名，不能为空。
 	Connection string
-	// KeyPrefix 原样保留，内部追加 :tasks/:ready/:delayed/:reserved/:failed。
+	// KeyPrefix 不能为空且原样保留，内部追加 :tasks/:ready/:delayed/:reserved/:failed。
 	// 同一 Redis 中相同前缀共享一个队列，独立队列必须使用不同前缀。
 	KeyPrefix string
 }
 
-// Store 借用 Manager 的 client；释放连接由 Manager 的 cleanup 负责。
+// Store 使用 Redis 脚本实现原子的入队、领取和状态转换。
 type Store struct {
+	// client 借用 Redis 连接，由 Manager 的 cleanup 关闭。
 	client *goredis.Client
-	keys   []string
+	// keys 按 Lua 脚本约定保存任务、就绪、延时、租约和失败集合键。
+	keys []string
 }
 
 var _ queue.Store = (*Store)(nil)
@@ -46,16 +49,21 @@ func NewStore(manager foundationredis.Manager, config Config) (*Store, error) {
 }
 
 type record struct {
-	Task     string `json:"task"`
-	Attempts int    `json:"attempts"`
-	Token    string `json:"token"`
-	Reason   string `json:"reason"`
-	FailedAt int64  `json:"failed_at"`
+	// Task 保存完整任务的 JSON 文本。
+	Task string `json:"task"`
+	// Attempts 记录本轮累计领取次数，人工重试时清零。
+	Attempts int `json:"attempts"`
+	// Token 标识当前租约所有者，用于状态变更校验。
+	Token string `json:"token"`
+	// Reason 保存受控失败分类，人工重试时清空，不存储处理错误原文。
+	Reason string `json:"reason"`
+	// FailedAt 保存失败归档的 Unix 毫秒时间，人工重试时清零。
+	FailedAt int64 `json:"failed_at"`
 }
 
 // Enqueue 保存任务副本，重复 ID 不覆盖待执行或失败记录。
 func (s *Store) Enqueue(ctx context.Context, task *queue.Task) error {
-	if task == nil || strings.TrimSpace(task.ID) == "" || len(task.ID) > 128 || strings.TrimSpace(task.Type) == "" {
+	if task == nil || strings.TrimSpace(task.ID) == "" || len(task.ID) > 128 || strings.TrimSpace(task.MessageVersion) == "" {
 		return errors.New("redis queue task id and type are required")
 	}
 	raw, err := json.Marshal(task)
@@ -89,7 +97,9 @@ func (s *Store) Reserve(ctx context.Context, now time.Time, lease time.Duration)
 		return nil, fmt.Errorf("reserve redis task: %w", err)
 	}
 	var result struct {
-		ID     string `json:"id"`
+		// ID 保存脚本返回的任务键，用于核对载荷中的 ID。
+		ID string `json:"id"`
+		// Record 保存脚本返回的任务及租约记录。
 		Record record `json:"record"`
 	}
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
@@ -97,7 +107,7 @@ func (s *Store) Reserve(ctx context.Context, now time.Time, lease time.Duration)
 	}
 	task := &queue.Task{}
 	reservation := &queue.Reservation{Task: task, Token: result.Record.Token, Attempts: result.Record.Attempts}
-	if err := json.Unmarshal([]byte(result.Record.Task), task); err != nil || task.ID != result.ID || task.Type == "" {
+	if err := json.Unmarshal([]byte(result.Record.Task), task); err != nil || task.ID != result.ID || task.MessageVersion == "" {
 		// 已取得租约的数据损坏时转入失败集合，保留原始数据供排障，避免不断领取。
 		task.ID = result.ID
 		failErr := s.Fail(ctx, reservation, "corrupt_payload", now)

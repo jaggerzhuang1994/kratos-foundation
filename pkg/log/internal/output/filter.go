@@ -16,10 +16,14 @@ func NewLevelFilter(logger log.Logger, level log.Level) log.Logger {
 }
 
 type filterLogger struct {
-	logger       log.Logger
-	filterKeys   map[string]struct{}
+	// logger 字段过滤后的输出目标。
+	logger log.Logger
+	// filterKeys 精确匹配的过滤字段集合。
+	filterKeys map[string]struct{}
+	// filterPrefix 按前缀匹配的过滤规则。
 	filterPrefix []string
-	filterEmpty  bool
+	// filterEmpty 是否移除 nil 或格式化为空字符串的值；不移除数字 0 和 false。
+	filterEmpty bool
 }
 
 // NewFilter 创建支持空值、精确 key 和尾部 * 前缀规则的过滤 Logger。

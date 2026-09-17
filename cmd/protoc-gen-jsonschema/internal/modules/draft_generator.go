@@ -12,7 +12,9 @@ import (
 )
 
 type MultiDraftGenerator struct {
-	module        *pgs.ModuleBase
+	// module 保留注入的插件上下文，当前方言转换未使用。
+	module *pgs.ModuleBase
+	// pluginOptions 指定目标 JSON Schema 方言。
 	pluginOptions *proto.PluginOptions
 }
 

@@ -98,8 +98,11 @@ func validateConnectionOption(name string, option connectionOption) error {
 
 	// 同类整数集中校验，防止 go-redis 把负值悄悄改成与配置意图不同的默认值。
 	integerFields := []struct {
-		field   string
-		value   int32
+		// field 用于校验错误定位的配置字段名。
+		field string
+		// value 待校验的配置值。
+		value int32
+		// minimum 允许的最小整数值。
 		minimum int32
 	}{
 		{"db", option.GetDb(), 0},
@@ -129,8 +132,11 @@ func validateConnectionOption(name string, option connectionOption) error {
 	}
 
 	durationFields := []struct {
-		field           string
-		value           *durationpb.Duration
+		// field 用于校验错误定位的配置字段名。
+		field string
+		// value 待校验的配置值。
+		value *durationpb.Duration
+		// allowedNegative 此字段允许的特殊负时长。
 		allowedNegative []time.Duration
 	}{
 		{"min_retry_backoff", option.GetMinRetryBackoff(), []time.Duration{-1}},

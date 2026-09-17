@@ -1,6 +1,6 @@
 # 类型化队列接入
 
-业务只定义消息、发送所需的小接口和处理方法。JSON、任务类型、领取次数、租约、重试、确认和启停由框架负责；Wire、驱动和 Runtime 登记仅出现在应用入口或基础设施组装层。业务不需要导入 queue、实现 Store、编写 Worker 壳或声明泛型队列身份。
+业务只定义消息、发送所需的小接口和处理方法。JSON、消息版本标识、领取次数、租约、重试、确认和启停由框架负责；Wire、驱动和 Runtime 登记仅出现在应用入口或基础设施组装层。业务不需要导入 queue、实现 Store、编写 Worker 壳或声明泛型队列身份。
 
 ## Queue 投递，Worker 消费
 
@@ -85,7 +85,7 @@ func RegisterMail(
     deliver func(context.Context, Message) error,
 ) (*queue.Queue[Message], error) {
     q, err := queue.NewQueue(queue.Definition[Message]{
-        Queue: "mail", MessageType: "send-email", Version: 1,
+        Queue: "mail", Version: 1,
         Validate: func(message Message) error {
             if message.Address == "" { return errors.New("email address is empty") }
             return nil
@@ -123,12 +123,31 @@ flowchart TD
 
 ## 契约与兼容性
 
+`Task.MessageVersion` 保存完整消息版本标识（例如 `EmailMessage.v1`），替代原 Go 字段 `Task.Type`。JSON 字段同步改为 `MessageVersion`，不兼容旧 `Type` 字段、不自动转换旧记录；消费端仍需精确匹配完整标识。Worker 日志字段同步改为 `task.message_version`，`handler_missing` 分类保持不变。
+
 - `Queue` 是观测逻辑名称，不能根据它自动选择 Redis key 或数据库表。驱动和物理隔离由组装层确定。
-- `MessageType` 必须显式声明，`Version` 为正整数，持久化 `Task.Type` 固定为 `MessageType.vVersion`，例如 `send-email.v1`，不依赖 Go 类型名。
+- `Definition` 不再提供 MessageType；消息标识在 NewQueue 构造时由 `reflect.TypeFor[T]()` 推导：逐层去掉未命名指针，遇到具名类型使用其 Name（具名指针也保留自己的名称）；名称为空时回退到 Queue。Version 为 0 默认 1，负数无效，最终 Task.MessageVersion 为 `类型名.v版本`。
+- `Definition[EmailMessage]{Queue: "mail"}` 对应 `EmailMessage.v1`，`Definition[*EmailMessage]` 相同；`Definition[[]byte]{Queue: "mail"}` 对应 `mail.v1`。依据的是静态 T，不是消息值的动态类型，因此 T=any 时也回退 Queue。类型别名沿用原类型名称，定义的新类型使用自己的名称。
+- 标识不包含包路径：不同包的同名类型可能相同；物理队列必须按契约隔离。重命名具名类型、修改 Version，或在回退场景修改 Queue 都会改变持久化标识，框架不自动转换已有任务。
 - Queue 的发布与处理共享定义；默认 `JSONCodec`，可替换 `Codec[T]`。发布校验/编码失败直接返回，不访问 Store。JSON 本身不拒绝未知字段，`null`/零值是否有效由 Validate 决定。
 - 消费解码/校验失败调用现有永久归档路径，`Reason=permanent`，`Cause=decode_error/validation_error`；未知类型或版本是 `handler_missing`。损坏 Store 外层记录仍由 Store 报错，不等于业务消息解码失败。
-- `Store` 保持底层存储契约，投递统一使用 Queue.Post/PostWith；旧的公开 Worker 构造与 Handler 表已移除。旧 `send-email` 任务不会自动变成 `send-email.v1`。部署新版本前须由旧版本应用排空，或使用独立物理队列；不能让只识别新版本的 Worker 竞争旧积压。
+- `Store` 保持底层存储契约，投递统一使用 Queue.Post/PostWith；旧的公开 Worker 构造与 Handler 表已移除。旧显式类型（例如 `send-email.v1`）不会自动变成 `EmailMessage.v1`。部署新版本前须由旧版本应用排空，或使用独立物理队列；不能让只识别新版本的 Worker 竞争旧积压。
 - 发布成功仍可能只是写入尚未提交的业务事务。网络错误也可能发生在实际提交之后。需要识别重复投递时使用 `PostWith` 的稳定 ID；默认完成后删除；GORM 开启 RetainCompleted 时，完成记录保留期间仍拒绝相同 ID，详见 [保留执行记录](../../contrib/queue/database/gorm/README.md#保留执行记录)。
+
+```mermaid
+flowchart TD
+    A([NewQueue 接收 Definition]) --> B[Version 为 0 使用 1]
+    B --> C{队列名称与版本合法?}
+    C -- 否 --> D([返回错误 不访问 Store])
+    C -- 是 --> T[反射静态 T 并去掉未命名指针]
+    T --> N{类型名称为空?}
+    N -- 是 --> Q[使用 Queue]
+    N -- 否 --> R[使用类型名称]
+    Q & R --> E[固化定义副本 Codec 为空使用 JSON]
+    E --> F([发布与 Worker 共用同一消息契约])
+```
+
+默认值解析不访问外部依赖，不新增日志或并发控制。
 
 ## 配置与投递信息
 
@@ -215,7 +234,7 @@ flowchart TD
 
 ## API 迁移
 
-旧 API 不保留别名或兼容构造。业务消息与显式 MessageType/Version 无需改名，调用方更新 provider 后须重新生成 Wire。
+旧 API 不保留别名或兼容构造。移除 Definition.MessageType，使用具名消息 T 与 Version；检查最终 Task.MessageVersion 与积压是否兼容，调用方更新 provider 后须重新生成 Wire。
 
 | 旧入口 | 当前用法 |
 | --- | --- |

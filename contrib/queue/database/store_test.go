@@ -42,7 +42,7 @@ func (r repoStub) RetryFailed(c context.Context, i string, a time.Time) error {
 func TestStoreEnqueueSnapshot(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(10, 100)
-	task := &queue.Task{ID: "A ", Type: "email", Payload: []byte("body"), Headers: map[string]string{"key": "value"}, AvailableAt: now}
+	task := &queue.Task{ID: "A ", MessageVersion: "email", Payload: []byte("body"), Headers: map[string]string{"key": "value"}, AvailableAt: now}
 	var saved *TaskRecord
 	s := NewStore(repoStub{insert: func(c context.Context, r *TaskRecord) error {
 		if c != ctx {
@@ -62,7 +62,7 @@ func TestStoreEnqueueSnapshot(t *testing.T) {
 	if string(task.Payload) != "body" || task.Headers["key"] != "value" {
 		t.Fatal("shared task")
 	}
-	for _, input := range []*queue.Task{nil, {}, {ID: " ", Type: "x"}, {ID: strings.Repeat("x", 129), Type: "x"}, {ID: "a", Type: " "}} {
+	for _, input := range []*queue.Task{nil, {}, {ID: " ", MessageVersion: "x"}, {ID: strings.Repeat("x", 129), MessageVersion: "x"}, {ID: "a", MessageVersion: " "}} {
 		if s.Enqueue(ctx, input) == nil {
 			t.Fatal("invalid task accepted")
 		}
@@ -85,7 +85,7 @@ func TestStoreClaimSnapshotAndValidation(t *testing.T) {
 		{"no attempts", func(r *TaskRecord) { r.Attempts = 0 }, false},
 		{"future task", func(r *TaskRecord) { r.Task.AvailableAt = now.Add(time.Second) }, false},
 		{"failed", func(r *TaskRecord) { r.Failed = true }, false},
-		{"invalid task", func(r *TaskRecord) { r.Task.Type = " " }, false},
+		{"invalid task", func(r *TaskRecord) { r.Task.MessageVersion = " " }, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var saved *TaskRecord
@@ -93,7 +93,7 @@ func TestStoreClaimSnapshotAndValidation(t *testing.T) {
 				if c != ctx || !n.Equal(now) || !u.Equal(until) || token == "" {
 					t.Fatal("claim args")
 				}
-				saved = &TaskRecord{Task: queue.Task{ID: "one", Type: "email", Payload: []byte("body")}, Token: token, ReservedUntil: u, Attempts: 2}
+				saved = &TaskRecord{Task: queue.Task{ID: "one", MessageVersion: "email", Payload: []byte("body")}, Token: token, ReservedUntil: u, Attempts: 2}
 				tc.change(saved)
 				return saved, nil
 			}})
@@ -189,7 +189,7 @@ func TestStoreOwnedTransitions(t *testing.T) {
 
 func TestStoreFailedSnapshots(t *testing.T) {
 	ctx := context.Background()
-	record := TaskRecord{Task: queue.Task{ID: "one", Type: "x", Payload: []byte("body")}, Failed: true, Attempts: 3, FailureReason: "permanent", FailedAt: time.Unix(20, 100)}
+	record := TaskRecord{Task: queue.Task{ID: "one", MessageVersion: "x", Payload: []byte("body")}, Failed: true, Attempts: 3, FailureReason: "permanent", FailedAt: time.Unix(20, 100)}
 	s := NewStore(repoStub{list: func(c context.Context, n int) ([]TaskRecord, error) {
 		if c != ctx || n != 1 {
 			t.Fatal("list args")
@@ -236,10 +236,10 @@ func TestStoresUseIndependentRepos(t *testing.T) {
 		return repoStub{insert: func(_ context.Context, r *TaskRecord) error { *ids = append(*ids, r.Task.ID); return nil }}
 	}
 	email, report := NewStore(newRepo(&first)), NewStore(newRepo(&second))
-	if err := email.Enqueue(context.Background(), &queue.Task{ID: "same-id", Type: "email"}); err != nil {
+	if err := email.Enqueue(context.Background(), &queue.Task{ID: "same-id", MessageVersion: "email"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := report.Enqueue(context.Background(), &queue.Task{ID: "same-id", Type: "report"}); err != nil {
+	if err := report.Enqueue(context.Background(), &queue.Task{ID: "same-id", MessageVersion: "report"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(first) != 1 || len(second) != 1 {

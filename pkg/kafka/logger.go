@@ -6,6 +6,7 @@ import (
 )
 
 type loggerAdapter struct {
+	// log 接收 Kafka 客户端日志的组件日志器。
 	log log.Logger
 }
 

@@ -72,6 +72,7 @@ func (l *disabledLogger) Fatalw(...any)         { os.Exit(1) }
 type cronLoggerContract cron.Logger
 
 type cronLogger struct {
+	// cronLog 适配 robfig/cron 日志契约的日志入口。
 	cronLog
 }
 

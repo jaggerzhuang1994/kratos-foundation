@@ -23,8 +23,11 @@ var (
 )
 
 type locker struct {
-	client        *redislock.Client
-	keyPrefix     string
+	// client 通过借用的 Redis 连接执行带所有者校验的锁操作。
+	client *redislock.Client
+	// keyPrefix 指定逻辑锁键前缀，构造默认 lock:；显式空值不划分命名空间。
+	keyPrefix string
+	// retryInterval 指定竞争失败后的重试间隔，构造默认 100ms，必须为正数。
 	retryInterval time.Duration
 }
 
@@ -162,7 +165,9 @@ func (l *locker) validate() error {
 }
 
 type lease struct {
-	key  string
+	// key 保存调用方逻辑键，不包含存储前缀。
+	key string
+	// held 保存当前租约及所有者令牌，供续期和释放校验。
 	held *redislock.Lock
 }
 
@@ -253,8 +258,11 @@ const (
 )
 
 type options struct {
-	connection    string
-	keyPrefix     string
+	// connection 选择具名 Redis 连接；空值使用默认连接。
+	connection string
+	// keyPrefix 指定逻辑锁键前缀，构造默认 lock:；显式空值不划分命名空间。
+	keyPrefix string
+	// retryInterval 指定竞争失败后的重试间隔，构造默认 100ms，必须为正数。
 	retryInterval time.Duration
 }
 

@@ -28,10 +28,14 @@ type jobMetrics interface {
 }
 
 type jobMetricsProvider struct {
-	disabled           bool
-	jobRunsTotal       metric.Int64Counter
+	// disabled 是否跳过任务指标采集。
+	disabled bool
+	// jobRunsTotal 已结束的任务执行次数，按任务名及成功/失败状态累计。
+	jobRunsTotal metric.Int64Counter
+	// jobDurationSeconds 任务执行耗时直方图，单位秒。
 	jobDurationSeconds metric.Float64Histogram
-	jobRunning         metric.Int64UpDownCounter
+	// jobRunning 当前执行中的任务数量。
+	jobRunning metric.Int64UpDownCounter
 }
 
 func newJobMetricsProvider(provider foundationmetrics.Provider, enabled bool) (jobMetrics, error) {
@@ -99,6 +103,7 @@ type jobTracing interface {
 }
 
 type jobTracingProvider struct {
+	// tracer 为任务执行创建 span 的追踪器。
 	tracer trace.Tracer
 }
 

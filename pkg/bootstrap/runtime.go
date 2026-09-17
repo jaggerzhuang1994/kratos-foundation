@@ -80,7 +80,10 @@ func NewJobBootstrap(
 }
 
 // jobRuntime 在组装边界将任务完成转换为应用正常停止，领域包无需了解 App。
-type jobRuntime struct{ *job.Manager }
+type jobRuntime struct {
+	// Manager 借用任务管理器，将任务生命周期适配为应用运行时。
+	*job.Manager
+}
 
 func (r *jobRuntime) Start(ctx context.Context) error {
 	err := r.Manager.Start(ctx)

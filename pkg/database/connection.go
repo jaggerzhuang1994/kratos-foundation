@@ -16,20 +16,29 @@ import (
 
 var errConnectionFactoryClosed = errors.New("database connection factory is closed")
 
-// connectionPool 保留指标标签所需的逻辑名，驱动名用于选择专用采集器。
+// connectionPool 记录受管 SQL 连接池及其观测标识。
 type connectionPool struct {
-	db     *sql.DB
-	name   string
+	// db 由连接工厂负责关闭的 SQL 连接池。
+	db *sql.DB
+	// name 用于指标标签的逻辑连接名。
+	name string
+	// driver 用于选择专用采集器的驱动名。
 	driver string
 }
 
 type connectionFactory struct {
-	mu          sync.Mutex
-	drivers     map[string]DriverFactory
+	// mu 保护连接登记和关闭状态。
+	mu sync.Mutex
+	// drivers 构造时固定的驱动工厂快照。
+	drivers map[string]DriverFactory
+	// connections 按连接池指针登记的受管资源，受 mu 保护。
 	connections map[*sql.DB]connectionPool
-	closed      bool
-	closeOnce   sync.Once
-	closeErr    error
+	// closed 是否已停止接收新连接，受 mu 保护。
+	closed bool
+	// closeOnce 保证连接池仅清理一次。
+	closeOnce sync.Once
+	// closeErr 首次清理的聚合错误，后续关闭复用该结果。
+	closeErr error
 }
 
 // newConnectionFactory 创建使用固定驱动快照的 SQL 连接池跟踪器。

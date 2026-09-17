@@ -19,8 +19,9 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 )
 
-// provider 持有应用私有的 TracerProvider。
+// provider 提供应用追踪能力。
 type provider struct {
+	// tp 应用私有的底层 Provider，用于创建业务 Tracer。
 	tp trace.TracerProvider
 }
 
@@ -132,6 +133,7 @@ func (t *provider) Tracer(name string, options ...trace.TracerOption) trace.Trac
 
 // disabledProvider 提供显式禁用的 no-op TracerProvider。
 type disabledProvider struct {
+	// provider 复用基础 Provider 接口实现。
 	*provider
 }
 

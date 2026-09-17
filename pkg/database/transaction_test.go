@@ -128,7 +128,7 @@ func TestTransactionEnqueuesTaskWithBusinessWrite(t *testing.T) {
 				if err := mgr.Connection(ctx).Exec("INSERT INTO orders (id) VALUES (?)", "order-1").Error; err != nil {
 					return err
 				}
-				if err := store.Enqueue(ctx, &queue.Task{ID: "order-1", Type: "order.created"}); err != nil {
+				if err := store.Enqueue(ctx, &queue.Task{ID: "order-1", MessageVersion: "order.created"}); err != nil {
 					return err
 				}
 				var inside, outside int64

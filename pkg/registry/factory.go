@@ -12,9 +12,11 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
-// Factory 持有启动时构造的具名实例，资源在 cleanup 前可并发借用。
-// 不得在 cleanup 后使用返回的 Registrar 或 Discovery。
-type Factory struct{ instances map[string]Resource }
+// Factory 管理具名注册中心实例；返回的能力仅可在 cleanup 前并发借用。
+type Factory struct {
+	// instances 启动时构造的只读资源表。
+	instances map[string]Resource
+}
 
 // NewFactory 从最终配置构造全部实例；失败按构造顺序逆序回滚。
 func NewFactory(manager config.Manager, logger log.Logger) (*Factory, func(), error) {

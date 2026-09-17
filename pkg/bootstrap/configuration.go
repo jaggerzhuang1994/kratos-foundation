@@ -30,16 +30,23 @@ type LocalConfigPathsProvider func(info appinfo.AppInfo, environment string, loc
 // ConfigSources 描述应用默认配置来源，供 Wire 按具体类型注入。
 // 零值不登记默认来源，适用于通过 Spec.Configuration 显式声明所有来源的应用。
 // 启用默认来源时身份、路径函数及来源构造函数均须提供；路径由选中的来源校验。
-// RemoteDir 和 RemoteName 仅在非 local 环境要求非空；NewSpec 复制描述，函数及 AppInfo 仍共享。
-// 构造函数只创建延迟加载器，配置资源由 NewConfigManager 的 cleanup 释放。
+// NewSpec 复制描述，函数及 AppInfo 仍共享；构造阶段不执行配置 I/O。
 type ConfigSources struct {
-	AppInfo      appinfo.AppInfo
-	LocalPath    LocalConfigPath
-	RemoteDir    RemoteConfigDirName
-	RemoteName   RemoteConfigName
-	LocalPaths   LocalConfigPathsProvider
-	RemotePaths  RemoteConfigPathsProvider
-	LocalSource  func(...string) config.SourceLoader
+	// AppInfo 提供配置路径解析所需的应用身份。
+	AppInfo appinfo.AppInfo
+	// LocalPath 指定 local 环境使用的本地文件、目录或 glob。
+	LocalPath LocalConfigPath
+	// RemoteDir 指定远程配置目录；非 local 环境不能为空。
+	RemoteDir RemoteConfigDirName
+	// RemoteName 指定远程配置名称，独立于应用名称；非 local 环境不能为空。
+	RemoteName RemoteConfigName
+	// LocalPaths 在加载阶段解析有序本地路径并返回文件系统错误。
+	LocalPaths LocalConfigPathsProvider
+	// RemotePaths 按应用身份、环境及远程名称生成有序路径。
+	RemotePaths RemoteConfigPathsProvider
+	// LocalSource 按本地路径创建延迟加载器，资源由配置 Manager 释放。
+	LocalSource func(...string) config.SourceLoader
+	// RemoteSource 按远程路径创建延迟加载器，资源由配置 Manager 释放。
 	RemoteSource func(...string) config.SourceLoader
 }
 

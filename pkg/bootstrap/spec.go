@@ -12,12 +12,16 @@ import (
 )
 
 // Spec 按领域收集应用声明。使用 NewSpec 构造，仅支持串行组装，不支持并发调用。
-// 配置源在 Manager 构造前声明；业务在提供 Bootstrap 的函数中描述蓝图，由 Wire 保证先声明后构造。
+// 业务在 Bootstrap provider 中声明蓝图，由 Wire 保证先声明后构造。
 type Spec struct {
+	// configuration 按声明顺序保存延迟加载器，须在配置 Manager 构造前完成登记。
 	configuration []config.SourceLoader
-	application   *app.Spec
-	server        *server.Spec
-	jobs          *job.Spec
+	// application 借用共享应用声明，登记运行时和生命周期钩子。
+	application *app.Spec
+	// server 借用共享服务器声明，收集传输层配置。
+	server *server.Spec
+	// jobs 借用共享任务声明，收集定时及后台任务。
+	jobs *job.Spec
 }
 
 // NewSpec 借用 Wire 注入的共享声明，不创建或复制领域 Spec。

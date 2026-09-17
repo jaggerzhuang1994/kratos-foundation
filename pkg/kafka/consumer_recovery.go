@@ -10,7 +10,10 @@ import (
 )
 
 // consumerOperationError 只标记 Kafka 操作失败，避免把 Handler 错误当作可恢复网络故障。
-type consumerOperationError struct{ err error }
+type consumerOperationError struct {
+	// err 原始 Kafka 操作错误。
+	err error
+}
 
 func (e *consumerOperationError) Error() string { return e.err.Error() }
 func (e *consumerOperationError) Unwrap() error { return e.err }

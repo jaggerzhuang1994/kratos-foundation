@@ -8,8 +8,11 @@ import (
 )
 
 type policy struct {
-	maxTimeout      time.Duration
-	minBudget       time.Duration
+	// maxTimeout 限制从派生时刻起的最长预算；0 表示不额外限制。
+	maxTimeout time.Duration
+	// minBudget 指定发起下游调用所需的最小剩余预算；0 表示不设下限。
+	minBudget time.Duration
+	// fallbackTimeout 指定无上游截止时间时的回退预算；0 表示不启用回退。
 	fallbackTimeout time.Duration
 }
 
@@ -148,22 +151,27 @@ type Info struct {
 	// Operation 是本次派生用于选择策略的路由名称。
 	Operation string
 
+	// AppliedAt 记录策略应用时刻，作为预算快照的时间基准。
 	AppliedAt time.Time
 
-	// 上游 Deadline。
+	// HasParentDeadline 标记上游是否携带截止时间。
 	HasParentDeadline bool
-	ParentDeadline    time.Time
+	// ParentDeadline 保存上游截止时间，仅 HasParentDeadline 为 true 时有效。
+	ParentDeadline time.Time
 
 	// 最终实际生效的 Deadline。
 	EffectiveDeadline time.Time
-	Source            Source
+	// Source 标识最终截止时间由上游、最大超时还是回退值决定。
+	Source Source
 
 	// 应用策略时的最终预算快照。
 	RemainingAtApply time.Duration
 
-	// 应用策略时的配置快照。
-	MinBudget       time.Duration
-	MaxTimeout      time.Duration
+	// MinBudget 保存应用时的最低预算配置。
+	MinBudget time.Duration
+	// MaxTimeout 保存应用时的最大超时配置；0 表示不额外限制。
+	MaxTimeout time.Duration
+	// FallbackTimeout 保存应用时的回退超时配置；0 表示不启用回退。
 	FallbackTimeout time.Duration
 }
 
@@ -218,8 +226,10 @@ var (
 
 // InsufficientBudgetError 表示最终实际可用预算小于 MinBudget。
 type InsufficientBudgetError struct {
+	// Remaining 保存策略计算后的实际剩余预算。
 	Remaining time.Duration
-	Required  time.Duration
+	// Required 保存所需的最低预算。
+	Required time.Duration
 }
 
 func (e *InsufficientBudgetError) Error() string {

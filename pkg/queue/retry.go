@@ -16,17 +16,25 @@ const (
 )
 
 // RetryPolicy 控制任务失败后的持久化重试。
-// MaxAttempts 包含首次领取，执行前崩溃也消耗次数；传 nil 时使用组件默认策略，传非 nil 时零 Backoff 明确表示不等待。
+// 传 nil 使用组件默认策略；非 nil 时逐字段采用显式值。
 type RetryPolicy struct {
+	// MaxAttempts 为总领取次数上限，范围 1–1000；首次领取和执行前崩溃均消耗次数。
 	MaxAttempts int
-	MinBackoff  time.Duration
-	MaxBackoff  time.Duration
+	// MinBackoff 为首次失败后的等待时长，不得为负；零值使所有重试立即排期。
+	MinBackoff time.Duration
+	// MaxBackoff 为后续倍增退避上限，不得为负；与 MinBackoff 均为正时不得小于 MinBackoff。
+	// 为零时首次仍等待 MinBackoff，从第二次失败起立即排期。
+	MaxBackoff time.Duration
 }
 
 type retryPolicy struct {
+	// MaxAttempts 为总领取次数上限，范围 1–1000；首次领取和执行前崩溃均消耗次数。
 	MaxAttempts int
-	MinBackoff  time.Duration
-	MaxBackoff  time.Duration
+	// MinBackoff 为首次失败后的等待时长，不得为负；零值使所有重试立即排期。
+	MinBackoff time.Duration
+	// MaxBackoff 为后续倍增退避上限，不得为负；与 MinBackoff 均为正时不得小于 MinBackoff。
+	// 为零时首次仍等待 MinBackoff，从第二次失败起立即排期。
+	MaxBackoff time.Duration
 }
 
 // resolveRetryPolicy 将可选策略展开为完整值，同时拦截无限重试或倒置退避区间。
@@ -90,6 +98,7 @@ func nextBackoff(current, maximum time.Duration) time.Duration {
 }
 
 type permanentError struct {
+	// err 保留被标记为不可重试的原始错误，供错误链解包。
 	err error
 }
 

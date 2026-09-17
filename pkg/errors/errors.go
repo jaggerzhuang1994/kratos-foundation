@@ -18,10 +18,14 @@ const (
 	mdValidationErrorKey = "validation_error"
 )
 
-// Error 扩展 Kratos 状态错误，保存因果链、业务错误码和 HTTP 呈现信息。
+// Error 为 Kratos 状态错误提供业务错误与 HTTP 响应扩展。
 type Error struct {
+	// Status 承载 Kratos 状态码、原因、公开消息及元数据。
 	errors.Status
-	cause    error
+	// cause 保留原始错误链，由 Unwrap 返回。
+	cause error
+	// httpData 保存 HTTP 响应附加数据；链式错误副本内部共享，存取时对可 JSON 编码值复制。
+	// 无法编码的值保留原引用，由响应编码器报错。
 	httpData any
 }
 

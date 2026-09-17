@@ -15,7 +15,9 @@ type TransactionManager interface {
 }
 
 type txOptions struct {
-	sqlOptions    *sql.TxOptions
+	// sqlOptions 本次事务的 SQL 选项副本；仅外层事务可显式设置，嵌套事务会拒绝。
+	sqlOptions *sql.TxOptions
+	// sqlOptionsSet 区分未传选项与显式传入 nil，后者会被拒绝。
 	sqlOptionsSet bool
 }
 
@@ -82,8 +84,11 @@ type useConnectionKey struct{}
 type useTxKey struct{}
 
 type transactionFrame struct {
-	owner    *manager
-	db       *gorm.DB
+	// owner 标识事务所属 Manager，避免跨实例误用。
+	owner *manager
+	// db 仅在当前事务回调期间有效的 GORM 事务。
+	db *gorm.DB
+	// previous Context 中上一层事务，支持交错嵌套。
 	previous *transactionFrame
 }
 

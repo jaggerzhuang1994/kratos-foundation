@@ -12,10 +12,14 @@ import (
 // sqlMetrics 统计 GORM SQL 操作回调，不采集 SQL 文本或参数。
 // 回调只在 Manager 发布前安装；运行期复用 Prometheus 自身的并发安全实现。
 type sqlMetrics struct {
+	// operations 按操作和结果累计 GORM SQL 回调次数。
 	operations *prometheus.CounterVec
-	duration   *prometheus.HistogramVec
-	slow       *prometheus.CounterVec
-	threshold  *prometheus.GaugeVec
+	// duration 记录 SQL 操作耗时，包含 GORM 回调处理。
+	duration *prometheus.HistogramVec
+	// slow 累计超过阈值的 SQL 操作次数。
+	slow *prometheus.CounterVec
+	// threshold 构造期固定的慢查询阈值，单位秒；阈值不大于零时不累计 slow。
+	threshold *prometheus.GaugeVec
 }
 
 func newSQLMetrics(registerer prometheus.Registerer) (*sqlMetrics, error) {
@@ -56,9 +60,12 @@ func newSQLMetrics(registerer prometheus.Registerer) (*sqlMetrics, error) {
 func (m *sqlMetrics) install(db *gorm.DB, name string, slowThreshold time.Duration) error {
 	callbacks := db.Callback()
 	for _, operation := range []struct {
-		name   string
+		// name GORM 操作名称。
+		name string
+		// before 注册操作开始回调的入口。
 		before func(string, func(*gorm.DB)) error
-		after  func(string, func(*gorm.DB)) error
+		// after 注册操作结束回调的入口。
+		after func(string, func(*gorm.DB)) error
 	}{
 		{"create", callbacks.Create().Before("*").Register, callbacks.Create().After("*").Register},
 		{"update", callbacks.Update().Before("*").Register, callbacks.Update().After("*").Register},

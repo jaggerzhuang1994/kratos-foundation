@@ -20,17 +20,22 @@ var ErrAESConfigMissing = errors.New("database AES field encryption is not confi
 type aesFieldContextKey struct{}
 
 type aesFieldCipher struct {
+	// algorithm 用于字段加解密的算法。
 	algorithm foundationaes.Cipher
-	key       []byte
+	// key 字段加密密钥，不得输出到日志。
+	key []byte
 }
 
 type aesFieldState struct {
+	// connection 当前加密状态所属的连接名。
 	connection string
-	cipher     *aesFieldCipher
+	// cipher 当前字段加密配置；未配置时为 nil。
+	cipher *aesFieldCipher
 }
 
 // aesFieldPlugin 向 GORM serializer 注入固定连接的加密状态。
 type aesFieldPlugin struct {
+	// state 连接对应的字段加密状态。
 	state aesFieldState
 }
 

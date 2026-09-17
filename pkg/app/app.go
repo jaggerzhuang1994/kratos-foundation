@@ -18,40 +18,65 @@ import (
 
 // App 持有 Kratos 应用及启动、停止所需的状态；组装阶段由 bootstrap 管理。
 type App struct {
+	// App 提供底层 Kratos 应用生命周期入口。
 	*kratos.App
+	// stop 执行幂等停止，并共享第一次停止的结果。
 	stop func() error
 
-	// 服务 Start 返回与 Stop 完成各计数一次，全部完成后才执行最终停止钩子。
-	serversMu   sync.Mutex
-	remaining   int
+	// serversMu 保护 Start 返回与 Stop 完成的计数和完成通知。
+	serversMu sync.Mutex
+	// remaining 记录尚未返回的 Start 与尚未完成的 Stop 数量。
+	remaining int
+	// serversDone 全部运行时启动调用返回且停止完成后关闭。
 	serversDone chan struct{}
 
-	parent         context.Context
-	parentDone     chan struct{}
+	// parent 保存父上下文，用于将取消转换为统一停机。
+	parent context.Context
+	// parentDone 通知父上下文监听运行时退出。
+	parentDone chan struct{}
+	// parentStopOnce 保证父上下文监听退出信号只关闭一次。
 	parentStopOnce sync.Once
 
+	// beforeStart 保存启动前钩子。
 	beforeStart []HookFunc
-	afterStart  []HookFunc
-	beforeStop  []HookFunc
-	afterStop   []HookFunc
-	stopPolicy  *StopPolicy
+	// afterStart 保存启动后钩子。
+	afterStart []HookFunc
+	// beforeStop 保存停止前钩子。
+	beforeStop []HookFunc
+	// afterStop 保存停止后钩子。
+	afterStop []HookFunc
+	// stopPolicy 提供可热更新的停机预算，本次停机开始后冻结使用。
+	stopPolicy *StopPolicy
 
-	ready    atomic.Bool
+	// ready 原子记录启动后钩子已全部成功；就绪判断还须排除 stopping。
+	ready atomic.Bool
+	// stopping 原子标记已请求停止。
 	stopping atomic.Bool
+	// stopOnce 保证停机状态与预算只初始化一次。
 	stopOnce sync.Once
+	// stopTime 保存本次停机冻结的预算，读取前经 stopOnce 同步。
 	stopTime time.Duration
 
+	// contextMu 保护停机上下文的读写。
 	contextMu sync.RWMutex
-	stopCtx   context.Context
+	// stopCtx 保存停止前回调上下文，受 contextMu 保护；最终清理只继承其值。
+	stopCtx context.Context
 
-	failureMu  sync.Mutex
+	// failureMu 保护生命周期失败结果。
+	failureMu sync.Mutex
+	// failureErr 保存首个需要向调用方返回的生命周期失败。
 	failureErr error
 
+	// beforeStopOnce 保证停止前钩子仅执行一次。
 	beforeStopOnce sync.Once
-	beforeStopErr  error
-	afterStopOnce  sync.Once
-	afterStopErr   error
-	finalError     func() error
+	// beforeStopErr 保存停止前钩子的稳定结果。
+	beforeStopErr error
+	// afterStopOnce 保证停止后钩子仅执行一次。
+	afterStopOnce sync.Once
+	// afterStopErr 汇总首个故障、前后停止钩子及最终错误，完成 afterStopOnce 后读取。
+	afterStopErr error
+	// finalError 读取服务注销等附加停机错误。
+	finalError func() error
 }
 
 // NewApp 冻结 Spec 并构造应用；serviceRegistrar 为 nil 时关闭服务注册。

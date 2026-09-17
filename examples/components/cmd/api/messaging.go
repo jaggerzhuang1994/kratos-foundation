@@ -32,23 +32,36 @@ var errDemoFailure = errors.New("demo handler failure")
 // messaging 借用 Redis 和观测 Provider，独占两个 Kafka Producer。
 // app 先停止运行时，再执行 cleanup 注销采样并释放 Producer，最后才能释放借用资源。
 type messaging struct {
+	// producer 发送演示 Kafka 消息。
 	producer kafka.Producer
+	// consumer 消费演示 Kafka 消息，由应用管理启停。
 	consumer *kafka.ConsumerRuntime
-	worker   *queue.Worker[string]
-	tasks    *queue.Queue[string]
-	backlog  *queue.Queue[string]
+	// worker 处理对应队列任务，由应用管理启停。
+	worker *queue.Worker[string]
+	// tasks 提交对应队列任务。
+	tasks *queue.Queue[string]
+	// backlog 提交就绪和延时积压演示任务，不配置消费 Worker。
+	backlog *queue.Queue[string]
+	// business 保存各业务场景的独立队列和 Worker。
 	business []businessQueue
-	client   *redis.Client
-	logger   log.Logger
+	// client 借用 Redis 客户端记录演示结果。
+	client *redis.Client
+	// logger 记录消息发送与处理结果。
+	logger log.Logger
 }
 
 // businessQueue 保存固定业务类型及其运行时；资源随 messaging 一起启动和停止。
 type businessQueue struct {
-	name     string
+	// name 标识业务队列场景。
+	name string
+	// taskType 用作演示任务 ID 后缀，不参与队列消息版本匹配。
 	taskType string
-	payload  string
-	tasks    *queue.Queue[string]
-	worker   *queue.Worker[string]
+	// payload 保存该场景提交的演示载荷。
+	payload string
+	// tasks 提交对应队列任务。
+	tasks *queue.Queue[string]
+	// worker 处理对应队列任务，由应用管理启停。
+	worker *queue.Worker[string]
 }
 
 func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory, metricsProvider metrics.Provider, tracingProvider tracing.Provider, logger log.Logger) (_ *messaging, cleanup func(), err error) {
@@ -116,14 +129,14 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 				logger.With("queue", name, "error", releaseErr).Error("Failed to unregister queue statistics")
 			}
 		})
-		workerName, taskType, handler := consumerName, "demo", m.handleTask
+		workerName, handler := consumerName, m.handleTask
 		switch name {
 		case emailQueue:
-			workerName, taskType, handler = "email-worker", "email.render", m.handleEmail
+			workerName, handler = "email-worker", m.handleEmail
 		case reportQueue:
-			workerName, taskType, handler = "report-worker", "report.summarize", m.handleReport
+			workerName, handler = "report-worker", m.handleReport
 		}
-		q, createErr := queue.NewQueue(queue.Definition[string]{Queue: name, MessageType: taskType, Version: 1, Codec: taskTextCodec{}}, store, queueObs)
+		q, createErr := queue.NewQueue(queue.Definition[string]{Queue: name, Version: 1, Codec: taskTextCodec{}}, store, queueObs)
 		if createErr != nil {
 			return nil, cleanup, createErr
 		}
@@ -248,7 +261,7 @@ func (m *messaging) handleReport(ctx context.Context, task *queue.Task) error {
 	return nil
 }
 
-// taskTextCodec 保留演示任务的纯文本格式；任务类型显式带版本。
+// taskTextCodec 保留演示任务的纯文本格式；消息版本由 Definition 生成。
 type taskTextCodec struct{}
 
 func (taskTextCodec) Encode(value string) ([]byte, error) { return []byte(value), nil }
