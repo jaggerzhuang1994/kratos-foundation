@@ -31,7 +31,7 @@
 
 | YAML 顶层配置 | 用途 | 支持热更新的范围 |
 | --- | --- | --- |
-| `log` | 根过滤及标准/文件输出策略 | filter_keys、std、file 全部字段；根级别、禁用和格式固定于 env |
+| `log` | 根过滤及标准/文件输出策略 | level、filter_keys、modules、std、file 全部字段；禁用和格式固定于 env |
 | `app` | 注册端点、metadata、注册与停机期限 | 仅 `stop_timeout`；停机开始后预算固定 |
 | `tracing` | OTLP 导出器与采样器 | 仅 `sampler`；构造时已禁用的 Provider 不能靠热更新启用 |
 | `server` | HTTP/gRPC、中间件、健康与指标端点 | 仅 `middleware`；地址、端点和停机延迟需重启 |
@@ -117,8 +117,8 @@ flowchart LR
 
 - 基于 `LOG_*` 环境变量的严格配置解析。
 - stdout/stderr 分流与可轮转文件输出。
-- 日志级别：请求 debug > log.modules 首项命中级别 > WithLevel > LOG_LEVEL；格式在启动时固定，输出端策略支持热更新。
-- 每次 `NewLogger` 构造独立输出并返回 cleanup；Bootstrap 订阅 log 配置更新过滤与输出资源，根级别和格式固定于 env；`log.WithModule` 返回借用当前输出的派生视图。
+- 日志级别：请求 debug > log.modules 首项命中级别 > WithLevel > log.level > LOG_LEVEL；格式在启动时固定，输出端策略支持热更新。
+- 每次 `NewLogger` 构造独立输出并返回 cleanup；Bootstrap 订阅 log 配置更新过滤与输出资源，根级别支持热更新并作为 std/file 级别默认值，优先于 env；格式固定于 env；`log.WithModule` 返回借用当前输出的派生视图。
 - 不可变的模块、上下文、级别和敏感字段派生。
 - 每条输出保留有效 `module`，缺失时为 `unknown`；通过 Foundation 安装全局绑定后，Kratos SDK 日志归属 `kratos`。
 

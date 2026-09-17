@@ -9,6 +9,8 @@ import (
 // RuntimeConfig 是完整的运行期模块和输出策略。根及输出端过滤的 nil 切片继承 env，空切片清空该层。
 // 使用普通 JSON 结构保留空列表的存在性；固定字段不属于此契约。
 type RuntimeConfig struct {
+	// Level 覆盖根环境级别，并作为未显式配置输出端级别的默认值。
+	Level      *string        `json:"level,omitempty"`
 	FilterKeys []string       `json:"filter_keys"`
 	Std        *OutputPolicy  `json:"std,omitempty"`
 	File       *FilePolicy    `json:"file,omitempty"`
@@ -42,7 +44,7 @@ func (c *RuntimeConfig) matchModule(module string) *ModulePolicy {
 	return nil
 }
 
-// OutputPolicy 覆盖标准输出策略；省略字段继承实例启动环境。
+// OutputPolicy 覆盖标准输出策略；级别省略时先继承根 Level，其他字段继承实例启动环境。
 type OutputPolicy struct {
 	Level      *string  `json:"level,omitempty"`
 	Disable    *bool    `json:"disable,omitempty"`
@@ -73,7 +75,7 @@ func ValidateRuntimeConfig(config *RuntimeConfig) error {
 	if config == nil {
 		return fmt.Errorf("log runtime config is nil")
 	}
-	if err := validateFilterKeys(config.FilterKeys); err != nil {
+	if err := validatePolicy(config.Level, config.FilterKeys); err != nil {
 		return err
 	}
 	if p := config.Std; p != nil {
@@ -137,7 +139,7 @@ func cloneValue[T any](value *T) *T {
 }
 
 func cloneRuntimeConfig(c *RuntimeConfig) *RuntimeConfig {
-	next := &RuntimeConfig{FilterKeys: slices.Clone(c.FilterKeys), Modules: make([]ModulePolicy, len(c.Modules))}
+	next := &RuntimeConfig{Level: cloneValue(c.Level), FilterKeys: slices.Clone(c.FilterKeys), Modules: make([]ModulePolicy, len(c.Modules))}
 	for i, rule := range c.Modules {
 		next.Modules[i] = ModulePolicy{Module: rule.Module, Level: cloneValue(rule.Level), Disable: cloneValue(rule.Disable), FilterKeys: slices.Clone(rule.FilterKeys)}
 	}
@@ -161,6 +163,11 @@ func applyValue[T any](target *T, value *T) {
 
 func mergeOutputConfig(base envConfig, policy *RuntimeConfig) (envConfig, error) {
 	if policy != nil {
+		// 根策略先覆盖环境输出级别，再由输出端显式配置覆盖。
+		if policy.Level != nil {
+			level, _ := parseLevel(*policy.Level)
+			base.Level, base.Std.Level, base.File.Level = level, level, level
+		}
 		if p := policy.Std; p != nil {
 			applyValue(&base.Std.Disable, p.Disable)
 			if p.Level != nil {

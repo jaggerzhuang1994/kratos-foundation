@@ -62,15 +62,16 @@ func TestRuntimePolicyCopiesAndRejectsInvalidUpdates(t *testing.T) {
 	state := &sharedState{}
 	state.WithKV("service", "orders")
 	size := 10
-	policy := &RuntimeConfig{FilterKeys: []string{"secret"}, Std: &OutputPolicy{Disable: proto.Bool(false), Level: proto.String("warn"), FilterKeys: []string{}}, File: &FilePolicy{Enable: proto.Bool(false), Path: proto.String("app.log"), Rotating: &RotatingPolicy{MaxSize: &size}}}
+	policy := &RuntimeConfig{Level: proto.String("info"), FilterKeys: []string{"secret"}, Std: &OutputPolicy{Disable: proto.Bool(false), Level: proto.String("warn"), FilterKeys: []string{}}, File: &FilePolicy{Enable: proto.Bool(false), Path: proto.String("app.log"), Rotating: &RotatingPolicy{MaxSize: &size}}}
 	if err := state.applyRuntimeConfig(policy); err != nil {
 		t.Fatal(err)
 	}
 	previous := state.custom.Load()
 	policy.FilterKeys[0] = "changed"
 	*policy.Std.Level = "fatal"
+	*policy.Level = "fatal"
 	size = 20
-	if previous.filterKeys[0] != "secret" || *previous.policy.Std.Level != "warn" || *previous.policy.File.Rotating.MaxSize != 10 || previous.policy.Std.FilterKeys == nil {
+	if *previous.policy.Level != "info" || previous.filterKeys[0] != "secret" || *previous.policy.Std.Level != "warn" || *previous.policy.File.Rotating.MaxSize != 10 || previous.policy.Std.FilterKeys == nil {
 		t.Fatal("snapshot alias or empty-list presence lost")
 	}
 	negative := -1
@@ -222,5 +223,58 @@ func TestModulePolicyRejectsInvalidPolicy(t *testing.T) {
 	}
 	if err := state.applyRuntimeConfig(&RuntimeConfig{Modules: []ModulePolicy{{Module: "*"}, {Module: "*"}}}); err == nil {
 		t.Fatal("duplicate expression accepted")
+	}
+}
+
+func TestRootLevelDefaultsAndReload(t *testing.T) {
+	state := &sharedState{}
+	state.custom.Store(&customState{})
+	records := 0
+	root := &logger{shared: state, config: &configState{level: kratoslog.LevelError, msgKey: "msg", output: loggerFunc(func(kratoslog.Level, ...any) error { records++; return nil })}}
+	base := envConfig{Level: kratoslog.LevelError, MsgKey: "msg", TimeFormat: "2006", Std: outputConfig{Level: kratoslog.LevelError}, File: fileConfig{outputConfig: outputConfig{Disable: true, Level: kratoslog.LevelFatal}}}
+	for _, tc := range []struct {
+		raw       string
+		std, file kratoslog.Level
+		visible   bool
+	}{
+		{`{"level":"debug"}`, kratoslog.LevelDebug, kratoslog.LevelDebug, true},
+		{`{"level":"warn","std":{"level":"info"},"file":{"level":"error"}}`, kratoslog.LevelInfo, kratoslog.LevelError, false},
+		{`{}`, kratoslog.LevelError, kratoslog.LevelFatal, false},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			var policy RuntimeConfig
+			if err := json.Unmarshal([]byte(tc.raw), &policy); err != nil {
+				t.Fatal(err)
+			}
+			if err := state.applyRuntimeConfig(&policy); err != nil {
+				t.Fatal(err)
+			}
+			records = 0
+			root.Debug("probe")
+			if (records == 1) != tc.visible {
+				t.Errorf("records=%d want visible=%v", records, tc.visible)
+			}
+			merged, err := mergeOutputConfig(base, &policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if merged.Std.Level != tc.std || merged.File.Level != tc.file {
+				t.Errorf("output levels=%v/%v want=%v/%v", merged.Std.Level, merged.File.Level, tc.std, tc.file)
+			}
+			records = 0
+			root.WithLevel(kratoslog.LevelDebug).Debug("instance")
+			if records != 1 {
+				t.Error("root level overrode explicit instance level")
+			}
+		})
+	}
+	for _, raw := range []string{`{"level":""}`, `{"level":"trace"}`} {
+		var policy RuntimeConfig
+		if err := json.Unmarshal([]byte(raw), &policy); err != nil {
+			t.Fatal(err)
+		}
+		if err := state.applyRuntimeConfig(&policy); err == nil {
+			t.Errorf("accepted invalid root level: %s", raw)
+		}
 	}
 }

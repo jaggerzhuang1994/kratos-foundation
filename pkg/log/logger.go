@@ -167,12 +167,15 @@ func (l *logger) clone() *logger {
 	}
 }
 
-// levelEnabled 按请求 debug、模块策略、实例、env 解析；禁用不能被放宽。
+// levelEnabled 按请求 debug、模块策略、实例、根策略、env 解析；禁用不能被放宽。
 func (l *logger) levelEnabled(level kratoslog.Level, custom *customState) bool {
 	if l.config.disabled {
 		return false
 	}
 	minimum := l.config.level
+	if custom.policy != nil && custom.policy.Level != nil {
+		minimum, _ = parseLevel(*custom.policy.Level)
+	}
 	if l.level != nil {
 		minimum = *l.level
 	}

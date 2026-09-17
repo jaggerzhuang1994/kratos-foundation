@@ -19,7 +19,7 @@ logger.WithModule("orders").Info("ready")
 
 ## 策略优先级与公共 API
 
-级别优先级：**请求 debug > log.modules 首个命中项的 level > WithLevel > LOG_LEVEL**。根 `LOG_DISABLE` 和命中模块的 `disable: true` 是硬限制，不能由请求 debug 解除。组件通过 `WithModule` 声明归属，模块策略集中在 `log.modules` 并支持热更新。
+级别优先级：**请求 debug > log.modules 首个命中项的 level > WithLevel > log.level > LOG_LEVEL**。根 `LOG_DISABLE` 和命中模块的 `disable: true` 是硬限制，不能由请求 debug 解除。组件通过 `WithModule` 声明归属，模块策略集中在 `log.modules` 并支持热更新。
 
 | 入口 | 用途与限制 |
 | --- | --- |
@@ -39,28 +39,27 @@ orders := logger.WithModule("orders").WithLevel(kratoslog.LevelWarn)
 orders.WithContext(request.WithDebug(ctx)).Debug("request details")
 ```
 
-输出端级别是独立的最低限制，debug 不绕过它。根 `LOG_LEVEL=info` 时，仅把 `log.std.level` 改成 debug 不会产生 DEBUG 日志；需要模块配置、实例或请求放宽根级别。
+输出端级别是独立的最低限制，debug 不绕过它。未配置 `log.level` 且 `LOG_LEVEL=info` 时，仅把 `log.std.level` 改成 debug 不会产生 DEBUG 日志；需要根配置、模块配置、实例或请求放宽根级别。
 
 ## 配置热更新
 
 | 分类 | 字段 | 生效方式 |
 | --- | --- | --- |
-| 固定 | 根 level、disable、filter_empty、time_format、msg_key | 每个实例构造时从 env 读取，之后固定 |
-| 动态 | 根 filter_keys、modules；std 的 level、disable、filter_keys；file 的 enable、level、filter_keys、path、rotating 全部字段 | env 为初始值，可由配置覆盖 |
+| 固定 | 根 disable、filter_empty、time_format、msg_key | 每个实例构造时从 env 读取，之后固定 |
+| 动态 | 根 level、filter_keys、modules；std 的 level、disable、filter_keys；file 的 enable、level、filter_keys、path、rotating 全部字段 | env 为初始值，可由配置覆盖 |
 
-`bootstrap.NewLogBootstrap` 订阅 `log`；进程应由一个权威配置 Manager 管理。每次发布完整替换动态策略，缺失字段恢复该实例的 env 值。`NewLogger` 本身不会创建配置 Manager。根固定字段不属于动态契约；各组件的 log 配置已移除，请迁移到 log.modules。
+`bootstrap.NewLogBootstrap` 订阅 `log`；进程应由一个权威配置 Manager 管理。每次发布完整替换动态策略，缺失字段恢复该实例的 env 值（输出端级别优先继承 `log.level`）。`NewLogger` 本身不会创建配置 Manager。根固定字段不属于动态契约；各组件的 log 配置已移除，请迁移到 log.modules。
 
 ```yaml
 log:
+  level: info # std/file 未设置 level 时继承此值
   filter_keys: [password, token]
   std:
     disable: false
-    level: info
     filter_keys: []
   file:
     enable: true
     path: ./app.log
-    level: info
     rotating:
       disable: false
       max_size: 100
@@ -70,7 +69,7 @@ log:
       compress: true
 ```
 
-以上为示例值。所有动态字段省略时继承 env；显式 false、0 或空列表不会当作缺失。`filter_keys: []` 清空该层过滤，`null` 和缺失均恢复 env；根、首个命中模块、实例追加过滤和输出端过滤最终取并集。这里的缺失/null 规则针对传给 `ApplyRuntimeConfig` 的有效对象；通过 config.Manager 更新时，官方默认 merge 会保留源中省略的旧字段，因此从源中删除字段不等于恢复 env。`RuntimeConfig` 使用普通 JSON 结构保留 nil 与空切片的区别，不是 protobuf 类型别名；protobuf `Logging` 负责根配置协议及 schema。
+以上为示例值。输出端级别按 **log.std/file.level > log.level > LOG_STD/FILE_LEVEL** 解析；根级别按 **log.level > LOG_LEVEL** 解析。未配置根或输出端级别且没有输出端环境变量时，输出端保持无独立限制。`log.level` 支持 debug/info/warn/error/fatal（协议和 schema 接受全小写或全大写；直接使用 RuntimeConfig 时忽略大小写及首尾空白），空字符串或非法值拒绝整次更新；null 或缺失回退环境值。继承自 `log.level` 的输出端阈值同样不会被请求 debug、模块规则或 WithLevel 绕过。环境变量仍在实例构造时解析和校验，非法环境值会使构造失败，不能靠配置覆盖绕过校验。其他动态字段省略时继承 env；显式 false、0 或空列表不会当作缺失。`filter_keys: []` 清空该层过滤，`null` 和缺失均恢复 env；根、首个命中模块、实例追加过滤和输出端过滤最终取并集。这里的缺失/null 规则针对传给 `ApplyRuntimeConfig` 的有效对象；通过 config.Manager 更新时，官方默认 merge 会保留源中省略的旧字段，因此从源中删除字段不等于恢复 env。`RuntimeConfig` 使用普通 JSON 结构保留 nil 与空切片的区别，不是 protobuf 类型别名；protobuf `Logging` 负责根配置协议及 schema。
 
 文件默认关闭，`LOG_FILE_ENABLE=true` 可在启动时启用；配置 `log.file.enable=true` 也能在启动后启用。关闭文件会释放句柄和轮转任务。路径或轮转变化会准备新输出；新代通过就绪 channel 等待前代释放后才允许写入，同路径切换也遵守该规则。仅修改级别、过滤或标准输出策略复用原文件。启用轮转时 max_size 必须大于零；保留天数与数量为零表示不限制，负值非法。
 
@@ -83,7 +82,7 @@ log:
 ```mermaid
 flowchart TD
     A([配置订阅更新]) --> B[读锁内取得版本与活动输出快照 后释放]
-    B --> C[锁外合并 env 校验并准备候选输出]
+    B --> C[锁外按输出端 level、根 level、env 顺序合并 校验并准备候选输出]
     C --> D{成功?}
     D -- 否 --> E[锁外关闭新建候选 保留原策略]
     E --> W[Bootstrap ERROR Failed to apply log configuration]
@@ -140,7 +139,7 @@ log:
 
 列表按顺序匹配，首个命中即停止；精确项没有特殊优先权，宽泛项放前面会遮住后面的精确项。支持精确模块名、末尾单个 `*` 的前缀表达式和 `*` 全匹配；不支持其他通配符或正则表达式。重复表达式、空名称、非法级别和过滤字段使整次发布失败。
 
-匹配使用 `WithModule` 声明的模块身份，没有声明则为 `unknown`；普通 KV 中的 module 仅用于输出展示，不改变模块策略身份。模块规则未设置 level 时继承 WithLevel 或 LOG_LEVEL，不从后续项补齐；disable 缺失或 false 表示不额外禁用，不能解除 LOG_DISABLE。请求 debug 仍遵守输出端级别。
+匹配使用 `WithModule` 声明的模块身份，没有声明则为 `unknown`；普通 KV 中的 module 仅用于输出展示，不改变模块策略身份。模块规则未设置 level 时依次继承 WithLevel、log.level 或 LOG_LEVEL，不从后续项补齐；disable 缺失或 false 表示不额外禁用，不能解除 LOG_DISABLE。请求 debug 仍遵守输出端级别。
 
 模块 filter_keys 只追加：根规则 + 首个命中模块规则 + WithFilterKeys + 对应 std/file 规则取并集，重复键不会影响结果。模块空列表不会清除其他层。字段规则支持精确键和尾部 `*`，仅处理结构化日志键，不递归处理字段值；module 字段始终保留。
 
@@ -280,7 +279,8 @@ flowchart TD
     B -- 实例 --> E[使用实例模块策略]
     C --> E
     D --> E
-    E --> F{禁用或级别不足?}
+    E --> E1[按请求 debug、模块、WithLevel、log.level、LOG_LEVEL 解析级别]
+    E1 --> F{禁用或级别不足?}
     F -- 是 --> Z([结束])
     F -- 否 --> G[锁外读取字段快照并求值]
     G --> H[固定模块优先；否则取最后有效 module 或 unknown]
@@ -306,15 +306,15 @@ flowchart TD
 |---|---:|---|
 | `LOG_DISABLE` | `false` | 根禁用，构造后固定 |
 | `LOG_MSG_KEY` | `msg` | 消息字段名，构造后固定；不能为空或 module |
-| `LOG_LEVEL` | `info` | 根 Logger 最低级别 |
+| `LOG_LEVEL` | `info` | 根 Logger 初始最低级别，可被 log.level 覆盖 |
 | `LOG_FILTER_EMPTY` | `true` | 过滤值为 `nil` 或空字符串的字段 |
 | `LOG_FILTER_KEYS` | 空 | 根过滤键，逗号分隔 |
 | `LOG_TIME_FORMAT` | `time.RFC3339` | 时间戳格式 |
 | `LOG_STD_DISABLE` | `false` | 禁用标准输出端 |
-| `LOG_STD_LEVEL` | 无独立限制 | 标准输出端显式最低级别 |
+| `LOG_STD_LEVEL` | 无独立限制 | 标准输出端初始最低级别，低于 log.level 和 log.std.level |
 | `LOG_STD_FILTER_KEYS` | 空 | 标准输出端过滤键，默认保留 service 字段 |
 | `LOG_FILE_ENABLE` | `false` | 显式启用文件输出端 |
-| `LOG_FILE_LEVEL` | 无独立限制 | 文件输出端显式最低级别 |
+| `LOG_FILE_LEVEL` | 无独立限制 | 文件输出端初始最低级别，低于 log.level 和 log.file.level |
 | `LOG_FILE_FILTER_KEYS` | 空 | 文件输出端过滤键 |
 | `LOG_FILE_PATH` | `./app.log` | 当前日志文件 |
 | `LOG_FILE_ROTATING_DISABLE` | `false` | 禁用文件轮转 |

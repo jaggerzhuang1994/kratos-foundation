@@ -156,6 +156,21 @@ func (m *Logging) validate(all bool) error {
 
 	}
 
+	if m.Level != nil {
+
+		if _, ok := _Logging_Level_InLookup[m.GetLevel()]; !ok {
+			err := LoggingValidationError{
+				field:  "Level",
+				reason: "value must be in list [debug DEBUG info INFO warn WARN error ERROR fatal FATAL]",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return LoggingMultiError(errors)
 	}
@@ -232,6 +247,19 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = LoggingValidationError{}
+
+var _Logging_Level_InLookup = map[string]struct{}{
+	"debug": {},
+	"DEBUG": {},
+	"info":  {},
+	"INFO":  {},
+	"warn":  {},
+	"WARN":  {},
+	"error": {},
+	"ERROR": {},
+	"fatal": {},
+	"FATAL": {},
+}
 
 // Validate checks the field values on LogPolicy with the rules defined in the
 // proto definition for this message. If any rules are violated, the first

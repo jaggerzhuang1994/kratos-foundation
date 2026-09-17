@@ -51,7 +51,7 @@ flowchart TD
     N --> Z
 ```
 
-日志的覆盖顺序为 **请求 debug > log.modules 首项命中级别 > 实例显式级别 > LOG_LEVEL 启动级别**。请求 debug 只调整最低级别，不解除禁用、敏感字段过滤或显式输出端级别限制。详细规则见 [log](../log/README.md)。
+日志的覆盖顺序为 **请求 debug > log.modules 首项命中级别 > 实例显式级别 > log.level > LOG_LEVEL 启动级别**。请求 debug 只调整最低级别，不解除禁用、敏感字段过滤或输出端级别限制（包括继承的 log.level）。详细规则见 [log](../log/README.md)。
 
 服务端策略复用现有动态中间件的原子发布与原子缓存，不新增锁或后台任务；非法配置整次拒绝，保留原策略。
 

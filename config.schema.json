@@ -1438,7 +1438,7 @@
         "fatal",
         "FATAL"
       ],
-      "description": "高于 WithLevel，低于请求 debug；省略继承实例或 env 级别。"
+      "description": "高于 WithLevel，低于请求 debug；省略继承实例、根 level 或 env 级别。"
     },
     ".kratos_foundation_pb.LogModule.module": {
       "type": "string"
@@ -1456,7 +1456,7 @@
         }
       },
       "type": "object",
-      "description": "LogPolicy 覆盖标准输出策略；省略字段继承 env。"
+      "description": "LogPolicy 覆盖标准输出策略；级别省略时继承根 level，再回退 env。"
     },
     ".kratos_foundation_pb.LogPolicy.disable": {
       "type": "boolean"
@@ -1525,6 +1525,9 @@
         },
         "modules": {
           "$ref": "#/definitions/.kratos_foundation_pb.Logging.modules"
+        },
+        "level": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Logging.level"
         }
       },
       "type": "object",
@@ -1538,6 +1541,22 @@
         "type": "string"
       },
       "type": "array"
+    },
+    ".kratos_foundation_pb.Logging.level": {
+      "type": "string",
+      "enum": [
+        "debug",
+        "DEBUG",
+        "info",
+        "INFO",
+        "warn",
+        "WARN",
+        "error",
+        "ERROR",
+        "fatal",
+        "FATAL"
+      ],
+      "description": "覆盖 LOG_LEVEL，并作为 std.level/file.level 的默认值，优先于输出端环境变量。"
     },
     ".kratos_foundation_pb.Logging.modules": {
       "items": {

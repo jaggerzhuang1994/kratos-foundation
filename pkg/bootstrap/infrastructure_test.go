@@ -310,7 +310,7 @@ func TestLogBootstrapHotReloadsExistingViews(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
-	source := testconfig.NewMutableSource(t, "log", &config_pb.Logging{File: &config_pb.LogFilePolicy{Level: proto.String("error")}, Modules: []*config_pb.LogModule{{Module: "orders", Level: proto.String("error")}}})
+	source := testconfig.NewMutableSource(t, "log", &config_pb.Logging{Level: proto.String("error"), Modules: []*config_pb.LogModule{{Module: "orders", Level: proto.String("error")}}})
 	manager, closeManager, err := config.NewManager(config.Sources{source})
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +328,7 @@ func TestLogBootstrapHotReloadsExistingViews(t *testing.T) {
 	}()
 	view := logger.WithModule("orders").WithLevel(kratoslog.LevelError)
 	view.Info("before-hidden")
-	source.Update(t, &config_pb.Logging{File: &config_pb.LogFilePolicy{Level: proto.String("debug")}, Modules: []*config_pb.LogModule{{Module: "orders", Level: proto.String("debug")}}})
+	source.Update(t, &config_pb.Logging{Level: proto.String("debug"), Modules: []*config_pb.LogModule{{Module: "orders", Level: proto.String("debug")}}})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		view.Debug("after-visible")

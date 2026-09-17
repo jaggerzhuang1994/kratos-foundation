@@ -12,9 +12,14 @@ message Logging {
   optional LogFilePolicy file = 3;
   // 按顺序首个命中；过滤字段与根及输出端规则累加。
   repeated LogModule modules = 4;
+  // 覆盖 LOG_LEVEL，并作为 std.level/file.level 的默认值，优先于输出端环境变量。
+  optional string level = 5 [
+    (pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}},
+    (validate.rules).string = {in: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}
+  ];
 }
 
-// LogPolicy 覆盖标准输出策略；省略字段继承 env。
+// LogPolicy 覆盖标准输出策略；级别省略时继承根 level，再回退 env。
 message LogPolicy {
   optional string level = 1;
   optional bool disable = 2;
@@ -43,7 +48,7 @@ message LogRotatingPolicy {
 // LogModule 按模块精确匹配或末尾 * 前缀匹配；* 匹配全部模块。
 message LogModule {
  string module = 1 [(validate.rules).string.min_len = 1];
- // 高于 WithLevel，低于请求 debug；省略继承实例或 env 级别。
+ // 高于 WithLevel，低于请求 debug；省略继承实例、根 level 或 env 级别。
  optional string level = 2 [
   (pubg.jsonschema.field) = {string: {enum: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}},
   (validate.rules).string = {in: ['debug', 'DEBUG', 'info', 'INFO', 'warn', 'WARN', 'error', 'ERROR', 'fatal', 'FATAL']}

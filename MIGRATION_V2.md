@@ -466,7 +466,7 @@ flowchart LR
 
 ## 日志三层策略与 API 收敛
 
-当前版本重新开放顶层 `log` 作为运行期策略，配置使用 JSON 字段名，不保留旧二进制字段编号。仅支持当前 schema 中的策略字段；根 level/disable/filter_empty/time_format/msg_key 固定于 `LOG_*`；filter_keys/std/file 以 env 为初始值并支持热更新。
+当前版本重新开放顶层 `log` 作为运行期策略，配置使用 JSON 字段名，不保留旧二进制字段编号。仅支持当前 schema 中的策略字段；根 disable/filter_empty/time_format/msg_key 固定于 `LOG_*`；level/filter_keys/std/file 以 env 为初始值并支持热更新。
 
 - `log.WithLevel(...)`、`log.WithFilterKeys(...)` 改为返回派生 Logger，必须保存或使用返回值；忽略结果不再修改进程状态。
 - `log.WithKV(...)` 改为 `log.With(...)`；AppInfo/Tracing 等组装层共享元数据使用 `log.RegisterFields(...)`。
@@ -474,9 +474,9 @@ flowchart LR
 - `Logger` 增加 `WithLevel`，自定义实现必须返回独立派生视图。移除 `WithModuleConfig` 和 `ModuleConfig`；组件使用 WithModule 声明模块，统一通过 `log.modules` 热更新，模块配置级别高于 WithLevel。
 - `bootstrap.NewLogBootstrap` 接收 `(spec, manager, logger)`，其中 `config.Manager` 为必需依赖。更新手动调用和 Wire 生成产物，cleanup 先取消订阅再恢复全局绑定。
 - `request.WithDebug(ctx)`（`pkg/request`）返回请求调试上下文，替代日志包内的请求标记入口；使用 `logger.WithContext(ctx)` 或 `log.WithContext(ctx)` 记录。ctx debug 高于实例级别，但不绕过禁用、过滤或输出端显式限制。
-- 未显式设置输出端级别时不再重复按全局级别过滤；需要硬限制时设置 `log.std.level` / `log.file.level` 或环境输出级别。
+- 新增 `log.level`，优先于 `LOG_LEVEL`，并为未显式配置的 std/file 级别提供默认值，优先于输出端环境变量。未配置 `log.level` 时保留原环境行为；需要独立限制时设置 `log.std.level` / `log.file.level` 或环境输出级别。
 
-完整默认值、继承、热更新失败边界、并发流程图及示例见 [日志文档](pkg/log/README.md#三层策略与公共-api)。
+完整默认值、继承、热更新失败边界、并发流程图及示例见 [日志文档](pkg/log/README.md#策略优先级与公共-api)。
 
 请求 debug 的跨服务传播由独立传输适配层负责。服务端 `server.middleware.request_debug.accept_incoming` 默认 true，显式 false 关闭接收；客户端 `client.clients.<name>.middleware.request_debug.propagate` 默认 true。保留键不能通过通用 metadata 注入。规则与流程见 [request](pkg/request/README.md)。
 
