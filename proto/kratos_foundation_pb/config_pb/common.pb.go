@@ -79,8 +79,8 @@ func (x *Endpoint) GetHost() string {
 
 // Middleware 是服务端与客户端共用的中间件配置。
 //
-// 热更新语义取决于引用它的位置：在 server.middleware 下全部支持热更新并逐项原子替换，不保证整条调用链同时切换；
-// 在 client.clients 的 middleware 下则随所属客户端一起生效，代价是旧连接会退役重建。
+// 热更新语义取决于引用它的位置：Server 的直接策略字段全部支持热更新并逐项原子替换，不保证整条调用链同时切换；
+// ClientOption 的直接策略字段随所属客户端一起生效，代价是旧连接会退役重建。
 type Middleware struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

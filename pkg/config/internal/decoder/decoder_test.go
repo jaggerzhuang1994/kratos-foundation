@@ -137,6 +137,39 @@ func TestDecoderSupportsGoAndProtobufTargets(t *testing.T) {
 	}
 }
 
+func TestDecoderIgnoresRemovedMiddlewareLayer(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target interface {
+			GetLogging() *config_pb.Middleware_Logging
+		}
+	}{
+		{name: "server", target: new(config_pb.Server)},
+		{name: "client option", target: new(config_pb.ClientOption)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			valueDecoder, err := New(tt.target, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := valueDecoder.Apply(
+				map[string]any{"middleware": map[string]any{"logging": map[string]any{"disable": true}}},
+				true,
+				tt.target,
+			); err != nil {
+				t.Fatal(err)
+			}
+			if tt.target.GetLogging() != nil {
+				t.Fatalf("removed middleware layer populated logging: %v", tt.target.GetLogging())
+			}
+		})
+	}
+}
+
 func TestDecoderClearsReusedTargetAndCreatesFreshTargets(t *testing.T) {
 	t.Parallel()
 

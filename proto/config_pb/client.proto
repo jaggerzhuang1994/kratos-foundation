@@ -31,10 +31,18 @@ message ClientOption {
   // 默认为 discovery:///{client_key}
   // 也可以指定直连 host:port
   string target = 2;
-  // 中间件
-  optional ClientMiddleware middleware = 3;
   // discovery 目标使用的 registry.instances 名称；省略或空值继承 client.discovery。
   string discovery = 4;
+  // 元数据透传配置。
+  optional Middleware.Metadata metadata = 5;
+  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。
+  optional Middleware.Tracing tracing = 6;
+  optional Middleware.Metrics metrics = 7;
+  optional Middleware.Logging logging = 8;
+  optional Middleware.CircuitBreaker circuit_breaker = 9;
+  optional Middleware.Deadline deadline = 10;
+  // 请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。
+  optional Middleware.RequestDebug request_debug = 11;
 }
 
 enum Protocol {
@@ -44,17 +52,4 @@ enum Protocol {
   HTTP = 1;
   // https请求
   HTTPS = 3;
-}
-
-// 客户端中间件配置
-message ClientMiddleware {
-  optional Middleware.Metadata metadata = 1;
-  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。
-  optional Middleware.Tracing tracing = 2;
-  optional Middleware.Metrics metrics = 3;
-  optional Middleware.Logging logging = 4;
-  optional Middleware.CircuitBreaker circuit_breaker = 5;
-  optional Middleware.Deadline deadline = 6;
-  // 请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。
-  optional Middleware.RequestDebug request_debug = 7;
 }

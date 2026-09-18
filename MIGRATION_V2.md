@@ -65,7 +65,7 @@ HealthConfig 中的地址、路径、开关和检查期限迁移至 `server.http
 
 ### 删除或改名的配置
 
-目标 protobuf 配置解码时，已删除字段即使值是 null 或空对象也会被拒绝；Manager 不再全局预检未读取的字段。
+Foundation 自带 protobuf 不再声明 reserved；已删除字段按未知字段忽略，Manager 也不全局预检未读取的字段。因此迁移时必须主动清理旧路径，不能依赖启动报错发现遗漏。业务自定义 protobuf 仍可用 reserved 拒绝旧字段。
 
 | 旧字段 | 迁移方式 |
 |---|---|
@@ -73,7 +73,9 @@ HealthConfig 中的地址、路径、开关和检查期限迁移至 `server.http
 | 顶层 `metrics` | 显式构造 Provider，HTTP 指标端点使用 `server.http.metrics` |
 | 顶层 `job`、`queue` | 强类型 Spec/构造配置与显式组装 |
 | `app.disable_registrar` | 由 Wire provider 返回 `registry.Registrar`；返回 nil 禁用服务注册 |
-| `server.middleware.timeout`、`client.clients.*.middleware.timeout` | 改成 `deadline`，按需求设置 fallback_timeout/max_timeout/min_budget |
+| `server.middleware.*` | 删除中间 `middleware` 层，迁移到 `server.*`；旧路径会作为未知字段忽略 |
+| `client.clients.*.middleware.*` | 删除中间 `middleware` 层，迁移到 `client.clients.*.*`；旧路径会作为未知字段忽略 |
+| `server.middleware.timeout`、`client.clients.*.middleware.timeout` | 分别迁移到 `server.deadline`、`client.clients.*.deadline`，按需求设置 fallback_timeout/max_timeout/min_budget |
 | `database.connections.*.replicas/datas/trace_resolver_mode` | 删除，改为独立连接和显式选择 |
 | `server.log`、`tracing.log`、`tracing.tracer_name` | Logger 派生和 Provider instrumentation scope |
 | `redis.connections.*.read_only` | 删除，重新核对 Redis 接入方式 |
@@ -82,7 +84,7 @@ HealthConfig 中的地址、路径、开关和检查期限迁移至 `server.http
 Deadline 缺失时默认回退超时为 10s，仅在父 Context 没有截止时间时生效；显式 `0s`
 关闭回退超时。不要把旧 timeout 字段机械改名后沿用语义。
 
-仅支持文档声明的热更新范围：app.stop_timeout、server.middleware、client.clients、
+仅支持文档声明的热更新范围：app.stop_timeout、server 请求策略、client.clients、
 tracing.sampler、job.cron 和数据库连接池参数。DSN、驱动、连接集合、服务监听地址等变化需要重启。
 恢复 main 的 protobuf 字段编号后，此前未发布 v2 的二进制配置不能复用；从 YAML/JSON 重新生成。
 
@@ -329,7 +331,7 @@ Go、gRPC、HTTP、Foundation client/errors、校验和文档产物必须指向�
 当前使用 `spec.Configuration` 显式声明路径与覆盖顺序，移除了按环境选择文件/远程配置的组装逻辑。
 
 本例 `internal/conf/source_test.go` 用临时文件验证顺序和最终覆盖值，并通过 v2 Manager
-读取业务 Duration 与 `server.middleware.deadline.fallback_timeout`。这类测试比单独检查 YAML 语法更有效，
+读取业务 Duration 与 `server.deadline.fallback_timeout`。这类测试比单独检查 YAML 语法更有效，
 但仍不等于构造全部组件或验证 Consul 中的实际配置。发布前还应逐份清理远端旧字段，
 检查环境模板替换后的值，并用隔离环境验证组件构造。业务 Schema 应合并所选运行库的
 `config.schema.json`，避免编辑器接受运行时已经拒绝的字段。
@@ -481,7 +483,7 @@ flowchart LR
 
 完整默认值、继承、热更新失败边界、并发流程图及示例见 [日志文档](pkg/log/README.md#策略优先级与公共-api)。
 
-请求 debug 的跨服务传播由独立传输适配层负责。服务端 `server.middleware.request_debug.accept_incoming` 默认 true，显式 false 关闭接收；客户端 `client.clients.<name>.middleware.request_debug.propagate` 默认 true。保留键不能通过通用 metadata 注入。规则与流程见 [request](pkg/request/README.md)。
+请求 debug 的跨服务传播由独立传输适配层负责。服务端 `server.request_debug.accept_incoming` 默认 true，显式 false 关闭接收；客户端 `client.clients.<name>.request_debug.propagate` 默认 true。保留键不能通过通用 metadata 注入。规则与流程见 [request](pkg/request/README.md)。
 
 文件日志现在默认关闭，普通进程与测试进程行为一致。启用时将 `LOG_FILE_DISABLE=false` 替换为 `LOG_FILE_ENABLE=true`；关闭时删除旧变量或设置 `LOG_FILE_ENABLE=false`。旧变量不再读取；运行期可通过 `log.file.enable=true` 启用文件日志。
 

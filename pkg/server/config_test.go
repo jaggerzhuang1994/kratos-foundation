@@ -33,7 +33,7 @@ func TestServerRejectsInvalidBBRConfiguration(t *testing.T) {
 		{"infinite cpu quota", &config_pb.Middleware_RateLimit_BBRLimiter{CpuQuota: proto.Float64(math.Inf(1))}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			config := &config_pb.ServerMiddleware{RateLimit: &config_pb.Middleware_RateLimit{Enable: proto.Bool(true), BbrLimiter: tt.limiter}}
+			config := &config_pb.Server{RateLimit: &config_pb.Middleware_RateLimit{Enable: proto.Bool(true), BbrLimiter: tt.limiter}}
 			if err := validateMiddlewareConfig(config); err == nil {
 				t.Fatal("enabled invalid BBR configuration was accepted")
 			}
@@ -46,9 +46,9 @@ func TestServerRejectsInvalidBBRConfiguration(t *testing.T) {
 }
 
 func TestNewRuntimeRejectsInvalidBBRBeforeConstruction(t *testing.T) {
-	config := &config_pb.Server{Middleware: &config_pb.ServerMiddleware{RateLimit: &config_pb.Middleware_RateLimit{
+	config := &config_pb.Server{RateLimit: &config_pb.Middleware_RateLimit{
 		Enable: proto.Bool(true), BbrLimiter: &config_pb.Middleware_RateLimit_BBRLimiter{Bucket: proto.Int32(0)},
-	}}}
+	}}
 	defer func() {
 		if value := recover(); value != nil {
 			t.Fatalf("NewRuntime panicked instead of rejecting config: %v", value)
@@ -95,7 +95,7 @@ func TestConfigValidationRejectsInvalidRuntimePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	badMetadata.Middleware = &config_pb.ServerMiddleware{Metadata: &config_pb.Middleware_Metadata{Prefix: []string{" "}}}
+	badMetadata.Metadata = &config_pb.Middleware_Metadata{Prefix: []string{" "}}
 	if err := validateConfig(badMetadata); err == nil {
 		t.Fatal("unsafe metadata prefix was accepted")
 	}

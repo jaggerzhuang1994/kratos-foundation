@@ -41,44 +41,44 @@ func TestClientSpecCanonicalizesMiddlewareDefaults(t *testing.T) {
 
 	equivalent := []struct {
 		name  string
-		left  *config_pb.ClientMiddleware
-		right *config_pb.ClientMiddleware
+		left  *config_pb.ClientOption
+		right *config_pb.ClientOption
 	}{
-		{name: "empty logging", left: &config_pb.ClientMiddleware{Logging: new(config_pb.Middleware_Logging)}},
-		{name: "empty deadline", left: &config_pb.ClientMiddleware{Deadline: new(config_pb.Middleware_Deadline)}},
-		{name: "empty metadata", left: &config_pb.ClientMiddleware{Metadata: new(config_pb.Middleware_Metadata)}},
-		{name: "empty tracing", left: &config_pb.ClientMiddleware{Tracing: new(config_pb.Middleware_Tracing)}},
-		{name: "empty metrics", left: &config_pb.ClientMiddleware{Metrics: new(config_pb.Middleware_Metrics)}},
-		{name: "explicit false metadata disable", left: &config_pb.ClientMiddleware{Metadata: &config_pb.Middleware_Metadata{Disable: &falseValue}}},
-		{name: "explicit false tracing disable", left: &config_pb.ClientMiddleware{Tracing: &config_pb.Middleware_Tracing{Disable: &falseValue}}},
-		{name: "explicit false metrics disable", left: &config_pb.ClientMiddleware{Metrics: &config_pb.Middleware_Metrics{Disable: &falseValue}}},
-		{name: "explicit false logging disable", left: &config_pb.ClientMiddleware{Logging: &config_pb.Middleware_Logging{Disable: &falseValue}}},
-		{name: "zero max deadline", left: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(0)}}},
-		{name: "zero minimum budget", left: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{MinBudget: durationpb.New(0)}}},
+		{name: "empty logging", left: &config_pb.ClientOption{Logging: new(config_pb.Middleware_Logging)}},
+		{name: "empty deadline", left: &config_pb.ClientOption{Deadline: new(config_pb.Middleware_Deadline)}},
+		{name: "empty metadata", left: &config_pb.ClientOption{Metadata: new(config_pb.Middleware_Metadata)}},
+		{name: "empty tracing", left: &config_pb.ClientOption{Tracing: new(config_pb.Middleware_Tracing)}},
+		{name: "empty metrics", left: &config_pb.ClientOption{Metrics: new(config_pb.Middleware_Metrics)}},
+		{name: "explicit false metadata disable", left: &config_pb.ClientOption{Metadata: &config_pb.Middleware_Metadata{Disable: &falseValue}}},
+		{name: "explicit false tracing disable", left: &config_pb.ClientOption{Tracing: &config_pb.Middleware_Tracing{Disable: &falseValue}}},
+		{name: "explicit false metrics disable", left: &config_pb.ClientOption{Metrics: &config_pb.Middleware_Metrics{Disable: &falseValue}}},
+		{name: "explicit false logging disable", left: &config_pb.ClientOption{Logging: &config_pb.Middleware_Logging{Disable: &falseValue}}},
+		{name: "zero max deadline", left: &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(0)}}},
+		{name: "zero minimum budget", left: &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{MinBudget: durationpb.New(0)}}},
 		{
 			name: "circuit breaker without enable",
-			left: &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
+			left: &config_pb.ClientOption{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
 				Sre: &config_pb.Middleware_CircuitBreaker_SREBreaker{Success: &zeroSuccess},
 			}},
 		},
 		{
 			name: "explicit false circuit breaker enable",
-			left: &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
+			left: &config_pb.ClientOption{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
 				Enable: &falseValue,
 				Sre:    &config_pb.Middleware_CircuitBreaker_SREBreaker{Success: &zeroSuccess},
 			}},
 		},
 		{
 			name:  "enabled circuit breaker with empty SRE",
-			left:  &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue, Sre: new(config_pb.Middleware_CircuitBreaker_SREBreaker)}},
-			right: &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue}},
+			left:  &config_pb.ClientOption{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue, Sre: new(config_pb.Middleware_CircuitBreaker_SREBreaker)}},
+			right: &config_pb.ClientOption{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue}},
 		},
 	}
 	for _, tt := range equivalent {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			left := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.left}, nil)
-			right := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.right}, nil)
+			left := newClientSpec("orders", tt.left, nil)
+			right := newClientSpec("orders", tt.right, nil)
 			if !left.equal(right) {
 				t.Fatal("default-equivalent middleware produced different client specs")
 			}
@@ -87,37 +87,37 @@ func TestClientSpecCanonicalizesMiddlewareDefaults(t *testing.T) {
 
 	different := []struct {
 		name  string
-		left  *config_pb.ClientMiddleware
-		right *config_pb.ClientMiddleware
+		left  *config_pb.ClientOption
+		right *config_pb.ClientOption
 	}{
 		{
 			name: "zero fallback disables default timeout",
-			left: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)}},
+			left: &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)}},
 		},
 		{
 			name: "disabled logging",
-			left: &config_pb.ClientMiddleware{Logging: &config_pb.Middleware_Logging{Disable: &trueValue}},
+			left: &config_pb.ClientOption{Logging: &config_pb.Middleware_Logging{Disable: &trueValue}},
 		},
 		{
 			name: "nonzero top-level deadline",
-			left: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: nonzeroDeadline}},
+			left: &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: nonzeroDeadline}},
 		},
 		{
 			name:  "route zero duration overrides inheritance",
-			left:  &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{Routes: []*config_pb.Middleware_Deadline_RouteRule{routeWithZeroDuration}}},
-			right: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{Routes: []*config_pb.Middleware_Deadline_RouteRule{routeWithoutDuration}}},
+			left:  &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{Routes: []*config_pb.Middleware_Deadline_RouteRule{routeWithZeroDuration}}},
+			right: &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{Routes: []*config_pb.Middleware_Deadline_RouteRule{routeWithoutDuration}}},
 		},
 		{
 			name:  "SRE scalar presence selects explicit value",
-			left:  &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue, Sre: &config_pb.Middleware_CircuitBreaker_SREBreaker{Success: &zeroSuccess}}},
-			right: &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue}},
+			left:  &config_pb.ClientOption{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue, Sre: &config_pb.Middleware_CircuitBreaker_SREBreaker{Success: &zeroSuccess}}},
+			right: &config_pb.ClientOption{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: &trueValue}},
 		},
 	}
 	for _, tt := range different {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			left := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.left}, nil)
-			right := newClientSpec("orders", &config_pb.ClientOption{Middleware: tt.right}, nil)
+			left := newClientSpec("orders", tt.left, nil)
+			right := newClientSpec("orders", tt.right, nil)
 			if left.equal(right) {
 				t.Fatal("effective middleware change produced equal client specs")
 			}
@@ -148,11 +148,11 @@ func TestClientRejectsInvalidSREConfiguration(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			config := configWithTarget("orders", "127.0.0.1:1")
-			config.Clients["orders"].Middleware = &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{Enable: proto.Bool(true), Sre: tt.breaker}}
+			config.Clients["orders"].CircuitBreaker = &config_pb.Middleware_CircuitBreaker{Enable: proto.Bool(true), Sre: tt.breaker}
 			if err := builder.validateConfig(config); err == nil {
 				t.Fatal("enabled invalid SRE configuration was accepted")
 			}
-			config.Clients["orders"].Middleware.CircuitBreaker.Enable = proto.Bool(false)
+			config.Clients["orders"].CircuitBreaker.Enable = proto.Bool(false)
 			if err := builder.validateConfig(config); err != nil {
 				t.Fatalf("disabled SRE configuration must be ignored: %v", err)
 			}
@@ -169,19 +169,19 @@ func TestClientSpecInheritsRootDefaults(t *testing.T) {
 		discovery string
 	}{
 		{"absent client", nil, &config_pb.Middleware_Deadline{FallbackTimeout: root.FallbackTimeout, MaxTimeout: root.MaxTimeout, MinBudget: root.MinBudget}, "regional"},
-		{"partial override", &config_pb.ClientOption{Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(3 * time.Second)}}}, &config_pb.Middleware_Deadline{FallbackTimeout: root.FallbackTimeout, MaxTimeout: durationpb.New(3 * time.Second), MinBudget: root.MinBudget}, "regional"},
-		{"explicit zero", &config_pb.ClientOption{Discovery: "custom", Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0), MaxTimeout: durationpb.New(0), MinBudget: durationpb.New(0)}}}, &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)}, "custom"},
+		{"partial override", &config_pb.ClientOption{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(3 * time.Second)}}, &config_pb.Middleware_Deadline{FallbackTimeout: root.FallbackTimeout, MaxTimeout: durationpb.New(3 * time.Second), MinBudget: root.MinBudget}, "regional"},
+		{"explicit zero", &config_pb.ClientOption{Discovery: "custom", Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0), MaxTimeout: durationpb.New(0), MinBudget: durationpb.New(0)}}, &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)}, "custom"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			beforeRoot, beforeOption := proto.CloneOf(root), proto.CloneOf(tt.option)
 			spec := newClientSpec("orders", tt.option, root)
-			if spec.discovery != tt.discovery || !proto.Equal(spec.middleware.Deadline, tt.want) {
-				t.Fatalf("effective spec = %s %v", spec.discovery, spec.middleware.Deadline)
+			if spec.discovery != tt.discovery || !proto.Equal(spec.middleware.deadline, tt.want) {
+				t.Fatalf("effective spec = %s %v", spec.discovery, spec.middleware.deadline)
 			}
 			if !proto.Equal(root, beforeRoot) || !proto.Equal(tt.option, beforeOption) {
 				t.Fatal("input configuration mutated")
 			}
-			spec.middleware.Deadline.FallbackTimeout.Seconds = 99
+			spec.middleware.deadline.FallbackTimeout.Seconds = 99
 			if !proto.Equal(root, beforeRoot) || !proto.Equal(tt.option, beforeOption) {
 				t.Fatal("effective configuration aliases input")
 			}
@@ -200,7 +200,7 @@ func TestClientRejectsInvalidRootDefaults(t *testing.T) {
 		{"negative budget", &config_pb.Client{MinBudget: durationpb.New(-time.Second)}},
 		{"invalid duration", &config_pb.Client{MaxTimeout: &durationpb.Duration{Nanos: 1000000000}}},
 		{"root conflict", &config_pb.Client{MaxTimeout: durationpb.New(time.Second), MinBudget: durationpb.New(2 * time.Second)}},
-		{"inherited conflict", &config_pb.Client{MinBudget: durationpb.New(2 * time.Second), Clients: map[string]*config_pb.ClientOption{"orders": {Target: "localhost:9000", Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(time.Second)}}}}}},
+		{"inherited conflict", &config_pb.Client{MinBudget: durationpb.New(2 * time.Second), Clients: map[string]*config_pb.ClientOption{"orders": {Target: "localhost:9000", Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(time.Second)}}}}},
 		{"missing discovery", &config_pb.Client{Discovery: proto.String("missing"), Clients: map[string]*config_pb.ClientOption{"orders": nil}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

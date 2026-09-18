@@ -7,7 +7,7 @@
 # Duration 使用 protobuf 秒字符串（如 10s、0.2s、0s），不能写 10m 或裸数字。
 # 地址、连接名及凭据均为示例，按实际环境替换；仅在应用组装对应组件后生效。
 # 本文件不自动加载；由应用通过 contrib/config/file 或其他配置源显式加载。
-# 热更新范围：log.filter_keys/modules/std/file、app.stop_timeout、server.middleware、client.clients、tracing.sampler、数据库连接池。
+# 热更新范围：log.filter_keys/modules/std/file、app.stop_timeout、server 请求策略、client.clients、tracing.sampler、数据库连接池。
 # job.cron 支持热更新；其余字段需重启；LOG_*、Consul 连接参数以及 Queue Spec 见 README.md。
 #
 
@@ -39,68 +39,67 @@ server:
   # 建议设置 3-5s，让服务发现有时间同步
   stop_delay: 3s
 
-  # 通用中间件配置 [热更新]；非法组合保留旧策略，逐项发布不保证整条调用链同时切换
-  middleware:
-    # 截止时间控制：未配置 deadline 时，fallback_timeout 也默认 10s
-    deadline:
-      # 没有上游截止时间时的兜底值 [默认: 10s；显式 0s 关闭回退超时]
-      fallback_timeout: 1s
-      # 本地最大耗时；无上游预算且 fallback 为 0 时也会作为超时 [默认: 0s，不限制]
-      max_timeout: 0s
-      # 进入 Handler 所需的最小剩余预算 [默认: 0s，不检查]
-      min_budget: 0s
-      # 路由级策略（优先级: 精确 path > 最长 prefix > 默认配置）；缺失字段继承全局，显式 0s 关闭对应限制
-      routes:
-        - path: /api.v1.LongRunning/Process
-          fallback_timeout: 30s
-          max_timeout: 30s
-          min_budget: 0.100s
-        - prefix: /api.v1.Upload
-          fallback_timeout: 60s
-          max_timeout: 60s
-    # 请求 debug：默认接收上游标记，可显式关闭 [默认: true；热更新]
-    request_debug:
-      accept_incoming: true
-    # Metadata 中间件
-    metadata:
-      # 是否禁用 [默认: false]
-      disable: false
-      # 接收并向下游传播的 metadata 前缀 [默认: x-md-]
-      prefix:
-        - x-md-
-      # 固定携带的 metadata
-      # constants:
-      #   x-md-service-version: v1.0.0
-    # 链路追踪中间件
-    tracing:
-      # 是否禁用 [默认: false]
-      disable: false
-    # 监控中间件
-    metrics:
-      # 是否禁用 [默认: false]
-      disable: false
-    # 日志中间件
-    logging:
-      # 是否禁用 [默认: false]
-      disable: false
-    # 表单校验中间件
-    validator:
-      # 是否禁用 [默认: false]
-      disable: false
-    # 限流中间件
-    rate_limit:
-      # 是否启用 [默认: false]
-      enable: false
-      # BBR 限流器配置
-      bbr_limiter:
-        # 窗口时间长度 [默认: 10s]
-        window: 10s
-        # 每个窗口的桶数量 [默认: 100]
-        bucket: 100
-        # CPU 使用率阈值 (千分比) [默认: 800 = 80%]
-        cpu_threshold: 800
-        # 容器环境 CPU 配额，设置后使用新的 CPU 计算方式
-        # cpu_quota: 2.0
+  # 请求策略 [热更新]；非法组合保留旧策略，逐项发布不保证整条调用链同时切换
+  # 截止时间控制：未配置 deadline 时，fallback_timeout 也默认 10s
+  deadline:
+    # 没有上游截止时间时的兜底值 [默认: 10s；显式 0s 关闭回退超时]
+    fallback_timeout: 1s
+    # 本地最大耗时；无上游预算且 fallback 为 0 时也会作为超时 [默认: 0s，不限制]
+    max_timeout: 0s
+    # 进入 Handler 所需的最小剩余预算 [默认: 0s，不检查]
+    min_budget: 0s
+    # 路由级策略（优先级: 精确 path > 最长 prefix > 默认配置）；缺失字段继承全局，显式 0s 关闭对应限制
+    routes:
+      - path: /api.v1.LongRunning/Process
+        fallback_timeout: 30s
+        max_timeout: 30s
+        min_budget: 0.100s
+      - prefix: /api.v1.Upload
+        fallback_timeout: 60s
+        max_timeout: 60s
+  # 请求 debug：默认接收上游标记，可显式关闭 [默认: true；热更新]
+  request_debug:
+    accept_incoming: true
+  # Metadata 中间件
+  metadata:
+    # 是否禁用 [默认: false]
+    disable: false
+    # 接收并向下游传播的 metadata 前缀 [默认: x-md-]
+    prefix:
+      - x-md-
+    # 固定携带的 metadata
+    # constants:
+    #   x-md-service-version: v1.0.0
+  # 链路追踪中间件
+  tracing:
+    # 是否禁用 [默认: false]
+    disable: false
+  # 监控中间件
+  metrics:
+    # 是否禁用 [默认: false]
+    disable: false
+  # 日志中间件
+  logging:
+    # 是否禁用 [默认: false]
+    disable: false
+  # 表单校验中间件
+  validator:
+    # 是否禁用 [默认: false]
+    disable: false
+  # 限流中间件
+  rate_limit:
+    # 是否启用 [默认: false]
+    enable: false
+    # BBR 限流器配置
+    bbr_limiter:
+      # 窗口时间长度 [默认: 10s]
+      window: 10s
+      # 每个窗口的桶数量 [默认: 100]
+      bucket: 100
+      # CPU 使用率阈值 (千分比) [默认: 800 = 80%]
+      cpu_threshold: 800
+      # 容器环境 CPU 配额，设置后使用新的 CPU 计算方式
+      # cpu_quota: 2.0
 
   # 业务 HTTP 服务器配置；disable 只控制业务监听，独立管理监听另行配置
   http:
@@ -504,7 +503,7 @@ kafka:
 # 服务客户端配置
 # =============================================================================
 client:
-  # 各客户端逐字段继承这些默认值；单个 middleware.deadline 显式值优先。[热更新]
+  # 各客户端逐字段继承这些默认值；单个客户端的 deadline 显式值优先。[热更新]
   fallback_timeout: 10s
   max_timeout: 0s
   min_budget: 0s
@@ -524,74 +523,71 @@ client:
       target: discovery:///user-service
       # 发现实例；省略或为空时继承 client.discovery，直连目标不使用此字段。
       discovery: default
-      # 中间件配置
-      middleware:
-        # 调用预算配置
-        deadline:
-          # 父 Context 无截止时间时的兜底值 [省略继承 client.fallback_timeout；显式 0s 关闭回退超时]
-          fallback_timeout: 2s
-          # 单次调用最大耗时；无父预算且 fallback 为 0 时也会作为超时 [省略继承 client.max_timeout；显式 0s 不限制]
-          max_timeout: 2s
-          # 预算低于该值时不再发起请求 [省略继承 client.min_budget；显式 0s 不检查]
-          min_budget: 0.020s
-          routes:
-            - path: /api.user.v1.UserService/GetProfile
-              fallback_timeout: 5s
-              max_timeout: 5s
-              min_budget: 0.020s
-            # 同一规则只能设置 path 或 prefix；缺失预算继承客户端全局配置
-            - prefix: /api.user.v1.UserService/
-              fallback_timeout: 2s
-              max_timeout: 2s
-              min_budget: 0.020s
-        # 请求 debug：是否向该下游传播 Context 标记 [默认: true；对外服务可关闭]
-        request_debug:
-          propagate: true
-        # Metadata 配置
-        metadata:
-          # 是否禁用 [默认: false]
-          disable: false
-          # 固定携带的 metadata
-          # constants:
-          #   x-md-client-version: v1.0.0
-          # 本 Client 仅向下游传播 x-md-global- 前缀
-          prefix:
-            - x-md-global-
-        # 链路追踪
-        tracing:
-          disable: false
-        # 监控
-        metrics:
-          disable: false
-        # 日志
-        logging:
-          disable: false
-        # 熔断器配置
-        circuit_breaker:
-          # 是否启用 [默认: false]
-          enable: true
-          # SRE 熔断器配置
-          sre:
-            # 成功率阈值 (K = 1/success) [默认: 0.6]
-            # K = 1/success；提高 success 会降低 K，使熔断更激进
-            success: 0.6
-            # 最小请求数 [默认: 100]
-            request: 100
-            # 桶数量 [默认: 10]
-            bucket: 10
-            # 统计窗口时长 [默认: 3s]
-            window: 3s
+      # 调用预算配置
+      deadline:
+        # 父 Context 无截止时间时的兜底值 [省略继承 client.fallback_timeout；显式 0s 关闭回退超时]
+        fallback_timeout: 2s
+        # 单次调用最大耗时；无父预算且 fallback 为 0 时也会作为超时 [省略继承 client.max_timeout；显式 0s 不限制]
+        max_timeout: 2s
+        # 预算低于该值时不再发起请求 [省略继承 client.min_budget；显式 0s 不检查]
+        min_budget: 0.020s
+        routes:
+          - path: /api.user.v1.UserService/GetProfile
+            fallback_timeout: 5s
+            max_timeout: 5s
+            min_budget: 0.020s
+          # 同一规则只能设置 path 或 prefix；缺失预算继承客户端全局配置
+          - prefix: /api.user.v1.UserService/
+            fallback_timeout: 2s
+            max_timeout: 2s
+            min_budget: 0.020s
+      # 请求 debug：是否向该下游传播 Context 标记 [默认: true；对外服务可关闭]
+      request_debug:
+        propagate: true
+      # Metadata 配置
+      metadata:
+        # 是否禁用 [默认: false]
+        disable: false
+        # 固定携带的 metadata
+        # constants:
+        #   x-md-client-version: v1.0.0
+        # 本 Client 仅向下游传播 x-md-global- 前缀
+        prefix:
+          - x-md-global-
+      # 链路追踪
+      tracing:
+        disable: false
+      # 监控
+      metrics:
+        disable: false
+      # 日志
+      logging:
+        disable: false
+      # 熔断器配置
+      circuit_breaker:
+        # 是否启用 [默认: false]
+        enable: true
+        # SRE 熔断器配置
+        sre:
+          # 成功率阈值 (K = 1/success) [默认: 0.6]
+          # K = 1/success；提高 success 会降低 K，使熔断更激进
+          success: 0.6
+          # 最小请求数 [默认: 100]
+          request: 100
+          # 桶数量 [默认: 10]
+          bucket: 10
+          # 统计窗口时长 [默认: 3s]
+          window: 3s
 
     # 直连模式示例
     # external-api:
     #   protocol: HTTPS
     #   target: api.example.com:443
-    #   middleware:
-    #     deadline:
-    #       fallback_timeout: 10s
-    #       max_timeout: 10s
-    #     circuit_breaker:
-    #       enable: true
+    #   deadline:
+    #     fallback_timeout: 10s
+    #     max_timeout: 10s
+    #   circuit_breaker:
+    #     enable: true
 
 # 仅可配置已经由业务注册的 Cron 任务；未知名称会导致启动/热更新校验失败。
 job:

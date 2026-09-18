@@ -17,8 +17,7 @@ type componentConfig = *config_pb.Server
 
 // defaultConfig 只作为合并模板使用，Manager.Load 会先复制它。
 var defaultConfig = &config_pb.Server{
-	StopDelay:  durationpb.New(0),
-	Middleware: nil,
+	StopDelay: durationpb.New(0),
 	Http: &config_pb.HttpServerOption{
 		Disable:            proto.Bool(false),
 		Network:            proto.String("tcp"),
@@ -60,11 +59,6 @@ func loadConfig(manager foundationconfig.Manager) (componentConfig, error) {
 	return next, nil
 }
 
-// defaultMiddlewareConfig 是 server.middleware 订阅使用的默认值。它必须是非 nil 的空
-// 消息：未配置 middleware 的应用同样需要拿到默认策略，而各中间件对空配置的处理与对
-// nil 的处理一致。
-var defaultMiddlewareConfig = &config_pb.ServerMiddleware{}
-
 // validateConfig 统一检查生成约束、停机时间和中间件策略。
 func validateConfig(config componentConfig) error {
 	if err := config.ValidateAll(); err != nil {
@@ -73,17 +67,14 @@ func validateConfig(config componentConfig) error {
 	if stopDelay := config.GetStopDelay().AsDuration(); stopDelay < 0 {
 		return fmt.Errorf("server stop_delay cannot be negative: %s", stopDelay)
 	}
-	return validateMiddlewareConfig(config.GetMiddleware())
+	return validateMiddlewareConfig(config)
 }
 
 // validateMiddlewareConfig 校验可热更新的中间件策略。
 //
-// 热更新只订阅 server.middleware 这一子树，因此这部分校验必须能脱离整份 Server 配置
-// 独立执行；启动期的 validateConfig 也复用它，避免两条路径出现不同的接受标准。
-func validateMiddlewareConfig(config *config_pb.ServerMiddleware) error {
-	if err := config.ValidateAll(); err != nil {
-		return fmt.Errorf("validate server middleware config: %w", err)
-	}
+// 热更新订阅完整 server 快照，但只应用这些策略；启动期的 validateConfig 也复用它，
+// 避免两条路径出现不同的接受标准。
+func validateMiddlewareConfig(config *config_pb.Server) error {
 	if _, err := deadline.NewStore(config.GetDeadline()); err != nil {
 		return fmt.Errorf("server deadline: %w", err)
 	}

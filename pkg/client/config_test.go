@@ -244,14 +244,12 @@ func TestFactoryNestedMiddlewareNoOpKeepsCachedVersion(t *testing.T) {
 	falseValue := false
 	zeroSuccess := 0.0
 	noOp := configWithTarget("orders", "http://127.0.0.1:1")
-	noOp.Clients["orders"].Middleware = &config_pb.ClientMiddleware{
-		Deadline: &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(0)},
-		Metadata: &config_pb.Middleware_Metadata{Disable: &falseValue},
-		Logging:  new(config_pb.Middleware_Logging),
-		CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
-			Enable: &falseValue,
-			Sre:    &config_pb.Middleware_CircuitBreaker_SREBreaker{Success: &zeroSuccess},
-		},
+	noOp.Clients["orders"].Deadline = &config_pb.Middleware_Deadline{MaxTimeout: durationpb.New(0)}
+	noOp.Clients["orders"].Metadata = &config_pb.Middleware_Metadata{Disable: &falseValue}
+	noOp.Clients["orders"].Logging = new(config_pb.Middleware_Logging)
+	noOp.Clients["orders"].CircuitBreaker = &config_pb.Middleware_CircuitBreaker{
+		Enable: &falseValue,
+		Sre:    &config_pb.Middleware_CircuitBreaker_SREBreaker{Success: &zeroSuccess},
 	}
 	if err := updateFactoryConfig(factory, noOp); err != nil {
 		t.Fatal(err)
@@ -270,9 +268,7 @@ func TestFactoryNestedMiddlewareNoOpKeepsCachedVersion(t *testing.T) {
 
 	trueValue := true
 	changed := configWithTarget("orders", "http://127.0.0.1:1")
-	changed.Clients["orders"].Middleware = &config_pb.ClientMiddleware{
-		Logging: &config_pb.Middleware_Logging{Disable: &trueValue},
-	}
+	changed.Clients["orders"].Logging = &config_pb.Middleware_Logging{Disable: &trueValue}
 	if err := updateFactoryConfig(factory, changed); err != nil {
 		t.Fatal(err)
 	}
@@ -292,9 +288,7 @@ func TestFactoryExplicitZeroFallbackReplacesDefaultVersion(t *testing.T) {
 	before := currentSnapshot(factory, "orders")
 
 	next := configWithTarget("orders", "http://127.0.0.1:1")
-	next.Clients["orders"].Middleware = &config_pb.ClientMiddleware{
-		Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)},
-	}
+	next.Clients["orders"].Deadline = &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(0)}
 	if err := updateFactoryConfig(factory, next); err != nil {
 		t.Fatal(err)
 	}
@@ -369,9 +363,9 @@ func TestFactoryRejectsSREUpdateWithoutRetiringExistingClients(t *testing.T) {
 	beforeOrders := currentSnapshot(factory, "orders")
 	beforePayments := currentSnapshot(factory, "payments")
 	next := configWithTargets(map[string]string{"orders": "http://127.0.0.1:2", "payments": "http://127.0.0.1:2"})
-	next.Clients["payments"].Middleware = &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
+	next.Clients["payments"].CircuitBreaker = &config_pb.Middleware_CircuitBreaker{
 		Enable: proto.Bool(true), Sre: &config_pb.Middleware_CircuitBreaker_SREBreaker{Bucket: proto.Int32(0)},
-	}}
+	}
 	if err := updateFactoryConfig(factory, next); err == nil {
 		t.Error("invalid SRE update was accepted")
 	}
@@ -384,7 +378,7 @@ func TestFactoryRootDefaultsUpdate(t *testing.T) {
 	seen := make(chan clientSpec, 8)
 	initial := &config_pb.Client{Discovery: proto.String("regional"), FallbackTimeout: durationpb.New(5 * time.Second), Clients: map[string]*config_pb.ClientOption{
 		"inherited": {Target: "localhost:9000"},
-		"override":  {Target: "localhost:9001", Discovery: "fixed", Middleware: &config_pb.ClientMiddleware{Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(2 * time.Second)}}},
+		"override":  {Target: "localhost:9001", Discovery: "fixed", Deadline: &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(2 * time.Second)}},
 	}}
 	f := newConfiguredTestFactory(t, initial, func(_ context.Context, spec clientSpec) (clientResult, error) {
 		seen <- spec
@@ -415,7 +409,7 @@ func TestFactoryRootDefaultsUpdate(t *testing.T) {
 	for _, name := range []string{"inherited", "dynamic", "new-dynamic"} {
 		acquire(name)
 		spec := receiveWithin(t, seen, "updated client spec")
-		if spec.middleware.Deadline.FallbackTimeout.AsDuration() != 7*time.Second || spec.discovery != "updated" {
+		if spec.middleware.deadline.FallbackTimeout.AsDuration() != 7*time.Second || spec.discovery != "updated" {
 			t.Fatalf("%s did not inherit updated root", name)
 		}
 	}

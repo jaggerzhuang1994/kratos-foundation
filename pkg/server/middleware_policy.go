@@ -23,7 +23,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// middlewarePolicies 持有全部可热更新的服务端中间件策略，是 server.middleware 的唯一订阅者。
+// middlewarePolicies 持有全部可热更新的服务端中间件策略，是 server 的唯一订阅者。
 type middlewarePolicies struct {
 	// logger 中间件配置更新与失败日志入口。
 	logger log.Logger
@@ -45,7 +45,7 @@ type middlewarePolicies struct {
 	rateLimit *dynamicMiddleware
 
 	// current 保存最近一次生效的配置，用于判断哪些中间件真正需要重建。
-	current *config_pb.ServerMiddleware
+	current *config_pb.Server
 }
 
 // dynamicMiddlewares 汇总一次配置对应的全部中间件实现；字段为 nil 表示该项禁用。
@@ -74,13 +74,13 @@ func newMiddlewarePolicies(
 	metricsProvider metrics.Provider,
 	tracingProvider tracing.Provider,
 ) (*middlewarePolicies, func(), error) {
-	deadlineStore, err := deadline.NewStore(config.GetMiddleware().GetDeadline())
+	deadlineStore, err := deadline.NewStore(config.GetDeadline())
 	if err != nil {
 		return nil, nil, err
 	}
 	built, err := buildDynamicMiddlewares(
 		logger,
-		config.GetMiddleware(),
+		config,
 		metricsProvider,
 		tracingProvider,
 	)
@@ -97,19 +97,19 @@ func newMiddlewarePolicies(
 		logging:      newDynamicMiddleware(built.logging),
 		validator:    newDynamicMiddleware(built.validator),
 		rateLimit:    newDynamicMiddleware(built.rateLimit),
-		current:      proto.CloneOf(config.GetMiddleware()),
+		current:      proto.CloneOf(config),
 	}
 
-	// 只订阅 middleware 子树：监听整个 server 段会让修改监听地址之类的字段也触发
-	// 中间件重建，进而重置 BBR 限流器的统计窗口。
+	// 策略字段直接属于 server，因此订阅完整快照；回调只比较策略字段，监听地址等
+	// 需重启配置发生变化时不会重建中间件或重置 BBR 统计窗口。
 	cancel, err := configManager.Subscribe(
-		"server.middleware",
-		new(config_pb.ServerMiddleware),
+		"server",
+		new(config_pb.Server),
 		func(_ string, value any, updateErr error) {
-			next, valid := value.(*config_pb.ServerMiddleware)
+			next, valid := value.(*config_pb.Server)
 			if updateErr == nil && (!valid || next == nil) {
 				updateErr = fmt.Errorf(
-					"server middleware config update has type %T, want *config_pb.ServerMiddleware",
+					"server config update has type %T, want *config_pb.Server",
 					value,
 				)
 			}
@@ -117,7 +117,7 @@ func newMiddlewarePolicies(
 				updateErr = validateMiddlewareConfig(next)
 			}
 			// 订阅会回放当前快照；内容未变时不重建，也不误报配置更新。
-			if updateErr == nil && proto.Equal(policies.current, next) {
+			if updateErr == nil && middlewareConfigEqual(policies.current, next) {
 				return
 			}
 			if updateErr == nil {
@@ -136,7 +136,7 @@ func newMiddlewarePolicies(
 			}
 			logger.Info("server middleware config updated")
 		},
-		defaultMiddlewareConfig,
+		defaultConfig,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -156,7 +156,7 @@ func newMiddlewarePolicies(
 // 只有订阅回调会调用它，因此 p.current 无需额外加锁。
 func (p *middlewarePolicies) update(
 	logger log.Logger,
-	config *config_pb.ServerMiddleware,
+	config *config_pb.Server,
 	metricsProvider metrics.Provider,
 	tracingProvider tracing.Provider,
 ) error {
@@ -229,7 +229,7 @@ func (p *middlewarePolicies) update(
 // nil，因此遥测中间件能否工作仍由构造期注入的 Provider 决定，配置只负责开关。
 func buildDynamicMiddlewares(
 	logger log.Logger,
-	conf *config_pb.ServerMiddleware,
+	conf *config_pb.Server,
 	metricsProvider metrics.Provider,
 	tracingProvider tracing.Provider,
 ) (dynamicMiddlewares, error) {
@@ -246,6 +246,19 @@ func buildDynamicMiddlewares(
 		validator:    validator.Validator(conf.GetValidator()),
 		rateLimit:    ratelimit.Server(conf.GetRateLimit()),
 	}, nil
+}
+
+// middlewareConfigEqual 只比较支持热更新的请求策略；监听与生命周期字段的变化需要
+// 重启，不应触发中间件替换。
+func middlewareConfigEqual(left, right *config_pb.Server) bool {
+	return proto.Equal(left.GetMetadata(), right.GetMetadata()) &&
+		proto.Equal(left.GetRequestDebug(), right.GetRequestDebug()) &&
+		proto.Equal(left.GetTracing(), right.GetTracing()) &&
+		proto.Equal(left.GetMetrics(), right.GetMetrics()) &&
+		proto.Equal(left.GetLogging(), right.GetLogging()) &&
+		proto.Equal(left.GetValidator(), right.GetValidator()) &&
+		proto.Equal(left.GetRateLimit(), right.GetRateLimit()) &&
+		proto.Equal(left.GetDeadline(), right.GetDeadline())
 }
 
 // snapshot 固化一次配置对应的中间件实现。

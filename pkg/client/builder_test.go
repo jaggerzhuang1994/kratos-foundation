@@ -202,7 +202,7 @@ func TestBuilderHTTPPropagatesRequestDebug(t *testing.T) {
 	for _, propagate := range []bool{true, false} {
 		result, err := builder.build(t.Context(), newClientSpec("debug", &config_pb.ClientOption{
 			Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL,
-			Middleware: &config_pb.ClientMiddleware{RequestDebug: &config_pb.Middleware_RequestDebug{Propagate: proto.Bool(propagate)}},
+			RequestDebug: &config_pb.Middleware_RequestDebug{Propagate: proto.Bool(propagate)},
 		}, nil))
 		if err != nil {
 			t.Fatal(err)

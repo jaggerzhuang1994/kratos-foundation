@@ -20,8 +20,8 @@ logger.WithContext(ctx).With("detail", log.DebugOnly("verbose")).Info("request s
 
 | 配置 | 默认与作用 |
 | --- | --- |
-| `server.middleware.request_debug.accept_incoming` | true；默认接受传入标记，显式 false 关闭；支持热更新 |
-| `client.clients.<name>.middleware.request_debug.propagate` | true；false 时停止向该下游传递；随 clients 配置更新重建客户端 |
+| `server.request_debug.accept_incoming` | true；默认接受传入标记，显式 false 关闭；支持热更新 |
+| `client.clients.<name>.request_debug.propagate` | true；false 时停止向该下游传递；随 clients 配置更新重建客户端 |
 
 两端共享配置消息，但 `accept_incoming` 只在服务端生效，`propagate` 只在客户端生效。省略值使用默认值；配置源更新删除键是否生效遵循 Config 的默认合并规则。服务端关闭接收不会清除业务已在本地写入的标记；客户端关闭传播也不会改变本地 Context。新租用的客户端应用新配置，已有租约沿用原客户端策略。
 

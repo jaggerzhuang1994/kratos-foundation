@@ -44,12 +44,13 @@ func TestMiddlewareUpdateRejectsBBRWithoutChangingOtherPolicies(t *testing.T) {
 	metrics := testMetricsProvider{registry: prometheus.NewRegistry()}
 	tracing := runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()}
 	manager := &serverManagerStub{}
-	policies, cleanup, err := newMiddlewarePolicies(manager, logger, &config_pb.Server{}, metrics, tracing)
+	initial := &config_pb.Server{}
+	policies, cleanup, err := newMiddlewarePolicies(manager, logger, initial, metrics, tracing)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	next := &config_pb.ServerMiddleware{
+	next := &config_pb.Server{
 		Deadline:  &config_pb.Middleware_Deadline{FallbackTimeout: durationpb.New(time.Second)},
 		RateLimit: &config_pb.Middleware_RateLimit{Enable: proto.Bool(true), BbrLimiter: &config_pb.Middleware_RateLimit_BBRLimiter{Bucket: proto.Int32(0)}},
 	}
@@ -58,8 +59,8 @@ func TestMiddlewareUpdateRejectsBBRWithoutChangingOtherPolicies(t *testing.T) {
 			t.Fatalf("update panicked instead of rejecting config: %v", value)
 		}
 	}()
-	manager.observer("server.middleware", next, nil)
-	if policies.current != nil {
+	manager.observer("server", next, nil)
+	if !proto.Equal(policies.current, initial) {
 		t.Fatalf("invalid update replaced current config: %v", policies.current)
 	}
 	ctx, cancel, err := policies.deadline.Derive(context.Background(), "/test")
@@ -93,7 +94,7 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 		t.Fatalf("newMiddlewarePolicies() error = %v", err)
 	}
 
-	next := &config_pb.ServerMiddleware{
+	next := &config_pb.Server{
 		Deadline: &config_pb.Middleware_Deadline{
 			FallbackTimeout: durationpb.New(time.Second),
 		},
@@ -104,7 +105,7 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 		Validator: &config_pb.Middleware_Validator{Disable: boolp(true)},
 		RateLimit: &config_pb.Middleware_RateLimit{Enable: boolp(true)},
 	}
-	manager.observer("server.middleware", next, nil)
+	manager.observer("server", next, nil)
 	if !proto.Equal(policies.current, next) {
 		t.Fatalf("current middleware = %v, want %v", policies.current, next)
 	}
@@ -114,12 +115,12 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 
 	accepted := proto.CloneOf(policies.current)
 	manager.observer(
-		"server.middleware",
-		&config_pb.ServerMiddleware{Metadata: &config_pb.Middleware_Metadata{Prefix: []string{" "}}},
+		"server",
+		&config_pb.Server{Metadata: &config_pb.Middleware_Metadata{Prefix: []string{" "}}},
 		nil,
 	)
-	manager.observer("server.middleware", "wrong type", nil)
-	manager.observer("server.middleware", new(config_pb.ServerMiddleware), errors.New("source failed"))
+	manager.observer("server", "wrong type", nil)
+	manager.observer("server", new(config_pb.Server), errors.New("source failed"))
 	if !proto.Equal(policies.current, accepted) {
 		t.Fatal("invalid middleware update replaced active state")
 	}
@@ -141,26 +142,33 @@ func (l *policyUpdateLogger) Info(values ...any) { l.updates++ }
 func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
 	logger := &policyUpdateLogger{Logger: newRuntimeTestLogger(t)}
 	manager := &serverManagerStub{}
-	initial := proto.CloneOf(defaultMiddlewareConfig)
-	_, cleanup, err := newMiddlewarePolicies(manager, logger, &config_pb.Server{Middleware: initial},
+	initial := proto.CloneOf(defaultConfig)
+	policies, cleanup, err := newMiddlewarePolicies(manager, logger, initial,
 		testMetricsProvider{registry: prometheus.NewRegistry()}, runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	manager.observer("server.middleware", proto.CloneOf(initial), nil)
+	manager.observer("server", proto.CloneOf(initial), nil)
 	if logger.updates != 0 {
 		t.Fatal("initial snapshot logged as update")
 	}
 	next := proto.CloneOf(initial)
 	next.Logging = &config_pb.Middleware_Logging{Disable: proto.Bool(!initial.GetLogging().GetDisable())}
-	manager.observer("server.middleware", next, nil)
+	manager.observer("server", next, nil)
 	if logger.updates != 1 {
 		t.Fatalf("changed config logged %d updates", logger.updates)
 	}
-	manager.observer("server.middleware", proto.CloneOf(next), nil)
+	manager.observer("server", proto.CloneOf(next), nil)
 	if logger.updates != 1 {
 		t.Fatal("duplicate snapshot logged as update")
+	}
+	current := policies.current
+	restartOnly := proto.CloneOf(next)
+	restartOnly.Http.Addr = proto.String("127.0.0.1:18000")
+	manager.observer("server", restartOnly, nil)
+	if policies.current != current || logger.updates != 1 {
+		t.Fatal("restart-only server change replaced middleware policy")
 	}
 }
 
@@ -189,7 +197,7 @@ func TestRequestDebugPolicyHotUpdate(t *testing.T) {
 	}
 	var enabledContext context.Context
 	for _, enabled := range []bool{false, true, false} {
-		manager.observer("server.middleware", &config_pb.ServerMiddleware{RequestDebug: &config_pb.Middleware_RequestDebug{AcceptIncoming: proto.Bool(enabled)}}, nil)
+		manager.observer("server", &config_pb.Server{RequestDebug: &config_pb.Middleware_RequestDebug{AcceptIncoming: proto.Bool(enabled)}}, nil)
 		got, err := handler(ctx, nil)
 		if err != nil || got != enabled {
 			t.Fatalf("enabled=%v got=%v err=%v", enabled, got, err)

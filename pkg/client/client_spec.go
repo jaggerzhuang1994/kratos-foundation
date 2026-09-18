@@ -22,7 +22,19 @@ type clientSpec struct {
 	// target 连接目标；省略时使用 discovery:/// 加连接名。
 	target string
 	// middleware 已复制并归一化的中间件配置，作为版本比较依据。
-	middleware *config_pb.ClientMiddleware
+	middleware *clientMiddlewareConfig
+}
+
+// clientMiddlewareConfig 是具名客户端直接策略字段的规范化快照，只用于内部比较和构建，
+// 不形成额外的配置路径。
+type clientMiddlewareConfig struct {
+	metadata       *config_pb.Middleware_Metadata
+	tracing        *config_pb.Middleware_Tracing
+	metrics        *config_pb.Middleware_Metrics
+	logging        *config_pb.Middleware_Logging
+	circuitBreaker *config_pb.Middleware_CircuitBreaker
+	deadline       *config_pb.Middleware_Deadline
+	requestDebug   *config_pb.Middleware_RequestDebug
 }
 
 func newClientSpec(name string, option *config_pb.ClientOption, defaults *config_pb.Client) clientSpec {
@@ -39,17 +51,20 @@ func newClientSpec(name string, option *config_pb.ClientOption, defaults *config
 		discovery = "default"
 	}
 
-	middleware := option.GetMiddleware()
-	if middleware == nil {
-		middleware = new(config_pb.ClientMiddleware)
-	} else {
-		middleware = proto.Clone(middleware).(*config_pb.ClientMiddleware)
+	middleware := &clientMiddlewareConfig{
+		metadata:       proto.CloneOf(option.GetMetadata()),
+		tracing:        proto.CloneOf(option.GetTracing()),
+		metrics:        proto.CloneOf(option.GetMetrics()),
+		logging:        proto.CloneOf(option.GetLogging()),
+		circuitBreaker: proto.CloneOf(option.GetCircuitBreaker()),
+		deadline:       proto.CloneOf(option.GetDeadline()),
+		requestDebug:   proto.CloneOf(option.GetRequestDebug()),
 	}
 	// 在独立副本上逐字段继承，必须先于零值规范化，保证显式 0s 可以覆盖根配置。
-	if middleware.Deadline == nil {
-		middleware.Deadline = new(config_pb.Middleware_Deadline)
+	if middleware.deadline == nil {
+		middleware.deadline = new(config_pb.Middleware_Deadline)
 	}
-	d := middleware.Deadline
+	d := middleware.deadline
 	if d.FallbackTimeout == nil {
 		d.FallbackTimeout = proto.CloneOf(defaults.GetFallbackTimeout())
 	}
@@ -70,8 +85,8 @@ func newClientSpec(name string, option *config_pb.ClientOption, defaults *config
 	}
 }
 
-func canonicalizeClientMiddleware(middleware *config_pb.ClientMiddleware) {
-	if deadlineConfig := middleware.Deadline; deadlineConfig != nil {
+func canonicalizeClientMiddleware(middleware *clientMiddlewareConfig) {
+	if deadlineConfig := middleware.deadline; deadlineConfig != nil {
 		// fallback_timeout 缺失时默认 10s，显式 0s 必须保留以关闭回退超时。
 		zeroDuration := new(durationpb.Duration)
 		if proto.Equal(deadlineConfig.MaxTimeout, zeroDuration) {
@@ -81,44 +96,44 @@ func canonicalizeClientMiddleware(middleware *config_pb.ClientMiddleware) {
 			deadlineConfig.MinBudget = nil
 		}
 		if proto.Equal(deadlineConfig, new(config_pb.Middleware_Deadline)) {
-			middleware.Deadline = nil
+			middleware.deadline = nil
 		}
 	}
-	if metadataConfig := middleware.Metadata; metadataConfig != nil {
+	if metadataConfig := middleware.metadata; metadataConfig != nil {
 		if metadataConfig.Disable != nil && !metadataConfig.GetDisable() {
 			metadataConfig.Disable = nil
 		}
 		if proto.Equal(metadataConfig, new(config_pb.Middleware_Metadata)) {
-			middleware.Metadata = nil
+			middleware.metadata = nil
 		}
 	}
-	if tracingConfig := middleware.Tracing; tracingConfig != nil {
+	if tracingConfig := middleware.tracing; tracingConfig != nil {
 		if tracingConfig.Disable != nil && !tracingConfig.GetDisable() {
 			tracingConfig.Disable = nil
 		}
 		if proto.Equal(tracingConfig, new(config_pb.Middleware_Tracing)) {
-			middleware.Tracing = nil
+			middleware.tracing = nil
 		}
 	}
-	if metricsConfig := middleware.Metrics; metricsConfig != nil {
+	if metricsConfig := middleware.metrics; metricsConfig != nil {
 		if metricsConfig.Disable != nil && !metricsConfig.GetDisable() {
 			metricsConfig.Disable = nil
 		}
 		if proto.Equal(metricsConfig, new(config_pb.Middleware_Metrics)) {
-			middleware.Metrics = nil
+			middleware.metrics = nil
 		}
 	}
-	if loggingConfig := middleware.Logging; loggingConfig != nil {
+	if loggingConfig := middleware.logging; loggingConfig != nil {
 		if loggingConfig.Disable != nil && !loggingConfig.GetDisable() {
 			loggingConfig.Disable = nil
 		}
 		if proto.Equal(loggingConfig, new(config_pb.Middleware_Logging)) {
-			middleware.Logging = nil
+			middleware.logging = nil
 		}
 	}
-	if circuitBreakerConfig := middleware.CircuitBreaker; circuitBreakerConfig != nil {
+	if circuitBreakerConfig := middleware.circuitBreaker; circuitBreakerConfig != nil {
 		if !circuitBreakerConfig.GetEnable() {
-			middleware.CircuitBreaker = nil
+			middleware.circuitBreaker = nil
 		} else if proto.Equal(
 			circuitBreakerConfig.Sre,
 			new(config_pb.Middleware_CircuitBreaker_SREBreaker),
@@ -132,7 +147,31 @@ func (s clientSpec) equal(other clientSpec) bool {
 	return s.protocol == other.protocol &&
 		s.target == other.target &&
 		s.discovery == other.discovery &&
-		proto.Equal(s.middleware, other.middleware)
+		s.middleware.equal(other.middleware)
+}
+
+func (c *clientMiddlewareConfig) equal(other *clientMiddlewareConfig) bool {
+	return proto.Equal(c.metadata, other.metadata) &&
+		proto.Equal(c.tracing, other.tracing) &&
+		proto.Equal(c.metrics, other.metrics) &&
+		proto.Equal(c.logging, other.logging) &&
+		proto.Equal(c.circuitBreaker, other.circuitBreaker) &&
+		proto.Equal(c.deadline, other.deadline) &&
+		proto.Equal(c.requestDebug, other.requestDebug)
+}
+
+func (c *clientMiddlewareConfig) GetMetadata() *config_pb.Middleware_Metadata { return c.metadata }
+func (c *clientMiddlewareConfig) GetTracing() *config_pb.Middleware_Tracing   { return c.tracing }
+func (c *clientMiddlewareConfig) GetMetrics() *config_pb.Middleware_Metrics   { return c.metrics }
+func (c *clientMiddlewareConfig) GetLogging() *config_pb.Middleware_Logging   { return c.logging }
+func (c *clientMiddlewareConfig) GetCircuitBreaker() *config_pb.Middleware_CircuitBreaker {
+	return c.circuitBreaker
+}
+func (c *clientMiddlewareConfig) GetDeadline() *config_pb.Middleware_Deadline {
+	return c.deadline
+}
+func (c *clientMiddlewareConfig) GetRequestDebug() *config_pb.Middleware_RequestDebug {
+	return c.requestDebug
 }
 
 func (s clientSpec) useDiscovery() bool {

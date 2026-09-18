@@ -122,39 +122,6 @@ func (m *Server) validate(all bool) error {
 
 	}
 
-	if m.Middleware != nil {
-
-		if all {
-			switch v := interface{}(m.GetMiddleware()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerValidationError{
-						field:  "Middleware",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerValidationError{
-						field:  "Middleware",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMiddleware()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerValidationError{
-					field:  "Middleware",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
 	if m.StopDelay != nil {
 
 		if all {
@@ -180,6 +147,270 @@ func (m *Server) validate(all bool) error {
 			if err := v.Validate(); err != nil {
 				return ServerValidationError{
 					field:  "StopDelay",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metadata != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetadata()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Metadata",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Metadata",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Metadata",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Tracing != nil {
+
+		if all {
+			switch v := interface{}(m.GetTracing()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Tracing",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Tracing",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Metrics != nil {
+
+		if all {
+			switch v := interface{}(m.GetMetrics()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Metrics",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Metrics",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Logging != nil {
+
+		if all {
+			switch v := interface{}(m.GetLogging()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Logging",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Logging",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Logging",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Validator != nil {
+
+		if all {
+			switch v := interface{}(m.GetValidator()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Validator",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Validator",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetValidator()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Validator",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.RateLimit != nil {
+
+		if all {
+			switch v := interface{}(m.GetRateLimit()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "RateLimit",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "RateLimit",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRateLimit()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "RateLimit",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Deadline != nil {
+
+		if all {
+			switch v := interface{}(m.GetDeadline()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.RequestDebug != nil {
+
+		if all {
+			switch v := interface{}(m.GetRequestDebug()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "RequestDebug",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ServerValidationError{
+						field:  "RequestDebug",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRequestDebug()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ServerValidationError{
+					field:  "RequestDebug",
 					reason: "embedded message failed validation",
 					cause:  err,
 				}
@@ -674,370 +905,6 @@ var _GrpcServerOption_Network_InLookup = map[string]struct{}{
 	"unix":       {},
 	"unixpacket": {},
 }
-
-// Validate checks the field values on ServerMiddleware with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *ServerMiddleware) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on ServerMiddleware with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ServerMiddlewareMultiError, or nil if none found.
-func (m *ServerMiddleware) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *ServerMiddleware) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if m.Metadata != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetadata()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Metadata",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Metadata",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetadata()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "Metadata",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Tracing != nil {
-
-		if all {
-			switch v := interface{}(m.GetTracing()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Tracing",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetTracing()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "Tracing",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Metrics != nil {
-
-		if all {
-			switch v := interface{}(m.GetMetrics()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Metrics",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetMetrics()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "Metrics",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Logging != nil {
-
-		if all {
-			switch v := interface{}(m.GetLogging()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Logging",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Logging",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetLogging()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "Logging",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Validator != nil {
-
-		if all {
-			switch v := interface{}(m.GetValidator()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Validator",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Validator",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetValidator()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "Validator",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.RateLimit != nil {
-
-		if all {
-			switch v := interface{}(m.GetRateLimit()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "RateLimit",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "RateLimit",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetRateLimit()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "RateLimit",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.Deadline != nil {
-
-		if all {
-			switch v := interface{}(m.GetDeadline()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Deadline",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "Deadline",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "Deadline",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if m.RequestDebug != nil {
-
-		if all {
-			switch v := interface{}(m.GetRequestDebug()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "RequestDebug",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ServerMiddlewareValidationError{
-						field:  "RequestDebug",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetRequestDebug()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ServerMiddlewareValidationError{
-					field:  "RequestDebug",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return ServerMiddlewareMultiError(errors)
-	}
-
-	return nil
-}
-
-// ServerMiddlewareMultiError is an error wrapping multiple validation errors
-// returned by ServerMiddleware.ValidateAll() if the designated constraints
-// aren't met.
-type ServerMiddlewareMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ServerMiddlewareMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ServerMiddlewareMultiError) AllErrors() []error { return m }
-
-// ServerMiddlewareValidationError is the validation error returned by
-// ServerMiddleware.Validate if the designated constraints aren't met.
-type ServerMiddlewareValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ServerMiddlewareValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ServerMiddlewareValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ServerMiddlewareValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ServerMiddlewareValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ServerMiddlewareValidationError) ErrorName() string { return "ServerMiddlewareValidationError" }
-
-// Error satisfies the builtin error interface
-func (e ServerMiddlewareValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sServerMiddleware.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ServerMiddlewareValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ServerMiddlewareValidationError{}
 
 // Validate checks the field values on HttpServerOption_Metrics with the rules
 // defined in the proto definition for this message. If any rules are

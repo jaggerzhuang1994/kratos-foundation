@@ -68,7 +68,7 @@ flowchart LR
 
 协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、requestdebug、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
 
-`server.middleware.tracing.disable: true` 或全局 `tracing.disable: true` 会停止服务端 Span 的记录、采样和导出，但常驻 tracing 中间件仍使用非采样 Provider 创建或延续请求 SpanContext。因此访问日志和业务日志仍能读取 `trace.id`、`span.id`，下游客户端也可继续传播同一条 TraceID；此模式不会创建 exporter。运行期重新启用 server tracing 时恢复使用构造期注入的真实 Provider；若全局 Provider 在构造期已禁用，则仍只能保留关联 ID，需重启才能恢复记录和导出。
+`server.tracing.disable: true` 或全局 `tracing.disable: true` 会停止服务端 Span 的记录、采样和导出，但常驻 tracing 中间件仍使用非采样 Provider 创建或延续请求 SpanContext。因此访问日志和业务日志仍能读取 `trace.id`、`span.id`，下游客户端也可继续传播同一条 TraceID；此模式不会创建 exporter。运行期重新启用 server tracing 时恢复使用构造期注入的真实 Provider；若全局 Provider 在构造期已禁用，则仍只能保留关联 ID，需重启才能恢复记录和导出。
 
 `NewRuntime` 在业务 HTTP、WebSocket、gRPC 和监控处理器组装完成后、服务启动前，按 HTTP 路径/方法及 gRPC 完整方法名的稳定顺序逐条记录 `INFO event=endpoint.registered`。HTTP 字段为 `transport=http, method, path, service, listener`；metrics/health 的 `service` 分别为对应能力，`listener` 为 `business` 或独立管理地址。gRPC 还包含实际服务名，`path` 采用 `/<service>/<method>`。业务路由来自底层 Server 的最终注册表，监控处理器由 Foundation 在挂载成功后补入；禁用的协议或监控能力不输出对应端点。
 
@@ -166,7 +166,7 @@ flowchart TD
 
 ## 截止时间
 
-`middleware.deadline.fallback_timeout` 缺失时默认 **10s**，未配置 `middleware` 或 `deadline` 也采用该默认值。只有父 Context 没有截止时间时才使用 fallback；显式 `fallback_timeout: 0s` 关闭回退超时。`max_timeout` 大于零时始终参与计算，并取更早的截止时间，因此关闭 fallback 后仍可能被父 Context 或 `max_timeout` 限制。`max_timeout` 与 `min_budget` 默认 0s，不启用对应限制。
+`server.deadline.fallback_timeout` 缺失时默认 **10s**，未配置 `deadline` 也采用该默认值。只有父 Context 没有截止时间时才使用 fallback；显式 `fallback_timeout: 0s` 关闭回退超时。`max_timeout` 大于零时始终参与计算，并取更早的截止时间，因此关闭 fallback 后仍可能被父 Context 或 `max_timeout` 限制。`max_timeout` 与 `min_budget` 默认 0s，不启用对应限制。
 
 精确 `path` 在配置更新时建立 map，`prefix` 建立按字节匹配的压缩前缀树；查询树的成本取决于 operation 长度，不再逐条扫描全部前缀。两种索引与默认值作为同一个只读快照原子发布，更新校验失败不替换旧快照，读侧不增加锁。空 operation 保留历史行为：存在前缀规则时选择配置顺序中的首条，否则使用全局策略。
 
@@ -339,7 +339,7 @@ flowchart TD
 
 默认 HTTP/gRPC 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
 
-`Request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.middleware.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。故障日志始终保留 `operation`、`code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
+`Request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。故障日志始终保留 `operation`、`code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
 
 最外层 `Recovered from a panic while handling a request` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
 
@@ -374,6 +374,6 @@ flowchart TD
 
 ## 请求 debug
 
-`server.middleware.request_debug.accept_incoming` 默认 true；可显式设为 false 关闭接收。默认请求链的 `request_debug` 优先级为 250，位于 deadline（200）与 metadata（300）之间，在访问日志前恢复 `request.WithDebug` 状态。关闭通用 metadata 不影响它。gRPC 流在建立时恢复标记，之后配置更新不改变已建立流的 Context。
+`server.request_debug.accept_incoming` 默认 true；可显式设为 false 关闭接收。默认请求链的 `request_debug` 优先级为 250，位于 deadline（200）与 metadata（300）之间，在访问日志前恢复 `request.WithDebug` 状态。关闭通用 metadata 不影响它。gRPC 流在建立时恢复标记，之后配置更新不改变已建立流的 Context。
 
-该配置随 `server.middleware` 热更新，复用现有动态策略；非法更新保留旧配置。`propagate` 字段仅客户端消费。传输协议、信任边界和流程见 [request](../request/README.md)。
+该配置随 `server` 请求策略热更新，复用现有动态策略；监听地址等需重启字段变化不会重建中间件。非法更新保留旧配置。`propagate` 字段仅客户端消费。传输协议、信任边界和流程见 [request](../request/README.md)。

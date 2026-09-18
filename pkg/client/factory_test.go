@@ -264,9 +264,9 @@ func TestFactoryModuleLoggingAppliesToRequests(t *testing.T) {
 func TestNewFactoryRejectsInvalidSREBeforeFirstRequest(t *testing.T) {
 	builder := newTestRealBuilder(t, nil)
 	config := configWithTarget("orders", "127.0.0.1:1")
-	config.Clients["orders"].Middleware = &config_pb.ClientMiddleware{CircuitBreaker: &config_pb.Middleware_CircuitBreaker{
+	config.Clients["orders"].CircuitBreaker = &config_pb.Middleware_CircuitBreaker{
 		Enable: proto.Bool(true), Sre: &config_pb.Middleware_CircuitBreaker_SREBreaker{Bucket: proto.Int32(0)},
-	}}
+	}
 	factory, cleanup, err := NewFactory(&capturedObserverManager{initial: config}, builder.logger, appinfo.New("test"), builder.tracing, builder.metrics, nil)
 	if cleanup != nil {
 		cleanup()

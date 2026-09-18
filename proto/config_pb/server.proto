@@ -8,21 +8,36 @@ import "google/protobuf/duration.proto";
 import "config_pb/common.proto";
 import "validate/validate.proto";
 
-// Server 只有 middleware 支持热更新：中间件是纯请求策略，可以原子替换；监听地址、
-// 端点和停机延迟决定 Server 实例本身，运行期无法安全切换。
+// Server 只有请求策略支持热更新：策略可以原子替换；监听地址、端点和停机延迟决定
+// Server 实例本身，运行期无法安全切换。
 message Server {
 
   // 业务 HTTP 与管理端点配置；业务监听和独立管理监听分别控制。[需重启]
   optional HttpServerOption http = 1;
   // grpc 服务器配置。[需重启]
   optional GrpcServerOption grpc = 2;
-  // 通用中间件配置。[热更新] 逐项发布策略；并发请求可能短暂读取新旧策略组合。
-  optional ServerMiddleware middleware = 3;
   // consul 服务发现会有1s左右延迟，所以在kratos生命周期中，
   // 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。
   // 因此给servers套上一个wrapper用于延迟停止服务。
   // [需重启] 该值在构造 Server 时冻结；建议 app.stop_timeout 预留更大的总停机预算，不做硬约束。
   optional google.protobuf.Duration stop_delay = 4;
+  // 旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。
+  // 元数据透传。[热更新]
+  optional Middleware.Metadata metadata = 5;
+  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]
+  optional Middleware.Tracing tracing = 6;
+  // 请求指标开关。[热更新]
+  optional Middleware.Metrics metrics = 7;
+  // 访问日志开关。[热更新] 适合排障时临时打开。
+  optional Middleware.Logging logging = 8;
+  // 请求校验开关。[热更新]
+  optional Middleware.Validator validator = 9;
+  // 自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。
+  optional Middleware.RateLimit rate_limit = 10;
+  // 请求截止时间。[热更新] 只影响新请求。
+  optional Middleware.Deadline deadline = 11;
+  // 请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。
+  optional Middleware.RequestDebug request_debug = 12;
 }
 
 message HttpServerOption {
@@ -86,32 +101,4 @@ message GrpcServerOption {
   optional bool custom_health = 5;
   // disableReflection 是否禁用服务反射
   optional bool disable_reflection = 6;
-}
-
-// 服务器中间件配置。
-//
-// [热更新] 全部字段都支持运行期修改，一次更新会先完整校验和构造，再逐项原子替换；并发请求可能短暂读取新旧组合。任何一项非法
-// 都会整体拒绝并保留上一次生效的组合。这些中间件常驻调用链，因此把某项从禁用改为
-// 启用也不需要重建 Server。
-//
-// 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成
-// 启用也只会保留 TraceID/SpanID 关联，不会记录或导出 Span。
-message ServerMiddleware {
-  // 旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。
-  // 元数据透传。[热更新]
-  optional Middleware.Metadata metadata = 1;
-  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]
-  optional Middleware.Tracing tracing = 2;
-  // 请求指标开关。[热更新]
-  optional Middleware.Metrics metrics = 3;
-  // 访问日志开关。[热更新] 适合排障时临时打开。
-  optional Middleware.Logging logging = 4;
-  // 请求校验开关。[热更新]
-  optional Middleware.Validator validator = 5;
-  // 自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。
-  optional Middleware.RateLimit rate_limit = 6;
-  // 请求截止时间。[热更新] 只影响新请求。
-  optional Middleware.Deadline deadline = 7;
-  // 请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。
-  optional Middleware.RequestDebug request_debug = 8;
 }

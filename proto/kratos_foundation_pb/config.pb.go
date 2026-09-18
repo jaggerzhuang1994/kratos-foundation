@@ -30,7 +30,7 @@ const (
 //	[需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。
 //
 // 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：
-// log、app.stop_timeout、server.middleware、client.clients、tracing.sampler
+// log、app.stop_timeout、server 的请求策略、client.clients、tracing.sampler
 // 以及 database 各连接的连接池参数和 job.cron。
 type Config struct {
 	state         protoimpl.MessageState
@@ -41,7 +41,7 @@ type Config struct {
 	App *config_pb.App `protobuf:"bytes,1,opt,name=app,proto3,oneof" json:"app,omitempty"`
 	// 链路追踪组件配置。仅 sampler 支持热更新。
 	Tracing *config_pb.Tracing `protobuf:"bytes,2,opt,name=tracing,proto3,oneof" json:"tracing,omitempty"`
-	// 服务组件配置。仅 middleware 支持热更新。
+	// 服务组件配置。仅请求策略字段支持热更新。
 	Server *config_pb.Server `protobuf:"bytes,3,opt,name=server,proto3,oneof" json:"server,omitempty"`
 	// 数据库配置。仅各连接的连接池参数支持热更新。
 	Database *config_pb.Database `protobuf:"bytes,4,opt,name=database,proto3,oneof" json:"database,omitempty"`

@@ -191,56 +191,6 @@
       "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "[热更新] 默认 0s，不限制派发调用所需的最小剩余预算。"
     },
-    ".kratos_foundation_pb.ClientMiddleware": {
-      "properties": {
-        "metadata": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.metadata"
-        },
-        "tracing": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.tracing"
-        },
-        "metrics": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.metrics"
-        },
-        "logging": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.logging"
-        },
-        "circuit_breaker": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.circuit_breaker"
-        },
-        "deadline": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.deadline"
-        },
-        "request_debug": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware.request_debug"
-        }
-      },
-      "type": "object",
-      "description": "客户端中间件配置"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.circuit_breaker": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.CircuitBreaker"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.deadline": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.logging": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.metadata": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.metrics": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.request_debug": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
-      "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
-    },
-    ".kratos_foundation_pb.ClientMiddleware.tracing": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
-      "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。"
-    },
     ".kratos_foundation_pb.ClientOption": {
       "properties": {
         "protocol": {
@@ -249,11 +199,29 @@
         "target": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.target"
         },
-        "middleware": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.middleware"
-        },
         "discovery": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.discovery"
+        },
+        "metadata": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.metadata"
+        },
+        "tracing": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.tracing"
+        },
+        "metrics": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.metrics"
+        },
+        "logging": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.logging"
+        },
+        "circuit_breaker": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.circuit_breaker"
+        },
+        "deadline": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.deadline"
+        },
+        "request_debug": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.request_debug"
         }
       },
       "type": "object",
@@ -262,21 +230,41 @@
         "discovery"
       ]
     },
+    ".kratos_foundation_pb.ClientOption.circuit_breaker": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.CircuitBreaker"
+    },
+    ".kratos_foundation_pb.ClientOption.deadline": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline"
+    },
     ".kratos_foundation_pb.ClientOption.discovery": {
       "type": "string",
       "description": "discovery 目标使用的 registry.instances 名称；省略或空值继承 client.discovery。"
     },
-    ".kratos_foundation_pb.ClientOption.middleware": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ClientMiddleware",
-      "description": "中间件"
+    ".kratos_foundation_pb.ClientOption.logging": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging"
+    },
+    ".kratos_foundation_pb.ClientOption.metadata": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata",
+      "description": "元数据透传配置。"
+    },
+    ".kratos_foundation_pb.ClientOption.metrics": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics"
     },
     ".kratos_foundation_pb.ClientOption.protocol": {
       "$ref": "#/definitions/.kratos_foundation_pb.Protocol",
       "description": "不指定协议时，AcquireClient 默认返回 gRPC 连接。"
     },
+    ".kratos_foundation_pb.ClientOption.request_debug": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
+      "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
+    },
     ".kratos_foundation_pb.ClientOption.target": {
       "type": "string",
       "description": "目标端点 支持服务发现/直连:\n 默认为 discovery:///{client_key}\n 也可以指定直连 host:port"
+    },
+    ".kratos_foundation_pb.ClientOption.tracing": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
+      "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。"
     },
     ".kratos_foundation_pb.Config": {
       "properties": {
@@ -315,7 +303,7 @@
         }
       },
       "type": "object",
-      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n log、app.stop_timeout、server.middleware、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数和 job.cron。"
+      "description": "Config 是 Foundation 的完整配置。\n\n 字段注释统一使用以下标记表达热更新语义：\n   [热更新] 修改后无需重启进程即可生效；\n   [需重启] 修改会被运行中的实例忽略，必须重启进程才会生效。\n\n 未标注的字段沿用其所在 message 顶部的说明。整体支持热更新的范围是：\n log、app.stop_timeout、server 的请求策略、client.clients、tracing.sampler\n 以及 database 各连接的连接池参数和 job.cron。"
     },
     ".kratos_foundation_pb.Config.app": {
       "$ref": "#/definitions/.kratos_foundation_pb.App",
@@ -355,7 +343,7 @@
     },
     ".kratos_foundation_pb.Config.server": {
       "$ref": "#/definitions/.kratos_foundation_pb.Server",
-      "description": "服务组件配置。仅 middleware 支持热更新。"
+      "description": "服务组件配置。仅请求策略字段支持热更新。"
     },
     ".kratos_foundation_pb.Config.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Tracing",
@@ -2281,15 +2269,40 @@
         "grpc": {
           "$ref": "#/definitions/.kratos_foundation_pb.Server.grpc"
         },
-        "middleware": {
-          "$ref": "#/definitions/.kratos_foundation_pb.Server.middleware"
-        },
         "stop_delay": {
           "$ref": "#/definitions/.kratos_foundation_pb.Server.stop_delay"
+        },
+        "metadata": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.metadata"
+        },
+        "tracing": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.tracing"
+        },
+        "metrics": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.metrics"
+        },
+        "logging": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.logging"
+        },
+        "validator": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.validator"
+        },
+        "rate_limit": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.rate_limit"
+        },
+        "deadline": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.deadline"
+        },
+        "request_debug": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Server.request_debug"
         }
       },
       "type": "object",
-      "description": "Server 只有 middleware 支持热更新：中间件是纯请求策略，可以原子替换；监听地址、\n 端点和停机延迟决定 Server 实例本身，运行期无法安全切换。"
+      "description": "Server 只有请求策略支持热更新：策略可以原子替换；监听地址、端点和停机延迟决定\n Server 实例本身，运行期无法安全切换。"
+    },
+    ".kratos_foundation_pb.Server.deadline": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline",
+      "description": "请求截止时间。[热更新] 只影响新请求。"
     },
     ".kratos_foundation_pb.Server.grpc": {
       "$ref": "#/definitions/.kratos_foundation_pb.GrpcServerOption",
@@ -2299,74 +2312,36 @@
       "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption",
       "description": "业务 HTTP 与管理端点配置；业务监听和独立管理监听分别控制。[需重启]"
     },
-    ".kratos_foundation_pb.Server.middleware": {
-      "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware",
-      "description": "通用中间件配置。[热更新] 逐项发布策略；并发请求可能短暂读取新旧策略组合。"
+    ".kratos_foundation_pb.Server.logging": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging",
+      "description": "访问日志开关。[热更新] 适合排障时临时打开。"
+    },
+    ".kratos_foundation_pb.Server.metadata": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata",
+      "description": "旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。\n 元数据透传。[热更新]"
+    },
+    ".kratos_foundation_pb.Server.metrics": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics",
+      "description": "请求指标开关。[热更新]"
+    },
+    ".kratos_foundation_pb.Server.rate_limit": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RateLimit",
+      "description": "自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。"
+    },
+    ".kratos_foundation_pb.Server.request_debug": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
+      "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
     },
     ".kratos_foundation_pb.Server.stop_delay": {
       "type": "string",
       "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "consul 服务发现会有1s左右延迟，所以在kratos生命周期中，\n 服务deregister之后，不能马上停止服务，需要延迟一段时间后在停止服务，否则服务监听者还没有拉取最新服务列表，服务已经停止。\n 因此给servers套上一个wrapper用于延迟停止服务。\n [需重启] 该值在构造 Server 时冻结；建议 app.stop_timeout 预留更大的总停机预算，不做硬约束。"
     },
-    ".kratos_foundation_pb.ServerMiddleware": {
-      "properties": {
-        "metadata": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.metadata"
-        },
-        "tracing": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.tracing"
-        },
-        "metrics": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.metrics"
-        },
-        "logging": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.logging"
-        },
-        "validator": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.validator"
-        },
-        "rate_limit": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.rate_limit"
-        },
-        "deadline": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.deadline"
-        },
-        "request_debug": {
-          "$ref": "#/definitions/.kratos_foundation_pb.ServerMiddleware.request_debug"
-        }
-      },
-      "type": "object",
-      "description": "服务器中间件配置。\n\n [热更新] 全部字段都支持运行期修改，一次更新会先完整校验和构造，再逐项原子替换；并发请求可能短暂读取新旧组合。任何一项非法\n 都会整体拒绝并保留上一次生效的组合。这些中间件常驻调用链，因此把某项从禁用改为\n 启用也不需要重建 Server。\n\n 注意 tracing 还依赖构造期注入的 Provider：Provider 被禁用时，这里改成\n 启用也只会保留 TraceID/SpanID 关联，不会记录或导出 Span。"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.deadline": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Deadline",
-      "description": "请求截止时间。[热更新] 只影响新请求。"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.logging": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging",
-      "description": "访问日志开关。[热更新] 适合排障时临时打开。"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.metadata": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metadata",
-      "description": "旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。\n 元数据透传。[热更新]"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.metrics": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Metrics",
-      "description": "请求指标开关。[热更新]"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.rate_limit": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RateLimit",
-      "description": "自适应限流。[热更新] 适合突发流量时临时启用；重新启用会重置 BBR 的统计窗口。"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.request_debug": {
-      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
-      "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
-    },
-    ".kratos_foundation_pb.ServerMiddleware.tracing": {
+    ".kratos_foundation_pb.Server.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
       "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]"
     },
-    ".kratos_foundation_pb.ServerMiddleware.validator": {
+    ".kratos_foundation_pb.Server.validator": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Validator",
       "description": "请求校验开关。[热更新]"
     },

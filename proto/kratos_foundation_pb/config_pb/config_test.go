@@ -1,12 +1,31 @@
 package config_pb
 
 import (
-	"google.golang.org/protobuf/encoding/protojson"
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+func TestMiddlewarePoliciesAreOwnedByServerAndClientOption(t *testing.T) {
+	server := (&Server{}).ProtoReflect().Descriptor().Fields()
+	client := (&ClientOption{}).ProtoReflect().Descriptor().Fields()
+	for _, name := range []protoreflect.Name{"deadline", "request_debug", "metadata", "tracing", "metrics", "logging", "validator", "rate_limit"} {
+		if server.ByName(name) == nil {
+			t.Fatalf("Server field %q is missing", name)
+		}
+	}
+	for _, name := range []protoreflect.Name{"deadline", "request_debug", "metadata", "tracing", "metrics", "logging", "circuit_breaker"} {
+		if client.ByName(name) == nil {
+			t.Fatalf("ClientOption field %q is missing", name)
+		}
+	}
+	if server.ByName("middleware") != nil || client.ByName("middleware") != nil {
+		t.Fatal("legacy middleware field is still present")
+	}
+}
 
 func TestLogModuleGeneratedValidationAcceptsOnlyDocumentedLevels(t *testing.T) {
 	tests := []struct {

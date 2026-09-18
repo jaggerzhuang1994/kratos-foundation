@@ -39,7 +39,7 @@ type Reader interface {
 }
 
 // Manager 是组件读取有效配置的唯一入口。
-// key 使用点分路径，可以指向任意层级，例如 "server.middleware.deadline"。
+// key 使用点分路径，可以指向任意层级，例如 "server.deadline"。
 type Manager interface {
 	// Load 将最近扫描快照中的 key 写入已分配的非 nil 指针 target。
 	// defaultValue 最多一个，必须与 target 的具体指针类型一致；配置不存在且未提供

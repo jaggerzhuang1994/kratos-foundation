@@ -73,7 +73,7 @@ flowchart TD
     L --> N[INFO client closed 或 ERROR client close failed]
 ```
 
-根级 `client.fallback_timeout`、`client.max_timeout`、`client.min_budget` 为每个客户端提供默认值；根字段省略时分别为 **10s、0s、0s**。单个 `client.clients.<name>.middleware.deadline` 按字段覆盖根配置，未配置 middleware/deadline 或未列在 clients 中的名称也继承根配置。时长必须是合法的非负 Protobuf Duration，超出 Go duration 范围时沿用现有饱和转换；有效 min_budget 不能超过正数 fallback_timeout 或 max_timeout，合并后的客户端和路由策略也参与校验。
+根级 `client.fallback_timeout`、`client.max_timeout`、`client.min_budget` 为每个客户端提供默认值；根字段省略时分别为 **10s、0s、0s**。单个 `client.clients.<name>.deadline` 按字段覆盖根配置，未配置 deadline 或未列在 clients 中的名称也继承根配置。时长必须是合法的非负 Protobuf Duration，超出 Go duration 范围时沿用现有饱和转换；有效 min_budget 不能超过正数 fallback_timeout 或 max_timeout，合并后的客户端和路由策略也参与校验。
 
 显式 `0s` 覆盖继承值：fallback_timeout 关闭无父截止时间时的回退超时，max_timeout 关闭本地最大耗时限制，min_budget 关闭最小剩余预算检查。父 Context 的截止时间仍生效。路由规则继续逐字段覆盖该客户端的有效策略。服务端与客户端共享[截止时间计算规则](../server/README.md#截止时间)。
 
@@ -307,7 +307,7 @@ flowchart TD
 
 ## 请求 debug
 
-向客户端调用传入 `request.WithDebug(ctx)` 派生的 Context，HTTP/gRPC 会传递该状态。`client.clients.<name>.middleware.request_debug.propagate` 默认 true；对外部服务可设为 false。它只控制出站传播，不清除本地状态，也不受通用 metadata 的 disable/prefix 控制。`accept_incoming` 字段仅服务端消费。
+向客户端调用传入 `request.WithDebug(ctx)` 派生的 Context，HTTP/gRPC 会传递该状态。`client.clients.<name>.request_debug.propagate` 默认 true；对外部服务可设为 false。它只控制出站传播，不清除本地状态，也不受通用 metadata 的 disable/prefix 控制。`accept_incoming` 字段仅服务端消费。
 
 该字段随 `clients` 配置更新重建客户端；已有租约使用原策略，新租约使用新策略。gRPC stream 在建立时写入 metadata，原生 outgoing metadata 中的旧 debug 值会被清除。完整边界与流程见 [request](../request/README.md)。
 
