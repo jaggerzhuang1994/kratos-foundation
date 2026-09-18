@@ -14,10 +14,16 @@ import (
 // HTTPServer 是 Foundation endpoint 使用的 Kratos HTTP Server。
 type HTTPServer = *http.Server
 
-// HTTPHandler 处理一条自定义 HTTP 路由；Request Context 包含服务端中间件派生状态。
-type HTTPHandler func(nethttp.ResponseWriter, *nethttp.Request) error
+// HTTPHandler 处理一条自定义 HTTP 路由；返回值由服务器配置的响应或错误编码器输出。
+// Request Context 包含服务端中间件派生状态。
+type HTTPHandler func(*nethttp.Request) (any, error)
 
-// HandleHTTP 创建一条自动执行服务端中间件链的自定义 HTTP 路由注册回调。
+// HTTPWriterHandler 处理需要直接控制状态码、Header 或响应体的自定义 HTTP 路由。
+// Request Context 包含服务端中间件派生状态。
+type HTTPWriterHandler func(nethttp.ResponseWriter, *nethttp.Request) error
+
+// HandleHTTP 创建一条自定义 HTTP 路由注册回调。
+// 它自动执行服务端中间件链，并统一编码 handler 返回值。
 func HandleHTTP(method, path string, handler HTTPHandler) HTTPEndpoint {
 	if handler == nil {
 		return nil
@@ -28,7 +34,19 @@ func HandleHTTP(method, path string, handler HTTPHandler) HTTPEndpoint {
 	}
 }
 
-// middlewareHTTPHandler 让声明式自定义路由复用生成式 HTTP 接口的中间件执行边界。
+// HandleHTTPWriter 创建一条允许 handler 直接写响应的自定义 HTTP 路由注册回调。
+// 中间件提前返回的 reply 仍由服务器配置的响应编码器输出。
+func HandleHTTPWriter(method, path string, handler HTTPWriterHandler) HTTPEndpoint {
+	if handler == nil {
+		return nil
+	}
+	return func(server HTTPServer) error {
+		server.Route("/").Handle(method, path, middlewareHTTPWriterHandler(path, handler))
+		return nil
+	}
+}
+
+// middlewareHTTPHandler 让声明式自定义路由复用生成式 HTTP 接口的中间件和编码边界。
 func middlewareHTTPHandler(operation string, handler HTTPHandler) http.HandlerFunc {
 	return func(ctx http.Context) error {
 		http.SetOperation(ctx, operation)
@@ -38,6 +56,24 @@ func middlewareHTTPHandler(operation string, handler HTTPHandler) http.HandlerFu
 				return nil, fmt.Errorf("http middleware request has type %T, want *http.Request", req)
 			}
 			// 自定义处理器应观察中间件替换后的请求及其派生 Context。
+			return handler(request.WithContext(callCtx))
+		})
+		reply, err := next(ctx, ctx.Request())
+		return ctx.Returns(reply, err)
+	}
+}
+
+// middlewareHTTPWriterHandler 保留中间件短路编码能力，
+// 同时避免二次编码 handler 已写入的响应。
+func middlewareHTTPWriterHandler(operation string, handler HTTPWriterHandler) http.HandlerFunc {
+	return func(ctx http.Context) error {
+		http.SetOperation(ctx, operation)
+		next := ctx.Middleware(func(callCtx context.Context, req any) (any, error) {
+			request, ok := req.(*nethttp.Request)
+			if !ok || request == nil {
+				return nil, fmt.Errorf("http middleware request has type %T, want *http.Request", req)
+			}
+			// Writer 模式仍接收中间件替换后的请求，但成功后由 handler 对响应负全责。
 			return nil, handler(ctx.Response(), request.WithContext(callCtx))
 		})
 		reply, err := next(ctx, ctx.Request())

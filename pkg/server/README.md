@@ -96,10 +96,27 @@ flowchart TD
 
 ### 自定义 HTTP 端点
 
-文件上传、回调接收或其他不适合 Protocol Buffers 绑定的 HTTP 接口通过 `HandleHTTP` 创建注册回调，再交给现有 `HTTP().Register`。该入口不扩展 `HTTPBuilder` 接口，已有 mock、装饰器和替代实现无需增加方法。它在构造期注册路由并自动执行与生成式 HTTP 接口相同的服务端中间件链，同时设置模板路径作为 operation；handler 返回的错误继续进入默认错误边界和 HTTP ErrorEncoder，中间件成功短路返回的非 nil reply 使用现有 HTTP 编码器输出。nil handler 得到 nil 注册回调，由 `Register` 按既有规则忽略。端点声明不是运行期配置，不支持热更新。
+回调接收或其他不适合 Protocol Buffers 绑定的 HTTP 接口通过 `HandleHTTP` 声明，再交给现有 `HTTP().Register`。handler 返回 `(reply, error)`：成功 reply 使用当前 HTTP Server 配置的 ResponseEncoder，错误经过服务端错误边界后使用当前 ErrorEncoder。Foundation 默认 ErrorEncoder 会统一输出业务错误并隐藏未知服务端错误；业务通过 HTTP ServerOption 覆盖编码器后，以覆盖后的配置为准。`nil, nil` 由 ResponseEncoder 处理，Kratos 默认实现产生 `200` 空响应。
+
+需要自行设置状态码、Header、流式输出、文件下载，或像上传限流一样必须向 `http.MaxBytesReader` 传入 ResponseWriter 时，使用 `HandleHTTPWriter`。该模式在 handler 成功返回后不会再次调用 ResponseEncoder；如果 handler 返回错误且尚未发送响应，错误仍进入相同的 ErrorEncoder。handler 一旦写入响应，后续错误编码通常无法替换已发送的状态或正文，因此应在首次写响应前完成所有可能失败的操作。
+
+两个入口都会设置模板路径作为 operation，并执行与生成式 HTTP 接口相同的服务端中间件链；handler 接收中间件替换后的 Request 及派生 Context，中间件也可提前返回 reply 或 error。与 Kratos 生成式路由一致，ResponseEncoder 和 ErrorEncoder 接收路由层原始 Request，而不是 middleware 传给下一层的替代 Request；需要影响内容协商等编码行为时，应原地更新原 Request 的 Header，而不能只传入 Clone。它们不扩展 `HTTPBuilder` 接口，已有 mock、装饰器和替代实现无需增加方法。nil handler 得到 nil 注册回调，由 `Register` 按既有规则忽略。端点声明在构造期生效，不支持热更新。
+
+ResponseEncoder 在 middleware 链完成后执行；若它已经写入部分响应再返回错误，路由层会直接调用 ErrorEncoder，无法重新经过错误规范化或访问日志，也可能产生重复写响应。自定义编码器应先完成可能失败的序列化，再发送状态和正文。
+
+常规 JSON 响应只需返回 reply：
 
 ```go
-spec.HTTP().Register(server.HandleHTTP(http.MethodPost, "/files/upload", func(w http.ResponseWriter, request *http.Request) error {
+spec.HTTP().Register(server.HandleHTTP(http.MethodGet, "/files/{id}", func(request *http.Request) (any, error) {
+    // Request Context 已包含身份、metadata、Trace 与截止时间；路径变量来自中间件派生后的 Request。
+    return map[string]any{"id": mux.Vars(request)["id"]}, nil
+}))
+```
+
+文件上传使用 Writer 模式直接控制读取上限和成功状态：
+
+```go
+spec.HTTP().Register(server.HandleHTTPWriter(http.MethodPost, "/files/upload", func(w http.ResponseWriter, request *http.Request) error {
     // Request Context 已包含身份、metadata、Trace 与截止时间；中间件替换 Request 时这里同步更新。
     request.Body = http.MaxBytesReader(w, request.Body, 20<<20)
     if err := request.ParseMultipartForm(8 << 20); err != nil {
@@ -129,7 +146,7 @@ spec.HTTP().Register(server.HandleHTTP(http.MethodPost, "/files/upload", func(w 
 }))
 ```
 
-示例所需的 `encoding/json`、`errors`、`net/http`、Foundation errors 与 server 包由调用方显式导入。路径变量可通过 Gorilla `mux.Vars(request)` 读取。上传大小、允许的媒体类型和文件名等外部输入仍由业务在 handler 内校验；框架不会自动读取或缓存正文。若业务直接写入响应后再返回错误，ErrorEncoder 可能无法替换已发送的状态或正文，因此应在首次写响应前完成所有可能失败的操作。
+示例所需的 `encoding/json`、`errors`、`net/http`、Gorilla mux、Foundation errors 与 server 包由调用方显式导入。上传大小、允许的媒体类型和文件名等外部输入仍由业务在 handler 内校验；框架不会自动读取或缓存正文。
 
 ```mermaid
 flowchart TD
@@ -140,13 +157,23 @@ flowchart TD
     E --> P{中间件成功短路?}
     P -- 是 --> Q[INFO Request completed]
     Q --> R[HTTP Encoder 输出非 nil reply]
-    R --> J
-    P -- 否 --> F[HTTPHandler 接收 ResponseWriter 与派生 Request]
-    F --> G{业务处理成功?}
-    G -- 是 --> H[写入自定义状态 Header 或响应体]
-    H --> I[INFO Request completed]
-    I --> J([响应完成])
-    G -- 否 --> K[INFO Request completed]
+    R --> Z{编码成功?}
+    Z -- 是 --> J
+    Z -- 否 --> Y[ErrorEncoder 使用原始 Request 可能无法替换已写响应]
+    Y --> J
+    P -- 否 --> F{注册入口?}
+    F -- HandleHTTP --> G[HTTPHandler 接收派生 Request 并返回 reply 或 error]
+    G --> H{业务处理成功?}
+    H -- 是 --> I[INFO Request completed]
+    I --> S[ResponseEncoder 输出 reply]
+    S --> Z
+    F -- HandleHTTPWriter --> T[HTTPWriterHandler 接收 ResponseWriter 与派生 Request]
+    T --> U{业务处理成功?}
+    U -- 是 --> V[handler 写入自定义状态 Header 或响应体]
+    V --> W[INFO Request completed]
+    W --> J([响应完成])
+    H -- 否 --> K[INFO Request completed]
+    U -- 否 --> K
     K --> L[错误边界 Normalize]
     L --> O{服务端故障?}
     O -- 是 --> M[ERROR Request failed with a server error]

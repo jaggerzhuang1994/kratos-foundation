@@ -24,12 +24,12 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
 
-func TestHandleHTTPUsesRequestMiddleware(t *testing.T) {
+func TestHandleHTTPUsesRequestMiddlewareAndResponseEncoder(t *testing.T) {
 	type requestKey struct{}
 	const operation = "/files/{id}"
 
 	spec := NewSpec()
-	spec.HTTP().Register(HandleHTTP(http.MethodPost, operation, func(w http.ResponseWriter, request *http.Request) error {
+	spec.HTTP().Register(HandleHTTP(http.MethodPost, operation, func(request *http.Request) (any, error) {
 		if got := request.Context().Value(requestKey{}); got != "upload" {
 			t.Fatalf("middleware context value = %v, want upload", got)
 		}
@@ -40,40 +40,51 @@ func TestHandleHTTPUsesRequestMiddleware(t *testing.T) {
 		if !ok || info.Operation() != operation {
 			t.Fatalf("transport operation = %q, want %q", info.Operation(), operation)
 		}
-		w.WriteHeader(http.StatusCreated)
-		_, err := w.Write([]byte(mux.Vars(request)["id"]))
-		return err
+		return mux.Vars(request)["id"], nil
 	}))
 
-	server := kratoshttp.NewServer(kratoshttp.Middleware(func(next middleware.Handler) middleware.Handler {
-		return func(ctx context.Context, req any) (any, error) {
-			request, ok := req.(*http.Request)
-			if !ok {
-				t.Fatalf("middleware request has type %T, want *http.Request", req)
+	server := kratoshttp.NewServer(
+		kratoshttp.ResponseEncoder(func(w http.ResponseWriter, _ *http.Request, reply any) error {
+			w.WriteHeader(http.StatusCreated)
+			_, err := w.Write([]byte("encoded:" + reply.(string)))
+			return err
+		}),
+		kratoshttp.Middleware(func(next middleware.Handler) middleware.Handler {
+			return func(ctx context.Context, req any) (any, error) {
+				request, ok := req.(*http.Request)
+				if !ok {
+					t.Fatalf("middleware request has type %T, want *http.Request", req)
+				}
+				ctx = context.WithValue(ctx, requestKey{}, "upload")
+				request = request.Clone(ctx)
+				request.Header.Set("X-Middleware", "replaced")
+				return next(ctx, request)
 			}
-			ctx = context.WithValue(ctx, requestKey{}, "upload")
-			request = request.Clone(ctx)
-			request.Header.Set("X-Middleware", "replaced")
-			return next(ctx, request)
-		}
-	}))
+		}),
+	)
 	if err := spec.http.endpoints[0](server); err != nil {
 		t.Fatal(err)
 	}
 
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/files/42", nil))
-	if response.Code != http.StatusCreated || response.Body.String() != "42" {
-		t.Fatalf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), http.StatusCreated, "42")
+	if response.Code != http.StatusCreated || response.Body.String() != "encoded:42" {
+		t.Fatalf(
+			"response = (%d, %q), want (%d, %q)",
+			response.Code,
+			response.Body.String(),
+			http.StatusCreated,
+			"encoded:42",
+		)
 	}
 }
 
 func TestHandleHTTPEncodesMiddlewareReply(t *testing.T) {
 	var handlerCalled bool
 	spec := NewSpec()
-	spec.HTTP().Register(HandleHTTP(http.MethodGet, "/cached", func(http.ResponseWriter, *http.Request) error {
+	spec.HTTP().Register(HandleHTTP(http.MethodGet, "/cached", func(*http.Request) (any, error) {
 		handlerCalled = true
-		return nil
+		return nil, nil
 	}))
 
 	server := kratoshttp.NewServer(kratoshttp.Middleware(func(middleware.Handler) middleware.Handler {
@@ -100,8 +111,8 @@ func TestHandleHTTPReturnsErrorsToHTTPEncoder(t *testing.T) {
 	wantErr := errors.New("upload failed")
 	var encodedErr error
 	spec := NewSpec()
-	spec.HTTP().Register(HandleHTTP(http.MethodPost, "/upload", func(http.ResponseWriter, *http.Request) error {
-		return wantErr
+	spec.HTTP().Register(HandleHTTP(http.MethodPost, "/upload", func(*http.Request) (any, error) {
+		return nil, wantErr
 	}))
 
 	server := kratoshttp.NewServer(kratoshttp.ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -116,6 +127,107 @@ func TestHandleHTTPReturnsErrorsToHTTPEncoder(t *testing.T) {
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/upload", nil))
 	if !errors.Is(encodedErr, wantErr) || response.Code != http.StatusTeapot {
 		t.Fatalf("encoded error = %v, status = %d", encodedErr, response.Code)
+	}
+}
+
+func TestHandleHTTPWriterWritesCustomResponse(t *testing.T) {
+	type requestKey struct{}
+	const operation = "/files/{id}"
+
+	spec := NewSpec()
+	spec.HTTP().Register(HandleHTTPWriter(
+		http.MethodPost,
+		operation,
+		func(w http.ResponseWriter, request *http.Request) error {
+			if got := request.Context().Value(requestKey{}); got != "upload" {
+				t.Fatalf("middleware context value = %v, want upload", got)
+			}
+			w.Header().Set("X-Handler", "writer")
+			w.WriteHeader(http.StatusAccepted)
+			_, err := w.Write([]byte(mux.Vars(request)["id"]))
+			return err
+		},
+	))
+
+	server := kratoshttp.NewServer(kratoshttp.Middleware(func(next middleware.Handler) middleware.Handler {
+		return func(ctx context.Context, req any) (any, error) {
+			request := req.(*http.Request)
+			ctx = context.WithValue(ctx, requestKey{}, "upload")
+			return next(ctx, request.Clone(ctx))
+		}
+	}))
+	if err := spec.http.endpoints[0](server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/files/42", nil))
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("response status = %d, want %d", response.Code, http.StatusAccepted)
+	}
+	if response.Body.String() != "42" || response.Header().Get("X-Handler") != "writer" {
+		t.Fatalf(
+			"response body and header = (%q, %q), want (%q, %q)",
+			response.Body.String(),
+			response.Header().Get("X-Handler"),
+			"42",
+			"writer",
+		)
+	}
+}
+
+func TestHandleHTTPWriterReturnsErrorsToHTTPEncoder(t *testing.T) {
+	wantErr := errors.New("writer failed")
+	var encodedErr error
+	spec := NewSpec()
+	spec.HTTP().Register(HandleHTTPWriter(http.MethodPost, "/writer", func(http.ResponseWriter, *http.Request) error {
+		return wantErr
+	}))
+
+	server := kratoshttp.NewServer(kratoshttp.ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
+		encodedErr = err
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	if err := spec.http.endpoints[0](server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/writer", nil))
+	if !errors.Is(encodedErr, wantErr) || response.Code != http.StatusTeapot {
+		t.Fatalf("encoded error = %v, status = %d", encodedErr, response.Code)
+	}
+}
+
+func TestHandleHTTPWriterEncodesMiddlewareReply(t *testing.T) {
+	var handlerCalled bool
+	spec := NewSpec()
+	spec.HTTP().Register(HandleHTTPWriter(
+		http.MethodGet,
+		"/cached-writer",
+		func(http.ResponseWriter, *http.Request) error {
+			handlerCalled = true
+			return nil
+		},
+	))
+
+	server := kratoshttp.NewServer(kratoshttp.Middleware(func(middleware.Handler) middleware.Handler {
+		return func(context.Context, any) (any, error) {
+			return map[string]string{"source": "middleware"}, nil
+		}
+	}))
+	if err := spec.http.endpoints[0](server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/cached-writer", nil))
+	var reply map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil {
+		t.Fatalf("decode middleware reply: %v", err)
+	}
+	if handlerCalled || reply["source"] != "middleware" {
+		t.Fatalf("handler called = %t, reply = %v", handlerCalled, reply)
 	}
 }
 
