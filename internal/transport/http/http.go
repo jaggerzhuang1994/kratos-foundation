@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	nethttp "net/http"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -20,7 +21,7 @@ type errResponse struct {
 	Data any `json:"data"`
 	// Reason 保存稳定错误原因标识。
 	Reason string `json:"reason"`
-	// Metadata 保存允许对外返回的错误元数据。
+	// Metadata 保留完整错误元数据，公开出口由网关统一过滤内部字段。
 	Metadata map[string]string `json:"metadata"`
 }
 
@@ -48,7 +49,7 @@ func Encoder() kratoshttp.EncodeErrorFunc {
 			Message:  se.Message,
 			Data:     httpData,
 			Reason:   se.Reason,
-			Metadata: se.PublicMetadata(),
+			Metadata: compatibilityMetadata(se, httpData),
 		}
 
 		statusCode := int(se.Code)
@@ -61,6 +62,38 @@ func Encoder() kratoshttp.EncodeErrorFunc {
 		w.WriteHeader(statusCode)
 		_, _ = w.Write(body)
 	}
+}
+
+const (
+	legacyHTTPDataMetadataKey   = "http_data"
+	legacyHTTPHeaderMetadataKey = "http_header"
+)
+
+// compatibilityMetadata 保留完整内部元数据，并为只解析 metadata 的 v1 HTTP 客户端
+// 回填 data 和响应头。返回独立副本，避免编码过程修改业务错误。
+func compatibilityMetadata(se *errors.Error, httpData any) map[string]string {
+	metadata := maps.Clone(se.Metadata)
+	if metadata == nil {
+		metadata = make(map[string]string, 2)
+	}
+	if _, exists := metadata[legacyHTTPDataMetadataKey]; !exists && httpData != nil {
+		if encoded, err := json.Marshal(httpData); err == nil {
+			metadata[legacyHTTPDataMetadataKey] = string(encoded)
+		}
+	}
+	if _, exists := metadata[legacyHTTPHeaderMetadataKey]; !exists {
+		if headers := se.HTTPHeaders(); len(headers) > 0 {
+			// 旧 http_header 契约只支持单值；完整多值仍保留在 v2 的 http_headers 中。
+			legacyHeaders := make(map[string]string, len(headers))
+			for key := range headers {
+				legacyHeaders[key] = headers.Get(key)
+			}
+			if encoded, err := json.Marshal(legacyHeaders); err == nil {
+				metadata[legacyHTTPHeaderMetadataKey] = string(encoded)
+			}
+		}
+	}
+	return metadata
 }
 
 const internalServerErrorBody = `{"code":500,"message":"Internal Server Error","data":null,"reason":"UNKNOWN","metadata":{}}`

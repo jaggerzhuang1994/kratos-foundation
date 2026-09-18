@@ -14,6 +14,14 @@ import (
 // Config 是元数据中间件对应的 protobuf 配置类型。
 type Config = *config_pb.Middleware_Metadata
 
+const (
+	grpcTimeoutHeader = "grpc-timeout"
+	traceparentHeader = "traceparent"
+	tracestateHeader  = "tracestate"
+	baggageHeader     = "baggage"
+	serviceNameHeader = "x-md-service-name"
+)
+
 // Validate 校验元数据前缀，避免空前缀意外透传所有请求头。
 func Validate(config Config) error {
 	for index, prefix := range config.GetPrefix() {
@@ -126,8 +134,18 @@ func (o *options) hasPrefix(key string) bool {
 
 // isReservedMetadataKey 判断键是否由其他中间件拥有，避免职责重叠。
 func isReservedMetadataKey(key string) bool {
-	return strings.EqualFold(strings.TrimSpace(key), deadlinemiddleware.HTTPTimeoutHeader) ||
-		strings.EqualFold(strings.TrimSpace(key), requestdebug.Header)
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case deadlinemiddleware.HTTPTimeoutHeader,
+		grpcTimeoutHeader,
+		traceparentHeader,
+		tracestateHeader,
+		baggageHeader,
+		serviceNameHeader,
+		requestdebug.Header:
+		return true
+	default:
+		return false
+	}
 }
 
 // withConstants 设置每个请求都携带的常量元数据。

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	kratoserrors "github.com/go-kratos/kratos/v2/errors"
+	httpstatus "github.com/go-kratos/kratos/v2/transport/http/status"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -53,6 +54,43 @@ func TestGRPCStatusRoundTripPreservesHTTPCode(t *testing.T) {
 				t.Fatal("restored HTTP code metadata is public")
 			}
 		})
+	}
+}
+
+func TestGRPCStatusWritesV1ReadableErrorContract(t *testing.T) {
+	original := New(409, "ORDER_EXISTS", "order already exists").
+		WithReasonCode(40901).
+		WithHTTPData(map[string]string{"order_id": "o-1"}).
+		WithMetadata(map[string]string{"tenant": "acme"})
+	wireStatus := roundTripGRPCStatus(t, original.GRPCStatus())
+	if got := httpstatus.FromGRPCCode(wireStatus.Code()); got != 409 {
+		t.Fatalf("v1 client HTTP code = %d, want 409", got)
+	}
+	detail := grpcErrorInfoDetail(t, wireStatus)
+	if detail.Reason != "ORDER_EXISTS" || detail.Metadata[mdReasonCodeKey] != "40901" || detail.Metadata[mdHTTPDataKey] != `{"order_id":"o-1"}` || detail.Metadata["tenant"] != "acme" {
+		t.Fatalf("v1-readable ErrorInfo = %+v", detail)
+	}
+}
+
+func TestFromErrorReadsV1GRPCErrorContract(t *testing.T) {
+	wireStatus, err := status.New(codes.Aborted, "order already exists").WithDetails(&errdetails.ErrorInfo{
+		Reason: "ORDER_EXISTS",
+		Metadata: map[string]string{
+			mdReasonCodeKey: "40901",
+			mdHTTPDataKey:   `{"order_id":"o-1"}`,
+			mdErrStackKey:   "v1-origin-frame",
+			"tenant":        "acme",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := FromError(roundTripGRPCStatus(t, wireStatus).Err())
+	if restored.Code != 409 || restored.Reason != "ORDER_EXISTS" || restored.ReasonCode() != 40901 || restored.PublicMetadata()["tenant"] != "acme" {
+		t.Fatalf("restored v1 error = %+v", restored)
+	}
+	if !reflect.DeepEqual(restored.HTTPData(), map[string]any{"order_id": "o-1"}) || !strings.Contains(restored.ErrStack(), "v1-origin-frame") {
+		t.Fatalf("restored v1 context: data=%#v stack=%q", restored.HTTPData(), restored.ErrStack())
 	}
 }
 

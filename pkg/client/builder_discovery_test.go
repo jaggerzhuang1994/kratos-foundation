@@ -64,8 +64,30 @@ func TestBuilderAcceptsInjectedDiscovery(t *testing.T) {
 	}
 }
 
+func TestBuilderHTTPDiscoveryDoesNotWaitForInitialNodes(t *testing.T) {
+	discovery := newUpdatingHTTPDiscovery()
+	builder := newTestRealBuilder(t, discovery)
+	protocol := config_pb.Protocol_HTTP
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+
+	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
+		Protocol: &protocol,
+		Target:   "discovery:///orders",
+	}, nil))
+	if err != nil {
+		t.Fatalf("build waited for an initial discovery node: %v", err)
+	}
+	defer func() { _ = result.close() }()
+	if result.httpClient == nil || result.grpcClient != nil {
+		t.Fatal("discovery build did not return exactly one HTTP client")
+	}
+	receiveWithin(t, discovery.watchers, "HTTP discovery watcher")
+}
+
 type staticDiscovery struct {
 	instances []*registry.ServiceInstance
+	ready     chan struct{}
 }
 
 func (d staticDiscovery) GetService(context.Context, string) ([]*registry.ServiceInstance, error) {
@@ -76,6 +98,7 @@ func (d staticDiscovery) Watch(ctx context.Context, _ string) (registry.Watcher,
 	return &staticWatcher{
 		ctx:       ctx,
 		instances: d.instances,
+		ready:     d.ready,
 		stopped:   make(chan struct{}),
 	}, nil
 }
@@ -84,6 +107,7 @@ type staticWatcher struct {
 	ctx       context.Context
 	instances []*registry.ServiceInstance
 	delivered atomic.Bool
+	ready     chan struct{}
 	stopOnce  sync.Once
 	stopped   chan struct{}
 }
@@ -91,6 +115,13 @@ type staticWatcher struct {
 func (w *staticWatcher) Next() ([]*registry.ServiceInstance, error) {
 	if w.delivered.CompareAndSwap(false, true) {
 		return w.instances, nil
+	}
+	// resolver 只有消费完首次返回的节点后才会再次调用 Next，此信号用于无 sleep 地同步测试请求。
+	if w.ready != nil {
+		select {
+		case w.ready <- struct{}{}:
+		default:
+		}
 	}
 	select {
 	case <-w.ctx.Done():

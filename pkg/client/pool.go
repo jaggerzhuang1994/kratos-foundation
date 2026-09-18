@@ -24,7 +24,7 @@ type retiredClient struct {
 	result clientResult
 }
 
-// AcquireClient 返回当前配置版本的客户端和调用级幂等 release。
+// AcquireClient 返回当前配置版本的客户端和调用级幂等 release；HTTP 服务发现不在此等待首个节点。
 func (f *factory) AcquireClient(ctx context.Context, name string) (
 	httpClient *kratoshttp.Client,
 	grpcClient *stdgrpc.ClientConn,

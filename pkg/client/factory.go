@@ -25,6 +25,7 @@ import (
 type Factory interface {
 	// AcquireClient 返回连接名称对应的客户端和幂等 release。成功返回后，调用方必须
 	// 在本次调用结束时执行 release；遗漏 release 会在 cleanup 预算耗尽后被强制关闭。
+	// HTTP 服务发现客户端不等待首个可用节点，节点尚未就绪时由实际请求返回发现错误。
 	AcquireClient(ctx context.Context, name string) (*kratoshttp.Client, *stdgrpc.ClientConn, func(), error)
 }
 

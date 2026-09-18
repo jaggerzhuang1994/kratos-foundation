@@ -103,6 +103,46 @@ func TestClientCombinesSourcesEscapesValuesAndSkipsReserved(t *testing.T) {
 	}
 }
 
+func TestMetadataWireContractRemainsCompatibleWithV1(t *testing.T) {
+	const value = "tenant+a b/中文"
+	t.Run("v1 caller to v2 server", func(t *testing.T) {
+		tr := &testTransport{header: headerCarrier{}}
+		tr.header.Set("x-md-tenant", url.QueryEscape(value))
+		ctx := transport.NewServerContext(context.Background(), tr)
+
+		_, err := Server(nil)(func(ctx context.Context, _ any) (any, error) {
+			md, ok := kratosmetadata.FromServerContext(ctx)
+			if !ok || md.Get("x-md-tenant") != value {
+				t.Fatalf("server metadata = %v, want tenant %q", md, value)
+			}
+			return nil, nil
+		})(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("v2 caller to v1 server", func(t *testing.T) {
+		tr := &testTransport{header: headerCarrier{}}
+		ctx := kratosmetadata.NewClientContext(context.Background(), kratosmetadata.Metadata{
+			"x-md-tenant": {value},
+		})
+		ctx = transport.NewClientContext(ctx, tr)
+
+		_, err := Client(nil)(func(context.Context, any) (any, error) { return nil, nil })(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := url.QueryUnescape(tr.header.Get("x-md-tenant"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if decoded != value {
+			t.Fatalf("legacy server decoded metadata = %q, want %q", decoded, value)
+		}
+	})
+}
+
 func TestMiddlewareDisabledAndMissingTransportPassThrough(t *testing.T) {
 	if Server(&config_pb.Middleware_Metadata{Disable: boolp(true)}) != nil || Client(&config_pb.Middleware_Metadata{Disable: boolp(true)}) != nil {
 		t.Fatal("disabled middleware must be nil")
@@ -122,36 +162,51 @@ func TestMiddlewareDisabledAndMissingTransportPassThrough(t *testing.T) {
 
 func boolp(v bool) *bool { return &v }
 
-func TestRequestDebugCannotUseGenericMetadata(t *testing.T) {
-	const key = "x-foundation-debug"
-	cfg := &config_pb.Middleware_Metadata{Prefix: []string{"x-"}, Constants: map[string]string{key: "1"}}
-	for _, side := range []string{"server", "client"} {
-		t.Run(side, func(t *testing.T) {
-			tr := &testTransport{header: headerCarrier{}}
-			ctx := context.Background()
-			mw := Server(cfg)
-			if side == "server" {
-				tr.header.Set(key, "1")
-				ctx = transport.NewServerContext(ctx, tr)
-			} else {
-				mw = Client(cfg)
-				ctx = kratosmetadata.NewClientContext(ctx, kratosmetadata.Metadata{key: {"1"}})
-				ctx = kratosmetadata.NewServerContext(ctx, kratosmetadata.Metadata{key: {"1"}})
-				ctx = transport.NewClientContext(ctx, tr)
+func TestFrameworkHeadersCannotUseGenericMetadata(t *testing.T) {
+	keys := []string{
+		deadlinemiddleware.HTTPTimeoutHeader,
+		"grpc-timeout",
+		"traceparent",
+		"tracestate",
+		"baggage",
+		"x-md-service-name",
+		"x-foundation-debug",
+	}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			cfg := &config_pb.Middleware_Metadata{
+				Prefix:    []string{"x-", "grpc-", "trace", "baggage"},
+				Constants: map[string]string{key: "forged"},
 			}
-			_, err := mw(func(ctx context.Context, _ any) (any, error) {
-				if side == "server" {
-					md, _ := kratosmetadata.FromServerContext(ctx)
-					if md.Get(key) != "" {
-						t.Fatal("generic server metadata accepted debug")
+			for _, side := range []string{"server", "client"} {
+				t.Run(side, func(t *testing.T) {
+					tr := &testTransport{header: headerCarrier{}}
+					ctx := context.Background()
+					mw := Server(cfg)
+					if side == "server" {
+						tr.header.Set(key, "forged")
+						ctx = transport.NewServerContext(ctx, tr)
+					} else {
+						mw = Client(cfg)
+						ctx = kratosmetadata.NewClientContext(ctx, kratosmetadata.Metadata{key: {"forged"}})
+						ctx = kratosmetadata.NewServerContext(ctx, kratosmetadata.Metadata{key: {"forged"}})
+						ctx = transport.NewClientContext(ctx, tr)
 					}
-				} else if tr.header.Get(key) != "" {
-					t.Fatal("generic client metadata injected debug")
-				}
-				return nil, nil
-			})(ctx, nil)
-			if err != nil {
-				t.Fatal(err)
+					_, err := mw(func(ctx context.Context, _ any) (any, error) {
+						if side == "server" {
+							md, _ := kratosmetadata.FromServerContext(ctx)
+							if md.Get(key) != "" {
+								t.Fatalf("generic server metadata accepted reserved key %q", key)
+							}
+						} else if tr.header.Get(key) != "" {
+							t.Fatalf("generic client metadata injected reserved key %q", key)
+						}
+						return nil, nil
+					})(ctx, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+				})
 			}
 		})
 	}

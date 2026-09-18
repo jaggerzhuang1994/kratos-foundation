@@ -17,6 +17,7 @@ import (
 )
 
 func TestBuilderHTTPSDiscoveryUsesTLS(t *testing.T) {
+	discoveryReady := make(chan struct{}, 1)
 	server := httptest.NewTLSServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		if r.TLS == nil {
 			t.Error("request did not use TLS")
@@ -34,13 +35,16 @@ func TestBuilderHTTPSDiscoveryUsesTLS(t *testing.T) {
 	t.Cleanup(func() { nethttp.DefaultTransport = previousDefaultTransport })
 
 	protocol := config_pb.Protocol_HTTPS
-	builder := newTestRealBuilder(t, staticDiscovery{instances: []*registry.ServiceInstance{{
-		Name:      "orders",
-		Endpoints: []string{server.URL},
-		Metadata: map[string]string{
-			appinfo.MetadataEnvironment: env.AppEnv(),
-		},
-	}}})
+	builder := newTestRealBuilder(t, staticDiscovery{
+		instances: []*registry.ServiceInstance{{
+			Name:      "orders",
+			Endpoints: []string{server.URL},
+			Metadata: map[string]string{
+				appinfo.MetadataEnvironment: env.AppEnv(),
+			},
+		}},
+		ready: discoveryReady,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
@@ -51,6 +55,7 @@ func TestBuilderHTTPSDiscoveryUsesTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = result.close() })
+	receiveWithin(t, discoveryReady, "initial discovery update")
 
 	requestContext, requestCancel := context.WithTimeout(context.Background(), time.Second)
 	defer requestCancel()

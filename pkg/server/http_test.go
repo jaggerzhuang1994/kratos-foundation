@@ -10,12 +10,15 @@ import (
 	"strings"
 	"testing"
 
+	kratosmetadata "github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
+	deadlinecontext "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
 
@@ -52,6 +55,14 @@ func TestIntegrationHTTPRoutes(t *testing.T) {
 					return nil, errors.New("internal storage location /private/order.db")
 				case "panic":
 					panic("private panic details")
+				case "context":
+					md, _ := kratosmetadata.FromServerContext(callCtx)
+					deadlineInfo, _ := deadlinecontext.InfoFromContext(callCtx)
+					return map[string]any{
+						"tenant":          md.Get("x-md-tenant"),
+						"trace_id":        trace.SpanContextFromContext(callCtx).TraceID().String(),
+						"deadline_source": string(deadlineInfo.Source),
+					}, nil
 				}
 				return map[string]any{"name": input.Name, "module": callCtx.Value(requestKey{})}, nil
 			})(ctx, &input)
@@ -88,6 +99,7 @@ func TestIntegrationHTTPRoutes(t *testing.T) {
 		reason                   string
 	}{
 		{"json with middleware", http.MethodPost, "/configured/v1/orders", `{"name":"订单甲"}`, http.StatusCreated, ""},
+		{"v1 context contract", http.MethodPost, "/configured/v1/orders", `{"mode":"context"}`, http.StatusCreated, ""},
 		{"empty JSON object", http.MethodPost, "/configured/v1/orders", `{}`, http.StatusCreated, ""},
 		{"business error", http.MethodPost, "/configured/v1/orders", `{"mode":"business-error"}`, http.StatusConflict, "ORDER_EXISTS"},
 		{"unknown error redacted", http.MethodPost, "/configured/v1/orders", `{"mode":"unexpected-error"}`, http.StatusInternalServerError, "UNKNOWN"},
@@ -103,6 +115,10 @@ func TestIntegrationHTTPRoutes(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Header.Set("Content-Type", "application/json")
+			if strings.Contains(test.body, `"mode":"context"`) {
+				req.Header.Set("x-md-tenant", "acme%2Blegacy")
+				req.Header.Set("traceparent", "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+			}
 			response, err := client.Do(req)
 			if err != nil {
 				t.Fatal(err)
@@ -133,7 +149,11 @@ func TestIntegrationHTTPRoutes(t *testing.T) {
 					if err := json.Unmarshal([]byte(test.body), &input); err != nil {
 						t.Fatal(err)
 					}
-					if result["name"] != input.Name || result["module"] != "orders" {
+					if input.Mode == "context" {
+						if result["tenant"] != "acme+legacy" || result["trace_id"] != "0af7651916cd43dd8448eb211c80319c" || result["deadline_source"] != string(deadlinecontext.SourceFallback) {
+							t.Fatalf("v1 HTTP context observed by v2 server=%v", result)
+						}
+					} else if result["name"] != input.Name || result["module"] != "orders" {
 						t.Fatalf("response=%v", result)
 					}
 				} else if result["reason"] != test.reason {

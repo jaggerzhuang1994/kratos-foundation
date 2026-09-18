@@ -235,9 +235,11 @@ make verify
 
 ### 旧错误兼容与安全请求日志
 
-默认 Server 请求链与 HTTP 编码器统一归一化旧结构化错误，保留原始 HTTP 状态及业务码，保留服务间 gRPC 堆栈及 cause 诊断，过滤响应头；HTTP 公开输出仍屏蔽堆栈。关闭访问日志仍保留一次服务端故障诊断；访问摘要不包含请求或响应正文。适用边界与流程见 [Server 错误边界](pkg/server/README.md#请求错误边界与安全日志) 和 [错误兼容](pkg/errors/README.md)。
+默认 Server 请求链与 HTTP 编码器统一归一化旧结构化错误，保留原始 HTTP 状态、业务码和完整 metadata，并保留服务间 gRPC 堆栈及 cause 诊断，过滤响应头。HTTP Encoder 延续 v1 契约，不过滤 `reason_code`、`err_stack` 等内部 metadata，并回填旧 Decoder 使用的 `http_data`、`http_header`；内部 v1 客户端须在网关过滤前消费兼容字段，公网出口必须过滤内部字段。关闭访问日志仍保留一次服务端故障诊断；访问摘要不包含请求或响应正文。适用边界与流程见 [Server 错误边界](pkg/server/README.md#请求错误边界与安全日志) 和 [错误兼容](pkg/errors/README.md)。
 
 应用级请求 debug 使用 [`request.WithDebug(ctx)`](pkg/request/README.md)，日志消费该状态，HTTP/gRPC 传输层按配置跨服务传播。
+
+v1/v2 混合调用继续兼容 HTTP JSON、gRPC `ErrorInfo`、`x-md-*` metadata 与 W3C TraceContext；通用 metadata 不得覆盖 deadline、trace、服务名和 debug 的框架保留头。旧 HTTP 预算传播和非标准 gRPC HTTP 状态的固有限制见[客户端跨版本兼容范围](pkg/client/README.md#v1v2-跨服务兼容范围)。
 
 ## 驱动组装入口
 

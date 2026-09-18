@@ -177,7 +177,6 @@ func (b *builder) newHTTPClient(ctx context.Context, spec clientSpec) (*kratosht
 		opts = append(opts,
 			kratoshttp.WithDiscovery(discovery),
 			kratoshttp.WithNodeFilter(filters...),
-			kratoshttp.WithBlock(),
 		)
 	}
 

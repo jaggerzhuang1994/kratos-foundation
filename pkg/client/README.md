@@ -41,7 +41,9 @@ client:
       target: "https://payments.example.com:443"
 ```
 
-`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，`discovery` 省略或为空时继承 `client.discovery`，根配置也省略或为空时使用 `default`，需注入包含该实例的 DiscoveryResolver；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。获取未配置的名称时同样继承根级 discovery；实例缺失或不可用时返回发现解析错误。官方默认 merge 保留更新中省略的字段，不能通过从源中删除条目移除有效配置。
+`AcquireClient(ctx, "orders")` 对应 map 的精确键名。服务发现示例为 `target: "discovery:///orders"`，`discovery` 省略或为空时继承 `client.discovery`，根配置也省略或为空时使用 `default`，需注入对应的 DiscoveryResolver；省略 target 也采用此形式。支持 `GRPC`、`HTTP`、`HTTPS`，省略 protocol 默认 GRPC。获取未配置的名称时同样继承根级 discovery；resolver 不存在或无法创建 watcher 时，Acquire 返回发现解析错误。
+
+HTTP 服务发现客户端创建 watcher 后立即完成构建，不等待首个可用节点。这与 v1 的非阻塞构造语义一致，也避免调用者取消后留下等待节点的共享后台构建。`AcquireClient` 成功只表示客户端资源及 watcher 已建立，不保证当前已有可用地址；节点尚未发布时，实际 HTTP 请求返回发现错误，后续 watcher 更新可让同一个客户端开始工作。Acquire 调用 Context 只控制本次等待共享构建，已发布客户端与 watcher 由租约、配置更新和 Factory cleanup 管理。官方默认 merge 保留更新中省略的字段，不能通过从源中删除条目移除有效配置。
 
 当前 Factory 的 gRPC 使用 `DialInsecure`，不提供 gRPC TLS/mTLS 配置，`GRPCS` 已移除；这是平台网关或 Service Mesh 终止并认证 TLS/mTLS 后的受信任内部明文链路，目标 URL 和单次调用选项不能启用 gRPC TLS。不得将该连接跨越不可信网络。HTTPS 仍使用 TLS，标准 Transport 至少要求 TLS 1.2，并保留其已有 TLS 配置；自定义 RoundTripper/TLS 拨号函数须自行实现安全与取消策略。需要应用自行管理 gRPC TLS 的例外场景，应单独构造和管理原生客户端，不改变 Factory 的平台责任边界。
 
@@ -148,14 +150,17 @@ flowchart TD
     K -- 是 --> L[释放锁 返回关闭错误]
     K -- 否 --> M{已有连接?}
     M -- 是 --> N[增加租约引用 释放锁]
-    N --> O[业务调用连接]
+    N --> O{业务调用时有可用节点?}
+    O -- 否 --> AJ[返回发现或连接错误]
+    O -- 是 --> AK[执行请求]
     M -- 否 --> P[登记或复用构建 释放锁]
-    P --> Q[锁外调用传输或服务发现 使用身份快照]
+    P --> Q[锁外创建传输并启动 discovery watcher 不等待首个 HTTP 节点]
     Q --> R{构建失败或调用 Context 取消?}
     R -- 是 --> S([返回错误 不授予租约])
     R -- 否 --> T[状态锁内发布仍有效版本 释放锁]
     T --> J
-    O --> U[release 状态锁内减少引用并分离待关连接 释放锁]
+    AJ --> U[release 状态锁内减少引用并分离待关连接 释放锁]
+    AK --> U
     F --> V[配置订阅回调 校验新配置]
     V --> W{有效?}
     W -- 否 --> X[ERROR client config update rejected 保留旧配置]
@@ -237,6 +242,68 @@ flowchart TD
 ## 可运行的组合用例
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。
+
+## 跨服务 metadata 约定
+
+业务必填参数应放在 protobuf/HTTP 请求字段中，不能依赖 metadata 隐式补全；只有不改变业务含义的请求级上下文适合 metadata。推荐按所有权分为三类：
+
+- 需要安全地跨多跳传播的 baggage 使用 `x-md-` 前缀，例如网关鉴权后写入的租户或区域标记。公网入口必须先删除调用方提供的同名头，再从可信身份重建；服务端 Context 只有匹配 `middleware.metadata.prefix` 的键会自动向下游传播。
+- 只发给当前下游的一跳参数使用 `metadata.NewClientContext` 显式写入调用 Context。显式 client metadata 不受发送端 prefix 限制，适合按目标服务选择的版本、幂等键或调用来源；接收端仍只把匹配自身 prefix 的头导入 Server Context。调用结束后不应把该派生 Context 复用于其他下游。
+- 固定 `constants` 只保存当前客户端实例稳定且非敏感的标识。动态租户、用户凭据、token、cookie 和请求 ID 不应放入 constants。
+
+Deadline、trace 和 request debug 由各自中间件拥有，不应通过通用 metadata 重复注入。`x-request-timeout-ms`、`grpc-timeout`、`traceparent`、`tracestate`、`baggage`、`x-md-service-name` 和 `x-foundation-debug` 均为框架保留键，通用 metadata 会在收发两端跳过，避免覆盖或追加出歧义多值。服务身份和授权优先使用 mTLS、网关签发凭据或针对当前下游显式生成的 `authorization`，不要把入站 Authorization/Cookie 作为 `x-md-` baggage 自动透传。多个普通来源写入同一个键时当前实现会追加多值，不提供覆盖优先级；每个键应只有一个明确所有者，接收方应拒绝意外多值。键名使用小写并保持紧凑，避免传播大对象或敏感数据。
+
+```mermaid
+flowchart TD
+    A([外部请求进入网关]) --> B[删除外部 x-md-* 与内部保留头]
+    B --> C{鉴权成功?}
+    C -- 否 --> D([返回未授权错误])
+    C -- 是 --> E[从可信身份重建允许跨多跳的 x-md-*]
+    E --> F[服务端 metadata 中间件写入 Server Context]
+    F --> G{调用下游需要哪类信息?}
+    G -- 业务必填 --> H[写入显式请求字段]
+    G -- 跨多跳 baggage --> I[沿用 Server Context 由 prefix 白名单传播]
+    G -- 仅当前下游 --> J[用 NewClientContext 派生一跳 Context]
+    H --> K[发起 HTTP 或 gRPC 调用]
+    I --> K
+    J --> K
+    K --> L{下游失败或超时?}
+    L -- 是 --> M[返回错误 由调用边界记录]
+    L -- 否 --> N([返回结果])
+    M --> N
+```
+
+## v1/v2 跨服务兼容范围
+
+下表描述当前 Foundation v2 与 v1 服务互调时可依赖的线协议契约。这里的 v1 指继续使用旧 HTTP JSON、gRPC `ErrorInfo`、`x-md-*` URL 转义和 W3C TraceContext 的服务。
+
+| 调用方向 | HTTP | gRPC |
+| --- | --- | --- |
+| v1 → v2 | HTTP 状态、reason、`reason_code`、data、响应头可恢复；`x-md-*` 和启用后的 W3C trace 可读取。v1 不发送剩余预算头，因此 v2 使用自身 Deadline 策略，并通过连接取消感知调用方超时 | gRPC 原生 deadline/cancel、`x-md-*`、W3C trace 和 `ErrorInfo` 可读取 |
+| v2 → v1 | Encoder 保留完整 metadata，并回填 `http_data`、单值 `http_header`；v2 同时发送 `x-request-timeout-ms`，旧服务即使忽略该头，调用方截止时间仍会取消 HTTP 请求 | gRPC 原生 deadline/cancel、`x-md-*`、W3C trace、reason、`reason_code`、data 和诊断 metadata 可读取 |
+
+只有接收端允许的 `x-md-*` 才作为跨版本业务 metadata 保证；v1 客户端曾经宽泛转发 Server Context，不代表 v2 接收端会接受非白名单头。trace 使用标准 `traceparent`、`tracestate` 和 `baggage`；v1 端必须启用其 tracing 中间件，v2 即使关闭采样也会保留关联 ID。
+
+两个旧线协议边界无法由 v2 单方面补齐：v1 HTTP 没有发送剩余毫秒预算，因此只能依靠 v2 本地 Deadline 与 HTTP 取消；旧 gRPC 端没有 `http_code` 恢复契约，422 等非标准映射状态在旧端可能显示为 500，但 reason/`reason_code` 仍可用于业务判断。需要跨 gRPC 精确保留这类 HTTP 状态时，两端都应升级到 v2，或改用标准可映射状态。HTTP 响应头不跨 gRPC 传播，这是协议边界，不属于兼容字段。
+
+```mermaid
+flowchart TD
+    A([v1 或 v2 调用方 Context]) --> B[客户端 Deadline metadata tracing 中间件]
+    B --> C{传输协议}
+    C -- HTTP --> D[W3C trace + x-md-* + v2 剩余预算头]
+    C -- gRPC --> E[gRPC 原生 deadline + W3C trace + x-md-*]
+    D --> F[服务端恢复允许的调用上下文]
+    E --> F
+    F --> G[业务处理]
+    G --> H{返回错误?}
+    H -- 否 --> I([返回响应])
+    H -- 是 --> J[错误边界归一化并在服务端故障时记录]
+    J --> K{传输协议}
+    K -- HTTP --> L[JSON 状态 reason data 完整 metadata 和兼容回填]
+    K -- gRPC --> M[gRPC status + ErrorInfo]
+    L --> N([v1 或 v2 客户端恢复业务错误])
+    M --> N
+```
 
 ## 请求 debug
 

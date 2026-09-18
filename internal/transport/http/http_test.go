@@ -23,27 +23,58 @@ func TestEncoderEncodesFoundationErrorAndHeaders(t *testing.T) {
 	if recorder.Code != http.StatusTooManyRequests || recorder.Header().Get("Retry-After") != "5" {
 		t.Fatalf("status=%d headers=%v", recorder.Code, recorder.Header())
 	}
-	if got := recorder.Body.String(); !strings.Contains(got, `"code":42`) || !strings.Contains(got, `"request_id":"r1"`) || !strings.Contains(got, `"retry":"later"`) {
+	if got := recorder.Body.String(); !strings.Contains(got, `"code":42`) || !strings.Contains(got, `"request_id":"r1"`) || !strings.Contains(got, `"reason_code":"42"`) || !strings.Contains(got, `"retry":"later"`) {
 		t.Fatalf("unexpected body: %s", got)
 	}
 }
 
-func TestEncoderMapsUnknownErrorToInternalServerError(t *testing.T) {
+func TestEncoderBackfillsV1HTTPErrorMetadata(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), errors.New("sql: password=private"))
-	if recorder.Code != http.StatusInternalServerError || recorder.Body.String() != internalServerErrorBody {
-		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	err := foundationerrors.New(http.StatusConflict, "CONFLICT", "conflict").
+		WithReasonCode(40901).
+		WithHTTPData(map[string]any{"id": json.Number("9007199254740993")}).
+		WithHTTPHeaders(http.Header{"Retry-After": {"5", "7"}})
+
+	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), err)
+
+	var response errResponse
+	if decodeErr := json.Unmarshal(recorder.Body.Bytes(), &response); decodeErr != nil {
+		t.Fatal(decodeErr)
 	}
-	if strings.Contains(recorder.Body.String(), "private") {
-		t.Fatalf("internal error details leaked in response: %s", recorder.Body.String())
+	if got := response.Metadata["http_data"]; got != `{"id":9007199254740993}` {
+		t.Fatalf("legacy http_data = %q", got)
+	}
+	if got := response.Metadata["http_header"]; got != `{"Retry-After":"5"}` {
+		t.Fatalf("legacy http_header = %q", got)
+	}
+	if got := response.Metadata["http_headers"]; got != `{"Retry-After":["5","7"]}` {
+		t.Fatalf("v2 http_headers = %q", got)
 	}
 }
 
-func TestDecoderRoundTripsErrorAndClosesBody(t *testing.T) {
-	body := &trackingReadCloser{Reader: strings.NewReader(`{"code":17,"message":"bad","data":{"field":"name"},"reason":"INVALID","metadata":{"public":"yes"}}`)}
+func TestEncoderMapsUnknownErrorAndPreservesDiagnosticsForGateway(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), errors.New("sql: password=private"))
+	var response errResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != http.StatusInternalServerError || response.Message != http.StatusText(http.StatusInternalServerError) {
+		t.Fatalf("status=%d response=%+v", recorder.Code, response)
+	}
+	if response.Metadata["err_stack"] == "" {
+		t.Fatalf("diagnostics missing from gateway metadata: %+v", response.Metadata)
+	}
+	if strings.Contains(response.Message, "password=private") {
+		t.Fatalf("private cause leaked in public message: %+v", response)
+	}
+}
+
+func TestDecoderReadsV1HTTPErrorContractAndClosesBody(t *testing.T) {
+	body := &trackingReadCloser{Reader: strings.NewReader(`{"code":17,"message":"bad","data":{"field":"name"},"reason":"INVALID","metadata":{"public":"yes","reason_code":"17","http_data":"{\"field\":\"name\"}","http_headers":"{\"Retry-After\":[\"3\"]}"}}`)}
 	err := Decoder()(context.Background(), &http.Response{StatusCode: http.StatusBadRequest, Status: "400 Bad Request", Header: http.Header{"X-Trace": {"t"}}, Body: body})
 	se := foundationerrors.FromError(err)
-	if se == nil || se.Reason != "INVALID" || se.ReasonCode() != 17 || se.PublicMetadata()["public"] != "yes" || se.HTTPHeaders().Get("X-Trace") != "t" || !body.closed {
+	if se == nil || se.Reason != "INVALID" || se.ReasonCode() != 17 || se.PublicMetadata()["public"] != "yes" || se.HTTPHeaders().Get("Retry-After") != "3" || se.HTTPHeaders().Get("X-Trace") != "t" || !body.closed {
 		t.Fatalf("decoded=%v closed=%t", se, body.closed)
 	}
 	if Decoder()(context.Background(), &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader("ignored"))}) != nil {
@@ -146,14 +177,14 @@ func TestEncoderPreservesLegacyExplicitStatuses(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), fmt.Errorf("wrapped: %w", legacy))
 			body := recorder.Body.String()
-			if recorder.Code != code || recorder.Header().Get("Retry-After") != "7" || !strings.Contains(body, `"code":1234`) || !strings.Contains(body, `9007199254740993`) || !strings.Contains(body, `"reason":"LEGACY"`) || strings.Contains(body, "private") {
+			if recorder.Code != code || recorder.Header().Get("Retry-After") != "7" || !strings.Contains(body, `"code":1234`) || !strings.Contains(body, `9007199254740993`) || !strings.Contains(body, `"reason":"LEGACY"`) || !strings.Contains(body, `"reason_code":"1234"`) || !strings.Contains(body, "private-stack") {
 				t.Fatalf("code=%d header=%v body=%s", recorder.Code, recorder.Header(), body)
 			}
 		})
 	}
 }
 
-func TestGatewayFiltersDiagnosticsReceivedOverGRPC(t *testing.T) {
+func TestEncoderPreservesGRPCDiagnosticsForGateway(t *testing.T) {
 	origin := foundationerrors.New(500, "INTERNAL", "internal error").WithMetadata(map[string]string{"err_stack": "private-origin-frame"}).WithCause(errors.New("private-database-cause"))
 	remote := origin.GRPCStatus().Err()
 	if !strings.Contains(foundationerrors.ErrStack(remote), "private-origin-frame") || !strings.Contains(foundationerrors.ErrStack(remote), "private-database-cause") {
@@ -161,7 +192,7 @@ func TestGatewayFiltersDiagnosticsReceivedOverGRPC(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), remote)
-	if recorder.Code != 500 || strings.Contains(recorder.Body.String(), "private-") || strings.Contains(recorder.Body.String(), "err_stack") {
-		t.Fatalf("gateway exposed diagnostics: %s", recorder.Body.String())
+	if recorder.Code != 500 || !strings.Contains(recorder.Body.String(), "private-origin-frame") || !strings.Contains(recorder.Body.String(), "private-database-cause") || !strings.Contains(recorder.Body.String(), "err_stack") {
+		t.Fatalf("gateway diagnostics missing: %s", recorder.Body.String())
 	}
 }

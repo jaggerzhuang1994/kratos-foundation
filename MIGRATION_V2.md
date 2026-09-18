@@ -30,6 +30,9 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 | [ ] 配置读取 | Kratos Config/Value/Watch 调用 | 改为 `config.Manager.Load/Subscribe`；回调对象独立，取消订阅不等待正在执行的回调 |
 | [ ] 订阅语义 | 曾提供多订阅、首次回放及队列 | 现在下一轮成功 Scan 后异步回放当前值，之后按变化串行通知；支持缺失 key 和同 key 多订阅 |
 | [ ] 客户端构造 | 旧 Factory 构造及 ResolveClient/MakeGrpcConn/MakeHttpClient | 使用新的 NewFactory 依赖签名；`AcquireClient(ctx, name)` 成功后必须 `defer release()` |
+| [ ] HTTP 服务发现 | 构造客户端时不等待首个节点 | v2 保持非阻塞构造；Acquire 成功不代表已有节点，隔离环境验证空节点请求失败及 watcher 更新后的恢复 |
+| [ ] 跨版本调用上下文 | v1/v2 HTTP 与 gRPC 混合调用 | `x-md-*` 与 W3C trace 保持兼容；gRPC deadline 原生双向传播。v1 HTTP 不发送剩余预算头，只能依靠 v2 本地 Deadline 和连接取消；不要宣称跨版本预算完全等价 |
+| [ ] 跨版本错误 | HTTP JSON 与 gRPC ErrorInfo | HTTP 双向保留业务状态和兼容 metadata；gRPC reason/reason_code 双向可读。422 等非标准 HTTP 状态只有 v2↔v2 能通过 `http_code` 精确恢复 |
 | [ ] 连接选择 | WithDefaultConnName/WithConnName | 生成客户端用 `NewXxxWithConnName(factory, name)`；手写调用显式传连接名 |
 | [ ] 调用选项 | GrpcCallOptionFromContext/HttpCallOptionFromContext 等 | 改用 WithGRPCCallOptions / WithHTTPCallOptions 后重新生成；按实际协议透传，原生客户端仍可直接使用 |
 | [ ] 协议能力 | GRPCS 枚举、流式 RPC | GRPCS 已删除，不能假定旧枚举提供安全传输；当前 Factory gRPC 走 DialInsecure。TLS gRPC 与流式调用需业务独立适配，不属于生成适配器能力 |
@@ -439,7 +442,7 @@ flowchart TD
 
 ### 旧 cyberkite 错误的运行期兼容
 
-新版 `errors.FromError` 可直接读取旧结构化错误的 Code/Reason/Message/Metadata，旧 422 不再先经 gRPC Unknown 丢失为 500。Server 默认常驻错误边界与 HTTP Encoder 使用 `errors.Normalize`，发送 gRPC 时保留 `http_code`、`err_stack` 及 cause 诊断文本，过滤响应头。普通未知故障的公开消息统一安全兜底；网关记录诊断后在公开出口过滤堆栈。
+新版 `errors.FromError` 可直接读取旧结构化错误的 Code/Reason/Message/Metadata，旧 422 不再先经 gRPC Unknown 丢失为 500。Server 默认常驻错误边界与 HTTP Encoder 使用 `errors.Normalize`；HTTP Encoder 延续 v1 契约，保留包含 `reason_code` 和内部诊断字段的完整 metadata，并从当前错误状态回填旧 Decoder 读取的 `http_data`、`http_header`。发送 gRPC 时保留 `http_code`、`err_stack` 及 cause 诊断文本，过滤响应头。普通未知故障的公开消息统一安全兜底；内部 v1 客户端须在网关过滤前消费兼容字段，公网出口应过滤诊断与旧 data/header 字段，并按兼容范围保留 `reason_code`。
 
 尚未升级的发送端若已经丢失 HTTP 状态，接收端仍不能从 reason_code 推断原状态；应升级发送端。业务应去除返回错误处重复日志，保留原因链。默认访问日志不再记录 args/完整堆栈，关闭访问摘要仍保留服务端错误日志；该变化的流程与配置边界见 [Server 错误边界](pkg/server/README.md#请求错误边界与安全日志)。
 
