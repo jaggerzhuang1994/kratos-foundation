@@ -13,8 +13,67 @@ import (
 	"strings"
 	"testing"
 
+	kratosjson "github.com/go-kratos/kratos/v2/encoding/json"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
+
+func TestJSONCodecPreservesV1Contract(t *testing.T) {
+	t.Run("marshal", func(t *testing.T) {
+		protocol := config_pb.Protocol_HTTP
+		encoded, err := kratosjson.MarshalOptions.Marshal(&config_pb.ClientOption{Protocol: &protocol})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(encoded)
+		if !strings.Contains(body, `"protocol":1`) || !strings.Contains(body, `"target":""`) {
+			t.Fatalf("JSON response = %s, want numeric enum and default fields", body)
+		}
+	})
+
+	t.Run("partial messages", func(t *testing.T) {
+		message := newRequiredMessage(t)
+		if _, err := kratosjson.MarshalOptions.Marshal(message); err != nil {
+			t.Fatalf("marshal partial message: %v", err)
+		}
+		if err := kratosjson.UnmarshalOptions.Unmarshal([]byte(`{"future":true}`), message); err != nil {
+			t.Fatalf("unmarshal partial message with unknown field: %v", err)
+		}
+	})
+
+	if !kratosjson.MarshalOptions.EmitDefaultValues {
+		t.Error("EmitDefaultValues is false, want v1-compatible true")
+	}
+}
+
+func newRequiredMessage(t *testing.T) *dynamicpb.Message {
+	t.Helper()
+	file, err := protodesc.NewFile(&descriptorpb.FileDescriptorProto{
+		Name:    protoString("v1_json_contract.proto"),
+		Package: protoString("v1_json_contract"),
+		Syntax:  protoString("proto2"),
+		MessageType: []*descriptorpb.DescriptorProto{{
+			Name: protoString("RequiredMessage"),
+			Field: []*descriptorpb.FieldDescriptorProto{{
+				Name:   protoString("id"),
+				Number: protoInt32(1),
+				Label:  descriptorpb.FieldDescriptorProto_LABEL_REQUIRED.Enum(),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_INT32.Enum(),
+			}},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dynamicpb.NewMessage(file.Messages().ByName("RequiredMessage"))
+}
+
+func protoString(value string) *string { return &value }
+
+func protoInt32(value int32) *int32 { return &value }
 
 func TestEncoderEncodesFoundationErrorAndHeaders(t *testing.T) {
 	recorder := httptest.NewRecorder()

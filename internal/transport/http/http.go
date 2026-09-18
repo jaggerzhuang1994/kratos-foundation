@@ -8,9 +8,20 @@ import (
 	"maps"
 	nethttp "net/http"
 
+	kratosjson "github.com/go-kratos/kratos/v2/encoding/json"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 )
+
+func init() {
+	// 保持 v1 HTTP JSON 契约，避免升级后枚举表示和宽松解析行为发生变化。
+	kratosjson.MarshalOptions.AllowPartial = true
+	kratosjson.MarshalOptions.UseEnumNumbers = true
+	kratosjson.MarshalOptions.EmitUnpopulated = true
+	kratosjson.MarshalOptions.EmitDefaultValues = true
+	kratosjson.UnmarshalOptions.AllowPartial = true
+	kratosjson.UnmarshalOptions.DiscardUnknown = true
+}
 
 type errResponse struct {
 	// Code 保存业务原因码，区别于 HTTP 响应状态码。
