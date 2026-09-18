@@ -30,7 +30,7 @@ func TestSpecBuildersIgnoreNilDeclarations(t *testing.T) {
 	if err := spec.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if len(spec.http.middlewares) != 0 || len(spec.http.endpoints) != 0 || len(spec.http.options) != 0 || len(spec.grpc.middlewares) != 0 || len(spec.grpc.services) != 0 || len(spec.grpc.options) != 0 {
+	if len(spec.http.middlewares) != 0 || len(spec.http.registrations) != 1 || len(spec.http.options) != 0 || len(spec.grpc.middlewares) != 0 || len(spec.grpc.services) != 0 || len(spec.grpc.options) != 0 {
 		t.Fatal("nil builder arguments must be ignored")
 	}
 

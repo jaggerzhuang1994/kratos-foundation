@@ -42,3 +42,5 @@ go.work.sum
 AGENTS.custom.md
 AGENTS.override.md
 .superpowers/
+
+__pycache__

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -155,7 +156,7 @@ func TestProcessFetchesPreservesFetchContextAndCommitErrors(t *testing.T) {
 func TestConsumerLogsRecoverableKafkaProtocolEvents(t *testing.T) {
 	logger, logPath := newQueueKafkaFileLogger(t)
 	value := newConsumer(ConsumerConfig{Connection: "main", Group: "billing"}, logger, nil).(*consumer)
-	value.logFetchEvents("worker-1", kgo.Fetches{{Topics: []kgo.FetchTopic{{
+	value.logFetchEvents(context.Background(), "worker-1", kgo.Fetches{{Topics: []kgo.FetchTopic{{
 		Topic: "orders",
 		Partitions: []kgo.FetchPartition{
 			{Partition: 1, Err: &kgo.ErrDataLoss{Topic: "orders", Partition: 1, ConsumedTo: 10, ResetTo: 8}},
@@ -181,6 +182,40 @@ func TestConsumerLogsRecoverableKafkaProtocolEvents(t *testing.T) {
 	}
 	if strings.Contains(logs, "ordinary fetch error") {
 		t.Fatalf("consumer logged non-protocol fetch error twice: %s", logs)
+	}
+}
+
+func TestConsumerFetchLogsPreserveConsumerContext(t *testing.T) {
+	logger, logPath := newQueueKafkaFileLogger(t)
+	ctx, cancel := context.WithCancel(foundationlog.WithKv(context.Background(), "request.id", "fetch-1"))
+	defer cancel()
+	polls := 0
+	value := newConsumer(ConsumerConfig{Connection: "main", Group: "billing"}, logger,
+		func(context.Context, string, string, ...kgo.Opt) (consumerClient, error) {
+			return &consumerClientStub{poll: func(pollCtx context.Context, _ int) kgo.Fetches {
+				polls++
+				if polls == 1 {
+					return kgo.Fetches{{Topics: []kgo.FetchTopic{{
+						Topic: "orders",
+						Partitions: []kgo.FetchPartition{{Partition: 1, Err: &kgo.ErrDataLoss{
+							Topic: "orders", Partition: 1, ConsumedTo: 10, ResetTo: 8,
+						}}},
+					}}}}
+				}
+				cancel()
+				return kgo.NewErrFetch(pollCtx.Err())
+			}}, nil
+		}).(*consumer)
+	_, err := value.consumeClient(ctx, "worker-1", func(context.Context, Delivery) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("consumeClient() error = %v, want context canceled", err)
+	}
+	written, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(written), "request.id=fetch-1") {
+		t.Fatalf("fetch log lost consumer context: %s", written)
 	}
 }
 

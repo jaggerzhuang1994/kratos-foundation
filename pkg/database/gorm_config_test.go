@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,21 +13,31 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	kratostracing "github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
-func TestGORMLoggerWriterClassifiesMessagesAndFlattensFormats(t *testing.T) {
-	logger, path := newDatabaseFileLogger(t)
-	writer := &gormLoggerWriter{logger: logger}
-	writer.Printf("line\n[error] %s", "explicit")
-	writer.Printf("trace %v %v", "source", errors.New("driver failed"))
-	writer.Printf("trace %v %v", "source", "SLOW SQL >= 200ms")
-	writer.Printf("plain %s", "message")
+func TestGORMLoggerWritesStructuredQueries(t *testing.T) {
+	base, path := newDatabaseFileLogger(t)
+	g := newGORMLogger(base, &config_pb.GormLogger{
+		Level:         config_pb.GormLogger_INFO.Enum(),
+		SlowThreshold: durationpb.New(time.Second),
+	})
+	ctx := foundationlog.WithKv(context.Background(), "request.id", "request-1")
+	g.Trace(
+		ctx,
+		time.Now().Add(-time.Millisecond),
+		func() (string, int64) { return "SELECT * FROM users", 2 },
+		nil,
+	)
 
 	written, err := os.ReadFile(path)
 	if err != nil {
@@ -34,26 +45,211 @@ func TestGORMLoggerWriterClassifiesMessagesAndFlattensFormats(t *testing.T) {
 	}
 	content := string(written)
 	for _, fragment := range []string{
-		"ERROR ", "WARN ", "INFO ",
-		"line [error] explicit",
-		"driver failed",
-		"SLOW SQL >= 200ms",
-		"plain message",
+		"INFO ",
+		"event=gorm.query",
+		"duration=",
+		"rows=2",
+		"sql=SELECT * FROM users",
+		"request.id=request-1",
 	} {
 		if !strings.Contains(content, fragment) {
 			t.Errorf("GORM log lacks %q: %s", fragment, content)
 		}
 	}
-	if secondGORMLogArgumentIsError(nil) || secondGORMLogArgumentIsError([]any{"one"}) ||
-		!secondGORMLogArgumentIsError([]any{"one", errors.New("two")}) ||
-		secondGORMLogArgumentIsError([]any{"one", "two"}) {
-		t.Fatal("GORM error argument classification is incorrect")
+	if strings.Contains(content, "[rows:2]") || strings.Contains(content, "msg=") {
+		t.Fatalf("GORM log still contains legacy text formatting: %s", content)
 	}
-	if secondGORMLogArgumentIsSlowSQL(nil) || secondGORMLogArgumentIsSlowSQL([]any{"one"}) ||
-		!secondGORMLogArgumentIsSlowSQL([]any{"one", "SLOW SQL >= 10ms"}) ||
-		secondGORMLogArgumentIsSlowSQL([]any{"one", "ordinary SQL"}) ||
-		secondGORMLogArgumentIsSlowSQL([]any{"one", errors.New("slow")}) {
-		t.Fatal("GORM slow SQL argument classification is incorrect")
+}
+
+func TestGORMLoggerCorrelatesQueriesWithActiveSpan(t *testing.T) {
+	base, path := newDatabaseFileLogger(t)
+	base = base.With(
+		foundationlog.TraceIDKey, kratostracing.TraceID(),
+		foundationlog.SpanIDKey, kratostracing.SpanID(),
+	)
+	g := newGORMLogger(base, &config_pb.GormLogger{Level: config_pb.GormLogger_INFO.Enum()})
+	provider := tracesdk.NewTracerProvider()
+	ctx, span := provider.Tracer("gorm-log-test").Start(context.Background(), "request")
+	spanContext := span.SpanContext()
+	defer span.End()
+	g.Trace(ctx, time.Now(), func() (string, int64) { return "SELECT 1", 1 }, nil)
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{
+		"trace.id=" + spanContext.TraceID().String(),
+		"span.id=" + spanContext.SpanID().String(),
+	} {
+		if !strings.Contains(string(written), fragment) {
+			t.Errorf("GORM query log lacks %q: %s", fragment, written)
+		}
+	}
+}
+
+func TestGORMLoggerDoesNotInventTraceForBackgroundQuery(t *testing.T) {
+	base, path := newDatabaseFileLogger(t)
+	base = base.With(
+		foundationlog.TraceIDKey, kratostracing.TraceID(),
+		foundationlog.SpanIDKey, kratostracing.SpanID(),
+	)
+	g := newGORMLogger(base, &config_pb.GormLogger{Level: config_pb.GormLogger_INFO.Enum()})
+	g.Trace(context.Background(), time.Now(), func() (string, int64) { return "SELECT 1", 1 }, nil)
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range strings.Fields(string(written)) {
+		if (strings.HasPrefix(field, "trace.id=") && field != "trace.id=") ||
+			(strings.HasPrefix(field, "span.id=") && field != "span.id=") {
+			t.Fatalf("background query log contains synthetic trace value %q: %s", field, written)
+		}
+	}
+}
+
+func TestGORMLoggerWritesStructuredSlowAndFailedQueries(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		config   *config_pb.GormLogger
+		begin    time.Time
+		err      error
+		contains []string
+	}{
+		{
+			name: "slow query",
+			config: &config_pb.GormLogger{
+				Level:         config_pb.GormLogger_WARN.Enum(),
+				SlowThreshold: durationpb.New(time.Millisecond),
+			},
+			begin:    time.Now().Add(-time.Second),
+			contains: []string{"WARN ", "event=gorm.query", "slow_threshold=1ms", "rows=3", "sql=SELECT slow"},
+		},
+		{
+			name: "failed query",
+			config: &config_pb.GormLogger{
+				Level: config_pb.GormLogger_ERROR.Enum(),
+			},
+			begin:    time.Now(),
+			err:      errors.New("driver failed"),
+			contains: []string{"ERROR ", "event=gorm.query", "err=driver failed", "rows=3", "sql=SELECT failed"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base, path := newDatabaseFileLogger(t)
+			g := newGORMLogger(base, test.config)
+			g.Trace(
+				context.Background(),
+				test.begin,
+				func() (string, int64) { return "SELECT " + strings.Split(test.name, " ")[0], 3 },
+				test.err,
+			)
+
+			written, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, fragment := range test.contains {
+				if !strings.Contains(string(written), fragment) {
+					t.Errorf("GORM log lacks %q: %s", fragment, written)
+				}
+			}
+		})
+	}
+}
+
+func TestGORMLoggerIgnoresConfiguredRecordNotFound(t *testing.T) {
+	base, path := newDatabaseFileLogger(t)
+	g := newGORMLogger(base, &config_pb.GormLogger{
+		Level:                     config_pb.GormLogger_ERROR.Enum(),
+		IgnoreRecordNotFoundError: proto.Bool(true),
+	})
+	g.Trace(
+		context.Background(),
+		time.Now(),
+		func() (string, int64) { return "SELECT missing", 0 },
+		gorm.ErrRecordNotFound,
+	)
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(written) != 0 {
+		t.Fatalf("ignored record-not-found log = %s", written)
+	}
+}
+
+func TestGORMLoggerSupportsLogModeAndMessages(t *testing.T) {
+	base, path := newDatabaseFileLogger(t)
+	g := newGORMLogger(base, &config_pb.GormLogger{Level: config_pb.GormLogger_SILENT.Enum()})
+	active := g.LogMode(gormlogger.Info)
+	active.Info(context.Background(), "info %s\n", "message")
+	active.Warn(context.Background(), "warn %s", "message")
+	active.Error(context.Background(), "error %s", "message")
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{
+		"INFO ", "msg=info message",
+		"WARN ", "msg=warn message",
+		"ERROR ", "msg=error message",
+	} {
+		if !strings.Contains(string(written), fragment) {
+			t.Errorf("GORM message log lacks %q: %s", fragment, written)
+		}
+	}
+	if lines := strings.Count(string(written), "\n"); lines != 3 {
+		t.Fatalf("GORM message logs contain embedded newlines: %q", written)
+	}
+}
+
+func TestGORMLoggerFiltersParameters(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		parameterized bool
+		wantParams    int
+	}{
+		{name: "retain parameters", parameterized: false, wantParams: 2},
+		{name: "hide parameters", parameterized: true, wantParams: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base, _ := newDatabaseFileLogger(t)
+			g := newGORMLogger(base, &config_pb.GormLogger{
+				ParameterizedQueries: proto.Bool(test.parameterized),
+			})
+			filter := g.(gorm.ParamsFilter)
+			sql, params := filter.ParamsFilter(context.Background(), "id IN (?, ?)", 1, 2)
+			if sql != "id IN (?, ?)" || len(params) != test.wantParams {
+				t.Fatalf("ParamsFilter() = (%q, %v), want unchanged SQL and %d params", sql, params, test.wantParams)
+			}
+		})
+	}
+}
+
+func TestGORMLogHandlerPreservesDerivedAttributes(t *testing.T) {
+	base, path := newDatabaseFileLogger(t)
+	handler := &gormLogHandler{logger: base}
+	slog.New(handler).
+		With("connection", "primary").
+		WithGroup("scope").
+		InfoContext(context.Background(), "configured", "queue", "jpush")
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{
+		"msg=configured",
+		"connection=primary",
+		"scope.queue=jpush",
+	} {
+		if !strings.Contains(string(written), fragment) {
+			t.Errorf("derived slog log lacks %q: %s", fragment, written)
+		}
 	}
 }
 
@@ -157,16 +353,16 @@ func TestGORMCallerFromRealQuery(t *testing.T) {
 
 func TestGORMLogCallerValidatesAndNormalizesSource(t *testing.T) {
 	for _, tc := range []struct {
-		args []any
-		want string
+		source string
+		want   string
 	}{
-		{nil, ""}, {[]any{42}, ""}, {[]any{"source"}, ""}, {[]any{"repo.go:x"}, ""}, {[]any{"repo.go:0"}, ""},
-		{[]any{"/srv/service/repo.go:110"}, "service/repo.go:110"},
-		{[]any{`C:\service\repo.go:110`}, "service/repo.go:110"},
-		{[]any{"repo.go:110"}, "repo.go:110"},
+		{"", ""}, {"source", ""}, {"repo.go:x", ""}, {"repo.go:0", ""},
+		{"/srv/service/repo.go:110", "service/repo.go:110"},
+		{`C:\service\repo.go:110`, "service/repo.go:110"},
+		{"repo.go:110", "repo.go:110"},
 	} {
-		if got := gormLogCaller(tc.args); got != tc.want {
-			t.Errorf("%v: got %q, want %q", tc.args, got, tc.want)
+		if got := normalizeGORMLogCaller(tc.source); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.source, got, tc.want)
 		}
 	}
 }

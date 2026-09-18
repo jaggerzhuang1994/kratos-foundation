@@ -12,6 +12,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -158,6 +159,7 @@ func TestConsumerRecoveryBackoffGrowsAndResetsAfterCommit(t *testing.T) {
 	logger, path := newQueueKafkaFileLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	ctx = foundationlog.WithKv(ctx, "request.id", "consumer-1")
 	creates := 0
 	terminal := errors.New("stop test")
 	value := newConsumer(ConsumerConfig{Concurrency: 1}, logger, func(context.Context, string, string, ...kgo.Opt) (consumerClient, error) {
@@ -191,8 +193,8 @@ func TestConsumerRecoveryBackoffGrowsAndResetsAfterCommit(t *testing.T) {
 		t.Fatalf("recovery logs = %v", attempts)
 	}
 	for index, expected := range []string{"attempt=1", "attempt=2", "attempt=1"} {
-		if !strings.Contains(attempts[index], expected) {
-			t.Fatalf("log %d = %s, want %s", index, attempts[index], expected)
+		if !strings.Contains(attempts[index], expected) || !strings.Contains(attempts[index], "request.id=consumer-1") {
+			t.Fatalf("log %d = %s, want %s and consumer context", index, attempts[index], expected)
 		}
 	}
 }
@@ -293,9 +295,10 @@ func TestConsumerRecoversTemporaryClientCreationFailure(t *testing.T) {
 
 type sessionBoundClient struct {
 	*consumerClientStub
-	ctx    context.Context
-	t      *testing.T
-	leaves int
+	ctx      context.Context
+	t        *testing.T
+	leaves   int
+	leaveErr error
 }
 
 func (c *sessionBoundClient) LeaveGroupContext(ctx context.Context) error {
@@ -309,7 +312,7 @@ func (c *sessionBoundClient) LeaveGroupContext(ctx context.Context) error {
 	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 5*time.Second {
 		c.t.Error("LeaveGroup must have a bounded shutdown deadline")
 	}
-	return nil
+	return c.leaveErr
 }
 
 func (c *sessionBoundClient) CloseAllowingRebalance() {
@@ -354,17 +357,18 @@ func TestConsumerLeavesGroupBeforeCancelingSDKSession(t *testing.T) {
 }
 
 func TestConsumerCancellationKeepsSDKAliveUntilLeaveGroup(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	logger, path := newQueueKafkaFileLogger(t)
+	ctx, cancel := context.WithCancel(foundationlog.WithKv(context.Background(), "request.id", "shutdown-1"))
 	defer cancel()
 	var client *sessionBoundClient
-	value := newConsumer(ConsumerConfig{Concurrency: 1}, nil,
+	value := newConsumer(ConsumerConfig{Concurrency: 1}, logger,
 		func(session context.Context, _, _ string, _ ...kgo.Opt) (consumerClient, error) {
 			client = &sessionBoundClient{ctx: session, t: t, consumerClientStub: &consumerClientStub{
 				poll: func(ctx context.Context, _ int) kgo.Fetches {
 					cancel()
 					return kgo.NewErrFetch(ctx.Err())
 				},
-			}}
+			}, leaveErr: errors.New("leave failed")}
 			return client, nil
 		})
 	if err := value.Consume(ctx, func(context.Context, Delivery) error { return nil }); !errors.Is(err, context.Canceled) {
@@ -372,6 +376,22 @@ func TestConsumerCancellationKeepsSDKAliveUntilLeaveGroup(t *testing.T) {
 	}
 	if client.leaves != 1 || client.closeCount() != 1 {
 		t.Fatalf("leaves=%d closes=%d", client.leaves, client.closeCount())
+	}
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"Kafka consumer is ready", "Failed to leave the Kafka consumer group"} {
+		var matched string
+		for _, line := range strings.Split(string(written), "\n") {
+			if strings.Contains(line, event) {
+				matched = line
+				break
+			}
+		}
+		if !strings.Contains(matched, "request.id=shutdown-1") {
+			t.Fatalf("%q log lost worker context: %s", event, matched)
+		}
 	}
 }
 

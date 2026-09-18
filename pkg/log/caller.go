@@ -52,7 +52,6 @@ func callerWrapper(function string) bool {
 	case foundation + "log.globalLogger.Log",
 		foundation + "log.kratosProxy.Log",
 		foundation + "log/internal/output.(*moduleLogger).Log",
-		foundation + "database.(*gormLoggerWriter).Printf",
 		foundation + "kafka.(*loggerAdapter).Log",
 		foundation + "job.(*cronLogger).Info",
 		foundation + "job.(*cronLogger).Error",

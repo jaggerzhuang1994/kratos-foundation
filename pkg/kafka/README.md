@@ -278,7 +278,7 @@ flowchart TD
 
 每次发布创建一个 producer span。每次投递创建一个 consumer span；该投递的所有 retry attempt 和 retry event 都属于同一个 span，不会创建新的根 span。consumer span 开始前会从消息 Header 提取 trace context。最终失败分类使用受控的 `kafka.consume.permanent` 或 `kafka.consume.retry_exhausted` span event，并且不把原始错误文本写入分类事件。
 
-指标仅使用稳定、低基数标签 `kafka.destination`、`kafka.consumer`、`kafka.operation` 和 `kafka.result`。不要将消息 Body、Header Value、消息 ID、trace ID、死信原始错误文本、连接地址或随机 consumer 实例 ID 放入指标标签。日志通过 context 关联，可包含逻辑 Destination、Consumer Name、消息 ID、attempt、受限错误分类和本文事件名；不得包含消息 Body、Header Value、trace ID 或死信原始错误文本。
+指标仅使用稳定、低基数标签 `kafka.destination`、`kafka.consumer`、`kafka.operation` 和 `kafka.result`。不要将消息 Body、Header Value、消息 ID、trace ID、死信原始错误文本、连接地址或随机 consumer 实例 ID 放入指标标签。日志通过 context 关联，可包含逻辑 Destination、Consumer Name、消息 ID、attempt、受限错误分类和本文事件名；不得包含消息 Body、Header Value、trace ID 或死信原始错误文本。consumer ready、重连、Fetch 协议异常和退组失败日志会绑定 worker Context；该 Context 存在活动 Span 时可自动附带 trace/span 字段。franz-go 的 `kgo.Logger` 接口不接收 Context，因此 SDK 内部日志无法保证 trace 关联，只能依靠其结构化 SDK 字段定位。
 
 ## 断线与消费恢复
 
@@ -288,14 +288,14 @@ franz-go 自身负责连接重建、Fetch 重试和消费组会话恢复，保�
 
 SDK 的 `ErrFirstReadEOF` 也可能由 Broker 重启引起，其 TLS/SASL 提示不是认证失败的确证。该错误从 Fetch 向外传播后，每个 worker 最多额外重建三次，沿用可取消退避；只有实际提交成功才重置这项预算。持续协议不匹配仍会在预算耗尽后终止，明确的认证、授权和证书验证失败不进入这项恢复。
 
-只有明确发生在 Kafka 构造、Fetch 或提交阶段的暂时错误（以及上述有界首读 EOF）才触发恢复。Handler 即使返回 EOF 等网络错误，也会照常终止消费；认证、授权、客户端关闭及其他永久错误同样终止。worker Context 控制 Poll 和退避等待，每轮 SDK 客户端拥有独立的生命周期。退出时先允许再均衡，再用最多 5 秒的独立 Context 执行 LeaveGroup，最后取消 SDK Context 并关闭客户端。健康 Broker 可立即释放成员及分区；退组超时或失败会记录 WARN，并继续清理，Broker 侧成员仍可能保留至会话超时。
+只有明确发生在 Kafka 构造、Fetch 或提交阶段的暂时错误（以及上述有界首读 EOF）才触发恢复。Handler 即使返回 EOF 等网络错误，也会照常终止消费；认证、授权、客户端关闭及其他永久错误同样终止。worker Context 控制 Poll 和退避等待，每轮 SDK 客户端拥有独立的生命周期。退出时先允许再均衡，再从 `context.WithoutCancel(workerCtx)` 派生最多 5 秒的独立 Context 执行 LeaveGroup，既保留日志与 trace 值又不继承退出取消；最后取消 SDK Context 并关闭客户端。健康 Broker 可立即释放成员及分区；退组超时或失败会绑定该 Context 记录 WARN，并继续清理，Broker 侧成员仍可能保留至会话超时。
 
 ```mermaid
 flowchart LR
     A[worker 创建本轮客户端] --> B[Poll 与业务处理]
     B -- 整批成功 --> C[提交位点]
     B -- 取消或业务及永久错误 --> D[允许再均衡 最多等待 5s 退组]
-    D -- 退组失败或超时 --> H[WARN leave group failed]
+    D -- 退组失败或超时 --> H[绑定 worker Context 后 WARN leave group failed]
     D -- 退组成功 --> I[取消 SDK Context 关闭并返回错误]
     H --> I
     B -- 首读 EOF --> V{本轮成功提交后额外重建少于三次?}
@@ -306,10 +306,10 @@ flowchart LR
     X --> B
     B -- 暂时 Kafka 操作失败 --> E[允许再均衡 最多等待 5s 退组]
     C -- 暂时提交失败 --> E
-    E -- 退组失败或超时 --> J[WARN leave group failed]
+    E -- 退组失败或超时 --> J[绑定 worker Context 后 WARN leave group failed]
     E -- 退组成功 --> K[取消 SDK Context 关闭旧客户端]
     J --> K
-    K --> F[WARN 并可取消指数退避]
+    K --> F[绑定 worker Context 后 WARN 并可取消指数退避]
     F --> G[优先已提交位点 缺失时从最早保留记录恢复]
     G --> A
     A -- 暂时构造错误 --> F

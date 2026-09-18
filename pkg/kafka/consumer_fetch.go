@@ -9,10 +9,11 @@ import (
 )
 
 // logFetchEvents 只记录 Kafka 协议级的数据丢失与 Group Session 事件。
-func (c *consumer) logFetchEvents(instance string, fetches kgo.Fetches) {
+func (c *consumer) logFetchEvents(ctx context.Context, instance string, fetches kgo.Fetches) {
 	if c.logger == nil {
 		return
 	}
+	logger := c.logger.WithContext(ctx)
 	for _, fetchError := range fetches.Errors() {
 		err := fmt.Errorf(
 			"kafka fetch %s[%d]: %w",
@@ -24,9 +25,9 @@ func (c *consumer) logFetchEvents(instance string, fetches kgo.Fetches) {
 		var groupSession *kgo.ErrGroupSession
 		switch {
 		case errors.As(fetchError.Err, &dataLoss):
-			c.logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Error("Kafka reported data loss while fetching records")
+			logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Error("Kafka reported data loss while fetching records")
 		case errors.As(fetchError.Err, &groupSession):
-			c.logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Warn("Kafka consumer group session was lost")
+			logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Warn("Kafka consumer group session was lost")
 		}
 	}
 }

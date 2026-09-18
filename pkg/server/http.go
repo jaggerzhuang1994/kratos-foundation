@@ -97,18 +97,22 @@ func newHTTPServer(
 	}
 
 	srv := http.NewServer(opts...)
-	for _, endpoint := range spec.http.endpoints {
-		if err := endpoint(srv); err != nil {
-			return nil, fmt.Errorf("register HTTP endpoint: %w", err)
+	var websocket *websocketServer
+	for _, registration := range spec.http.registrations {
+		if registration.endpoint != nil {
+			if err := registration.endpoint(srv); err != nil {
+				return nil, fmt.Errorf("register HTTP endpoint: %w", err)
+			}
+			continue
 		}
-	}
-
-	if len(spec.http.websockets) > 0 {
-		if websockets == nil {
-			return nil, fmt.Errorf("websocket hub is nil")
-		}
-		websocket := newWebSocketServer(logger, srv, websockets)
-		for _, endpoint := range spec.http.websockets {
+		if registration.websocket != nil {
+			if websockets == nil {
+				return nil, fmt.Errorf("websocket hub is nil")
+			}
+			if websocket == nil {
+				websocket = newWebSocketServer(logger, srv, websockets)
+			}
+			endpoint := registration.websocket
 			websocket.Handle(
 				endpoint.path,
 				endpoint.handler,

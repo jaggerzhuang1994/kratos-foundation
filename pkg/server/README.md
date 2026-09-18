@@ -17,7 +17,7 @@ flowchart TD
     C -- 否 --> X([返回错误 已分配资源执行 cleanup])
     C -- 是 --> D{http.disable 为 true?}
     D -- 是 --> E[跳过业务 HTTP]
-    D -- 否 --> F[构造 HTTP 并执行业务路由注册]
+    D -- 否 --> F[构造 HTTP 并按 Spec 顺序注册 HTTP 与 WebSocket]
     E --> G{grpc.disable 显式指定?}
     F -- 注册失败 --> X
     F -- 成功 --> G
@@ -46,6 +46,8 @@ func Boot(spec *bootstrap.Spec) bootstrap.Bootstrap {
     return bootstrap.Bootstrap{}
 }
 ```
+
+`HTTP().Register(...)`、`HTTP().WebSocket(...)` 和 `HTTP().WebSocketWithConfig(...)` 共享同一条有序声明流，底层服务器严格按照 Spec 调用顺序注册。路由发生重叠时，仍采用 Kratos 底层路由器的先注册优先语义；调用方不应依赖旧版“先注册全部 HTTP、再注册全部 WebSocket”的分组行为。启动阶段的 `endpoint.registered` 日志为了稳定对比仍按路径和方法排序，不表示实际注册顺序。
 
 Wire 通过 `app.NewSpec`、`server.NewSpec`、`job.NewSpec` 创建共享声明，注入 `bootstrap.NewSpec`；`NewServerBootstrap` 直接接收同一 app.Spec/server.Spec，并将 Boot 纳入前置依赖。`NewServerBootstrap` 在 Boot 完成后构造服务器，内部登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；不启动服务。成功返回的 cleanup 由 Wire 在应用停止后逆序执行，构造失败会回滚。完整示例见 [bootstrap](../bootstrap/README.md)。它返回的 ServerBootstrap 标记注入 NewRuntimeBootstrap，保证服务器登记先完成。
 

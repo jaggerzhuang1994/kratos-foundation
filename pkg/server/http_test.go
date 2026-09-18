@@ -62,7 +62,7 @@ func TestHandleHTTPUsesRequestMiddlewareAndResponseEncoder(t *testing.T) {
 			}
 		}),
 	)
-	if err := spec.http.endpoints[0](server); err != nil {
+	if err := spec.http.registrations[0].endpoint(server); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,7 +92,7 @@ func TestHandleHTTPEncodesMiddlewareReply(t *testing.T) {
 			return map[string]string{"source": "middleware"}, nil
 		}
 	}))
-	if err := spec.http.endpoints[0](server); err != nil {
+	if err := spec.http.registrations[0].endpoint(server); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,7 +119,7 @@ func TestHandleHTTPReturnsErrorsToHTTPEncoder(t *testing.T) {
 		encodedErr = err
 		w.WriteHeader(http.StatusTeapot)
 	}))
-	if err := spec.http.endpoints[0](server); err != nil {
+	if err := spec.http.registrations[0].endpoint(server); err != nil {
 		t.Fatal(err)
 	}
 
@@ -156,7 +156,7 @@ func TestHandleHTTPWriterWritesCustomResponse(t *testing.T) {
 			return next(ctx, request.Clone(ctx))
 		}
 	}))
-	if err := spec.http.endpoints[0](server); err != nil {
+	if err := spec.http.registrations[0].endpoint(server); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +188,7 @@ func TestHandleHTTPWriterReturnsErrorsToHTTPEncoder(t *testing.T) {
 		encodedErr = err
 		w.WriteHeader(http.StatusTeapot)
 	}))
-	if err := spec.http.endpoints[0](server); err != nil {
+	if err := spec.http.registrations[0].endpoint(server); err != nil {
 		t.Fatal(err)
 	}
 
@@ -216,7 +216,7 @@ func TestHandleHTTPWriterEncodesMiddlewareReply(t *testing.T) {
 			return map[string]string{"source": "middleware"}, nil
 		}
 	}))
-	if err := spec.http.endpoints[0](server); err != nil {
+	if err := spec.http.registrations[0].endpoint(server); err != nil {
 		t.Fatal(err)
 	}
 
@@ -228,6 +228,29 @@ func TestHandleHTTPWriterEncodesMiddlewareReply(t *testing.T) {
 	}
 	if handlerCalled || reply["source"] != "middleware" {
 		t.Fatalf("handler called = %t, reply = %v", handlerCalled, reply)
+	}
+}
+
+func TestHTTPAndWebSocketRoutesFollowSpecRegistrationOrder(t *testing.T) {
+	spec := NewSpec()
+	spec.HTTP().
+		Register(HandleHTTP(http.MethodGet, "/first", func(*http.Request) (any, error) { return nil, nil })).
+		WebSocket("/socket", testSocketHandler{}).
+		Register(HandleHTTP(http.MethodGet, "/last", func(*http.Request) (any, error) { return nil, nil }))
+
+	server, err := newHTTPServer(nil, nil, spec, newRuntimeTestLogger(t), newWebSocketHub())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	if err := server.WalkRoute(func(route kratoshttp.RouteInfo) error {
+		paths = append(paths, route.Path)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(paths, ","), "/first,/socket,/last"; got != want {
+		t.Fatalf("route order = %q, want %q", got, want)
 	}
 }
 

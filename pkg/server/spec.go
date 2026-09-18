@@ -58,10 +58,8 @@ type httpSpec struct {
 	middlewares []MiddlewareSpec
 	// options 传给 HTTP 服务构造函数的选项。
 	options []http.ServerOption
-	// endpoints HTTP 路由注册回调。
-	endpoints []HTTPEndpoint
-	// websockets WebSocket 路由与处理配置。
-	websockets []websocketEndpoint
+	// registrations 按声明顺序保存 HTTP 与 WebSocket 路由。
+	registrations []httpRegistration
 }
 
 type grpcSpec struct {
@@ -96,6 +94,13 @@ type websocketEndpoint struct {
 	upgrader []Upgrader
 }
 
+type httpRegistration struct {
+	// endpoint 为普通 HTTP 路由注册回调；与 websocket 仅有一个非 nil。
+	endpoint HTTPEndpoint
+	// websocket 为 WebSocket 路由配置；指针便于 WebSocketWithConfig 补充同一声明。
+	websocket *websocketEndpoint
+}
+
 // NewSpec 返回一个空服务定义；零值 Spec 也可以安全使用。
 func NewSpec() *Spec {
 	return &Spec{}
@@ -113,8 +118,12 @@ func (s *Spec) GRPC() GRPCBuilder {
 
 // Validate 拒绝无效或重复的 WebSocket 端点。
 func (s *Spec) Validate() error {
-	paths := make(map[string]struct{}, len(s.http.websockets))
-	for _, endpoint := range s.http.websockets {
+	paths := make(map[string]struct{}, len(s.http.registrations))
+	for _, registration := range s.http.registrations {
+		if registration.websocket == nil {
+			continue
+		}
+		endpoint := registration.websocket
 		if !strings.HasPrefix(endpoint.path, "/") {
 			return fmt.Errorf("websocket path %q must start with /", endpoint.path)
 		}
@@ -195,32 +204,33 @@ func (s *httpSpec) Option(options ...http.ServerOption) HTTPBuilder {
 	return s
 }
 
-// Register 追加非 nil 的 HTTP 路由注册回调。
+// Register 追加非 nil 的 HTTP 路由注册回调，并与 WebSocket 端点共享声明顺序。
 func (s *httpSpec) Register(endpoints ...HTTPEndpoint) HTTPBuilder {
 	for _, endpoint := range endpoints {
 		if endpoint != nil {
-			s.endpoints = append(s.endpoints, endpoint)
+			s.registrations = append(s.registrations, httpRegistration{endpoint: endpoint})
 		}
 	}
 	return s
 }
 
-// WebSocket 保存端点定义的独立副本，默认消息上限 1 MiB。
+// WebSocket 保存端点定义的独立副本，并与普通 HTTP 路由共享声明顺序，默认消息上限 1 MiB。
 // upgrader 切片独立复制；自定义上限使用 WebSocketWithConfig。
 func (s *httpSpec) WebSocket(path string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder {
-	s.websockets = append(s.websockets, websocketEndpoint{
+	s.registrations = append(s.registrations, httpRegistration{websocket: &websocketEndpoint{
 		path:     path,
 		handler:  handler,
 		upgrader: append([]Upgrader(nil), optionalUpgrader...),
-	})
+	}})
 	return s
 }
 
-// WebSocketWithConfig 复用端点登记校验，并保存本端点的接收上限。
+// WebSocketWithConfig 复用端点登记校验，保持调用顺序并保存本端点的接收上限。
 func (s *httpSpec) WebSocketWithConfig(path string, handler any, config WebSocketConfig) HTTPBuilder {
 	s.WebSocket(path, handler, config.Upgrader)
-	s.websockets[len(s.websockets)-1].maxMessageBytes = config.MaxMessageBytes
-	s.websockets[len(s.websockets)-1].maxInFlightMessages = config.MaxInFlightMessages
+	endpoint := s.registrations[len(s.registrations)-1].websocket
+	endpoint.maxMessageBytes = config.MaxMessageBytes
+	endpoint.maxInFlightMessages = config.MaxInFlightMessages
 	return s
 }
 

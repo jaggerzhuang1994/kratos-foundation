@@ -119,11 +119,11 @@ message GormLogger {
   optional Level level = 1;
   // gorm 慢日志门限
   optional google.protobuf.Duration slow_threshold = 2;
-  // 输出是否彩色
+  // 兼容字段；结构化 GORM 日志不输出 ANSI 颜色。
   optional bool colorful = 3;
   // 日志是否忽略record not found错误
   optional bool ignore_record_not_found_error = 4;
-  // ParameterizedQueries
+  // 是否保留 SQL 占位符而不把参数值写入日志；生产环境建议开启，避免敏感参数泄漏。
   optional bool parameterized_queries = 5;
 
   enum Level {

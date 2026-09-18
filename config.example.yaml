@@ -313,11 +313,11 @@ database:
       level: SILENT
       # 慢查询阈值 [默认: 200ms]
       slow_threshold: 0.2s
-      # 是否彩色输出 [默认: false]
+      # 兼容字段；结构化 GORM 日志不输出 ANSI 颜色
       colorful: false
       # 是否忽略 RecordNotFound 错误 [默认: true]
       ignore_record_not_found_error: true
-      # 是否参数化查询（日志中不显示参数值）[默认: false]
+      # 是否参数化查询（日志中不显示参数值）[默认: false；生产环境建议设为 true]
       parameterized_queries: false
 
   # 链路追踪配置

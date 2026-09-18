@@ -1,19 +1,24 @@
 package database
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
-func newGORMConfig(conf *config_pb.Gorm, gormLogger logger.Interface) *gorm.Config {
+func newGORMConfig(conf *config_pb.Gorm, gormLogger gormlogger.Interface) *gorm.Config {
 	result := &gorm.Config{}
 	if conf.GetSkipDefaultTransaction() {
 		result.SkipDefaultTransaction = conf.GetSkipDefaultTransaction()
@@ -75,77 +80,168 @@ func mergeGORMConfig(base, override *config_pb.Gorm) *config_pb.Gorm {
 	return result
 }
 
-type gormLoggerWriter struct {
-	// logger 接收 GORM 日志的组件日志器。
-	logger log.Logger
+type gormLogHandler struct {
+	logger        log.Logger
+	slowThreshold time.Duration
+	fields        []any
+	groups        []string
 }
 
-func newGORMLogger(log log.Logger, config *config_pb.GormLogger) logger.Interface {
-	level := logger.Silent
+func newGORMLogger(base log.Logger, config *config_pb.GormLogger) gormlogger.Interface {
+	level := gormlogger.Silent
 	switch config.GetLevel() {
 	case config_pb.GormLogger_INFO:
-		level = logger.Info
+		level = gormlogger.Info
 	case config_pb.GormLogger_WARN:
-		level = logger.Warn
+		level = gormlogger.Warn
 	case config_pb.GormLogger_ERROR:
-		level = logger.Error
+		level = gormlogger.Error
 	}
 
-	return logger.New(&gormLoggerWriter{
-		logger: log,
-	}, logger.Config{
+	configValue := gormlogger.Config{
 		SlowThreshold:             config.GetSlowThreshold().AsDuration(),
-		Colorful:                  config.GetColorful(),
 		IgnoreRecordNotFoundError: config.GetIgnoreRecordNotFoundError(),
 		ParameterizedQueries:      config.GetParameterizedQueries(),
 		LogLevel:                  level,
-	})
+	}
+	handler := &gormLogHandler{
+		logger:        base,
+		slowThreshold: configValue.SlowThreshold,
+	}
+	// 复用 GORM 对日志级别、慢查询和参数过滤的判定，只在输出边界转换为 Foundation 结构化字段。
+	return gormlogger.NewSlogLogger(slog.New(handler), configValue)
 }
 
-func (writer *gormLoggerWriter) Printf(format string, arguments ...any) {
-	format = strings.ReplaceAll(format, "\n", " ")
-	message := fmt.Sprintf(format, arguments...)
-	// GORM 已在适配之前定位 SQL 来源；优先复用，避免查询回调深度差异。
-	logger := writer.logger
-	if source := gormLogCaller(arguments); source != "" {
-		logger = logger.With(log.CallerKey, source)
+func (handler *gormLogHandler) Enabled(context.Context, slog.Level) bool {
+	return true
+}
+
+func (handler *gormLogHandler) Handle(ctx context.Context, record slog.Record) error {
+	logger := handler.logger.WithContext(ctx)
+	if caller := gormLogCaller(record.PC); caller != "" {
+		logger = logger.With(log.CallerKey, caller)
 	}
 
-	switch {
-	case strings.Contains(format, "[error]") || secondGORMLogArgumentIsError(arguments):
-		logger.Error(message)
-	case strings.Contains(format, "[warn]") || secondGORMLogArgumentIsSlowSQL(arguments):
+	attributes := make([]slog.Attr, 0, record.NumAttrs())
+	record.Attrs(func(attribute slog.Attr) bool {
+		attributes = append(attributes, attribute)
+		return true
+	})
+
+	fields := append([]any(nil), handler.fields...)
+	fields = appendGORMLogAttributes(fields, handler.groups, attributes, record.Message == "SQL executed")
+	if record.Message == "SQL executed" {
+		// GORM slog logger 将查询字段放在 trace 组内；输出时展平，便于日志系统直接检索。
+		fields = append([]any{"event", "gorm.query"}, fields...)
+		if record.Level == slog.LevelWarn && handler.slowThreshold > 0 {
+			fields = append(fields, "slow_threshold", handler.slowThreshold)
+		}
+		return logger.Log(gormLogLevel(record.Level), fields...)
+	}
+
+	message := formatGORMLogMessage(record.Message, attributes)
+	logger = logger.With(fields...)
+	switch gormLogLevel(record.Level) {
+	case kratoslog.LevelDebug:
+		logger.Debug(message)
+	case kratoslog.LevelWarn:
 		logger.Warn(message)
+	case kratoslog.LevelError:
+		logger.Error(message)
 	default:
 		logger.Info(message)
 	}
+	return nil
 }
 
-func secondGORMLogArgumentIsError(arguments []any) bool {
-	if len(arguments) < 2 {
-		return false
+func (handler *gormLogHandler) WithAttrs(attributes []slog.Attr) slog.Handler {
+	next := *handler
+	next.fields = append([]any(nil), handler.fields...)
+	next.fields = appendGORMLogAttributes(next.fields, handler.groups, attributes, false)
+	return &next
+}
+
+func (handler *gormLogHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return handler
 	}
-	_, ok := arguments[1].(error)
-	return ok
+	next := *handler
+	next.groups = append(append([]string(nil), handler.groups...), name)
+	return &next
 }
 
-func secondGORMLogArgumentIsSlowSQL(arguments []any) bool {
-	if len(arguments) < 2 {
-		return false
+func appendGORMLogAttributes(
+	fields []any,
+	groups []string,
+	attributes []slog.Attr,
+	isQuery bool,
+) []any {
+	for _, attribute := range attributes {
+		attribute.Value = attribute.Value.Resolve()
+		if attribute.Value.Kind() == slog.KindGroup {
+			nextGroups := groups
+			if attribute.Key != "" && !(isQuery && attribute.Key == "trace") {
+				nextGroups = append(append([]string(nil), groups...), attribute.Key)
+			}
+			fields = appendGORMLogAttributes(fields, nextGroups, attribute.Value.Group(), isQuery)
+			continue
+		}
+		if !isQuery && attribute.Key == "data" {
+			continue
+		}
+		key := attribute.Key
+		if isQuery && key == "error" {
+			key = "err"
+		}
+		if len(groups) > 0 {
+			key = strings.Join(append(append([]string(nil), groups...), key), ".")
+		}
+		fields = append(fields, key, attribute.Value.Any())
 	}
-	message, ok := arguments[1].(string)
-	return ok && strings.HasPrefix(message, "SLOW SQL >=")
+	return fields
 }
 
-// gormLogCaller 接受 GORM 首参数中的文件行号；格式不完整时退回默认 caller。
-func gormLogCaller(arguments []any) string {
-	if len(arguments) == 0 {
+func formatGORMLogMessage(message string, attributes []slog.Attr) string {
+	// GORM 的 callback 管理日志格式串自带换行，输出前压平以保持一条事件占一行。
+	message = strings.ReplaceAll(message, "\n", " ")
+	for _, attribute := range attributes {
+		if attribute.Key != "data" {
+			continue
+		}
+		data, ok := attribute.Value.Any().([]any)
+		if ok {
+			return fmt.Sprintf(message, data...)
+		}
+	}
+	return message
+}
+
+func gormLogLevel(level slog.Level) kratoslog.Level {
+	switch {
+	case level >= slog.LevelError:
+		return kratoslog.LevelError
+	case level >= slog.LevelWarn:
+		return kratoslog.LevelWarn
+	case level >= slog.LevelInfo:
+		return kratoslog.LevelInfo
+	default:
+		return kratoslog.LevelDebug
+	}
+}
+
+func gormLogCaller(programCounter uintptr) string {
+	if programCounter == 0 {
 		return ""
 	}
-	source, ok := arguments[0].(string)
-	if !ok {
+	frame, _ := runtime.CallersFrames([]uintptr{programCounter}).Next()
+	if frame.File == "" || frame.Line <= 0 {
 		return ""
 	}
+	return normalizeGORMLogCaller(frame.File + ":" + strconv.Itoa(frame.Line))
+}
+
+// normalizeGORMLogCaller 保留查询来源的末两级目录和行号，避免输出构建机绝对路径。
+func normalizeGORMLogCaller(source string) string {
 	source = strings.ReplaceAll(source, "\\", "/")
 	colon := strings.LastIndexByte(source, ':')
 	if colon <= 0 {

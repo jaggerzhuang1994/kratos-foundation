@@ -773,7 +773,7 @@
     },
     ".kratos_foundation_pb.GormLogger.colorful": {
       "type": "boolean",
-      "description": "输出是否彩色"
+      "description": "兼容字段；结构化 GORM 日志不输出 ANSI 颜色。"
     },
     ".kratos_foundation_pb.GormLogger.ignore_record_not_found_error": {
       "type": "boolean",
@@ -785,7 +785,7 @@
     },
     ".kratos_foundation_pb.GormLogger.parameterized_queries": {
       "type": "boolean",
-      "description": "ParameterizedQueries"
+      "description": "是否保留 SQL 占位符而不把参数值写入日志；生产环境建议开启，避免敏感参数泄漏。"
     },
     ".kratos_foundation_pb.GormLogger.slow_threshold": {
       "type": "string",

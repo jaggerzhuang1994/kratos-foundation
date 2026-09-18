@@ -20,7 +20,7 @@ func defaultConfig() *config_pb.Database {
 			Logger: &config_pb.GormLogger{
 				Level:                     &defaultGormLoggerLevel,
 				SlowThreshold:             durationpb.New(200 * time.Millisecond),
-				Colorful:                  proto.Bool(false), // 日志默认适配非终端采集器，不混入 ANSI 颜色码。
+				Colorful:                  proto.Bool(false), // 兼容旧配置；结构化日志不输出 ANSI 颜色码。
 				IgnoreRecordNotFoundError: proto.Bool(true),  // 未查到记录是常见分支，默认不将其写成错误日志。
 				ParameterizedQueries:      proto.Bool(false), // 默认保留完整 SQL，由业务显式决定是否隐去参数。
 			},

@@ -587,11 +587,11 @@ type GormLogger struct {
 	Level *GormLogger_Level `protobuf:"varint,1,opt,name=level,proto3,enum=kratos_foundation_pb.GormLogger_Level,oneof" json:"level,omitempty"`
 	// gorm 慢日志门限
 	SlowThreshold *durationpb.Duration `protobuf:"bytes,2,opt,name=slow_threshold,json=slowThreshold,proto3,oneof" json:"slow_threshold,omitempty"`
-	// 输出是否彩色
+	// 兼容字段；结构化 GORM 日志不输出 ANSI 颜色。
 	Colorful *bool `protobuf:"varint,3,opt,name=colorful,proto3,oneof" json:"colorful,omitempty"`
 	// 日志是否忽略record not found错误
 	IgnoreRecordNotFoundError *bool `protobuf:"varint,4,opt,name=ignore_record_not_found_error,json=ignoreRecordNotFoundError,proto3,oneof" json:"ignore_record_not_found_error,omitempty"`
-	// ParameterizedQueries
+	// 是否保留 SQL 占位符而不把参数值写入日志；生产环境建议开启，避免敏感参数泄漏。
 	ParameterizedQueries *bool `protobuf:"varint,5,opt,name=parameterized_queries,json=parameterizedQueries,proto3,oneof" json:"parameterized_queries,omitempty"`
 }
 

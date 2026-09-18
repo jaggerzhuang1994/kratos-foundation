@@ -274,19 +274,35 @@ flowchart LR
 
 ## SQL 日志来源
 
-`database/gorm` 日志的结构化 `caller` 使用 GORM 提供的查询来源，格式为 `目录/文件:行号`，与 SQL 消息中的来源对应，不依赖固定跳栈层数。GORM 无法提供有效来源时使用日志包默认 caller。原 SQL 消息、慢 SQL 阈值、参数过滤、RecordNotFound 策略和日志级别保持不变；此调整不会让 Writer 获得 GORM 未传入的请求 Context。
+`database/gorm` 使用 GORM 的结构化 slog 接口，不再把来源、耗时、影响行数和 SQL 拼接成一段 `msg`。查询日志固定包含 `event=gorm.query`、`duration` 和 `sql`；GORM 能确定影响行数时增加 `rows`，失败时增加 `err`，慢查询增加 `slow_threshold`。普通的 GORM Info/Warn/Error 事件仍使用 `msg`。
+
+结构化 `caller` 使用 GORM 提供的查询来源，格式为 `目录/文件:行号`，不依赖固定跳栈层数；GORM 无法提供有效来源时沿用日志包默认 caller。请求 Context 会继续传给 Foundation logger：存在有效 SpanContext 时，SQL 日志自动附带 `trace.id` 和 `span.id`；没有活动 Span 时不会生成虚假的关联 ID，默认 `LOG_FILTER_EMPTY=true` 会省略对应空字段，显式关闭空值过滤时则可能保留空字段。HTTP、WebSocket、Job 和队列任务执行应把派生 Context 传入数据库操作；队列领取前的空轮询、启动与清理等后台生命周期操作通常没有活动 Span，因此不含有效关联 ID 属于预期行为。
+
+GORM 的查询日志级别没有 Debug 档：`info` 会记录普通 SQL，`warn` 仅记录慢查询和错误，`error` 仅记录错误。开发环境或短时排障可使用 `info`；生产环境通常使用 `warn`，只有明确不需要慢查询观测时才使用 `error`。不要为了获得 trace ID 长期开启全量 SQL Info，常规请求关联优先依赖 Trace 与指标。忽略 RecordNotFound 和参数过滤仍由 `gorm.logger` 控制；`colorful` 仅为兼容保留，结构化日志不输出 ANSI 颜色。
+
+`parameterized_queries: true` 会保留 SQL 占位符而不记录参数值，生产环境建议开启。设为 `false` 时，GORM 可能把实际参数写入 `sql` 字段，应确保其中不包含令牌、密码和个人信息。
 
 ```mermaid
 flowchart TD
     A([GORM 执行查询或记录事件]) --> B{GORM 日志策略允许输出?}
     B -- 否 --> C([结束])
-    B -- 是 --> D[GORM 计算来源并调用 Writer.Printf]
-    D --> E{首参数含有效文件行号?}
-    E -- 是 --> F[规范化并附加 caller 字段]
-    E -- 否 --> G[沿用普通 caller]
-    F --> H[按既有规则识别 ERROR/WARN/INFO]
+    B -- 是 --> D{查询记录?}
+    D -- 否 --> J[格式化普通 msg]
+    D -- 是 --> E{parameterized_queries 已开启?}
+    E -- 是 --> F[保留 SQL 占位符]
+    E -- 否 --> G[由 GORM 生成含参数的 SQL]
+    F --> H[GORM 计算来源并生成 slog 记录]
     G --> H
-    H --> I([按 Foundation 策略过滤并输出日志])
+    H --> I[展平 duration/rows/sql/err 并附加 event]
+    I --> K[规范化 caller 并绑定请求 Context]
+    J --> K
+    K --> N{Context 含有效 SpanContext?}
+    N -- 是 --> O[附加 trace.id 与 span.id]
+    N -- 否 --> P[不生成关联 ID 由 filter_empty 决定是否保留空字段]
+    P --> L{Foundation 模块策略允许输出?}
+    O --> L
+    L -- 否 --> C
+    L -- 是 --> M([输出结构化日志])
 ```
 
 数据库管理日志使用 `database`，SQL 日志使用 `database/gorm`；通过 `log.modules` 集中配置级别、禁用和追加过滤，`database.log` 已移除。可用 `database*` 匹配两者。GORM 自身的 SQL 生成开关、慢查询阈值等仍由 gorm.logger 决定，Foundation 模块策略不能恢复 GORM 未生成的日志。详见 [log](../log/README.md#模块策略)。
