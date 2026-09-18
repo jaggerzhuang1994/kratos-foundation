@@ -40,7 +40,7 @@ func TestWebSocketPreservesMiddlewareContextUntilConnectionCloses(t *testing.T) 
 				}
 			})
 			server := kratoshttp.NewServer(kratoshttp.Middleware(propagate))
-			newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0)
+			newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, 0)
 			httpServer := httptest.NewServer(server)
 			t.Cleanup(httpServer.Close)
 			peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(httpServer.URL, "http")+"/ws", nil)
@@ -132,7 +132,7 @@ func TestWebSocketRejectedHandshakePreservesMiddlewareContext(t *testing.T) {
 	}
 	hub := newWebSocketHub()
 	server := kratoshttp.NewServer(kratoshttp.Middleware(propagate))
-	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0)
+	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, 0)
 	server.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws", nil))
 	<-middlewareDone
 	ctx := <-handler.handshake
@@ -208,7 +208,7 @@ func TestWebSocketWriteFailureClosesConnectionAndReleasesReadLoop(t *testing.T) 
 	hub := newWebSocketHub()
 	handler := newRuntimeWebSocketHandler()
 	server := kratoshttp.NewServer()
-	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
+	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, 0, Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
 	var fail atomic.Bool
 	host := httptest.NewUnstartedServer(server)
 	host.Listener = &failedWriteListener{Listener: host.Listener, fail: &fail}
@@ -256,6 +256,7 @@ func TestWebSocketStopDeadlineInterruptsBlockedConnectionClose(t *testing.T) {
 	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle(
 		"/ws",
 		handler,
+		0,
 		0,
 		Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	)
@@ -354,6 +355,148 @@ func (h *sizeLimitedWebSocketHandler) OnMessage(c WebSocketConn, data []byte, _ 
 	_ = c.SendText("accepted")
 }
 func (h *sizeLimitedWebSocketHandler) OnError(_ WebSocketConn, err error) { h.failures <- err }
+
+type blockingWebSocketHandler struct {
+	started  chan string
+	release  chan struct{}
+	finished chan string
+	closed   chan struct{}
+}
+
+func newBlockingWebSocketHandler() *blockingWebSocketHandler {
+	return &blockingWebSocketHandler{
+		started:  make(chan string, 3),
+		release:  make(chan struct{}),
+		finished: make(chan string, 3),
+		closed:   make(chan struct{}, 1),
+	}
+}
+
+func (h *blockingWebSocketHandler) OnMessage(_ WebSocketConn, data []byte, _ MessageType) {
+	h.started <- string(data)
+	<-h.release
+	h.finished <- string(data)
+}
+
+func (h *blockingWebSocketHandler) OnClose(WebSocketConn) { h.closed <- struct{}{} }
+
+func TestWebSocketBoundsConcurrentMessageDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		maxInFlight int
+		firstBatch  int
+	}{
+		{name: "default serial", firstBatch: 1},
+		{name: "configured parallel", maxInFlight: 2, firstBatch: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := newBlockingWebSocketHandler()
+			peer, hub := startConfiguredWebSocket(t, handler, WebSocketConfig{MaxInFlightMessages: tc.maxInFlight})
+			for _, message := range []string{"first", "second", "third"} {
+				if err := peer.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			for range tc.firstBatch {
+				receiveRuntimeValue(t, handler.started)
+			}
+			assertNoRuntimeValue(t, handler.started)
+
+			handler.release <- struct{}{}
+			receiveRuntimeValue(t, handler.finished)
+			receiveRuntimeValue(t, handler.started)
+			for range 2 {
+				handler.release <- struct{}{}
+				receiveRuntimeValue(t, handler.finished)
+			}
+
+			if err := peer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			receiveRuntimeValue(t, handler.closed)
+			ctx, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+			defer cancel()
+			if err := hub.stop(ctx); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+type cancelAwareWebSocketHandler struct {
+	started  chan struct{}
+	canceled chan struct{}
+	release  chan struct{}
+	closed   chan struct{}
+}
+
+func (h *cancelAwareWebSocketHandler) OnMessage(client WebSocketConn, _ []byte, _ MessageType) {
+	h.started <- struct{}{}
+	<-client.Request().Context().Done()
+	h.canceled <- struct{}{}
+	<-h.release
+}
+
+func (h *cancelAwareWebSocketHandler) OnClose(WebSocketConn) { h.closed <- struct{}{} }
+
+func TestWebSocketCloseWaitsForInFlightMessages(t *testing.T) {
+	handler := &cancelAwareWebSocketHandler{
+		started:  make(chan struct{}, 1),
+		canceled: make(chan struct{}, 1),
+		release:  make(chan struct{}),
+		closed:   make(chan struct{}, 1),
+	}
+	peer, hub := startConfiguredWebSocket(t, handler, WebSocketConfig{MaxInFlightMessages: 2})
+	if err := peer.WriteMessage(websocket.TextMessage, []byte("request")); err != nil {
+		t.Fatal(err)
+	}
+	receiveRuntimeValue(t, handler.started)
+	if err := peer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	receiveRuntimeValue(t, handler.canceled)
+	assertNoRuntimeValue(t, handler.closed)
+	close(handler.release)
+	receiveRuntimeValue(t, handler.closed)
+
+	ctx, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+	defer cancel()
+	if err := hub.stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func startConfiguredWebSocket(t *testing.T, handler any, config WebSocketConfig) (*websocket.Conn, *websocketHub) {
+	t.Helper()
+	spec := NewSpec()
+	spec.HTTP().WebSocketWithConfig("/ws", handler, config)
+	if err := spec.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	hub := newWebSocketHub()
+	server, err := newHTTPServer(nil, nil, spec, newRuntimeTestLogger(t), hub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := httptest.NewServer(server)
+	t.Cleanup(host.Close)
+	peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(host.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = peer.Close() })
+	return peer, hub
+}
+
+func assertNoRuntimeValue[T any](t *testing.T, values <-chan T) {
+	t.Helper()
+	select {
+	case value := <-values:
+		t.Fatalf("unexpected runtime value: %v", value)
+	case <-time.After(20 * time.Millisecond):
+	}
+}
 
 func TestWebSocketMessageLimits(t *testing.T) {
 	for _, tc := range []struct {

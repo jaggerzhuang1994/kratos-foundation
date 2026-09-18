@@ -59,7 +59,13 @@ func newWebSocketServer(
 }
 
 // Handle 在 HTTP 路由上注册一条 WebSocket 端点。
-func (s *websocketServer) Handle(path string, handler any, maxMessageBytes int64, optionalUpgrader ...Upgrader) {
+func (s *websocketServer) Handle(
+	path string,
+	handler any,
+	maxMessageBytes int64,
+	maxInFlightMessages int,
+	optionalUpgrader ...Upgrader,
+) {
 	if s.router == nil {
 		s.log.Warn("failed to handle websocket path: HTTP server is not initialized")
 		return
@@ -83,7 +89,15 @@ func (s *websocketServer) Handle(path string, handler any, maxMessageBytes int64
 				return nil, fmt.Errorf("websocket middleware request has type %T, want *http.Request", req)
 			}
 			// 握手需要保留中间件派生的身份、metadata 和请求截止时间。
-			client, err := upgrade(upgrader, clog, request.WithContext(ctx), w, handler, maxMessageBytes)
+			client, err := upgrade(
+				upgrader,
+				clog,
+				request.WithContext(ctx),
+				w,
+				handler,
+				maxMessageBytes,
+				maxInFlightMessages,
+			)
 			if err != nil {
 				clog.With("error", err).Warn("websocket upgrade failed")
 				return nil, err
@@ -214,7 +228,7 @@ type OnErrorHandler interface {
 	OnError(client WebSocketConn, err error)
 }
 
-// OnMessageHandler 接收每一帧完整的文本或二进制消息。
+// OnMessageHandler 接收每一帧完整的文本或二进制消息；并行端点的实现必须保证并发安全。
 type OnMessageHandler interface {
 	OnMessage(client WebSocketConn, message []byte, messageType MessageType)
 }

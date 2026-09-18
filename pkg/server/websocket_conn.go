@@ -36,6 +36,8 @@ const writeWait = time.Second
 // 默认限制整条接收消息；缓冲区大小不等于消息大小上限。
 const defaultWebSocketMaxMessageBytes int64 = 1 << 20
 
+const defaultWebSocketMaxInFlightMessages = 1
+
 type websocketClient struct {
 	// Logger 当前连接的日志入口。
 	log.Logger
@@ -46,6 +48,8 @@ type websocketClient struct {
 	conn *websocket.Conn
 	// maxMessageBytes 已归一化的消息字节上限，同时限制传输和解压后载荷；非正值不限制。
 	maxMessageBytes int64
+	// messageSlots 限制单连接并发消息数；容量固定，满载时读循环暂停形成背压。
+	messageSlots chan struct{}
 	// cancel 连接结束时取消其上下文。
 	cancel context.CancelFunc
 
@@ -53,7 +57,7 @@ type websocketClient struct {
 	onConnectHandler OnConnectHandler
 	// onMessageHandler 接收业务消息的回调。
 	onMessageHandler OnMessageHandler
-	// onCloseHandler 读循环退出时的关闭回调，主动 Close 不保证其已完成。
+	// onCloseHandler 读循环与在途消息处理全部退出后的关闭回调，主动 Close 不保证其已完成。
 	onCloseHandler OnCloseHandler
 	// onErrorHandler 连接异常回调。
 	onErrorHandler OnErrorHandler
@@ -64,6 +68,8 @@ type websocketClient struct {
 	closeOnce sync.Once
 	// closeErr 首次关闭连接的错误结果。
 	closeErr error
+	// messageHandlers 归属当前连接的在途消息处理任务，确保 OnClose 不与其并发。
+	messageHandlers sync.WaitGroup
 }
 
 // upgrade 依次执行应用握手校验和协议升级，再解析处理器支持的事件接口。
@@ -74,6 +80,7 @@ func upgrade(
 	w http.ResponseWriter,
 	handler any,
 	maxMessageBytes int64,
+	maxInFlightMessages int,
 ) (client *websocketClient, err error) {
 	onHandshakeHandler, _ := handler.(OnHandshakeHandler)
 	onConnectHandler, _ := handler.(OnConnectHandler)
@@ -96,6 +103,9 @@ func upgrade(
 	if maxMessageBytes == 0 {
 		maxMessageBytes = defaultWebSocketMaxMessageBytes
 	}
+	if maxInFlightMessages == 0 {
+		maxInFlightMessages = defaultWebSocketMaxInFlightMessages
+	}
 	// Gorilla 限制线上载荷；readMessage 另限制解压后字节，防止协商压缩绕过上限。
 	conn.SetReadLimit(maxMessageBytes)
 	// HTTP 请求及握手中间件返回时会取消原上下文。连接保留其值，并独立拥有
@@ -106,6 +116,7 @@ func upgrade(
 		request:          request.WithContext(ctx),
 		conn:             conn,
 		maxMessageBytes:  maxMessageBytes,
+		messageSlots:     make(chan struct{}, maxInFlightMessages),
 		cancel:           cancel,
 		onConnectHandler: onConnectHandler,
 		onMessageHandler: onMessageHandler,
@@ -160,6 +171,8 @@ func (c *websocketClient) resolve() {
 				c.With("error", err).Warn("websocket connection close failed")
 			}
 		}
+		// close 已取消连接上下文；等待业务处理自行响应取消，避免 OnClose 与其清理逻辑竞争。
+		c.messageHandlers.Wait()
 		if c.onCloseHandler != nil {
 			c.onCloseHandler.OnClose(c)
 		}
@@ -168,8 +181,18 @@ func (c *websocketClient) resolve() {
 		c.onConnectHandler.OnConnect(c)
 	}
 	for {
+		if c.onMessageHandler != nil {
+			select {
+			case c.messageSlots <- struct{}{}:
+			case <-c.request.Context().Done():
+				return
+			}
+		}
 		mt, m, err := c.readMessage()
 		if err != nil {
+			if c.onMessageHandler != nil {
+				<-c.messageSlots
+			}
 			if errors.Is(err, websocket.ErrReadLimit) && c.Logger != nil {
 				c.With("error", err, "max_message_bytes", c.maxMessageBytes).Warn("WebSocket message exceeded the configured size limit")
 			}
@@ -179,7 +202,10 @@ func (c *websocketClient) resolve() {
 			break
 		}
 		if c.onMessageHandler != nil {
-			func() {
+			c.messageHandlers.Add(1)
+			go func() {
+				defer c.messageHandlers.Done()
+				defer func() { <-c.messageSlots }()
 				defer func() {
 					if r := recover(); r != nil {
 						if c.Logger != nil {

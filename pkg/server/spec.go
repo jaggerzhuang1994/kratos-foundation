@@ -73,17 +73,21 @@ type grpcSpec struct {
 	services []GRPCService
 }
 
-// WebSocketConfig 控制单个端点的握手与接收限制，构造时读取，不热更新。
+// WebSocketConfig 控制单个端点的握手、接收限制与消息调度，构造时读取，不热更新。
 type WebSocketConfig struct {
 	// Upgrader 配置协议握手，零值使用 Gorilla 默认行为。
 	Upgrader Upgrader
 	// MaxMessageBytes 同时限制接收消息的传输载荷与解压后字节；0 使用默认 1 MiB，-1 显式取消上限。
 	MaxMessageBytes int64
+	// MaxInFlightMessages 限制单连接并发处理的消息数；0 使用默认值 1，负数无效。
+	MaxInFlightMessages int
 }
 
 type websocketEndpoint struct {
 	// maxMessageBytes 单条消息字节上限；0 使用 1 MiB，-1 不限制，覆盖传输及解压后载荷。
 	maxMessageBytes int64
+	// maxInFlightMessages 单连接同时执行的 OnMessage 数量；0 使用默认值 1。
+	maxInFlightMessages int
 	// path WebSocket 握手路由路径，须以 / 开头且不可重复。
 	path string
 	// handler 非 nil 业务对象，须至少实现一种受支持的 WebSocket 回调接口。
@@ -125,6 +129,9 @@ func (s *Spec) Validate() error {
 		}
 		if endpoint.maxMessageBytes < -1 {
 			return fmt.Errorf("websocket path %q max message bytes must be -1 or non-negative", endpoint.path)
+		}
+		if endpoint.maxInFlightMessages < 0 {
+			return fmt.Errorf("websocket path %q max in-flight messages must be non-negative", endpoint.path)
 		}
 		if len(endpoint.upgrader) > 1 {
 			return fmt.Errorf(
@@ -213,6 +220,7 @@ func (s *httpSpec) WebSocket(path string, handler any, optionalUpgrader ...Upgra
 func (s *httpSpec) WebSocketWithConfig(path string, handler any, config WebSocketConfig) HTTPBuilder {
 	s.WebSocket(path, handler, config.Upgrader)
 	s.websockets[len(s.websockets)-1].maxMessageBytes = config.MaxMessageBytes
+	s.websockets[len(s.websockets)-1].maxInFlightMessages = config.MaxInFlightMessages
 	return s
 }
 

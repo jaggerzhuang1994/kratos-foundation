@@ -94,18 +94,84 @@ flowchart TD
     K --> L([执行对应请求策略])
 ```
 
+### 自定义 HTTP 端点
+
+文件上传、回调接收或其他不适合 Protocol Buffers 绑定的 HTTP 接口通过 `HandleHTTP` 创建注册回调，再交给现有 `HTTP().Register`。该入口不扩展 `HTTPBuilder` 接口，已有 mock、装饰器和替代实现无需增加方法。它在构造期注册路由并自动执行与生成式 HTTP 接口相同的服务端中间件链，同时设置模板路径作为 operation；handler 返回的错误继续进入默认错误边界和 HTTP ErrorEncoder，中间件成功短路返回的非 nil reply 使用现有 HTTP 编码器输出。nil handler 得到 nil 注册回调，由 `Register` 按既有规则忽略。端点声明不是运行期配置，不支持热更新。
+
+```go
+spec.HTTP().Register(server.HandleHTTP(http.MethodPost, "/files/upload", func(w http.ResponseWriter, request *http.Request) error {
+    // Request Context 已包含身份、metadata、Trace 与截止时间；中间件替换 Request 时这里同步更新。
+    request.Body = http.MaxBytesReader(w, request.Body, 20<<20)
+    if err := request.ParseMultipartForm(8 << 20); err != nil {
+        var maxBytesErr *http.MaxBytesError
+        if errors.As(err, &maxBytesErr) {
+            return foundationerrors.New(http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "file too large").WithCause(err)
+        }
+        return foundationerrors.New(http.StatusBadRequest, "INVALID_UPLOAD", "invalid upload").WithCause(err)
+    }
+    defer request.MultipartForm.RemoveAll()
+    file, header, err := request.FormFile("file")
+    if err != nil {
+        return foundationerrors.New(http.StatusBadRequest, "FILE_REQUIRED", "file is required").WithCause(err)
+    }
+    defer file.Close()
+
+    // 外部存储调用继续传入 request.Context()，以传播身份、Trace 与截止时间。
+    // if err := storage.Save(request.Context(), header.Filename, file); err != nil { return err }
+    body, err := json.Marshal(map[string]any{"name": header.Filename})
+    if err != nil {
+        return err
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    _, err = w.Write(body)
+    return err
+}))
+```
+
+示例所需的 `encoding/json`、`errors`、`net/http`、Foundation errors 与 server 包由调用方显式导入。路径变量可通过 Gorilla `mux.Vars(request)` 读取。上传大小、允许的媒体类型和文件名等外部输入仍由业务在 handler 内校验；框架不会自动读取或缓存正文。若业务直接写入响应后再返回错误，ErrorEncoder 可能无法替换已发送的状态或正文，因此应在首次写响应前完成所有可能失败的操作。
+
+```mermaid
+flowchart TD
+    A([自定义 HTTP 请求]) --> B[按方法和模板路径匹配路由]
+    B --> C[设置 operation]
+    C --> D[Recovery / Deadline / RequestDebug / Metadata / Tracing / Metrics]
+    D --> E[错误边界 / 访问日志 / 自定义中间件 / 校验 / 限流]
+    E --> P{中间件成功短路?}
+    P -- 是 --> Q[INFO Request completed]
+    Q --> R[HTTP Encoder 输出非 nil reply]
+    R --> J
+    P -- 否 --> F[HTTPHandler 接收 ResponseWriter 与派生 Request]
+    F --> G{业务处理成功?}
+    G -- 是 --> H[写入自定义状态 Header 或响应体]
+    H --> I[INFO Request completed]
+    I --> J([响应完成])
+    G -- 否 --> K[INFO Request completed]
+    K --> L[错误边界 Normalize]
+    L --> O{服务端故障?}
+    O -- 是 --> M[ERROR Request failed with a server error]
+    O -- 否 --> N[HTTP ErrorEncoder]
+    M --> N
+    N --> J
+```
+
 WebSocket 默认对**传输载荷和解压后消息**分别施加 **1 MiB** 上限；旧的 `HTTP().WebSocket(...)` 注册入口也采用此默认值。上限针对整条消息，分片不能绕过；开启消息压缩时，两种大小都须满足上限，所以接近边界的不可压缩数据需要为压缩格式开销留余量。它不是连接数或进程总内存上限，也不是读取超时。
 
 通过 Spec 的端点配置覆盖（`spec` 为已创建的 `*server.Spec`，`handler` 实现至少一种 WebSocket 事件接口）：
 
 ```go
 spec.HTTP().WebSocketWithConfig("/ws", handler, server.WebSocketConfig{
-    MaxMessageBytes: 4 << 20,
-    Upgrader: server.Upgrader{EnableCompression: true},
+    MaxMessageBytes:      4 << 20,
+    MaxInFlightMessages: 4,
+    Upgrader:             server.Upgrader{EnableCompression: true},
 })
 ```
 
 `MaxMessageBytes=0` 使用默认值，`-1` 显式恢复不限制消息大小的旧行为，小于 `-1` 在 Spec 校验时拒绝。这是端点构造期配置，不来自 YAML，也不热更新。超限数据不会交给 `OnMessage`；框架尝试发送 1009 关闭帧，记录 `WARN readMessage | websocket message too large`，将包含 `websocket.ErrReadLimit` 的错误交给已提供的 `OnError`，随后按原有关闭路径执行 `OnClose`。网络已失效时不保证对端收到关闭帧。大文件建议通过上传接口或应用层分片传输。
+
+`MaxInFlightMessages=0` 使用默认值 **1**，因此旧注册入口和未显式配置的端点仍按接收顺序串行执行 `OnMessage`；负数在 Spec 校验时拒绝。大于 1 时，同一连接最多并发执行对应数量的消息处理任务，不同连接仍各自独立。达到上限后读循环暂停读取，依靠 TCP/WebSocket 背压限制继续进入进程的消息，不额外维护无界业务队列。并行模式只保证消息按线路顺序读取，不保证 `OnMessage` 完成或响应写入顺序；handler、其共享依赖及连接级业务状态必须支持并发访问，需要严格顺序的协议应保持默认值 1。框架继续用连接写锁串行写帧，但锁获取顺序不等于消息接收顺序。
+
+连接结束会先取消 `WebSocketConn.Request().Context()` 并关闭底层连接，再等待已经进入 `OnMessage` 的任务退出，最后调用 `OnClose`。业务回调必须监听连接 Context 或具有自己的有限超时；若回调永久阻塞，框架无法强制终止 goroutine，停机预算到期后虽然会强制关闭 socket 并返回错误，但该连接的 `OnClose` 和 hub 移除仍要等回调实际结束。
 
 WebSocket 的 `OnHandshake` 接收中间件派生的上下文，包含身份、metadata 和握手截止时间。升级成功后，`WebSocketConn.Request().Context()` 保留这些上下文值，同时脱离 HTTP 握手请求的取消和截止时间；连接关闭时取消。`OnConnect`、`OnMessage`、`OnError` 和 `OnClose` 均可通过 `Request()` 读取这些值。正常关闭及停机强制中断会先取消连接上下文，读循环退出时的 `OnClose` 看到已取消状态。应用如需连接最大存活时间，应自行按业务策略调用 `Close()`。
 
@@ -125,17 +191,28 @@ flowchart TD
     Y --> S
     V -- 否 --> H[hub 锁内登记连接 释放锁后启动读循环]
     H --> I[OnConnect 使用连接上下文]
-    I --> AA[按传输及解压后上限读取一条消息]
+    I --> AD{有可用消息处理槽?}
+    AD -- 否 --> AE[暂停读取 等待槽位或连接取消]
+    AE -- 槽位释放 --> AD
+    AE -- 连接取消 --> L
+    AD -- 是 --> AA[占用槽位并按传输及解压后上限读取一条消息]
     AA --> J{读取结果?}
     J -- 超限 --> AB[尝试发送 1009 并记录 WARN readMessage message too large]
-    AB --> K[OnError]
-    J -- 其他读失败 --> K
-    J -- 成功 --> AC[OnMessage 使用连接上下文]
-    AC --> AA
+    AB --> AJ[释放本次读取占用的槽位]
+    J -- 其他读失败 --> AJ
+    AJ --> K[OnError]
+    J -- 成功 --> AC[启动 OnMessage 并发任务 使用连接上下文]
+    AC --> AD
+    AC --> AF{任务执行结果?}
+    AF -- 完成 --> AG[释放消息处理槽]
+    AF -- panic --> AH[ERROR onMessageHandler panic]
+    AH --> AG
+    AG --> AD
     K --> L[closeOnce 内取消连接上下文]
     M[并发 Close 或停机关闭] --> L
     L --> N[写锁内发送可选关闭帧并关闭 socket 释放写锁]
-    N --> O{关闭错误?}
+    N --> AI[等待所有在途 OnMessage 退出]
+    AI --> O{关闭错误?}
     O -- 是 --> P[读循环 WARN websocket connection close failed]
     O -- 否 --> Q[OnClose 读取已取消的连接上下文]
     P --> Q
@@ -158,11 +235,11 @@ flowchart TD
     D -->|Context 到期| F[直接关闭每条底层 socket]
     F --> G[立即返回 Context 错误]
     F --> H[读写解除阻塞]
-    H --> I[读循环执行 closeOnce 和 OnClose]
-    I --> J[从 hub 移除连接]
+    H --> I[读循环执行 closeOnce 并等待在途 OnMessage]
+    I --> J[执行 OnClose 并从 hub 移除连接]
 ```
 
-框架可以用底层连接关闭打断网络读写，但不能强制终止业务实现的 `OnConnect`、`OnMessage`、`OnError` 或 `OnClose`；这些回调必须自行及时返回。缓冲结果 channel 保证停机超时返回后，已启动的关闭 goroutine 不会因上报结果再次阻塞。
+框架可以用底层连接关闭打断网络读写，但不能强制终止业务实现的 `OnConnect`、`OnMessage`、`OnError` 或 `OnClose`；这些回调必须自行及时返回。并行端点的在途 `OnMessage` 会观察到连接 Context 取消，全部退出后才执行 `OnClose`。缓冲结果 channel 保证停机超时返回后，已启动的关闭 goroutine 不会因上报结果再次阻塞。
 
 ## 截止时间
 

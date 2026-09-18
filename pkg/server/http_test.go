@@ -12,7 +12,9 @@ import (
 
 	kratosmetadata "github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
+	"github.com/go-kratos/kratos/v2/transport"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/gorilla/mux"
 	deadlinecontext "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
@@ -21,6 +23,101 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
+
+func TestHandleHTTPUsesRequestMiddleware(t *testing.T) {
+	type requestKey struct{}
+	const operation = "/files/{id}"
+
+	spec := NewSpec()
+	spec.HTTP().Register(HandleHTTP(http.MethodPost, operation, func(w http.ResponseWriter, request *http.Request) error {
+		if got := request.Context().Value(requestKey{}); got != "upload" {
+			t.Fatalf("middleware context value = %v, want upload", got)
+		}
+		if got := request.Header.Get("X-Middleware"); got != "replaced" {
+			t.Fatalf("middleware request header = %q, want replaced", got)
+		}
+		info, ok := transport.FromServerContext(request.Context())
+		if !ok || info.Operation() != operation {
+			t.Fatalf("transport operation = %q, want %q", info.Operation(), operation)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, err := w.Write([]byte(mux.Vars(request)["id"]))
+		return err
+	}))
+
+	server := kratoshttp.NewServer(kratoshttp.Middleware(func(next middleware.Handler) middleware.Handler {
+		return func(ctx context.Context, req any) (any, error) {
+			request, ok := req.(*http.Request)
+			if !ok {
+				t.Fatalf("middleware request has type %T, want *http.Request", req)
+			}
+			ctx = context.WithValue(ctx, requestKey{}, "upload")
+			request = request.Clone(ctx)
+			request.Header.Set("X-Middleware", "replaced")
+			return next(ctx, request)
+		}
+	}))
+	if err := spec.http.endpoints[0](server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/files/42", nil))
+	if response.Code != http.StatusCreated || response.Body.String() != "42" {
+		t.Fatalf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), http.StatusCreated, "42")
+	}
+}
+
+func TestHandleHTTPEncodesMiddlewareReply(t *testing.T) {
+	var handlerCalled bool
+	spec := NewSpec()
+	spec.HTTP().Register(HandleHTTP(http.MethodGet, "/cached", func(http.ResponseWriter, *http.Request) error {
+		handlerCalled = true
+		return nil
+	}))
+
+	server := kratoshttp.NewServer(kratoshttp.Middleware(func(middleware.Handler) middleware.Handler {
+		return func(context.Context, any) (any, error) {
+			return map[string]string{"source": "middleware"}, nil
+		}
+	}))
+	if err := spec.http.endpoints[0](server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/cached", nil))
+	var reply map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil {
+		t.Fatalf("decode middleware reply: %v", err)
+	}
+	if handlerCalled || reply["source"] != "middleware" {
+		t.Fatalf("handler called = %t, reply = %v", handlerCalled, reply)
+	}
+}
+
+func TestHandleHTTPReturnsErrorsToHTTPEncoder(t *testing.T) {
+	wantErr := errors.New("upload failed")
+	var encodedErr error
+	spec := NewSpec()
+	spec.HTTP().Register(HandleHTTP(http.MethodPost, "/upload", func(http.ResponseWriter, *http.Request) error {
+		return wantErr
+	}))
+
+	server := kratoshttp.NewServer(kratoshttp.ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
+		encodedErr = err
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	if err := spec.http.endpoints[0](server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/upload", nil))
+	if !errors.Is(encodedErr, wantErr) || response.Code != http.StatusTeapot {
+		t.Fatalf("encoded error = %v, status = %d", encodedErr, response.Code)
+	}
+}
 
 // TestIntegrationHTTPRoutes 验证正式构造链、路由选项、业务中间件及错误编码器的组合契约。
 func TestIntegrationHTTPRoutes(t *testing.T) {
