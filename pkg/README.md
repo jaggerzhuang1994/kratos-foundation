@@ -36,6 +36,8 @@
 | [`compress`](compress/readme.md) | 压缩工具 | M1 工具 | 单次调用完成；校验输入及解压限制 |
 | [`crypto`](crypto/README.md) | 密码学工具集合 | M1 工具 | `aes`、`ecc`、`password`、`rsa`、`schnorr` 分包；具体算法边界见各实现 |
 | [`totp`](totp/README.md) | 一次性验证码工具 | M1 工具 | Authenticator 是配置对象，`Current` 等依赖时间；不需要 Manager/Runtime |
+| [`utils`](utils/README.md) | 集合与并行工具 | M1 工具 | 优先使用标准库；含单次调用的固定 worker 池，取消后等待在途任务退出 |
+| [`validation`](validation/README.md) | 输入校验 | M1 工具 | 含 [displaytext](validation/displaytext/README.md) 预处理子包；长度检查位于 validation；URL 校验不等同于请求时的 SSRF 防护 |
 | [`gormscope`](gormscope/README.md) | GORM 查询辅助 | M1 工具 | 依赖 GORM，但不拥有数据库连接或事务 |
 | [`lock`](lock/lock.go) | 分布式锁/租约公共抽象 | M2 契约 | 定义 `Locker`、`Lease` 和稳定错误，提供可选 `WithMetrics` 包装；底层实现由 contrib 提供 |
 | [`redis`](redis/README.md) | Redis 连接资源 | M3 Manager | Manager 拥有共享 client，调用方借用；Subscribe 的操作生命周期另行释放 |
