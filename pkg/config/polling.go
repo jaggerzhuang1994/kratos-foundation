@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"slices"
@@ -14,12 +15,8 @@ import (
 )
 
 type subscription struct {
-	// id 本 Manager 内的订阅编号，用于日志关联。
-	id uint64
-	// observerName 用于日志标识的订阅回调名称。
-	observerName string
-	// targetType 用于日志标识的解码目标类型。
-	targetType string
+	// caller 记录直接调用 Subscribe 的源码位置。
+	caller string
 	// key 订阅路径；空串表示根配置。
 	key string
 	// decoder 按订阅目标类型及默认值构造的解码器。
@@ -54,18 +51,17 @@ func (m *manager) Subscribe(key string, prototype any, observer Observer, defaul
 	if err != nil {
 		return nil, err
 	}
-	// 登记时解析回调身份，轮询时复用；不记录函数捕获的业务数据。
-	observerName := "<unknown>"
-	if fn := runtime.FuncForPC(reflect.ValueOf(observer).Pointer()); fn != nil {
-		observerName = fn.Name()
+	// 在登记处捕获直接调用点，避免异步通知时只能看到轮询栈；仅保留末级目录和文件名。
+	caller := "<unknown>"
+	if _, file, line, ok := runtime.Caller(1); ok {
+		caller = fmt.Sprintf("%s/%s:%d", filepath.Base(filepath.Dir(file)), filepath.Base(file), line)
 	}
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return nil, ErrManagerClosed
 	}
-	m.nextSubscriptionID++
-	sub := &subscription{id: m.nextSubscriptionID, observerName: observerName, targetType: reflect.TypeOf(prototype).String(), key: key, decoder: valueDecoder, observer: observer, previous: m.snapshot, pendingInitial: true}
+	sub := &subscription{caller: caller, key: key, decoder: valueDecoder, observer: observer, previous: m.snapshot, pendingInitial: true}
 	m.subs = append(m.subs, sub)
 	m.mu.Unlock()
 	return func() {
@@ -128,21 +124,21 @@ func (m *manager) poll() {
 			if key == "" {
 				key = "<root>" // 整份配置订阅使用非空标识，避免被日志空值过滤器移除。
 			}
-			paths := []string{}
-			truncated := false
-			if !initial {
-				paths, truncated = changedPaths(sub.key, previous, existed, value, exists)
+			// 首次回放与真实变更分开命名；正常路径省略默认标志和实现类型。
+			logger := log.WithModule("config").With("key", key, "subscription", sub.caller)
+			if !exists {
+				logger = logger.With("found", false)
 			}
-			log.WithModule("config").With(
-				"key", key,
-				"subscription_id", sub.id,
-				"observer", sub.observerName,
-				"target_type", sub.targetType,
-				"changed_paths", paths,
-				"paths_truncated", truncated,
-				"initial", initial,
-				"found", exists).
-				Info("Configuration subscription update")
+			if initial {
+				logger.Info("config.watch")
+			} else {
+				paths, truncated := changedPaths(sub.key, previous, existed, value, exists)
+				logger = logger.With("changed_paths", paths)
+				if truncated {
+					logger = logger.With("paths_truncated", true)
+				}
+				logger.Info("config.change")
+			}
 			sub.notify(value, exists)
 		}
 	}
@@ -152,7 +148,7 @@ func (s *subscription) notify(value any, found bool) {
 	// 单个业务回调 panic 不应终止整个 Manager 的轮询，也不重试本次通知。
 	defer func() {
 		if recover() != nil {
-			log.WithModule("config").With("key", s.key, "subscription_id", s.id, "observer", s.observerName).
+			log.WithModule("config").With("key", s.key, "subscription", s.caller).
 				Error("Configuration observer panicked; continuing polling")
 		}
 	}()

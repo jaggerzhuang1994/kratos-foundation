@@ -119,22 +119,28 @@ defer cancel()
 
 cancel 幂等移除订阅，首次回放前取消会跳过该次回放；不等待已通过执行检查的回调。扫描、比较、解码和业务回调均不持有订阅锁；普通互斥锁只保护快照指针、订阅登记/移除和关闭状态的复合操作，避免注册和扫描交错导致状态不一致。
 
-每个订阅实际通知前记录一行 INFO `poll | config.notify | Configuration subscription update`，不记录配置值。空 key 的整份配置订阅以 `<root>` 标识；同一 key 的多个订阅分别记录，使用以下字段区分：
+每个订阅实际通知前记录一行 INFO，不记录配置值：首次回放使用 `config.watch`，后续变更使用 `config.change`。空 key 的整份配置订阅以 `<root>` 标识，使用 `subscription` 定位订阅登记位置；同一位置重复登记会显示相同值，不表示唯一订阅标识。
 
 | 字段 | 含义 |
 | --- | --- |
-| `subscription_id` | 同一 Manager 内递增的订阅编号，取消后不复用；不是跨进程或跨 Manager 的唯一编号 |
-| `observer` | 回调函数的 Go 符号名，匿名函数显示编译器生成的名称 |
-| `target_type` | 订阅解码目标的 Go 类型，帮助识别通用回调订阅的配置类型 |
-| `key` / `initial` / `found` | 订阅范围、是否首次回放、当前快照是否包含该范围 |
-| `changed_paths` | 相对该订阅上次快照的绝对 JSON Pointer 路径，例如 `/job/cron/refresh/disabled` |
-| `paths_truncated` | 路径超过 32 项时为 true，此时列表不完整 |
+| `key` | 订阅范围 |
+| `subscription` | 直接调用 `Subscribe` 的源码位置，格式为 `末级目录/文件.go:行号`；无法获取时为 `<unknown>` |
+| `changed_paths` | 仅变更事件记录，相对该订阅上次快照的绝对 JSON Pointer 路径 |
+| `found` | 仅当前快照缺失该范围时记录 false；有默认值时仍可能正常解码 |
+| `paths_truncated` | 仅路径超过 32 项时记录 true，此时列表不完整 |
 
-变更路径按键排序，新增、删除、类型变化和数组变化只记录对应节点，不展开其值；路径中的 `~` 和 `/` 分别转义为 `~0` 和 `~1`，根节点变化显示 `<root>`。首次回放是当前值交付而非变更事件，`initial=true` 且路径列表为空。字段路径可能包含业务自定义键名，配置键名本身不应承载凭据或隐私数据。
+例如（省略时间戳与 caller）：
 
-例如修改 `job.cron.refresh.disabled` 后，根订阅和 job 订阅都可能记录 `changed_paths=[/job/cron/refresh/disabled]`，但订阅编号、回调函数及目标类型不同。日志只说明订阅范围内的配置变化并即将通知，不表示这些路径都被该订阅使用，也不保证解码或业务应用成功；业务是否应用仍以相应组件的结果日志为准。
+```text
+INFO module=config key=job subscription=job/config_reload.go:37 msg=config.watch
+INFO module=config key=job subscription=job/config_reload.go:37 changed_paths=[/job/cron/refresh/disabled] msg=config.change
+```
 
-首次回放也记录；后续未变化、已取消或扫描失败时不记录该事件。回调 panic 的 ERROR 日志也携带订阅编号和回调函数，便于关联。输出受当前 Logger 级别和过滤规则控制。
+变更路径按键排序，新增、删除、类型变化和数组变化只记录对应节点，不展开其值；路径中的 `~` 和 `/` 分别转义为 `~0` 和 `~1`，根节点变化显示 `<root>`。首次回放是当前值交付而非变更事件，不记录变更路径。字段路径可能包含业务自定义键名，配置键名本身不应承载凭据或隐私数据。
+
+根订阅和局部订阅可能记录相同变更路径，可结合 `key` 和 `subscription` 定位其订阅范围与调用点。日志只说明即将通知，不表示这些路径都被该订阅使用，也不保证解码或业务应用成功；业务是否应用仍以相应组件的结果日志为准。
+
+后续未变化、已取消或扫描失败时不记录通知事件。通知日志不再输出 `observer`、`subscription_id`、`target_type`、`initial` 字段；回调 panic 的 ERROR 日志同样使用 `subscription` 调用点，便于关联。调用点在登记时捕获；通过 `NewHotReloadValue` 等封装订阅时，记录封装内部直接调用 `Subscribe` 的位置，不向上追溯业务调用栈，也不记录回调函数的定义位置。输出受当前 Logger 级别和过滤规则控制。
 
 存在性与值分别比较：若扫描结果中的 key 消失，无默认值通过 observer 返回 `ErrNotFound`，有默认值解码默认值；显式 null 按目标解码规则处理。源文件中省略字段不等于有效配置删除，仍受官方 merge 约束。Manager 不再使用官方 Value/Watch，因此不受其缺失 key、同 key 单 observer 和直接监听 null 的限制；resolver 等官方处理仍沿用上游行为。
 
@@ -159,8 +165,11 @@ flowchart TD
  J -- 是 --> K[获取 mu；检查取消与关闭；释放 mu]
  K --> L{可交付?}
  L -- 否 --> O
- L -- 是 --> L1[INFO poll / config.notify；记录订阅编号 回调 类型 变更路径及回放标志]
- L1 --> M[锁外按登记顺序解码并执行回调]
+ L -- 是 --> L1{首次回放?}
+ L1 -- 是 --> L2[INFO config.watch；key 和 subscription 调用点；缺失时 found=false]
+ L1 -- 否 --> L3[INFO config.change；追加变更路径；截断时 paths_truncated=true]
+ L2 --> M
+ L3 --> M[锁外按登记顺序解码并执行回调]
  M -- panic --> N[ERROR Configuration observer panicked；继续其余订阅]
  M -- 正常或解码错误 --> O[继续其余订阅]
  N --> O

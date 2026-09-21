@@ -3,8 +3,9 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
-	"strings"
+	"runtime"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -298,7 +299,7 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 		for i := 0; i+1 < len(fields); i += 2 {
 			event[fields[i].(string)] = fields[i+1]
 		}
-		if event["msg"] == "Configuration subscription update" {
+		if event["msg"] == "config.watch" || event["msg"] == "config.change" || event["msg"] == "Configuration observer panicked; continuing polling" {
 			event["level"] = level
 			events <- event
 		}
@@ -306,12 +307,16 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 	})))
 	backend := &scanBackend{values: map[string]any{"key": "secret-value"}}
 	m := &manager{backend: backend, snapshot: backend.values}
+	var wantCaller string
+	callback := func(string, any, error) {}
 	for _, key := range []string{"key", "key", ""} {
 		var prototype any = new(string)
 		if key == "" {
 			prototype = new(map[string]any)
 		}
-		_, err := m.Subscribe(key, prototype, func(string, any, error) {})
+		_, _, line, _ := runtime.Caller(0)
+		_, err := m.Subscribe(key, prototype, callback)
+		wantCaller = fmt.Sprintf("config/polling_test.go:%d", line+1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -352,18 +357,23 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 					key = "<root>"
 				}
 				if event["level"] != kratoslog.LevelInfo || event["module"] != "config" ||
-					event["key"] != key || event["initial"] != step.initial || event["found"] != found {
+					event["key"] != key || event["subscription"] != wantCaller {
 					t.Fatalf("unexpected event: %v", event)
 				}
-				if event["subscription_id"] != uint64(i+1) || !strings.Contains(event["observer"].(string), "TestPollingSubscriptionUpdateLogs") || event["target_type"] == "" {
-					t.Fatalf("missing subscription identity: %v", event)
+				if got, present := event["found"]; present != !found || (!found && got != false) {
+					t.Fatalf("unexpected presence flag: %v", event)
 				}
-				wantPaths := []string{}
-				if !step.initial {
-					wantPaths = []string{"/key"}
+				for _, field := range []string{"observer", "subscription_id", "target_type", "initial", "paths_truncated"} {
+					if _, present := event[field]; present {
+						t.Fatalf("redundant field %s: %v", field, event)
+					}
 				}
-				if !reflect.DeepEqual(event["changed_paths"], wantPaths) || event["paths_truncated"] != false {
-					t.Fatalf("unexpected paths: %v", event)
+				if step.initial {
+					if _, present := event["changed_paths"]; present || event["msg"] != "config.watch" {
+						t.Fatalf("unexpected initial event: %v", event)
+					}
+				} else if event["msg"] != "config.change" || !reflect.DeepEqual(event["changed_paths"], []string{"/key"}) {
+					t.Fatalf("unexpected change event: %v", event)
 				}
 				for _, value := range event {
 					if reflect.DeepEqual(value, "secret-value") || reflect.DeepEqual(value, "new-secret-value") {
@@ -373,4 +383,51 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 			}
 		})
 	}
+	// 大量字段变更才输出截断标志，避免精简日志丢失列表不完整的提示。
+	backend.err = nil
+	backend.values = map[string]any{"key": map[string]any{}}
+	m.poll()
+	for len(events) > 0 {
+		<-events
+	}
+	fields := make(map[string]any)
+	for i := 0; i < 33; i++ {
+		fields[fmt.Sprintf("field%02d", i)] = i
+	}
+	backend.values = map[string]any{"key": fields}
+	m.poll()
+	if len(events) != 3 {
+		t.Fatalf("got %d truncated events, want 3", len(events))
+	}
+	for len(events) > 0 {
+		event := <-events
+		if event["paths_truncated"] != true || len(event["changed_paths"].([]string)) != 32 {
+			t.Fatalf("missing truncation indication: %v", event)
+		}
+	}
+
+	// 通过 Manager 接口登记，异常日志也必须指向登记位置而非回调定义。
+	panicCallback := func(string, any, error) { panic("callback failed") }
+	var configManager Manager = m
+	_, _, line, _ := runtime.Caller(0)
+	_, err = configManager.Subscribe("key", new(map[string]any), panicCallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.poll()
+	if len(events) != 2 {
+		t.Fatalf("got %d events, want replay and panic", len(events))
+	}
+	for _, level := range []kratoslog.Level{kratoslog.LevelInfo, kratoslog.LevelError} {
+		event := <-events
+		if event["subscription"] != fmt.Sprintf("config/polling_test.go:%d", line+1) || event["level"] != level {
+			t.Fatalf("unexpected subscription caller: %v", event)
+		}
+		for _, field := range []string{"observer", "subscription_id"} {
+			if _, present := event[field]; present {
+				t.Fatalf("obsolete field %s: %v", field, event)
+			}
+		}
+	}
+
 }

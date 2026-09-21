@@ -122,9 +122,6 @@ type manager struct {
 	closeOnce sync.Once
 	// closeErr 关闭流程的结果，供重复关闭返回。
 	closeErr error
-
-	// nextSubscriptionID 为本 Manager 分配日志关联编号，由 mu 保护。
-	nextSubscriptionID uint64
 }
 
 func newManager(sources Sources) (*manager, error) {
