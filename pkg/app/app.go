@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
 )
@@ -81,7 +82,7 @@ type App struct {
 	finalError func() error
 }
 
-// NewApp 冻结 Spec 并构造应用；serviceRegistrar 为 nil 时关闭服务注册。
+// NewApp 冻结 Spec 并构造应用；Spec 禁用服务注册或 serviceRegistrar 为 nil 时不注册。
 // 组件选择和组装阶段由调用方负责。
 func NewApp(
 	ctx context.Context,
@@ -128,7 +129,10 @@ func NewApp(
 	}
 
 	var registrar *supervisedRegistrar
-	if serviceRegistrar != nil {
+	if snapshot.serviceRegistrationDisabled {
+		kratoslog.NewHelper(snapshot.logger).Infow("function", "NewApp", "event", "app.registration.disabled")
+	}
+	if serviceRegistrar != nil && !snapshot.serviceRegistrationDisabled {
 		registrar = newSupervisedRegistrar(
 			serviceRegistrar,
 			application,

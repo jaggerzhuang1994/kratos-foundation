@@ -188,7 +188,7 @@ flowchart TD
 
 ## 可选依赖由 Wire 构造注入
 
-`registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`。可选服务注册通过业务 provider 返回 nil Registrar 禁用，不需要 Boot 登记；默认 BaseProviderSet 使用 app.NewRegistrar。
+`registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`。业务 Boot 可调用 `spec.DisableServiceRegistration()` 独立关闭服务注册与注销（默认不关闭），也可由业务 provider 返回 nil Registrar 禁用；开关不跳过 provider 构造和配置校验，不影响服务器或服务发现，详见 [App 开关说明](../app/README.md#独立关闭服务注册)；默认 BaseProviderSet 使用 app.NewRegistrar。
 
 Job 不再有 Coordinator provider，NewJobBootstrap 直接接收应用 config.Manager。表达式、并发策略、runImmediately、maxPendingRuns 按配置 > 注册 > Task 默认值解析，热更新边界见 [Job 文档](../job/README.md)。
 

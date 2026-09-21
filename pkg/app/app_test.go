@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
@@ -128,5 +130,50 @@ func TestOnceStopSharesOneResultAcrossCallers(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("stop calls = %d, want 1", calls)
+	}
+}
+
+// TestNewAppServiceRegistrationSwitch 验证显式关闭优先于非 nil Registrar，且不阻断运行时。
+func TestNewAppServiceRegistrationSwitch(t *testing.T) {
+	initializeRuntimeSignals(t)
+	for _, disabled := range []bool{false, true} {
+		name := "default"
+		if disabled {
+			name = "disabled"
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				spec := newApplicationTestSpec(t)
+				if disabled {
+					spec.DisableServiceRegistration()
+					spec.DisableServiceRegistration()
+				}
+				release := make(chan struct{})
+				spec.RegisterRuntime(&applicationStopRequestRuntime{release: release})
+				registrar := new(registrarCallFake)
+				application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), registrar)
+				if err != nil {
+					t.Fatal(err)
+				}
+				result := make(chan error, 1)
+				go func() { result <- application.Run() }()
+				synctest.Wait()
+				if !spec.Ready() {
+					t.Fatal("application did not become ready")
+				}
+				close(release)
+				synctest.Wait()
+				if err := <-result; err != nil {
+					t.Fatal(err)
+				}
+				want := 1
+				if disabled {
+					want = 0
+				}
+				if registered, deregistered := registrar.calls(); registered != want || deregistered != want {
+					t.Fatalf("registration calls = %d/%d, want %d/%d", registered, deregistered, want, want)
+				}
+			})
+		})
 	}
 }

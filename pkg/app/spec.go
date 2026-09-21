@@ -37,6 +37,8 @@ type Spec struct {
 	metadata map[string]string
 	// endpoints 保存对外端点；URL 对象共享，调用方须保持只读。
 	endpoints []*url.URL
+	// serviceRegistrationDisabled 仅关闭本应用的服务注册，不影响服务发现。
+	serviceRegistrationDisabled bool
 	// signals 保存触发应用停止的系统信号。
 	signals []os.Signal
 
@@ -65,6 +67,8 @@ type appSnapshot struct {
 	metadata map[string]string
 	// endpoints 保存对外端点；URL 对象共享，调用方须保持只读。
 	endpoints []*url.URL
+	// serviceRegistrationDisabled 仅关闭本应用的服务注册，不影响服务发现。
+	serviceRegistrationDisabled bool
 	// signals 保存触发应用停止的系统信号。
 	signals []os.Signal
 	// runtimes 保存按登记顺序排列的运行时引用；资源 cleanup 仍由组装层管理。
@@ -151,6 +155,16 @@ func (s *Spec) AddEndpoints(endpoints ...*url.URL) {
 	s.endpoints = append(s.endpoints, endpoints...)
 }
 
+// DisableServiceRegistration 关闭本应用的服务注册与注销，适用于一次性 Job。
+// 默认不关闭；须在 NewApp 前调用，冻结后调用会 panic(ErrSpecFrozen)。
+// 不跳过 Registrar provider 的构造，也不关闭服务器或客户端服务发现。
+func (s *Spec) DisableServiceRegistration() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkMutable()
+	s.serviceRegistrationDisabled = true
+}
+
 // AddSignals 追加触发应用停止的信号。
 func (s *Spec) AddSignals(signals ...os.Signal) {
 	s.mu.Lock()
@@ -199,16 +213,17 @@ func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
 	}
 	s.frozen = true
 	snapshot := appSnapshot{
-		readySignal: s.readySignal,
-		appInfo:     s.appInfo,
-		logger:      s.logger,
-		metadata:    maps.Clone(s.metadata),
-		endpoints:   append([]*url.URL(nil), s.endpoints...),
-		signals:     append([]os.Signal(nil), s.signals...),
-		beforeStart: append([]HookFunc(nil), s.beforeStart...),
-		afterStart:  append([]HookFunc(nil), s.afterStart...),
-		beforeStop:  append([]HookFunc(nil), s.beforeStop...),
-		afterStop:   append([]HookFunc(nil), s.afterStop...),
+		serviceRegistrationDisabled: s.serviceRegistrationDisabled,
+		readySignal:                 s.readySignal,
+		appInfo:                     s.appInfo,
+		logger:                      s.logger,
+		metadata:                    maps.Clone(s.metadata),
+		endpoints:                   append([]*url.URL(nil), s.endpoints...),
+		signals:                     append([]os.Signal(nil), s.signals...),
+		beforeStart:                 append([]HookFunc(nil), s.beforeStart...),
+		afterStart:                  append([]HookFunc(nil), s.afterStart...),
+		beforeStop:                  append([]HookFunc(nil), s.beforeStop...),
+		afterStop:                   append([]HookFunc(nil), s.afterStop...),
 	}
 	snapshot.runtimes = append([]Runtime(nil), s.runtimes...)
 	decorators := append([]ContextDecorator(nil), s.decorators...)

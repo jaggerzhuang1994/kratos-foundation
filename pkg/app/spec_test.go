@@ -167,6 +167,7 @@ func TestSpecRejectsContributionsAfterFreeze(t *testing.T) {
 		}},
 		{name: "metadata", call: func() { spec.AddMetadata(map[string]string{"key": "value"}) }},
 		{name: "endpoints", call: func() { spec.AddEndpoints(endpoint) }},
+		{name: "service registration", call: spec.DisableServiceRegistration},
 		{name: "signals", call: func() { spec.AddSignals() }},
 		{name: "before start", call: func() { spec.BeforeStart(func(context.Context) error { return nil }) }},
 		{name: "after start", call: func() { spec.AfterStart(func(context.Context) error { return nil }) }},

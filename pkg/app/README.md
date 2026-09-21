@@ -34,7 +34,7 @@ flowchart TD
 - `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
 - `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
-- 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 表示禁用服务注册，组装层由 `app.NewRegistrar` 从具名 Registry Factory 解析实例；`app.registry` 省略或为空时使用 default，必须配置 `registry.instances.default`，缺失即报错。空名称不表示禁用，驱动禁用时返回 nil。
+- 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 或调用 Spec.DisableServiceRegistration 表示禁用服务注册，组装层由 `app.NewRegistrar` 从具名 Registry Factory 解析实例；`app.registry` 省略或为空时使用 default，必须配置 `registry.instances.default`，缺失即报错。空名称不表示禁用，驱动禁用时返回 nil。
 
 `Spec.RegisterLogger` 为 Kratos App 派生带 `module=kratos` 的 Logger，
 原 Logger 不被修改，派生视图共用原输出且不增加 cleanup。StopPolicy 自身日志归属 `app`。
@@ -47,6 +47,32 @@ flowchart TD
 `RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会 panic(app.ErrSpecFrozen)。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会 panic(app.ErrSpecFrozen)。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。所有公开登记方法均无返回值；AppInfo 和 Logger 是单例贡献，重复登记会 panic；Registrar 是独立的构造依赖，不保存在 Spec 中。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `NewKratosApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。冻结后的空参数写入同样会 panic，Ready 仍可正常读取。
 
 登记与冻结继续使用同一互斥锁保护共享状态；发生 panic 时 defer 释放锁，不留下半次登记。ContextDecorator 仍在锁外执行。`NewApp` 继续返回构造错误，包括重复消费 Spec 的 ErrSpecFrozen、缺失依赖和装饰函数返回 nil Context；这与公开登记方法的 panic 契约不同。
+
+### 独立关闭服务注册
+
+一次性 Job 可在构造应用前调用 `spec.DisableServiceRegistration()`（`app.Spec` 和 `bootstrap.Spec` 均提供）。
+默认不关闭；显式关闭优先于注入的非 nil Registrar，App 不再调用 Register/Deregister，
+并记录 `INFO function=NewApp event=app.registration.disabled`。重复声明安全，冻结后调用会 panic(app.ErrSpecFrozen)，不支持热更新。
+该开关与 `ExitWhenDone` 独立，不改变 HTTP/gRPC、健康监听或客户端发现。
+
+开关仅作用于 App 使用 Registrar 的阶段，不跳过 Wire 中 Registrar provider 与 Registry Factory 的构造或配置校验；
+默认 provider 仍要求有效的具名实例。共享注册中心资源仍由原 provider 的 cleanup 释放。
+
+```mermaid
+flowchart TD
+ A([构造 NewApp]) --> B[沿用 Spec 锁冻结声明并复制开关 然后释放锁]
+ B --> C{配置 身份 Logger 校验通过?}
+ C -- 否 --> D([返回错误])
+ C -- 是 --> E{已声明 DisableServiceRegistration?}
+ E -- 是 --> F[INFO NewApp app.registration.disabled]
+ E -- 否 --> G{Registrar 非 nil?}
+ G -- 是 --> H[安装注册与注销适配器]
+ G -- 否 --> I[不安装适配器]
+ F --> I
+ H --> J([返回应用 运行时按既有生命周期启动])
+ I --> J
+```
+
 
 ## 运行时故障与停止结果
 

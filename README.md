@@ -185,7 +185,7 @@ flowchart LR
 
 ## Job 调度与并发
 
-Job 仅提供本进程、同一 Manager 内的 AllowOverlap、SkipIfRunning、DelayIfRunning。`job.cron` 按注册名称热更新启用状态（disabled 默认 false）、表达式、并发策略和等待容量；run_immediately 只在启动时触发。除仅由配置控制的 disabled 外，四项调度参数按配置、注册声明、Task 默认值的顺序解析；重新启用不补跑立即执行，详见 [Job 文档](pkg/job/README.md)。Bootstrap 注入 config.Manager，无需 Coordinator provider。
+Job 仅提供本进程、同一 Manager 内的 AllowOverlap、SkipIfRunning、DelayIfRunning。`job.cron` 按注册名称热更新启用状态（disabled 默认 false）、表达式、并发策略和等待容量；run_immediately 只在启动时触发。除仅由配置控制的 disabled 外，四项调度参数按配置、注册声明、Task 默认值的顺序解析；重新启用不补跑立即执行，详见 [Job 文档](pkg/job/README.md)。Bootstrap 注入 config.Manager，无需 Coordinator provider。一次性 Job 可通过 `spec.DisableServiceRegistration()` 独立关闭本应用注册与注销；默认不关闭，且不跳过注册中心 provider 构造，见 [App 开关说明](pkg/app/README.md#独立关闭服务注册)。
 
 
 ## 主要目录

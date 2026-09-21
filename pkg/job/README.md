@@ -138,6 +138,16 @@ flowchart TD
 
 Manager 真正启动前按注册顺序逐条记录 `INFO event=job.registered`，包含任务名、kind、最终生效的 schedule、`registration.caller` 与 enabled；Once/Daemon 的 schedule 分别为 `once`/`daemon`。这些日志完成后才启动 Cron、Once 和 Daemon。Cron 调度器内部的 `wake`、`run`、`schedule`、`start`、`stop` 事件不再重复输出。
 
+一次性任务可在业务 Boot 中独立关闭服务注册；前置条件是已由 Wire 注入共享的 `*bootstrap.Spec`。
+任务完成退出与注册开关互不隐含，注册中心 provider 仍会构造并校验配置，见 [App 开关说明](../app/README.md#独立关闭服务注册)。
+
+```go
+spec.DisableServiceRegistration()
+spec.Job().RegisterOnce("finish", job.TaskFunc(func(ctx context.Context) error {
+    return nil // 替换为任务逻辑，并返回实际错误。
+})).ExitWhenDone()
+```
+
 `ExitWhenDone` 要求至少注册一个 Once，且 Spec 只能包含 Once；混入 Cron 或 Daemon 会在 `NewManager` 校验时返回错误。该模式在所有 Once 任务成功完成后返回 `job.ErrCompleted`；组装层 `bootstrap.NewJobBootstrap` 的适配器将该结果转换为 `app.ErrStopRequested`，请求正常停机。任务自身的失败原样保留。直接使用 Manager 时，由调用方处理 `job.ErrCompleted`。
 
 ```mermaid

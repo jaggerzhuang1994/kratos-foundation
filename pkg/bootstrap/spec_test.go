@@ -23,7 +23,7 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	}
 	if got := spec.AddContext(func(ctx context.Context) context.Context { return ctx }).
 		AddMetadata(map[string]string{"blueprint": "ready"}).AddEndpoints().AddSignals().
-		AfterStart().BeforeStop().AfterStop(); got != spec.Spec {
+		AfterStart().BeforeStop().AfterStop().DisableServiceRegistration(); got != spec.Spec {
 		t.Fatal("chain returned a different Spec")
 	}
 	started := false
@@ -42,6 +42,7 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 		t.Fatal("hook registered through bootstrap.Spec did not run")
 	}
 	assertBootstrapPanic(t, app.ErrSpecFrozen, func() { spec.BeforeStart() })
+	assertBootstrapPanic(t, app.ErrSpecFrozen, func() { spec.DisableServiceRegistration() })
 }
 
 // 防止匿名嵌入重新将内部生命周期装配能力暴露给业务。
