@@ -16,10 +16,10 @@ func changedPaths(key string, before any, existed bool, after any, exists bool) 
 	escape := func(segment string) string {
 		return strings.ReplaceAll(strings.ReplaceAll(segment, "~", "~0"), "/", "~1")
 	}
-	prefix := ""
+	var prefix strings.Builder
 	if key != "" {
-		for _, segment := range strings.Split(key, ".") {
-			prefix += "/" + escape(segment)
+		for segment := range strings.SplitSeq(key, ".") {
+			prefix.WriteString("/" + escape(segment))
 		}
 	}
 	var walk func(string, any, bool, any, bool)
@@ -57,6 +57,6 @@ func changedPaths(key string, before any, existed bool, after any, exists bool) 
 		}
 		paths = append(paths, path)
 	}
-	walk(prefix, before, existed, after, exists)
+	walk(prefix.String(), before, existed, after, exists)
 	return paths, truncated
 }
