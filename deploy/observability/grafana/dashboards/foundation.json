@@ -1,14 +1,15 @@
 {
   "id": null,
-  "uid": "foundation-overview",
-  "title": "Foundation · 应用总览",
+  "uid": "ack-container-overview",
+  "title": "ACK · 容器概览",
   "tags": [
-    "foundation",
-    "template"
+    "ACK",
+    "Kubernetes",
+    "Foundation"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 5,
+  "version": 1,
   "refresh": "30s",
   "time": {
     "from": "now-1h",
@@ -22,57 +23,41 @@
         "label": "Prometheus",
         "type": "datasource",
         "query": "prometheus",
-        "current": {
-          "text": "Foundation Prometheus",
-          "value": "foundation-prometheus"
-        },
         "refresh": 1
       },
       {
-        "name": "env",
-        "label": "环境",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(up{foundation=\"true\"}, env)",
-        "query": {
-          "query": "label_values(up{foundation=\"true\"}, env)",
-          "refId": "env"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
+        "name": "view",
+        "label": "视图",
+        "type": "custom",
+        "query": "Pod : view_pod,Node : view_node,Instance（Pod IP） : view_instance,Container : view_container",
         "current": {
-          "text": "All",
-          "value": "$__all"
-        }
-      },
-      {
-        "name": "cluster",
-        "label": "集群",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
+          "text": "Pod",
+          "value": "view_pod"
         },
-        "definition": "label_values(up{foundation=\"true\",env=~\"${env:regex}\"}, cluster)",
-        "query": {
-          "query": "label_values(up{foundation=\"true\",env=~\"${env:regex}\"}, cluster)",
-          "refId": "cluster"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        }
+        "options": [
+          {
+            "text": "Pod",
+            "value": "view_pod",
+            "selected": true
+          },
+          {
+            "text": "Node",
+            "value": "view_node",
+            "selected": false
+          },
+          {
+            "text": "Instance（Pod IP）",
+            "value": "view_instance",
+            "selected": false
+          },
+          {
+            "text": "Container",
+            "value": "view_container",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
       },
       {
         "name": "namespace",
@@ -82,9 +67,9 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\"}, namespace)",
+        "definition": "label_values(kube_pod_info, namespace)",
         "query": {
-          "query": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\"}, namespace)",
+          "query": "label_values(kube_pod_info, namespace)",
           "refId": "namespace"
         },
         "refresh": 2,
@@ -98,39 +83,16 @@
         }
       },
       {
-        "name": "app",
-        "label": "应用",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\"}, app)",
-        "query": {
-          "query": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\"}, app)",
-          "refId": "app"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        }
-      },
-      {
         "name": "node",
-        "label": "机器 / Node",
+        "label": "节点",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\"}, node)",
+        "definition": "label_values(kube_node_info, node)",
         "query": {
-          "query": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\"}, node)",
+          "query": "label_values(kube_node_info, node)",
           "refId": "node"
         },
         "refresh": 2,
@@ -151,9 +113,9 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\"}, pod)",
+        "definition": "label_values(kube_pod_info{namespace=~\"${namespace}\",node=~\"${node}\"}, pod)",
         "query": {
-          "query": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\"}, pod)",
+          "query": "label_values(kube_pod_info{namespace=~\"${namespace}\",node=~\"${node}\"}, pod)",
           "refId": "pod"
         },
         "refresh": 2,
@@ -167,17 +129,17 @@
         }
       },
       {
-        "name": "instance",
-        "label": "实例 / 采集地址",
+        "name": "container",
+        "label": "容器",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\"}, instance)",
+        "definition": "label_values(kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\"}, container)",
         "query": {
-          "query": "label_values(up{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\"}, instance)",
-          "refId": "instance"
+          "query": "label_values(kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\"}, container)",
+          "refId": "container"
         },
         "refresh": 2,
         "sort": 1,
@@ -188,388 +150,67 @@
           "text": "All",
           "value": "$__all"
         }
+      },
+      {
+        "name": "app_pod_label",
+        "type": "custom",
+        "query": "pod_name,pod",
+        "current": {
+          "text": "pod_name",
+          "value": "pod_name"
+        },
+        "hide": 2,
+        "skipUrlSync": true,
+        "multi": false,
+        "includeAll": false
       },
       {
         "name": "operation",
-        "label": "Server / Client 方法",
+        "label": "应用接口",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values({__name__=~\"(server|client)_requests_code_total\",foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, operation)",
+        "definition": "label_values(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}, operation)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "query": {
-          "query": "label_values({__name__=~\"(server|client)_requests_code_total\",foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, operation)",
+          "query": "label_values(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}, operation)",
           "refId": "operation"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
         }
-      },
-      {
-        "name": "group_by",
-        "label": "聚合维度",
-        "type": "custom",
-        "query": "App : app,Pod : pod,实例地址 : instance,Node : node,实例明细 : target",
-        "current": {
-          "text": "实例明细",
-          "value": "target"
-        },
-        "multi": false,
-        "includeAll": false,
-        "options": [
-          {
-            "text": "App",
-            "value": "app",
-            "selected": false
-          },
-          {
-            "text": "Pod",
-            "value": "pod",
-            "selected": false
-          },
-          {
-            "text": "实例地址",
-            "value": "instance",
-            "selected": false
-          },
-          {
-            "text": "Node",
-            "value": "node",
-            "selected": false
-          },
-          {
-            "text": "实例明细",
-            "value": "target",
-            "selected": true
-          }
-        ]
-      },
-      {
-        "name": "db_name",
-        "label": "数据库连接",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(go_sql_open_connections{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, db_name)",
-        "query": {
-          "query": "label_values(go_sql_open_connections{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, db_name)",
-          "refId": "db_name"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "redis_connection",
-        "label": "Redis 连接",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(db_client_connections_usage{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, redis_connection)",
-        "query": {
-          "query": "label_values(db_client_connections_usage{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, redis_connection)",
-          "refId": "redis_connection"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "kafka_topic",
-        "label": "Kafka Topic",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values({__name__=~\"kafka_(producer|consumer)_messages_total\",foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, kafka_destination)",
-        "query": {
-          "query": "label_values({__name__=~\"kafka_(producer|consumer)_messages_total\",foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, kafka_destination)",
-          "refId": "kafka_topic"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "kafka_consumer",
-        "label": "Kafka 消费者",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(kafka_consumer_messages_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, kafka_consumer)",
-        "query": {
-          "query": "label_values(kafka_consumer_messages_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, kafka_consumer)",
-          "refId": "kafka_consumer"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "queue_name",
-        "label": "Queue 队列",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values({__name__=~\"queue_(producer_messages_total|consumer_messages_total|tasks)\",foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, queue_destination)",
-        "query": {
-          "query": "label_values({__name__=~\"queue_(producer_messages_total|consumer_messages_total|tasks)\",foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, queue_destination)",
-          "refId": "queue_name"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "queue_consumer",
-        "label": "Queue Worker",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(queue_consumer_messages_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, queue_consumer)",
-        "query": {
-          "query": "label_values(queue_consumer_messages_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, queue_consumer)",
-          "refId": "queue_consumer"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "task_name",
-        "label": "Job 任务",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(job_running{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, exported_job)",
-        "query": {
-          "query": "label_values(job_running{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, exported_job)",
-          "refId": "task_name"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "lock_name",
-        "label": "Lock 业务名",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(lock_operations_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, lock_name)",
-        "query": {
-          "query": "label_values(lock_operations_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, lock_name)",
-          "refId": "lock_name"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "oss_bucket",
-        "label": "OSS Bucket",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(oss_requests_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, bucket)",
-        "query": {
-          "query": "label_values(oss_requests_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, bucket)",
-          "refId": "oss_bucket"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "cache_name",
-        "label": "业务缓存",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(business_cache_lookups_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, cache_name)",
-        "query": {
-          "query": "label_values(business_cache_lookups_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}, cache_name)",
-          "refId": "cache_name"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "kafka_cluster",
-        "label": "Kafka 集群",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(up{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\"}, kafka_cluster)",
-        "query": {
-          "query": "label_values(up{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\"}, kafka_cluster)",
-          "refId": "kafka_cluster"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "lag_group",
-        "label": "Lag 消费组",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(kafka_consumergroup_lag{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",kafka_cluster=~\"${kafka_cluster:regex}\"}, consumergroup)",
-        "query": {
-          "query": "label_values(kafka_consumergroup_lag{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",kafka_cluster=~\"${kafka_cluster:regex}\"}, consumergroup)",
-          "refId": "lag_group"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
-      },
-      {
-        "name": "lag_topic",
-        "label": "Lag Topic",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(kafka_consumergroup_lag{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",kafka_cluster=~\"${kafka_cluster:regex}\"}, topic)",
-        "query": {
-          "query": "label_values(kafka_consumergroup_lag{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",kafka_cluster=~\"${kafka_cluster:regex}\"}, topic)",
-          "refId": "lag_topic"
-        },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "hide": 2
       }
     ]
   },
+  "links": [
+    {
+      "title": "容器概览",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "应用组件",
+      "type": "link",
+      "url": "/d/ack-application-components",
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
   "panels": [
     {
       "id": 1,
+      "title": "01 · 容器概览 — 存活与异常",
+      "description": "对象状态来自 kube-state-metrics。Running 不等于 Ready；无数据不是零。",
       "type": "row",
-      "title": "01 · 应用概览 — 先看健康、流量与延迟",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -581,92 +222,79 @@
     },
     {
       "id": 2,
-      "title": "服务就绪 /readyz",
-      "type": "timeseries",
+      "title": "Ready 节点",
+      "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "仅受节点筛选影响，集群整机对象。",
       "gridPos": {
         "x": 0,
         "y": 1,
-        "w": 6,
-        "h": 6
+        "w": 4,
+        "h": 4
       },
-      "description": "由 blackbox-exporter 从网络实际请求 /readyz 和 /healthz。1=通过，0=失败。分组取最差状态；无样本不是健康，探测器失败另看采集状态。",
       "targets": [
         {
           "refId": "A",
-          "expr": "min by (env,cluster,namespace,${group_by:raw}) (probe_success{foundation_probe=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",probe=\"readyz\"})",
-          "legendFormat": "{{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum(max by (node) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status=\"true\"}))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bool",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "decimals": 0
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
+        "reduceOptions": {
           "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
       }
     },
     {
       "id": 3,
-      "title": "请求速率",
-      "type": "timeseries",
+      "title": "Running Pod",
+      "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "受命名空间、节点、Pod筛选影响；不受容器筛选影响。",
       "gridPos": {
-        "x": 6,
+        "x": 4,
         "y": 1,
-        "w": 6,
-        "h": 6
+        "w": 4,
+        "h": 4
       },
-      "description": "仅统计进入 Kratos 方法中间件的请求；探针和直接 HandleFunc 路由不计入。",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw}) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum((max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Running\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
           }
@@ -674,107 +302,46 @@
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
+        "reduceOptions": {
           "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
       }
     },
     {
       "id": 4,
-      "title": "服务端 5xx 比例",
-      "type": "timeseries",
+      "title": "Ready Pod",
+      "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "当前可服务的 Pod 数；不是副本期望值。",
       "gridPos": {
-        "x": 12,
+        "x": 8,
         "y": 1,
-        "w": 6,
-        "h": 6
+        "w": 4,
+        "h": 4
       },
-      "description": "先聚合错误数和总数再相除；没有流量时留空，不显示成功率。Kratos 的 code 为 HTTP 映射码，包含 gRPC 请求。",
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum by (env,cluster,namespace,${group_by:raw}) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\",code=~\"5..\"}[$__rate_interval])) or on (env,cluster,namespace,${group_by:raw}) (0 * sum by (env,cluster,namespace,${group_by:raw}) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))) / (sum by (env,cluster,namespace,${group_by:raw}) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])) > 0)",
-          "legendFormat": "{{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum((max by (namespace,pod) (kube_pod_status_ready{namespace=~\"${namespace}\",pod=~\"${pod}\",condition=\"true\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 5,
-      "title": "请求 P95",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 1,
-        "w": 6,
-        "h": 6
-      },
-      "description": "先合并桶再计算分位数；当前最大有限桶是 1s，超出后无法准确刻画长尾。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le,env,cluster,namespace,${group_by:raw}) (rate(server_requests_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
           }
@@ -782,160 +349,210 @@
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
+        "reduceOptions": {
           "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "运行中容器",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "普通容器，不包含 init container；Running 不等于应用健康。",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod,container) (kube_pod_container_status_running{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
         }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "等待中容器",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "等待原因见异常列表；零值仅来自真实状态序列。",
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod,container) (kube_pod_container_status_waiting{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
       }
     },
     {
       "id": 7,
-      "title": "应用进程 CPU（核）",
+      "title": "窗口重启次数",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "时间窗口 increase 估算，可能有小数；不等于容器存活数。",
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__range]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "title": "02 · 工作负载资源 — 随视图切换",
+      "description": "Pod / Container / Node / Instance（Pod IP）决定聚合口径。Node 视图这里是所选容器之和，不是整机资源。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 9,
+      "title": "CPU 使用量",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "cAdvisor 普通容器 CPU，排除空容器和 POD sandbox；Pod 视图包含所选容器。",
       "gridPos": {
         "x": 0,
-        "y": 8,
-        "w": 6,
-        "h": 6
+        "y": 6,
+        "w": 12,
+        "h": 8
       },
-      "description": "1 表示占用一颗 CPU 核。不是机器整体 CPU，也不是 Pod limit 使用率。",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw}) (rate(process_cpu_seconds_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "cores",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 8,
-      "title": "应用进程 RSS",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 8,
-        "w": 6,
-        "h": 6
-      },
-      "description": "Go 进程驻留内存；不等于 Pod 内所有容器的内存。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw}) (process_resident_memory_bytes{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\"})",
-          "legendFormat": "{{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 9,
-      "title": "Queue 最老就绪等待年龄",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 6,
-        "h": 6
-      },
-      "description": "需显式 RegisterStats。多个实例读取共享Store时使用max去重，不能sum累加快照；同名必须指向同一逻辑Store。Redis就绪候选>1000时年龄未知，数量仍精确。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (env,cluster,namespace,${group_by:raw},queue_destination) (queue_oldest_ready_age_seconds{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",queue_destination=~\"${queue_name:regex}\"})",
-          "legendFormat": "{{queue_destination}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -957,38 +574,41 @@
     },
     {
       "id": 10,
-      "title": "Kafka 消费组总 Lag",
+      "title": "内存工作集",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "Working Set，不是进程 RSS；Pod 视图为所选容器工作集之和。",
       "gridPos": {
-        "x": 18,
-        "y": 8,
-        "w": 6,
-        "h": 6
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
       },
-      "description": "独立Kafka exporter采集的集群状态，按env/cluster/kafka_cluster/consumergroup/topic查看。此区不受业务App/Pod/Node筛选，不把共享group lag归因某个Pod；负位点/lag表示未知，不能当0。",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,kafka_cluster,consumergroup,topic) (max by (env,cluster,kafka_cluster,consumergroup,topic,partition) (kafka_consumergroup_lag{foundation_kafka=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",kafka_cluster=~\"${kafka_cluster:regex}\",consumergroup=~\"${lag_group:regex}\",topic=~\"${lag_topic:regex}\"} >= 0))",
-          "legendFormat": "{{env}} / {{cluster}} / {{kafka_cluster}} / {{consumergroup}} / {{topic}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "bytes",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1010,209 +630,215 @@
     },
     {
       "id": 11,
-      "type": "row",
-      "title": "02 · Server — 端点请求明细",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 14,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 12,
-      "title": "Server 端点请求明细（时间范围估算）",
-      "type": "table",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 15,
-        "w": 24,
-        "h": 9
-      },
-      "description": "窗口增量由 Prometheus increase 外推，可能非整数；operation 为稳定逻辑端点，未经过中间件的请求不计入。按所选聚合维度区分环境、应用及实例。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},operation,kind,code) (increase(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__range]))",
-          "legendFormat": "{{operation}} / {{kind}} / {{code}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 2,
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "端点"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 300
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "状态码"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 80
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "窗口请求数（估算）"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 150
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "协议"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 80
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "应用 / Node / Pod / 实例"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 400
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "sortBy": [
-          {
-            "displayName": "窗口请求数（估算）",
-            "desc": true
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "operation": "端点",
-              "kind": "协议",
-              "code": "状态码",
-              "Value": "窗口请求数（估算）",
-              "target": "应用 / Node / Pod / 实例",
-              "app": "应用",
-              "instance": "实例",
-              "node": "Node",
-              "pod": "Pod"
-            },
-            "indexByName": {
-              "operation": 0,
-              "code": 1,
-              "Value": 2,
-              "kind": 3,
-              "target": 4,
-              "app": 4,
-              "pod": 4,
-              "node": 4,
-              "instance": 4,
-              "env": 5,
-              "cluster": 6,
-              "namespace": 7
-            }
-          }
-        }
-      ]
-    },
-    {
-      "id": 13,
-      "type": "row",
-      "title": "Server — 高流量、错误和慢接口",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 14,
-      "title": "Server 各端点请求速率",
+      "title": "CPU / 容器 Limit",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "只统计有正 Limit 且有使用量的容器；不包含无 Limit 容器，不是整个 Pod 的资源上限。",
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 14,
         "w": 12,
         "h": 8
       },
-      "description": "",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) and on (namespace,pod,container) ((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"cpu\",unit=\"core\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0)), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"cpu\",unit=\"core\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0) and on (namespace,pod,container) ((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "内存 / 容器 Limit",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "只统计有正 Limit 且有使用量的容器；不包含无 Limit 容器，不是整个 Pod 的资源上限。",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) and on (namespace,pod,container) ((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"memory\",unit=\"byte\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0)), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"memory\",unit=\"byte\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0) and on (namespace,pod,container) ((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "CPU 限流周期比例",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "可选 cAdvisor 指标；按周期统计，不是被限流的 CPU 时间比例。",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_cfs_throttled_periods_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_cfs_periods_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "内存 RSS",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "容器 cgroup RSS；与 Working Set 含义不同。可选指标未采集时留空。",
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (container_memory_rss{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1234,41 +860,42 @@
     },
     {
       "id": 15,
-      "title": "Server 各端点 5xx 比例",
+      "title": "容器运行数量趋势",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "按所选视图汇总真实 Running 状态；不使用 up 推导容器存活。",
       "gridPos": {
-        "x": 12,
-        "y": 25,
+        "x": 0,
+        "y": 30,
         "w": 12,
         "h": 8
       },
-      "description": "无请求时不补零；4xx 与 5xx 分开观察。",
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\",code=~\"5..\"}[$__rate_interval])) or 0 * sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))) / (sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(server_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])) > 0)",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (kube_pod_container_status_running{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
           },
-          "min": 0,
-          "max": 1
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
         },
         "overrides": []
       },
@@ -1289,38 +916,41 @@
     },
     {
       "id": 16,
-      "title": "Server 各端点 P95",
+      "title": "重启次数（所选时间窗口）",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "increase 按整个面板时间窗口估算；可能有小数。",
       "gridPos": {
-        "x": 0,
-        "y": 33,
+        "x": 12,
+        "y": 30,
         "w": 12,
         "h": 8
       },
-      "description": "耗时单位为秒，Grafana 自动换算为 ms/µs；分位数是直方图估计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95,sum by (le,env,cluster,namespace,${group_by:raw},operation,kind) (rate(server_requests_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__range]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1342,38 +972,57 @@
     },
     {
       "id": 17,
-      "title": "Server 各端点 P99",
+      "title": "03 · 节点资源 — 整机口径",
+      "description": "本区只受节点筛选影响，忽略命名空间、Pod、容器和视图。包含系统进程、所有工作负载及其他主机开销。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 18,
+      "title": "节点 CPU 使用率",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "1 - idle，各逻辑 CPU 求平均；不是 Pod CPU。node_uname_info 的 node 或 nodename 须对应 Kubernetes 节点名。",
       "gridPos": {
-        "x": 12,
-        "y": 33,
+        "x": 0,
+        "y": 39,
         "w": 12,
         "h": 8
       },
-      "description": "耗时单位为秒，Grafana 自动换算为 ms/µs；分位数是直方图估计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99,sum by (le,env,cluster,namespace,${group_by:raw},operation,kind) (rate(server_requests_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "max by (node) ((1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1394,52 +1043,44 @@
       }
     },
     {
-      "id": 18,
-      "type": "row",
-      "title": "03 · Client — 下游调用",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 41,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
       "id": 19,
-      "title": "Client 各端点请求速率",
+      "title": "节点内存使用率",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "1 - MemAvailable / MemTotal；只受节点筛选影响。",
       "gridPos": {
-        "x": 0,
-        "y": 42,
+        "x": 12,
+        "y": 39,
         "w": 12,
         "h": 8
       },
-      "description": "",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(client_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "max by (node) ((1 - max by (instance) (node_memory_MemAvailable_bytes) / max by (instance) (node_memory_MemTotal_bytes)) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1461,41 +1102,42 @@
     },
     {
       "id": 20,
-      "title": "Client 各端点 5xx 比例",
+      "title": "节点 Load 15m / CPU 核数",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "归一化 load，可能超过 1；不是 CPU 利用率。",
       "gridPos": {
-        "x": 12,
-        "y": 42,
+        "x": 0,
+        "y": 47,
         "w": 12,
         "h": 8
       },
-      "description": "无请求时不补零；4xx 与 5xx 分开观察。",
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(client_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\",code=~\"5..\"}[$__rate_interval])) or 0 * sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(client_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))) / (sum by (env,cluster,namespace,${group_by:raw},operation,kind) (rate(client_requests_code_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])) > 0)",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "max by (node) ((max by (instance) (node_load15) / count by (instance) (node_cpu_seconds_total{mode=\"idle\"})) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
           },
-          "min": 0,
-          "max": 1
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
         },
         "overrides": []
       },
@@ -1516,38 +1158,43 @@
     },
     {
       "id": 21,
-      "title": "Client 各端点 P95",
+      "title": "节点最满文件系统",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "各节点已采集文件系统的最高使用率；不是所有磁盘加总。",
       "gridPos": {
-        "x": 0,
-        "y": 50,
+        "x": 12,
+        "y": 47,
         "w": 12,
         "h": 8
       },
-      "description": "耗时单位为秒，Grafana 自动换算为 ms/µs；分位数是直方图估计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95,sum by (le,env,cluster,namespace,${group_by:raw},operation,kind) (rate(client_requests_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "max by (node) ((max by (instance) (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"} / (node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"} > 0))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1569,38 +1216,47 @@
     },
     {
       "id": 22,
-      "title": "Client 各端点 P99",
+      "title": "节点网络",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "主机设备总量；bond/bridge 或设备映射可能重复计算，需按实际设备拓扑调整过滤。",
       "gridPos": {
-        "x": 12,
-        "y": 50,
+        "x": 0,
+        "y": 55,
         "w": 12,
         "h": 8
       },
-      "description": "耗时单位为秒，Grafana 自动换算为 ms/µs；分位数是直方图估计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99,sum by (le,env,cluster,namespace,${group_by:raw},operation,kind) (rate(client_requests_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{operation}} / {{kind}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
+          "expr": "max by (node) ((sum by (instance) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 接收/读取",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "max by (node) ((sum by (instance) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 发送/写入",
           "range": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "Bps",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1622,51 +1278,103 @@
     },
     {
       "id": 23,
-      "type": "row",
-      "title": "04 · 数据访问 — SQL、Redis 与缓存",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 58,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 24,
-      "title": "SQL 操作 P95",
+      "title": "节点磁盘吞吐",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "主机设备总量；bond/bridge 或设备映射可能重复计算，需按实际设备拓扑调整过滤。",
       "gridPos": {
-        "x": 0,
-        "y": 59,
+        "x": 12,
+        "y": 55,
         "w": 12,
         "h": 8
       },
-      "description": "GORM 操作回调耗时，含回调处理；并非数据库服务端纯执行时间。原生 sql.DB、事务控制语句及返回游标后的扫描不覆盖；SQL 文本与参数不作标签。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,db_name,operation) (rate(database_sql_operation_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",db_name=~\"${db_name:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{db_name}} / {{operation}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
+          "expr": "max by (node) ((sum by (instance) (rate(node_disk_read_bytes_total{device!~\"loop.*|ram.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 接收/读取",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "max by (node) ((sum by (instance) (rate(node_disk_written_bytes_total{device!~\"loop.*|ram.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 发送/写入",
           "range": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "Bps",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "节点压力与 Ready 异常",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1 表示压力或非 Ready；Ready unknown 也作为异常。只受节点筛选影响。",
+      "gridPos": {
+        "x": 0,
+        "y": 63,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node,condition) (kube_node_status_condition{node=~\"${node}\",condition=~\"MemoryPressure|DiskPressure|PIDPressure\",status=\"true\"}) or max by (node,condition) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status!=\"true\"})",
+          "legendFormat": "{{node}} / {{condition}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1688,38 +1396,41 @@
     },
     {
       "id": 25,
-      "title": "SQL 慢操作次数（时间范围估算）",
+      "title": "节点可分配 CPU",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "Kubernetes allocatable 容量，不是实时空闲 CPU。",
       "gridPos": {
         "x": 12,
-        "y": 59,
+        "y": 63,
         "w": 12,
         "h": 8
       },
-      "description": "",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},db_name,operation) (increase(database_sql_slow_operations_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",db_name=~\"${db_name:regex}\"}[$__range]))",
-          "legendFormat": "{{db_name}} / {{operation}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "max by (node) (kube_node_status_allocatable{node=~\"${node}\",resource=\"cpu\",unit=\"core\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "cores",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1741,36 +1452,47 @@
     },
     {
       "id": 26,
-      "title": "Redis 调用 P95",
-      "type": "timeseries",
+      "title": "04 · 对象清单与异常定位",
+      "description": "清单保留 namespace/pod/container/node/pod_ip，方便对照 ACK 控制台。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 71,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 27,
+      "title": "Pod 清单",
+      "type": "table",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "包含当前选中的 Pod；无 IP 或未调度时字段可能为空。",
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 72,
         "w": 12,
         "h": 8
       },
-      "description": "redisotel v9.17.2 指标；命令与 pipeline 调用分开。status=error 包含 redis.Nil，不等同服务端异常。命中/未命中是连接池复用，不是缓存命中率。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,redis_connection,pool_name,type) (rate(db_client_connections_use_time_milliseconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",db_system=\"redis\",redis_connection=~\"${redis_connection:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{redis_connection}} / {{pool_name}} / {{type}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})",
+          "legendFormat": "{{${view:raw}}}",
+          "range": false,
+          "instant": true,
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
           }
@@ -1778,122 +1500,87 @@
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 27,
-      "title": "业务缓存命中率",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 67,
-        "w": 12,
-        "h": 8
-      },
-      "description": "需业务通过 metrics.NewCacheMetrics 记录Hit/Miss/Error/Load；缓存命中率=hit/(hit+miss)，网络错误单独展示，不推导自Redis池hits。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "((sum by (env,cluster,namespace,${group_by:raw},cache_name) (rate(business_cache_lookups_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",cache_name=~\"${cache_name:regex}\",result=\"hit\"}[$__rate_interval]))) or on (env,cluster,namespace,${group_by:raw},cache_name) (0 * (sum by (env,cluster,namespace,${group_by:raw},cache_name) (rate(business_cache_lookups_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",cache_name=~\"${cache_name:regex}\",result=~\"hit|miss\"}[$__rate_interval]))))) / ((sum by (env,cluster,namespace,${group_by:raw},cache_name) (rate(business_cache_lookups_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",cache_name=~\"${cache_name:regex}\",result=~\"hit|miss\"}[$__rate_interval]))) > 0)",
-          "legendFormat": "{{cache_name}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showHeader": true,
+        "cellHeight": "sm"
       }
     },
     {
       "id": 28,
-      "type": "row",
-      "title": "05 · 异步任务 — 队列、消息与定时任务",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 75,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 29,
-      "title": "Queue 任务数量（按状态）",
-      "type": "timeseries",
+      "title": "容器清单",
+      "type": "table",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "普通容器及镜像，按 Pod 元数据关联节点和 IP。",
       "gridPos": {
-        "x": 0,
-        "y": 76,
+        "x": 12,
+        "y": 72,
         "w": 12,
         "h": 8
       },
-      "description": "需显式 RegisterStats。多个实例读取共享Store时使用max去重，不能sum累加快照；同名必须指向同一逻辑Store。Redis就绪候选>1000时年龄未知，数量仍精确。",
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (env,cluster,namespace,${group_by:raw},queue_destination,state) (queue_tasks{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",queue_destination=~\"${queue_name:regex}\"})",
-          "legendFormat": "{{queue_destination}} / {{state}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "(max by (namespace,pod,container,image) (kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": false,
+          "instant": true,
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 29,
+      "title": "Pod 阶段",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Pod 状态独立于容器筛选，Container 视图下仍是 Pod 状态。",
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (${view:raw},phase) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,phase) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}} / {{phase}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1915,36 +1602,33 @@
     },
     {
       "id": 30,
-      "title": "消费最终结果速率",
-      "type": "timeseries",
+      "title": "当前等待原因",
+      "type": "table",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "仅列当前等待原因，如 CrashLoopBackOff、ImagePullBackOff；无异常时列表为空。",
       "gridPos": {
         "x": 12,
-        "y": 76,
+        "y": 80,
         "w": 12,
         "h": 8
       },
-      "description": "应用运行时处理指标，不是 Broker/Store 积压或 Kafka consumer group lag；一次消息可包含多次尝试。运行时失败、最终处理结果、失败归档结果分别统计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},queue_destination,queue_consumer,queue_result) (rate(queue_consumer_messages_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",queue_destination=~\"${queue_name:regex}\",queue_consumer=~\"${queue_consumer:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{queue_destination}} / {{queue_consumer}} / {{queue_result}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "(max by (namespace,pod,container,reason) (kube_pod_container_status_waiting_reason{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) == 1",
+          "legendFormat": "{{${view:raw}}}",
+          "range": false,
+          "instant": true,
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "suffix: 次/秒",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
+          "unit": "short",
+          "noValue": "无数据",
           "color": {
             "mode": "palette-classic"
           }
@@ -1952,107 +1636,61 @@
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showHeader": true,
+        "cellHeight": "sm"
       }
     },
     {
       "id": 31,
-      "title": "消费最终结果速率",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
+      "title": "05 · 应用黄金指标 — Foundation",
+      "description": "本区是应用埋点，不是 cAdvisor 指标。需 namespace、container 和 pod_name（或将隐藏 app_pod_label 改为 pod）。应用指标通过 namespace/pod 关联节点。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
         "x": 0,
-        "y": 84,
-        "w": 12,
-        "h": 8
-      },
-      "description": "应用运行时处理指标，不是 Broker/Store 积压或 Kafka consumer group lag；一次消息可包含多次尝试。运行时失败、最终处理结果、失败归档结果分别统计。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},kafka_destination,kafka_consumer,kafka_result) (rate(kafka_consumer_messages_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",kafka_destination=~\"${kafka_topic:regex}\",kafka_consumer=~\"${kafka_consumer:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{kafka_destination}} / {{kafka_consumer}} / {{kafka_result}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "suffix: 次/秒",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "y": 88,
+        "w": 24,
+        "h": 1
       }
     },
     {
       "id": 32,
-      "title": "Job 完成速率（按结果）",
+      "title": "请求速率",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
       "gridPos": {
-        "x": 12,
-        "y": 84,
+        "x": 0,
+        "y": 89,
         "w": 12,
         "h": 8
       },
-      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。运行中数量表示已进入执行的任务，跳过/等待调度不是一次已执行任务。",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job,status) (rate(job_runs_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{exported_job}} / {{status}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "suffix: 次/秒",
+          "unit": "reqps",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -2074,51 +1712,99 @@
     },
     {
       "id": 33,
-      "type": "row",
-      "title": "任务耗时与失败",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 92,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 34,
-      "title": "消费消息 P95（含重试流程）",
+      "title": "服务端 5xx 比例",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
       "gridPos": {
-        "x": 0,
-        "y": 93,
+        "x": 12,
+        "y": 89,
         "w": 12,
         "h": 8
       },
-      "description": "应用运行时处理指标，不是 Broker/Store 积压或 Kafka consumer group lag；一次消息可包含多次尝试。运行时失败、最终处理结果、失败归档结果分别统计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,queue_destination,queue_consumer) (rate(queue_consumer_message_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",queue_destination=~\"${queue_name:regex}\",queue_consumer=~\"${queue_consumer:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{queue_destination}} / {{queue_consumer}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\",code=~\"5..\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) or on (${view:raw}) (0 * sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "title": "请求 P95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
+      "gridPos": {
+        "x": 0,
+        "y": 97,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -2140,38 +1826,41 @@
     },
     {
       "id": 35,
-      "title": "消费消息 P95（含重试流程）",
+      "title": "应用进程 CPU（核）",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
       "gridPos": {
         "x": 12,
-        "y": 93,
+        "y": 97,
         "w": 12,
         "h": 8
       },
-      "description": "应用运行时处理指标，不是 Broker/Store 积压或 Kafka consumer group lag；一次消息可包含多次尝试。运行时失败、最终处理结果、失败归档结果分别统计。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,kafka_destination,kafka_consumer) (rate(kafka_consumer_message_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",kafka_destination=~\"${kafka_topic:regex}\",kafka_consumer=~\"${kafka_consumer:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{kafka_destination}} / {{kafka_consumer}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(process_cpu_seconds_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "cores",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -2193,38 +1882,41 @@
     },
     {
       "id": 36,
-      "title": "Job 执行 P95",
+      "title": "应用进程 RSS",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
       "gridPos": {
         "x": 0,
-        "y": 101,
-        "w": 12,
+        "y": 105,
+        "w": 24,
         "h": 8
       },
-      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。运行中数量表示已进入执行的任务，跳过/等待调度不是一次已执行任务。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,exported_job) (rate(job_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{exported_job}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(process_resident_memory_bytes{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": true,
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "bytes",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -2246,201 +1938,390 @@
     },
     {
       "id": 37,
-      "title": "Job 失败次数（最近 1 小时）",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
+      "title": "06 · 采集可用性 — 区分未接入与真实为零",
+      "description": "检查整个数据源是否存在各类核心指标，不代表 exporter 当前健康或全部目标齐全。缺失为 0，不给业务指标补零。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "x": 12,
-        "y": 101,
-        "w": 12,
-        "h": 8
-      },
-      "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。运行中数量表示已进入执行的任务，跳过/等待调度不是一次已执行任务。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job) (increase(job_runs_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\",status=\"failure\"}[1h]))",
-          "legendFormat": "{{exported_job}} · {{env}} / {{cluster}} / {{namespace}} / {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "x": 0,
+        "y": 113,
+        "w": 24,
+        "h": 1
       }
     },
     {
       "id": 38,
-      "title": "Job 跳过速率",
-      "type": "timeseries",
+      "title": "Kubernetes 对象状态",
+      "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
       "gridPos": {
         "x": 0,
-        "y": 109,
-        "w": 8,
-        "h": 8
+        "y": 114,
+        "w": 4,
+        "h": 4
       },
-      "description": "按 disabled、already_running、pending_full 展示未进入 Handler 的周期触发；不计入任务执行失败。",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job,reason) (rate(job_triggers_skipped_total{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{exported_job}} / {{reason}} · {{${group_by:raw}}}",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "suffix: 次/秒",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "color": {"mode": "palette-classic"}
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]},
-        "tooltip": {"mode": "multi", "sort": "desc"}
-      }
-    },
-    {
-      "id": 39,
-      "title": "Job 当前等待数",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 8,
-        "y": 109,
-        "w": 8,
-        "h": 8
-      },
-      "description": "DelayIfRunning 策略中当前等待准入的调用数；按实例求和表示所选实例的总等待数。",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (env,cluster,namespace,${group_by:raw},exported_job) (job_pending{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"})",
-          "legendFormat": "{{exported_job}} · {{${group_by:raw}}}",
-          "range": true
+          "expr": "(count(kube_pod_info) > bool 0) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
           },
-          "color": {"mode": "palette-classic"}
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未检测到",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "有样本",
+                  "color": "green"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]},
-        "tooltip": {"mode": "multi", "sort": "desc"}
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
       }
     },
     {
-      "id": 40,
-      "title": "Job 等待 P95",
-      "type": "timeseries",
+      "id": 39,
+      "title": "容器 CPU",
+      "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
       "gridPos": {
-        "x": 16,
-        "y": 109,
-        "w": 8,
-        "h": 8
+        "x": 4,
+        "y": 114,
+        "w": 4,
+        "h": 4
       },
-      "description": "DelayIfRunning 等待结束时的耗时，result 区分 admitted 与 canceled；取消不代表任务执行失败。",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,${group_by:raw},le,exported_job,result) (rate(job_wait_duration_seconds_bucket{foundation=\"true\",env=~\"${env:regex}\",cluster=~\"${cluster:regex}\",namespace=~\"${namespace:regex}\",app=~\"${app:regex}\",node=~\"${node:regex}\",pod=~\"${pod:regex}\",instance=~\"${instance:regex}\",exported_job=~\"${task_name:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{exported_job}} / {{result}} · {{${group_by:raw}}}",
-          "range": true
+          "expr": "(count(container_cpu_usage_seconds_total) > bool 0) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "showPoints": "never"
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
           },
-          "color": {"mode": "palette-classic"}
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未检测到",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "有样本",
+                  "color": "green"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]},
-        "tooltip": {"mode": "multi", "sort": "desc"}
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 40,
+      "title": "容器内存",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "gridPos": {
+        "x": 8,
+        "y": 114,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count(container_memory_working_set_bytes) > bool 0) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未检测到",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "有样本",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 41,
+      "title": "节点 CPU",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "gridPos": {
+        "x": 12,
+        "y": 114,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count(node_cpu_seconds_total) > bool 0) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未检测到",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "有样本",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 42,
+      "title": "节点身份",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "gridPos": {
+        "x": 16,
+        "y": 114,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count(node_uname_info) > bool 0) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未检测到",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "有样本",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 43,
+      "title": "应用请求埋点",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "gridPos": {
+        "x": 20,
+        "y": 114,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count(server_requests_code_total) > bool 0) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未检测到",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "有样本",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
       }
     }
   ],
-  "annotations": {
-    "list": []
-  },
-  "description": "按应用变量复用：总览关注健康、流量、延迟和积压；组件明细用于定位原因。",
-  "links": [
-    {
-      "title": "应用总览",
-      "type": "link",
-      "url": "/d/foundation-overview",
-      "includeVars": true,
-      "keepTime": true,
-      "targetBlank": false
-    },
-    {
-      "title": "组件排障明细",
-      "type": "link",
-      "url": "/d/foundation-components",
-      "includeVars": true,
-      "keepTime": true,
-      "targetBlank": false
-    }
-  ]
+  "description": "ACK 全视图：对象存活、容器资源、节点资源与应用指标。一个数据源对应一个集群；Instance 视图为 Pod IP。节点资源仅受节点筛选影响。"
 }

@@ -1,95 +1,58 @@
 #!/usr/bin/env python3
-"""验证已启动的本地 Compose：真实请求、采集身份、Grafana 导入和全部聚合查询。"""
+"""在已接入 ACK 指标的 Prometheus 上验证四种视图，可选检查 Grafana 导入。"""
+import argparse
 import json
-import re
-import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-# 有界业务请求提供真实样本，不生成模拟监控数据。
-for _ in range(10):
-    with urllib.request.urlopen("http://127.0.0.1:18000/hello", timeout=3) as response:
-        assert response.status == 200
-with urllib.request.urlopen("http://127.0.0.1:19001/readyz", timeout=3) as response:
-    assert response.status == 200
-dashboards = []
-for path in sorted((Path(__file__).parent / "grafana/dashboards").glob("*.json")):
-    source = json.loads(path.read_text())
-    with urllib.request.urlopen("http://127.0.0.1:13000/api/dashboards/uid/"+source["uid"],timeout=5) as response:
-        dashboard = json.load(response)["dashboard"]
-    assert dashboard["panels"] == source["panels"], "Grafana 未加载当前面板: "+source["uid"]
-    assert all(not p.get("collapsed",False) for p in source["panels"] if p["type"]=="row")
-    assert len({p["id"] for p in source["panels"]})==len(source["panels"])
-    for p in source["panels"]:
-        unit = p.get("fieldConfig",{}).get("defaults",{}).get("unit","")
-        if unit == "percentunit":
-            defaults = p["fieldConfig"]["defaults"]
-            assert defaults.get("min") == 0 and defaults.get("max") == 1, p["title"]
-        if p["type"] != "row" and any(word in p["title"] for word in ["P95","P99","耗时","平均等待时间"]):
-            assert unit in ("s","ms"), (p["title"],unit)
-    dashboards.append(dashboard)
-    print("Grafana provisioned dashboard:",dashboard["title"])
-with urllib.request.urlopen("http://127.0.0.1:19090/api/v1/targets", timeout=5) as response:
-    targets = json.load(response)["data"]["activeTargets"]
-assert targets, "Prometheus 没有发现应用目标"
-for target in targets:
-    if target["labels"].get("foundation") != "true" and target["labels"].get("foundation_probe") != "true":
-        continue
-    assert target["health"] == "up", target["lastError"]
-    assert all(
-        name in target["labels"]
-        for name in ["env", "cluster", "namespace", "app", "node", "pod", "instance"]
-    )
-    print("target labels", target["labels"])
-
-deadline = time.monotonic() + 45
-while True:
-    query = urllib.parse.urlencode(
-        {"query": 'rate(server_requests_code_total{foundation="true"}[1m])'}
-    )
-    with urllib.request.urlopen(
-        "http://127.0.0.1:19090/api/v1/query?" + query, timeout=5
-    ) as response:
-        ready = json.load(response)["data"]["result"]
-    if ready:
-        break
-    if time.monotonic() >= deadline:
-        raise RuntimeError("45 秒内未获得两次有效请求指标采样，请检查 Prometheus Targets")
-    time.sleep(1)
-
-def panels(items):
-    for panel in items:
-        yield panel
-        yield from panels(panel.get("panels", []))
+from check_dashboards import VIEWS, expression, panels
 
 
-# 默认示例必须真的有运行时与两条健康探测样本，不能只验证空查询语法。
-for metric_name in ["go_cpu_classes_gc_total_cpu_seconds_total", "go_sched_latencies_seconds_count", "process_virtual_memory_bytes"]:
-    query = urllib.parse.urlencode({"query": metric_name + '{foundation="true"}'})
-    with urllib.request.urlopen("http://127.0.0.1:19090/api/v1/query?" + query, timeout=5) as response:
-        samples = json.load(response)["data"]["result"]
-    assert samples and all(sample["metric"].get("target") for sample in samples), metric_name
-query = urllib.parse.urlencode({"query": 'probe_success{foundation_probe="true"}'})
-with urllib.request.urlopen("http://127.0.0.1:19090/api/v1/query?" + query, timeout=5) as response:
-    probes = json.load(response)["data"]["result"]
-assert {sample["metric"]["probe"] for sample in probes} == {"healthz", "readyz"}
-assert all(float(sample["value"][1]) == 1 and sample["metric"].get("target") for sample in probes)
-print("runtime, config, readiness and liveness samples verified")
+def read_json(url):
+    # 返回体有界，连接与读取失败直接暴露，不把采集失败解释为无异常。
+    with urllib.request.urlopen(url, timeout=15) as response:
+        data = response.read(8 * 1024 * 1024 + 1)
+    if len(data) > 8 * 1024 * 1024:
+        raise RuntimeError('监控响应超过 8 MiB，请缩小查询范围')
+    return json.loads(data)
 
-count = 0
-for group in ["app", "pod", "instance", "node", "target"]:
-    for panel in (p for dashboard in dashboards for p in panels(dashboard["panels"])):
-        for target in panel.get("targets", []):
-            expression = target["expr"].replace("${group_by:raw}", group)
-            expression = expression.replace("$__rate_interval", "1m").replace("$__range", "15m")
-            expression = re.sub(r"\$\{[a-z_]+:regex\}", ".*", expression)
-            url = "http://127.0.0.1:19090/api/v1/query?" + urllib.parse.urlencode(
-                {"query": expression}
-            )
-            with urllib.request.urlopen(url, timeout=5) as response:
-                result = json.load(response)
-            assert result["status"] == "success", (panel["title"], result)
-            count += 1
-print("PromQL queries succeeded:", count)
-print("dashboard panels:", sum(1 for d in dashboards for _ in panels(d["panels"])))
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--prometheus-url', required=True)
+    parser.add_argument('--grafana-url')
+    args = parser.parse_args()
+
+    def query(expr):
+        url = args.prometheus_url.rstrip('/') + '/api/v1/query?' + urllib.parse.urlencode({'query': expr})
+        result = read_json(url)
+        if result.get('status') != 'success':
+            raise RuntimeError(f'Prometheus 查询失败: {result.get("error", "unknown error")}')
+        return result['data']['result']
+
+    # 先验证基础设施接入；普通 Compose 不具备这些指标，不能把空查询当作联调成功。
+    for metric in ['kube_pod_info', 'kube_node_info', 'container_cpu_usage_seconds_total',
+                   'container_memory_working_set_bytes', 'node_uname_info', 'node_cpu_seconds_total']:
+        if not query('count(' + metric + ')'):
+            raise RuntimeError(f'缺少 ACK 核心指标 {metric}；请检查对应采集组件')
+    count = 0
+    for path in sorted((Path(__file__).parent / 'grafana/dashboards').glob('*.json')):
+        dashboard = json.loads(path.read_text())
+        if args.grafana_url:
+            loaded = read_json(args.grafana_url.rstrip('/') + '/api/dashboards/uid/' + dashboard['uid'])['dashboard']
+            if loaded['panels'] != dashboard['panels'] or loaded['templating'] != dashboard['templating']:
+                raise RuntimeError('Grafana 尚未加载当前版本: ' + dashboard['title'])
+        for panel in panels(dashboard):
+            for target in panel.get('targets', []):
+                for view in VIEWS:
+                    samples = query(expression(target['expr'], view))
+                    if panel['title'] in {'CPU 使用量', '内存工作集', '节点 CPU 使用率', '节点内存使用率'} and not samples:
+                        raise RuntimeError(panel['title'] + ' 无数据；检查标签和节点关联')
+                    count += 1
+        print('查询通过:', dashboard['title'])
+    print('四种视图的 PromQL 查询通过:', count, '；不代表浏览器变量插值已验证')
+
+
+if __name__ == '__main__':
+    main()

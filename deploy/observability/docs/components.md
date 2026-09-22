@@ -1,8 +1,8 @@
 # 组件指标与面板接入
 
-[同一 Dashboard](../grafana/dashboards/foundation.json) 的折叠分区复用 datasource、env、cluster、namespace、app、node、pod、instance 和 group_by。普通 Prometheus 与 Kubernetes 使用相同 JSON；业务可以更换 UID 后复制到自己的 Folder，也可以共享面板并保存带筛选的 URL。数据源权限仍需单独管理。
+[应用组件](../grafana/dashboards/foundation-components.json) 复用容器概览的 datasource、view、namespace、node、pod、container；通过 kube_pod_info 关联节点/IP，支持四种视图。应用指标需附加 namespace/container 和 pod_name（或按面板说明选择 pod）。数据源权限仍需单独管理，普通非 Kubernetes 采集不适用此关联。
 
-采集前提：组件与 HTTP `/metrics` 共用同一个 `metrics.Provider`，组件观测没有被关闭，采集目标附带 `foundation="true"` 及身份标签，且操作实际发生。只创建 Counter/Histogram 不一定立即生成样本；速率至少需要两次抓取，不能把 No data 显示成成功或零错误。本地最小示例没有接入下表组件，新增分区留空是正常现象；业务接入之后自动展示。
+采集前提：组件与 HTTP `/metrics` 共用同一个 `metrics.Provider`，组件观测没有被关闭，采集目标身份标签与面板所选筛选条件匹配，且操作实际发生。只创建 Counter/Histogram 不一定立即生成样本；速率至少需要两次抓取，不能把 No data 显示成成功或零错误。本地最小示例没有接入下表组件，新增分区留空是正常现象；业务接入之后自动展示。
 
 | 分区 | 当前指标与额外筛选 | 启用方式与边界 |
 | --- | --- | --- |
@@ -14,7 +14,7 @@
 | Job | job_runs_total、job_duration_seconds、job_running、job_triggers_skipped_total、job_pending、job_wait_duration_seconds；exported_job/status/reason/result | Manager 注入 Provider；默认启用，可由 job.WithMetrics(false) 关闭。执行指标与准入跳过、等待指标分开解释 |
 | Lock | lock_operations_total、lock_operation_duration_seconds、lock_released_hold_duration_seconds；lock_name/operation/result | 业务构造时显式用 lock.WithMetrics 包装原 Locker，再注入业务，见 [Lock 文档](../../../pkg/lock/README.md) |
 
-Redis 新增 redis_connection 标签保留配置连接身份，解决多个 client 共用地址时样本无法区分的问题。旧版本序列没有该标签，按 All 可查看旧数据，按具体连接只展示新数据。使用多个进程时，应先按 instance 排障，再切到 app 汇总。
+Redis 新增 redis_connection 标签保留配置连接身份，解决多个 client 共用地址时样本无法区分的问题。旧版本序列没有该标签，按 All 可查看旧数据，按具体连接只展示新数据。使用多个进程时，应先按 Pod/Container 排障，再切换视图比较。
 
 Job 的原始指标标签名是 `job`，Prometheus 抓取也有 `job` 标签。模板统一 `honor_labels: false`，所以任务名成为 `exported_job`；不要修改成 honor_labels=true 来迁就图表，否则可能破坏目标身份。组件产生的 `operation` 仅由各自分区使用；顶层接口筛选只影响 Server 和 Client。
 
@@ -37,7 +37,7 @@ flowchart TD
     E --> F[Prometheus 抓取管理端口并附加身份标签]
     F --> G{抓取成功且存在样本?}
     G -- 否 --> H([检查开关 目标标签 操作与采集错误])
-    G -- 是 --> I[选择组件分区及 App Pod 实例或 Node]
+    G -- 是 --> I[选择组件分区及命名空间 Pod 容器和视图]
     I --> J[按组件身份聚合计数或直方图桶]
     J --> K{出现失败或延迟增长?}
     K -- 否 --> L([继续观察])
@@ -56,17 +56,17 @@ flowchart TD
 | SQL 慢操作 | database_sql_slow_operations_total、database_sql_slow_threshold_seconds | 有效 GORM slow_threshold，默认 200ms；0s 禁用。按连接和操作统计，无 SQL 文本标签；计数不等于日志行数，详见 Database README |
 | SQL 执行 | database_sql_operations_total、database_sql_operation_duration_seconds | 跟随 Database 指标开关的 GORM 回调；含框架回调处理，不覆盖原生 sql.DB、事务控制语句或游标后续扫描 |
 | Redis 业务缓存 | business_cache_lookups_total、business_cache_loads_total、business_cache_load_duration_seconds | metrics.NewCacheMetrics 由业务调用 Hit/Miss/Error/Load，缓存分区可直接展示，不能从连接池 hits/misses 推导 |
-| Kafka | kafka_consumergroup_lag | 可选 Kafka exporter 示例、抓取配置和 Lag 分区；按共享 Kafka 集群/消费组/Topic/分区，不受 App/Pod 筛选；Broker 磁盘/ISR 仍需独立采集 |
+| Kafka | kafka_consumergroup_lag | 可选 Kafka exporter 示例与抓取配置；默认面板不包含 Lag，独立面板按共享 Kafka 集群/消费组/Topic/分区展示；Broker 磁盘/ISR 仍需独立采集 |
 | Queue | queue_tasks、queue_oldest_ready_age_seconds、queue_stats_collection_success、queue_stats_oldest_ready_known | 显式 queue.RegisterStats；数据库单条聚合、Redis只读Lua。Redis ready候选>1000时年龄未知并省略；要求context_timeout_enabled:true。共享快照用max去重不累加 |
 | Job 调度 | job_triggers_skipped_total、job_pending、job_wait_duration_seconds | 本进程 gate 已记录 disabled、already_running、pending_full，以及 admitted/canceled 等待结果；不提供跨进程启用状态、协调器或续租语义 |
 | Kubernetes | Pod working set、CPU throttling、重启、OOM、期望/就绪副本 | kubelet/cAdvisor 与 kube-state-metrics；普通服务没有这些概念 |
 
-Job 调度跳过/等待已随 Manager 指标直接暴露；Kubernetes 专属资源仍需接入对应平台采集。业务自定义指标和缓存接入步骤见 [业务指标指南](business-metrics.md)，健康、Kafka 与 MySQL 部署边界见 [外部采集](external-metrics.md)。
+Job 调度跳过/等待已随 Manager 指标直接暴露；容器概览已集成 ACK 的 CPU/内存/存活与节点资源，仍需平台实际采集。业务自定义指标和缓存接入步骤见 [业务指标指南](business-metrics.md)，健康、Kafka 与 MySQL 部署边界见 [外部采集](external-metrics.md)。
 
 指标维度与开销设计可参照 [Prometheus 埋点规范](https://prometheus.io/docs/practices/instrumentation/)；服务端基础设施的独立采集见 [Prometheus Exporter 列表](https://prometheus.io/docs/instrumenting/exporters/)，需逐项确认部署版本与权限。
 
-Queue 数量属于共享 Store 快照，推荐单独选择一个采集实例，或对同一 app/queue_destination 使用 max 去重；不同 Store 必须使用不同逻辑队列名。数据库聚合可能扫描队列表，设置采集超时并按规模调整频率。Redis 年龄不可用时不是零等待；不要只看年龄告警而忽略采集成功与年龄可用性。
+Queue 数量属于共享 Store 快照，推荐单独选择一个采集实例，或对同一逻辑 Store/queue_destination 使用 max 去重；不同 Store 必须使用不同逻辑队列名。数据库聚合可能扫描队列表，设置采集超时并按规模调整频率。Redis 年龄不可用时不是零等待；不要只看年龄告警而忽略采集成功与年龄可用性。
 
 Go Runtime 新分区展示线程、VMS/RSS、堆/栈、对象与分配速率、GC频率/平均暂停/CPU估计开销、调度P95。配置状态指标及 Config 分区已移除；来源错误查看官方 Config 日志，热更新生效情况通过组件日志与实际参数验证。
 
-本地可复现实测见 [components 示例](../../../examples/components/README.md)。Queue 空轮询产生的 `redis.Nil` 也会计入 SDK 非成功返回，空闲时比例可能接近 100%；应结合 `error_type`、连接超时与 Queue 运行时错误判断，不能据此认定 Redis 服务故障。
+组件业务指标的本地可复现实测见 [components 示例](../../../examples/components/README.md)。Queue 空轮询产生的 `redis.Nil` 也会计入 SDK 非成功返回，空闲时比例可能接近 100%；应结合 `error_type`、连接超时与 Queue 运行时错误判断，不能据此认定 Redis 服务故障。

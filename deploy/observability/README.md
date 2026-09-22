@@ -1,95 +1,75 @@
-# 应用监控模板与本地部署
+# ACK 容器与应用全视图监控
 
-[应用总览](grafana/dashboards/foundation.json) 与 [组件排障明细](grafana/dashboards/foundation-components.json) 两份 Dashboard 同时用于 Kubernetes、普通服务器与本地开发。业务无需修改 Foundation 的 metrics 实现；Prometheus 在抓取时补齐部署身份标签，使 Go、进程、框架和业务指标具有相同的筛选维度。
+导入 [ACK · 容器概览](grafana/dashboards/foundation.json) 和 [ACK · 应用组件](grafana/dashboards/foundation-components.json)，选择已接入 ACK 默认监控的 Prometheus 数据源。两份面板分别使用 UID `ack-container-overview` 和 `ack-application-components`，不以历史面板为兼容目标。
 
-## 本地完整体验
+## 页面规划
 
-前置条件：Docker Engine/Compose 可用、网络能拉取镜像，宿主机 13000、18000、19001、19090 端口空闲。仓库根目录执行：
+容器概览从存活与异常开始，依次展示工作负载 CPU/内存、节点整机资源、对象清单、应用黄金指标和采集可用性。应用组件页集中展示 Server/Client、SQL、Redis、Queue、Kafka、Job、Lock、OSS、缓存与 Go Runtime。
 
-```sh
-make -C deploy/observability check
-make -C deploy/observability up
-curl --fail http://127.0.0.1:18000/hello
-curl --fail http://127.0.0.1:19001/readyz
-```
+顶部支持 Pod、Node、Instance（Pod IP）、Container 四种视图；筛选包括命名空间、节点、Pod 和容器。应用组件按相同对象范围下钻。节点区始终是整机口径且只受节点筛选影响；工作负载区的 Node 视图仅汇总所选工作负载。完整的口径、标签与失败边界见 [面板说明](docs/dashboard.md)。
 
-打开 [Grafana 应用概览](http://127.0.0.1:13000/d/foundation-overview) 和 [Prometheus Targets](http://127.0.0.1:19090/targets)。本地 Grafana 使用匿名 Viewer，登录表单禁用；只绑定 loopback，便于直接查看。线上需接入现有 Grafana 认证和权限体系，不沿用本地匿名配置。文件 provisioning 的面板不允许 UI 保存修改；复制到业务 Grafana 后可另存。
+## ACK 接入
 
-首次构建下载 Go 依赖与镜像；示例固定 Prometheus v3.5.5、Grafana 12.3.11，作为验证基线，不声明为最新版本。更新版本后重新执行配置、规则和面板验证。Prometheus 每 15s 抓取，Grafana 每 30s 刷新；持续调用 `/hello` 产生业务流量，等待至少两次抓取，再查看速率图。
+一个数据源对应一个集群，需具备 kube-state-metrics、kubelet/cAdvisor、node-exporter。默认 ACK 集成不保证所有可选指标启用；先看“采集可用性”区块，再检查缺失组件。核心指标有样本也不代表所有目标健康。
 
-只启动应用、Prometheus、Grafana。没有部署 node-exporter、日志存储、链路后端或 Alertmanager，因此机器图表默认为空，告警在 Prometheus 中计算但不会发送通知。Compose 在 macOS/Windows 上运行于 Linux VM；即使额外部署 node-exporter，也不能把 Linux VM 指标当作宿主操作系统指标。
+应用指标另外需要 namespace/container/pod_name 采集标签；若应用采集使用 pod，按面板说明修改隐藏 app_pod_label。基础设施区不依赖应用 target_info 或 foundation 标签。node-exporter 的 node 或 nodename 需与 Kubernetes 节点名匹配；虚拟节点可能没有整机指标。
 
-停止示例（保留卷中的历史数据）：
-
-```sh
-make -C deploy/observability down
-```
-
-## 普通服务器接入
-
-在每个实例启动 `/metrics` 管理端口。以 [standalone.yaml](prometheus/standalone.yaml) 为普通 Prometheus 配置模板，和 [alerts.yaml](prometheus/alerts.yaml) 放在同一个配置目录，替换地址、env/cluster/namespace/app/node。`127.0.0.1` 只适合 Prometheus 与服务同一网络命名空间；若 Prometheus 在容器里，改成可达的主机地址。不要把负载均衡或反向代理地址当成实例地址，否则无法可靠区分实例。
-
-多个 App 或实例各增加一个 static_configs 条目；同一机器上的多个 App 使用相同 node、不同 app/instance。非 K8s 使用 `namespace=standalone`、`pod=none`。在机器上已有 node-exporter 时启用对应抓取；其 env、cluster、node 必须与该机应用完全一致。机器图表关联失败时不会悄悄显示另一台机器。
-
-应用 `/metrics` 是普通 HTTP 管理接口，不继承业务鉴权；限制为监控网络访问。现有 Prometheus 将这些 scrape_configs、规则文件路径合并到自己的配置，不覆盖已有采集任务。执行 `promtool check config` 后，通过已有运维流程重载。
-
-## Kubernetes 接入
-
-使用 [Kubernetes 文档](../kubernetes/README.md) 的 Deployment、ServiceMonitor 和 PrometheusRule 包装。无需额外部署第二套 Prometheus/Grafana。同一份 JSON 可人工导入，也可以包装成带 `grafana_dashboard=1` 的 ConfigMap，交给 kube-prometheus-stack 的 Grafana sidecar。
-
-## 一份模板如何给各业务使用
-
-建议优先保留共享 Dashboard，通过变量和 URL 保存各应用入口。例如：
+直接导入两份 JSON 并选择真实数据源即可。共享入口示例：
 
 ```text
-/d/foundation-overview?var-env=prod&var-cluster=cluster-a&var-namespace=orders&var-app=orders-api
+/d/ack-container-overview?var-namespace=orders&var-view=view_pod
 ```
 
-其余变量保持 All。业务希望自定义面板时，导入 JSON、选择 Prometheus 数据源、**更换唯一 UID**、修改标题并保存默认 App。手动复制的 Dashboard 后续不会自动继承上游更新，需要按版本合并；重复使用同一个 UID 会覆盖原有面板。纯复用方可使用共享模板和链接，避免重复维护。
+数据源权限负责访问隔离；筛选项不是租户权限控制。文件 provisioning 应更新源 JSON 后同步，避免界面编辑被覆盖。
 
-Grafana 的变量筛选不是租户隔离。Folder 权限控制面板访问；如要求各业务只能查询自己的数据，还需在数据源或监控后端实现权限与隔离，不能依靠隐藏 app 变量。
+## 验证与打包
 
-筛选含义、指标来源和聚合边界见 [面板说明](docs/dashboard.md)。
+先确保 Docker 可用；以下命令均从仓库根目录执行：
+
+```sh
+# 合成 ACK 数据验证，不访问实际监控数据。
+make -C deploy/observability check-dashboards
+
+# 如已有包含 promtool 的本地容器，可复用，避免额外启动镜像。
+make -C deploy/observability check-dashboards PROMTOOL_CONTAINER=foundation-observability-prometheus-1
+
+# 仅生成 ConfigMap 和示例规则包装，不连接集群。
+make -C deploy/observability render-kubernetes
+```
+
+打包产物位于 `/tmp/foundation-monitoring/dashboard.json` 和 `rules.yaml`。JSON 是面板源文件，不手改打包产物。`rules.yaml` 仍是原有示例应用告警，不是新 ACK 全视图面板的完整告警策略；部署前须按实际平台调整，不应因导入面板就直接启用告警。
+
+真实联调需使用能直接访问 Prometheus HTTP API 的地址，可选传入能读取面板 API 的 Grafana 地址；认证按平台正常流程处理，不在仓库写入凭据：
+
+```sh
+make -C deploy/observability smoke \
+  PROMETHEUS_URL=http://127.0.0.1:19090 \
+  GRAFANA_URL=http://127.0.0.1:13000
+```
+
+此处地址仅示意已有的本地端口转发；必须指向具备 ACK 指标的服务。smoke 检查核心指标存在、资源与节点关联有结果、四种视图查询及可选的 Grafana JSON 导入，不代替浏览器变量插值和视觉验收。
 
 ```mermaid
 flowchart TD
-    A([选择部署环境]) --> B{Kubernetes?}
-    B -- 是 --> C[ServiceMonitor 发现每个 Pod 补齐 Node 等标签]
-    B -- 否 --> D[static_configs 声明每个进程地址及机器标签]
-    C --> E[Prometheus 抓取应用管理端口]
-    D --> E
-    E --> F{抓取成功?}
-    F -- 否 --> G[up 为 0 满足持续时间后触发 TargetDown]
-    F -- 是 --> H[保存框架业务与进程指标]
-    I[可选外部 node-exporter] --> J[采集机器资源 使用相同 env cluster node]
-    J --> H
-    H --> K[Grafana 变量筛选与维度聚合]
-    K --> L([查看应用或机器视角])
-    H --> M[Prometheus 计算告警规则]
-    G --> M
-    M --> N{配置了外部 Alertmanager?}
-    N -- 否 --> O([仅在 Prometheus 查看告警状态])
-    N -- 是 --> P[Alertmanager 分组路由至已配置通知渠道]
-    P --> Q([按 runbook 排障])
+    A([核对 ACK 数据源与采集标签]) --> B[check-dashboards 合成数据验证]
+    B --> C{验证通过?}
+    C -- 否 --> D([按失败查询修正 不部署])
+    C -- 是 --> E[导入两份 JSON 或生成 ConfigMap]
+    E --> F[选择真实单集群数据源和筛选范围]
+    F --> G[运行 smoke 并检查 Grafana 视图]
+    G --> H{指标存在且标签关联成功?}
+    H -- 否 --> I([检查采集可用性 标签和权限])
+    H -- 是 --> J([投入使用并关联平台日志排障])
 ```
 
-## 验证与维护
+## 本地应用示例的范围
 
-- `make -C examples/minimal test`：实际执行 HTTP handler，验证业务及框架指标名称/标签，并运行 race/vet。
-- `make -C deploy/observability check`：Compose 语法、两份 Prometheus 配置、全部告警表达式和规则测试。
-- `make -C deploy/observability smoke`：在本地 Compose 已启动后产生 10 个真实请求，核验就绪、目标标签、Grafana 导入以及四种聚合维度的全部查询。速率样本最多等待 45s；机器查询可执行不代表已采到机器数据。
-- `make -C deploy/observability render-kubernetes`：由同一 JSON 和 alerts.yaml 生成 `/tmp/foundation-monitoring/dashboard.json`、`rules.yaml`，不连接集群；生成结果不手改，调整源文件后重生成。
-- Dashboard 的每个查询应在实际 Prometheus 上执行；JSON 合法或 Grafana 接受导入不代表指标存在。机器图表还需在具有 node-exporter 的环境验证。
+现有 Compose 仍用于 Foundation HTTP、组件指标和示例告警体验，提供 Prometheus、Grafana、blackbox；它不是 ACK 集群，没有 kube-state-metrics/cAdvisor/node-exporter 的完整基础数据，不能用它验证新容器面板的数据完整性。启动、停止和配置检查入口仍为 `make -C deploy/observability up/down/check`，其工具和固定镜像见 Makefile。`check` 验证现有 Compose、Prometheus 与告警，不等于面板验证。
 
-遵循官方 [Grafana provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/)、[变量](https://grafana.com/docs/grafana/latest/visualizations/dashboards/variables/) 与 [Prometheus 配置](https://prometheus.io/docs/prometheus/latest/configuration/configuration/) 约定。
+普通服务器的 [standalone.yaml](prometheus/standalone.yaml) 也是应用采集示例；新面板面向 ACK，不伪造普通进程的 Pod 和节点身份。Kubernetes ConfigMap 接入见 [Kubernetes 示例](../kubernetes/README.md)。
 
-组件观测已包含 Redis、Database、Kafka、Queue、Job、Client 和可选 Lock 包装的分区；启用条件与尚未覆盖的指标见 [组件指标说明](docs/components.md)。最小 Compose 继续只运行 HTTP 示例，不会自动创建这些业务依赖。
-
-新增 Go Runtime、Config、Health、SQL、Queue Store、OSS、业务缓存及共享 Kafka Lag 分区。默认实例明细图例包含 App / Node / Pod / 地址，并始终保留环境、集群与命名空间。需要汇总时再选择App或Node；共享队列快照和Kafka位点有专门去重规则。
-
-- [业务指标接入指南与可复用任务说明](docs/business-metrics.md)：构造、埋点、命名、Grafana查询及缓存命中率。
-- [Ready/Health与Kafka外部采集](docs/external-metrics.md)：本地、普通Prometheus、Kubernetes配置。
-
-本地Compose现在额外运行blackbox用于真实健康探测；业务示例仍仅HTTP。Kafka exporter是可选叠加配置，数据库/队列/OSS/缓存需业务实际接入后才产生样本。
-
-完整的本地组件业务流量与预期/实际指标核验，见 [components 示例](../../examples/components/README.md)。该示例在当前监控项目增加独立 app，不影响最小模板的依赖范围。
+- [组件指标](docs/components.md)：启用条件与业务口径。
+- [业务埋点](docs/business-metrics.md)：Counter、Histogram 与缓存指标接入。
+- [外部采集](docs/external-metrics.md)：blackbox、Kafka Lag、MySQL；与节点/cAdvisor 基础指标不同。
+- [排障](docs/troubleshooting.md)：标签、采集、查询与组件诊断。
+- [components 示例](../../examples/components/README.md)：本地真实业务流量验证，不替代 ACK 联调。

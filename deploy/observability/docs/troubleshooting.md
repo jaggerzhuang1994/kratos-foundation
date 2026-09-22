@@ -1,6 +1,6 @@
 # 应用与监控排障
 
-先记录 env、cluster、namespace、app、pod、instance、node 和发生时间，按同一时间窗口比较 Dashboard 与日志。告警规则是 [alerts.yaml](../prometheus/alerts.yaml)，指标边界见 [面板说明](dashboard.md)。
+先记录数据源、namespace、node、pod、container、视图和发生时间；示例告警还需记录其 env、cluster、namespace、app、pod、node，按同一时间窗口比较 Dashboard 与日志。告警规则是 [alerts.yaml](../prometheus/alerts.yaml)，指标边界见 [面板说明](dashboard.md)。
 
 ## 本地启动失败
 
@@ -16,7 +16,7 @@ docker compose -f deploy/observability/compose.yaml logs --tail=100 app promethe
 ## 面板没有数据或变量为空
 
 1. 在 Prometheus Targets 检查目标是否存在、健康和最后错误，确认数据源指向正确环境。
-2. 查询 `up{foundation="true"}`，检查全部目标标签。使用本模板必须有 app/env/cluster/namespace/node/pod/instance；普通部署 pod=none。
+2. 查询 kube_pod_info、container_cpu_usage_seconds_total、node_uname_info，检查标准 namespace/pod/container 和节点名；应用指标另需 pod_name（或将隐藏 app_pod_label 改为 pod）。新面板不使用 target_info 发现对象。Job 任务名依赖默认 honor_labels=false 下的 exported_job。
 3. 清除旧的级联筛选。切换 env/app 后旧 pod/instance 可能已不属于当前集合；切回 All 或重新选择。
 4. 请求 `/hello` 后等待两次抓取；没有请求时，方法计数器可能尚未产生序列，不能据此判断采集失败。
 5. 检查实际 `/metrics` 的名称；查询必须是 server_requests_seconds_bucket，不能写成重复的 bucket_bucket。原生 HandleFunc 不自动进入方法中间件。
@@ -27,10 +27,10 @@ docker compose -f deploy/observability/compose.yaml logs --tail=100 app promethe
 ```sh
 curl --fail http://127.0.0.1:19001/metrics
 curl --fail --get http://127.0.0.1:19090/api/v1/query \
-  --data-urlencode 'query=up{foundation="true"}'
+  --data-urlencode 'query=up'
 ```
 
-不要通过 `or vector(0)` 全面填零掩盖缺失数据。机器图为空时检查 node-exporter 是否存在，以及它和应用的 env/cluster/node 是否完全一致。Pod 的 hostname 与 Node 不一致是正常的。机器正在运行但上面没有被选中的应用目标时，本面板会排除该机器。
+不要通过 `or vector(0)` 全面填零掩盖缺失数据。容器概览已包含 ACK 容器和节点资源；健康探测与 Kafka Lag 使用独立面板。节点图为空时检查 node_uname_info 的 node/nodename 是否匹配 kube_node_info.node；多集群同名对象须隔离数据源。
 
 ## FoundationTargetDown
 
@@ -125,7 +125,7 @@ flowchart TD
 
 ## 健康探测与配置状态
 
-Health分区取自真实HTTP探测。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。
+独立健康面板应取自真实HTTP探测；默认应用面板不包含 Health 分区。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。
 
 Config watcher为0时先核对应用是否正在停止或使用自定义配置Manager；不要机械重启业务。版本是进程内本地接受序号，不能据此判断多Pod配置内容一致；最近成功时间很旧但没有发布新配置并不异常。订阅积压增长、回调均值升高时关联订阅处理日志；接受快照不代表每个组件成功应用，必要时组件应另加自己的应用结果事件。
 

@@ -17,8 +17,8 @@
 [监控部署入口](deploy/observability/README.md) 提供本地 Docker Compose、普通 Prometheus 采集配置及可导入的 Grafana Dashboard；
 [Kubernetes 示例](deploy/kubernetes/README.md) 接入已有 kube-prometheus-stack，通过 ServiceMonitor 和 PrometheusRule 复用同一面板与规则。
 
-面板支持环境、集群、命名空间、App、机器/Node、Pod、实例和接口筛选；应用图可按 App/Pod/实例/Node 聚合。
-整机指标需额外的 node-exporter，和应用进程指标分开解释。详见 [维度说明](deploy/observability/docs/dashboard.md)、
+默认面板面向 ACK，覆盖容器/Pod 存活、cAdvisor CPU/内存和 node-exporter 整机指标，支持 Pod、Node、Instance（Pod IP）、Container 视图。
+Foundation 应用组件使用同一 Kubernetes 对象范围下钻；健康探测与 Kafka Lag 仍使用独立面板。详见 [维度说明](deploy/observability/docs/dashboard.md)、
 [告警接入](deploy/observability/docs/alerts.md) 和 [排障手册](deploy/observability/docs/troubleshooting.md)。
 
 ## 配置参考

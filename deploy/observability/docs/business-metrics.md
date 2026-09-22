@@ -11,7 +11,7 @@
 | 当前有多少任务、库存或连接 | Gauge / ObservableGauge | business_pending_orders |
 | 缓存有效命中多少、回源多久 | 已封装 CacheMetrics | business_cache_lookups_total、business_cache_load_duration_seconds |
 
-标签使用固定枚举：operation=create/cancel，result=success/error。禁止订单 ID、用户 ID、原始 URL/SQL、错误原文或无限增长的租户列表。App/环境/Node/Pod/实例身份由 Prometheus 抓取配置附加，业务不要重复声明 `app`、`instance`、`job` 等目标标签。
+标签使用固定枚举：operation=create/cancel，result=success/error。禁止订单 ID、用户 ID、原始 URL/SQL、错误原文或无限增长的租户列表。job/instance 由 Prometheus 抓取配置附加；App/环境/Node/Pod 属于可选平台标签，业务不要重复声明 `app`、`instance`、`job` 等目标标签。
 
 命名包含业务前缀、基础单位（秒/字节）和计数后缀；实际导出名称需通过 `/metrics` 确认，OTel 会规范化点号和单位。Histogram 边界应围绕业务 SLO 设置；秒值不能填入毫秒数。
 
@@ -64,33 +64,33 @@ Provider cleanup 由原有 Wire 组装层负责；本例 instruments 没有独�
 
 ## 3. Prometheus 确认采集
 
-在消费项目实际管理端口执行 `curl -fsS http://127.0.0.1:9001/metrics`，确认业务名称、单位、标签；再到 Prometheus 查询 `business_orders_total{app="orders-api"}`，确认 env/cluster/namespace/app/node/pod/instance/target 都由抓取端附加。
+在消费项目实际管理端口执行 `curl -fsS http://127.0.0.1:9001/metrics`，确认业务名称、单位、标签；再到 Prometheus 查询 `business_orders_total`，确认 namespace/pod_name/container 能与 kube_pod_info 的 namespace/pod 关联。
 
-`target` 是本模板的实例明细标签：`App / Node / Pod / 抓取地址`。普通服务用 pod=none；Kubernetes 使用真实 Pod。旧部署如果没有 target，先更新抓取 relabel 配置，再选择“实例明细”；旧历史序列没有新标签。所有实例必须直接采集，不能把业务负载均衡地址作为唯一 target。
+默认面板不使用示例 target 标签，新 ACK 面板需要真实 Kubernetes 身份。所有实例必须直接采集，不能把业务负载均衡地址作为唯一采集目标。
 
 ## 4. 展示到 Grafana
 
 共享面板会自动发现变量的候选值，但不会自动猜测任意业务指标的含义和图表类型。业务可复制 Foundation JSON、更换 `uid` 和标题后导入自己的 Folder；保留 datasource 与身份变量，再新增图表。不要复用原 UID 覆盖公共模板。文件 provisioning 的面板修改应回写源 JSON。
 
-下面示例使用逐实例明细，始终保留 env/cluster/namespace/target；如需全 App 汇总，将聚合列表的 `target` 替换成 `app`。过滤选择器必须保留，不能只按一个 app 名跨环境查询。
+下面是独立业务图表的固定容器明细示例，前提是业务指标具有 namespace/pod_name/container。使用面板现有 namespace、pod、container 变量；这两个片段不随 view 切换，也不关联 node。需要完整四视图时，复制当前请求速率/P95 图表的 Pod 元数据关联和视图表达式，再替换指标名与业务标签。
 
 请求速率：
 
 ```promql
-sum by (env,cluster,namespace,target,operation,result) (
-  rate(business_orders_total{foundation="true",env=~"${env:regex}",cluster=~"${cluster:regex}",namespace=~"${namespace:regex}",app=~"${app:regex}",node=~"${node:regex}",pod=~"${pod:regex}",instance=~"${instance:regex}"}[$__rate_interval])
+sum by (namespace,container,pod_name,operation,result) (
+  rate(business_orders_total{namespace=~"${namespace}",pod_name=~"${pod}",container=~"${container}"}[$__rate_interval])
 )
 ```
 
 P95（单位设为 seconds）：
 
 ```promql
-histogram_quantile(0.95, sum by (le,env,cluster,namespace,target,operation) (
-  rate(business_order_duration_seconds_bucket{foundation="true",env=~"${env:regex}",cluster=~"${cluster:regex}",namespace=~"${namespace:regex}",app=~"${app:regex}",node=~"${node:regex}",pod=~"${pod:regex}",instance=~"${instance:regex}"}[$__rate_interval])
+histogram_quantile(0.95, sum by (le,namespace,container,pod_name,operation) (
+  rate(business_order_duration_seconds_bucket{namespace=~"${namespace}",pod_name=~"${pod}",container=~"${container}"}[$__rate_interval])
 ))
 ```
 
-图例设为 `{{env}} / {{cluster}} / {{namespace}} / {{target}} / {{operation}} / {{result}}`，P95 无 result 时移除末尾。先对每条 Counter 求 rate 再聚合，先合并 Histogram 桶再算分位数；禁止 sum(rate) 的总量直接称作平均延迟、平均多个 P95、或相加多个进程重复读取的共享库存 Gauge。
+图例设为 `{{namespace}} / {{pod_name}} / {{container}} / {{operation}} / {{result}}`，P95 无 result 时移除末尾。先对每条 Counter 求 rate 再聚合，先合并 Histogram 桶再算分位数；禁止 sum(rate) 的总量直接称作平均延迟、平均多个 P95、或相加多个进程重复读取的共享库存 Gauge。
 
 错误率需以错误请求数除总请求数：已有成功流量而从未出现错误标签时，用相同分组的 `0 * 总量` 补错误分子；无总流量时保留空值。可复制模板 Client 分区的完整公式，替换指标和结果标签，不要使用无条件 `or vector(0)` 掩盖抓取故障。
 
@@ -126,6 +126,6 @@ flowchart TD
 
 可以把下段作为消费项目 AI 工具的任务说明或本地 skill 内容，不依赖全局安装：
 
-> 为当前业务接入 Foundation 指标。先读本项目 AGENTS.md、Makefile 和 Foundation 的 metrics/业务指标指南，列出指标事件、单位、固定标签、SLO 与清理顺序。复用已有 Provider，在构造期创建 instrument，禁止业务 ID/原始错误/SQL 标签。为真实成功、失败及无流量情况验证导出；根据 Counter/Histogram/Gauge 的实际语义新增 Grafana 图表，保留 env/cluster/namespace/app/node/pod/instance 筛选和可区分实例的图例。共享状态 Gauge 去重，不累加；不要伪造未接入的指标。同步中文使用说明和流程图，运行本项目相关测试与 PromQL 校验，报告实际验证和未联调项。
+> 为当前业务接入 Foundation 指标。先读本项目 AGENTS.md、Makefile 和 Foundation 的 metrics/业务指标指南，列出指标事件、单位、固定标签、SLO 与清理顺序。复用已有 Provider，在构造期创建 instrument，禁止业务 ID/原始错误/SQL 标签。为真实成功、失败及无流量情况验证导出；根据 Counter/Histogram/Gauge 的实际语义新增 Grafana 图表，复用 kube_pod_info 对象关联及 namespace/pod/container 筛选和四种 view和可区分实例的图例。共享状态 Gauge 去重，不累加；不要伪造未接入的指标。同步中文使用说明和流程图，运行本项目相关测试与 PromQL 校验，报告实际验证和未联调项。
 
 参考：[Prometheus 指标设计](https://prometheus.io/docs/practices/instrumentation/)、[指标类型](https://prometheus.io/docs/concepts/metric_types/)。

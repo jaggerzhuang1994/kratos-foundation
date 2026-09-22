@@ -1,88 +1,83 @@
-# Dashboard 维度与业务复用
+# ACK 容器全视图面板
 
-入口：[Dashboard JSON](../grafana/dashboards/foundation.json)、[部署说明](../README.md)。总览与组件明细两份面板共享 App 筛选；变量决定选择哪些数据，聚合维度决定如何汇总。同一 App 的多个副本可以合并，也可以分别比较。
+[容器概览](../grafana/dashboards/foundation.json) 面向 ACK 容器、Pod 和节点运行状态；[应用组件](../grafana/dashboards/foundation-components.json) 用于 Foundation 请求、数据库、消息和任务排障。重新设计后使用独立 UID：`ack-container-overview`、`ack-application-components`。
 
-## 页面组织与单位
+## 页面与视图
 
-默认打开应用总览：首组聚焦健康、流量、错误、延迟、CPU、内存和积压风险；下方按 Server、Client、数据访问、异步任务排列。完整的连接池、Redis、配置、Go 运行时与机器细节放在 [组件排障明细](../grafana/dashboards/foundation-components.json)，通过顶部链接保留时间范围和筛选跳转。所有分组默认展开。
+容器概览按六个区块组织：
 
-按排障用途划分 Dashboard，按 app 变量选择应用。业务专属 KPI 可另建 Dashboard；仅为了不同 app 复制整套基础图表，会增加维护成本。
+1. **存活与异常**：Ready 节点、Running Pod、Ready Pod、运行中容器、等待中容器和窗口重启次数。
+2. **工作负载资源**：CPU 核数、内存工作集、CPU/内存相对容器 Limit、CPU 限流周期、RSS 和容器运行趋势。
+3. **节点资源**：整机 CPU/内存、归一化 Load、最满文件系统、网络和磁盘吞吐、节点压力、可分配 CPU。
+4. **对象清单与异常**：Pod/容器清单、Pod 阶段和等待原因。
+5. **应用黄金指标**：Foundation 请求速率、5xx、P95、进程 CPU/RSS。
+6. **采集可用性**：数据源内是否存在各类核心样本，区分未接入与真实业务零值。
 
-`ops/s` 是每秒操作次数，即吞吐量；现在图表显示“次/秒”。耗时使用 s/ms 并自动换算；错误比例使用百分比。窗口请求数由 increase 估算，可能有小数，不是审计计数。Server/Client 明细按稳定 operation 与协议区分请求量、状态码、4xx/5xx、平均耗时、P95/P99；未经方法中间件的路由和未知路径 404 不包含在内。
+顶部先选数据源，再选视图、命名空间、节点、Pod、容器。应用接口筛选只影响请求指标；组件页另外提供连接、队列、任务等筛选。
 
-SQL 慢操作复用有效 GORM slow_threshold（默认 200ms，0s 禁用）；计数包含超阈值的失败操作，不等于实际输出日志行数。明细同时展示阈值、慢操作速率和窗口次数。阈值合并多实例时取最大值；核对配置时选择单实例。未发生慢操作时计数序列可能不存在。
+| 视图 | 图例与聚合 | 解释 |
+| --- | --- | --- |
+| Pod | namespace / pod | 所选容器按 Pod 求和；不同命名空间不合并 |
+| Container | namespace / pod / container | 每个 Pod 内各容器分别展示 |
+| Node | node | 工作负载区为该节点上**所选工作负载**之和；不是整机用量 |
+| Instance（Pod IP） | namespace / pod / pod_ip | Kubernetes 运行实例地址；不是 Prometheus 的 exporter 抓取地址 |
+
+视图切换作用于工作负载趋势和应用组件图表；首屏数量是当前筛选范围总量。**节点资源区只受节点筛选影响**，忽略命名空间、Pod、容器及视图。Pod 状态和 Pod 清单不受容器筛选影响；Container 视图下 Pod 阶段仍表示 Pod 状态。未调度的 Pod 允许出现在 Pod/Instance 视图，Node 视图显示“未调度”，IP 可能为空。
+
+## 接入契约
+
+一个 Prometheus 数据源对应一个集群。面板不猜测阿里云实例采用 cluster、cluster_id 还是其他跨集群标签；聚合多个集群的数据源须先隔离集群，否则同名 namespace/pod/node 会被合并或产生多对多匹配。变量不能作为权限隔离。
+
+| 来源 | 必要指标/标签 | 用途 |
+| --- | --- | --- |
+| kube-state-metrics | kube_pod_info：namespace/pod/node/pod_ip；kube_node_info：node | 发现对象及关联节点/IP |
+| kube-state-metrics | kube_pod_status_phase、kube_pod_status_ready、kube_pod_container_status_running/waiting/restarts_total | 存活、就绪、异常和重启 |
+| kube-state-metrics | kube_pod_container_resource_limits：namespace/pod/container/resource/unit | 容器 Limit 比例；不是 Pod 级资源预算 |
+| kubelet/cAdvisor | container_cpu_usage_seconds_total、container_memory_working_set_bytes：namespace/pod/container | 容器资源用量 |
+| node-exporter | node_cpu_seconds_total、node_memory_MemAvailable_bytes、node_memory_MemTotal_bytes；instance | 节点资源 |
+| node-exporter | node_uname_info：instance + node 或 nodename | 关联到 kube_node_info.node；优先 node，其次 nodename，名称必须真实一致 |
+| Foundation 应用 | 业务指标 + namespace/container/pod_name | 应用与 Kubernetes 对象关联 |
+
+应用使用 `pod` 而不是 `pod_name` 时，将两份 JSON 中隐藏变量 `app_pod_label` 的 current 改为 `pod`。它是固定白名单标签名，不是任意 PromQL。基础设施区直接使用标准 `pod`，不要求 Foundation 的 target_info、foundation 标签或 job 过滤。节点内部仅通过标准 instance 关联同一个 node-exporter 的数据，不把它当成容器身份。
+
+`container_memory_rss`、CFS 限流、部分磁盘/状态指标可能不在当前 ACK 默认采集列表中；对应图表留空，需按实际版本核对。ECI/虚拟节点可能没有 node-exporter，节点图表不能伪造物理机数据。未采集应用埋点不会影响基础设施区。
+
+Pod 元数据需在当前查询时刻仍存在。短任务结束并被删除后，跨较长窗口的 increase 无法再关联当前元数据，会遗漏已消失对象；本面板用于实时排障，不作为精确账单、SLA 或审计报表。
+
+## 计算边界
+
+- Running 不等于 Ready；容器运行状态不是 `up`。`up` 只证明抓取成功。容器统计不含 init container。
+- 计数和资源查询先按对象去除采集副本，再聚合。cAdvisor 排除空 container 和 `POD` sandbox，避免把父 cgroup 与普通容器重复相加。
+- Limit 比例仅纳入同时有使用量与正 Limit 的容器。无 Limit 容器不进入分子或分母，避免错误比率；全部无 Limit 时留空。这里是容器 Limit，不覆盖 Kubernetes Pod 级资源预算。
+- CPU 使用量单位为核；CPU 限流按周期比例计算；Working Set、cgroup RSS、应用进程 RSS 分别标注，不混用。
+- 节点 CPU 为各逻辑 CPU 的非 idle 比例；内存为 `1 - MemAvailable / MemTotal`。Load 可能超过 1，不是百分比。节点磁盘图取最满文件系统，网络/磁盘吞吐需按实际设备拓扑排除重复设备。
+- 应用 P95 先合并桶再算分位数，不平均分位数。无请求时错误率留空；有请求但没有 5xx 序列时补同范围的零。
+- Queue 快照使用 max 去重，不跨实例累加共享库存；同一聚合视图中的同名队列必须对应同一 Store。
+- 只有“采集可用性”将缺失样本明确显示为 0，业务和资源图不使用 `or vector(0)` 伪造健康。可用性表示存在样本，不证明每个目标都正常。
+- 变量使用默认 `${pod}` 插值，交给 Prometheus 数据源转义；动态聚合仅使用固定四项 `${view:raw}` 白名单，避免先前 `:regex` 的点号转义错误。
 
 ```mermaid
 flowchart TD
-    A([打开应用总览]) --> B[选择 App 和实例维度]
-    B --> C{健康、错误、延迟或积压异常?}
-    C -- 否 --> D([继续观察常用图表])
-    C -- 是 --> E[保留时间和筛选进入组件排障明细]
-    E --> F[按 operation、队列、任务或连接定位]
-    F --> G{需要具体失败原因?}
-    G -- 是 --> H[关联应用日志和 Trace]
-    G -- 否 --> I([确认指标范围与趋势])
+    A([选择单集群数据源]) --> B[读取 Kubernetes 对象与采集可用性]
+    B --> C{基础指标存在?}
+    C -- 否 --> D([检查 ACK 采集组件与指标列表 不补业务零值])
+    C -- 是 --> E[选择 namespace node pod container 和视图]
+    E --> F[cAdvisor 按对象去重 关联 Pod 元数据]
+    E --> G[node-exporter 按 instance 关联真实节点名]
+    E --> H[应用 pod_name 或 pod 归一化 关联 Pod 元数据]
+    F --> I{身份匹配且无跨集群冲突?}
     H --> I
+    G --> J{节点名与 kube_node_info 一致?}
+    I -- 否 --> K([无数据或查询错误 检查标签与采集日志])
+    J -- 否 --> K
+    I -- 是 --> L[按所选视图聚合工作负载与应用指标]
+    J -- 是 --> M[按所选节点展示整机资源]
+    L --> N([结合清单 状态 日志与 Trace 定位])
+    M --> N
 ```
 
-## 标签契约
+## 来源与验证
 
-| 标签 / 变量 | 含义 | Kubernetes 来源 | 普通服务来源 |
-| --- | --- | --- | --- |
-| datasource | Prometheus 数据源 | Grafana 已有数据源 | Grafana 已有或本地 provisioned 数据源 |
-| env | local/dev/test/pre/prod 等部署环境 | Service environment 标签 | static_configs labels，与 APP_ENV 保持一致 |
-| cluster | 集群或部署区域的稳定名称 | ServiceMonitor 固定 replacement | 例如 vm-production、local |
-| namespace | 资源所属命名空间 | Kubernetes namespace | 固定 standalone |
-| app | 稳定业务应用名 | Service app.kubernetes.io/name | static_configs labels |
-| node | 机器/Node 名 | Pod 所在 Node 名 | 运维管理的稳定机器名 |
-| pod | Pod 名 | Kubernetes Pod 名 | 固定 none |
-| instance | 每个抓取端点 | PodIP:管理端口 | 主机地址:管理端口 |
-| operation | 稳定接口名 | 方法中间件 | 方法中间件 |
-| group_by | app/pod/instance/node/target | 查询时聚合 | 查询时聚合 |
+设计依据：[阿里云基础指标列表](https://www.alibabacloud.com/help/en/prometheus/developer-reference/container-cluster-metrics)、[ACK 可观测最佳实践](https://help.aliyun.com/zh/ack/ack-managed-and-ack-dedicated/user-guide/observability-best-practices)、[kube-state-metrics Pod 指标](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/pod-metrics.md)、[Node 指标](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/cluster/node-metrics.md)。按本次检索的指标契约设计，不代表已连接你的 ACK 验证标签。
 
-`foundation="true"` 用于标记应用采集目标，避免将 Prometheus、Grafana 或其他服务混进应用变量。标签在抓取时统一附加，不需要给每个业务计数器重复添加。app/node 取部署身份，不能用随机进程 UUID 代替。service.instance.id 等 OTel Resource 信息通常出现在 target_info 等导出信息中，不保证每个原生 Go 指标都自带这些属性。
-
-变量从 env 到 instance 级联、多选并支持 All；operation 仅影响请求量、错误率和延迟图，不过滤进程内存。group_by 为固定白名单单选；新增默认“实例明细”target=App / Node / Pod / 地址，便于一张图中区分所有实例。聚合时始终保留 env、cluster、namespace，以免不同环境中的同名 App 合并。
-
-当前不添加用户 ID、订单 ID、trace ID 等高基数筛选。后续确有需求可增加 region、team、version，但应先有稳定采集标签、控制取值数量并验证滚动发布语义。接口变量对应 operation，不能用原始带 ID URL 代替。
-
-## 三种视角
-
-- **App**：选 app，group_by=app；多个副本的请求数、CPU 核数、RSS 求和。错误率为总错误数/总请求数，P95 先合并直方图桶后计算，不平均各 Pod 的 P95。
-- **Pod / 实例**：group_by=pod 或 instance；namespace 和 pod 可定位单个副本。非 K8s 所有 pod=none，比较进程时选 instance。
-- **机器**：group_by=node 汇总该节点上所选应用的进程资源。下方机器区另从 node-exporter 展示整机 CPU、内存、根分区及网络；使用 env/cluster/node 与所选实例所在机器相交，避免看错机器。整机资源包括其他 App，不能当成当前 App 独占资源。
-
-## 指标边界
-
-| 图表 | 数据与限制 |
-| --- | --- |
-| 可采集实例数 | sum(up)；抓取成功不代表 ready，更不证明业务成功；已从发现中消失的目标不会继续 up=0 |
-| 请求速率 / 5xx | server_requests_code_total；仅进入方法中间件的请求；Kratos gRPC 同样使用 HTTP 映射 code |
-| 请求 P95 | server_requests_seconds_bucket；按实际直方图桶插值估算，低流量时结合窗口请求数与均值判断 |
-| 进程 CPU | rate(process_cpu_seconds_total)，单位核；不是百分比，不除以宿主机核心数 |
-| RSS / Go 堆 | process_resident_memory_bytes / go_memstats_heap_alloc_bytes；不等于整个 Pod working set |
-| 配置拒绝 | Manager 拒绝快照的次数，不代表组件逐项热更新的应用结果 |
-| 机器资源 | node-exporter；本地 Compose 不启用，不伪造数据，不将无数据显示为零 |
-
-同一模板已增加 Client、Database、Redis、Kafka、Queue、Job、Lock 的默认展开分区，并增加各组件的连接、Topic、队列、任务和业务锁名称筛选。组件变量仅影响所属分区，身份筛选对所有组件生效；最小示例没有这些依赖，未接入组件时对应面板留空。完整指标、启用方式与限制见 [组件指标说明](components.md)。Kafka Lag 通过独立 exporter 接入；Queue 状态通过可选 StatsProvider 接入。
-
-```mermaid
-flowchart TD
-    A([打开面板]) --> B[选择 Prometheus 与 env cluster namespace app]
-    B --> C[级联选择 node pod instance]
-    C --> D{要查看哪个层次?}
-    D -- 应用 --> E[按 group_by 汇总所选进程与请求]
-    D -- 机器 --> F[求所选实例所在机器集合]
-    F --> G{node-exporter 标签匹配且有数据?}
-    G -- 否 --> H([留空 按排障文档检查采集])
-    G -- 是 --> I[展示机器整体资源]
-    E --> J{是请求图表?}
-    J -- 是 --> K[应用 operation 筛选]
-    J -- 否 --> L([展示进程与配置指标])
-    K --> M([展示速率 错误比例或桶聚合 P95])
-    I --> N([按机器查看 不作单 App 资源归因])
-```
-
-业务可共享面板 URL，也可更换 UID 后导入到业务 Folder 并保存默认筛选。变量与 Folder 都不能替代数据源级权限隔离。文件 provisioning 后的变更应在源 JSON 中维护，再重部署，避免被下一次同步覆盖。
-
-新增 `target` 抓取标签不改变既有 app/node/pod/instance 语义；历史样本没有新标签，升级采集配置后再选择实例明细。共享Queue状态使用max去重；Kafka Lag按共享集群和消费组展示，不支持按Pod归因。配置版本始终逐实例展示。
+仓库根目录执行 `make -C deploy/observability check-dashboards`：使用固定版本 promtool，覆盖四种视图、缺失数据、跨 namespace 同名 Pod、采集副本去重、sandbox 排除、Limit 分母、节点关联和错误率回退。真实 ACK 联调和部署方法见 [入口文档](../README.md)。

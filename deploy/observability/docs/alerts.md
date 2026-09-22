@@ -1,5 +1,7 @@
 # 告警规则与通知接入
 
+本文规则仍用于原有示例应用采集标签，不是新版 ACK 容器全视图的完整告警策略。导入新面板不代表应直接部署这些规则；需按实际集群身份、容量与阈值另行核对。
+
 [alerts.yaml](../prometheus/alerts.yaml) 是普通 Prometheus 和 Kubernetes PrometheusRule 的唯一规则源；[规则测试](../prometheus/alerts.test.yaml) 随规则一起维护。阈值是演示基线，业务应按流量、SLO、硬件和维护窗口调整。
 
 | 告警 | 条件 | 持续时间 | 处理入口 |

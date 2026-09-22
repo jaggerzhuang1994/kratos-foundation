@@ -15,7 +15,7 @@ make -C examples/components exercise
 
 `up` 合并 [监控 Compose](../../deploy/observability/compose.yaml)，使用同一个 `foundation-observability` 本地项目，保留 minimal-api 并新增 components-api、Redis、Kafka、Kafka exporter 和 OSS 协议模拟服务。会重建应用并重新加载 Prometheus；不会连接生产依赖。首次需要拉取镜像。
 
-- Grafana：<http://127.0.0.1:13000/d/foundation-overview?var-app=components-api&var-group_by=target>
+- Grafana：<http://127.0.0.1:13000/d/ack-container-overview>
 - 业务入口：`POST http://127.0.0.1:18010/demo/run`，每次生成独立 run ID。
 - 指标及健康：`http://127.0.0.1:19011/metrics`、`/healthz`、`/readyz`。
 - `exercise` 默认五轮、间隔五秒；指定轮数：`python3 examples/components/exercise.py --rounds 10`。仅有限轮次，不会持续压测。
@@ -89,7 +89,7 @@ flowchart TD
     X --> Z
 ```
 
-面板选 `App=components-api` 查看本例；选 All 比较两个应用。`实例明细` 图例保留 app/node/pod/instance，避免同名 Pod 或多机器混淆；公共身份标签由 Prometheus 目标配置提供。Kafka lag 是共享集群指标，使用 kafka_cluster/group/topic 筛选，不错误地绑定业务 app。
+当前面板已面向 ACK 重新设计，需要 kube-state-metrics、cAdvisor 和 node-exporter，以及可关联的 namespace/pod/container。此普通 Compose 业务示例不提供完整 Kubernetes 身份，不能直接作为新版面板的真实联调环境；业务指标仍可在 Prometheus 查询。Kafka Lag 使用独立 exporter 面板。
 
 ## 验证入口
 
@@ -98,7 +98,7 @@ make -C examples/components generate
 make -C examples/components test
 python3 examples/components/oss-emulator.py --self-test
 make -C deploy/observability check
-make -C deploy/observability smoke
+make -C deploy/observability check-dashboards
 ```
 
 `test` 是无需外部服务的 Go race + vet，含本地 HTTP/SQLite/OSS 协议测试；真实 Docker 业务与指标核验是 `exercise`。面板查询验证见 [监控说明](../../deploy/observability/README.md)，业务自定义指标接入见 [业务指标指南](../../deploy/observability/docs/business-metrics.md)。
