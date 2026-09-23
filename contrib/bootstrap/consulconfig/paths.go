@@ -1,52 +1,25 @@
 package consulconfig
 
 import (
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
+	"path"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 )
 
-// NewDefaultRemoteConfigPathsProvider 返回按优先级排列的十二层远程路径。
-// 环境单文件保留在环境目录，避免被基础层 name/*.yaml 匹配而混入其他环境。
-// configs 先于 secrets；每组公共先于应用、基础先于环境、单文件先于同名目录片段。
-func NewDefaultRemoteConfigPathsProvider() bootstrap.RemoteConfigPathsProvider {
-	return func(_ appinfo.AppInfo, environment string, directory bootstrap.RemoteConfigDirName, name bootstrap.RemoteConfigName) []string {
-		dir := string(directory)
-		configName := string(name)
-		return []string{
-			"configs/common*.yaml",
-			"configs/" + environment + "/common*.yaml",
-			"configs/" + dir + "/" + configName + ".yaml",
-			"configs/" + dir + "/" + configName + "/*.yaml",
-			"configs/" + dir + "/" + environment + "/" + configName + ".yaml",
-			"configs/" + dir + "/" + configName + "/" + environment + "/*.yaml",
-			"secrets/common*.yaml",
-			"secrets/" + environment + "/common*.yaml",
-			"secrets/" + dir + "/" + configName + ".yaml",
-			"secrets/" + dir + "/" + configName + "/*.yaml",
-			"secrets/" + dir + "/" + environment + "/" + configName + ".yaml",
-			"secrets/" + dir + "/" + configName + "/" + environment + "/*.yaml",
-		}
-	}
-}
+// RemoteConfigDirs 是业务指定的有序 Consul KV 目录列表。
+type RemoteConfigDirs []string
 
-// NewDefaultLocalConfigPathsProvider 返回文件优先、目录按应用展开、否则按 glob 加载的路径函数。
-// Stat 仅在调用返回的函数时执行；已有字面路径中的通配符字符不作 glob 解释。
-func NewDefaultLocalConfigPathsProvider() bootstrap.LocalConfigPathsProvider {
-	return func(info appinfo.AppInfo, environment string, location bootstrap.LocalConfigPath) ([]string, error) {
-		path := string(location)
-		fileInfo, err := os.Stat(path)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("stat local config path: %w", err)
+// RemoteConfigPaths 是相对于每个远程目录的有序路径模板列表。
+type RemoteConfigPaths []string
+
+// NewDefaultRemoteConfigPaths 按目录顺序展开每组相对路径，返回独立的完整路径列表。
+// 不执行模板替换或路径模式解析；空目录列表或空路径列表会禁用远程配置来源。
+func NewDefaultRemoteConfigPaths(dirs RemoteConfigDirs, paths RemoteConfigPaths) bootstrap.RemoteConfigPaths {
+	result := make(bootstrap.RemoteConfigPaths, 0, len(dirs)*len(paths))
+	for _, dir := range dirs {
+		for _, pattern := range paths {
+			result = append(result, path.Join(dir, pattern))
 		}
-		if err == nil && fileInfo.IsDir() {
-			return []string{filepath.Join(path, info.Name()+".yaml"), filepath.Join(path, environment, info.Name()+".yaml")}, nil
-		}
-		// 普通文件原样返回；不存在的路径留给文件源展开 glob 并处理无匹配情况。
-		return []string{path}, nil
 	}
+	return result
 }

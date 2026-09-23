@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -106,27 +107,22 @@ func TestGeneratedDriverAssembly(t *testing.T) {
 	}
 	info := appinfo.New("drivers")
 	for _, tt := range []struct {
-		name           string
-		build          func(appinfo.AppInfo, bootstrap.LocalConfigPath) (*driverAssembly, func(), error)
-		wantName       string
-		wantConfigName string
+		name       string
+		build      func(appinfo.AppInfo, bootstrap.LocalConfigPaths) (*driverAssembly, func(), error)
+		wantRemote bootstrap.RemoteConfigPaths
 	}{
-		{"directory argument", func(info appinfo.AppInfo, path bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
-			return initializeDrivers(info, path, "orders")
-		}, "orders", info.Name()},
-		{"directory provider", initializeDriversWithDirectoryProvider, "shared-orders", info.Name()},
-		{"name provider", initializeDriversWithNameProvider, "shared-orders", "shared-config"},
+		{"path arguments", func(info appinfo.AppInfo, paths bootstrap.LocalConfigPaths) (*driverAssembly, func(), error) {
+			return initializeDrivers(info, paths, bootstrap.RemoteConfigPaths{"configs/{{app}}/{{version}}/*.yaml"})
+		}, bootstrap.RemoteConfigPaths{"configs/{{app}}/{{version}}/*.yaml"}},
+		{"paths provider", initializeDriversWithPathsProvider, bootstrap.RemoteConfigPaths{"configs/shared-orders/{{env}}/shared-config.yaml", "secrets/shared-orders/{{env}}/shared-config.yaml"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			application, cleanup, err := tt.build(info, bootstrap.LocalConfigPath(path))
+			application, cleanup, err := tt.build(info, bootstrap.LocalConfigPaths{path})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(application.Directory) != tt.wantName {
-				t.Fatalf("config directory = %q, want %q", application.Directory, tt.wantName)
-			}
-			if string(application.Name) != tt.wantConfigName || application.App.Name() != info.Name() {
-				t.Fatalf("config name=%q app name=%q", application.Name, application.App.Name())
+			if !slices.Equal(application.LocalPaths, []string{path}) || !slices.Equal(application.RemotePaths, tt.wantRemote) || application.App.Name() != info.Name() {
+				t.Fatalf("local=%v remote=%v app=%q", application.LocalPaths, application.RemotePaths, application.App.Name())
 			}
 			cleanup()
 			cleanup()

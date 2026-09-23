@@ -69,21 +69,16 @@ func initializeComponents(sources config.Sources, version string) (*kratos.App, 
 
 func newRegistrar() registry.Registrar { return nil }
 
-func initializeDrivers(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath, directory bootstrap.RemoteConfigDirName) (*driverAssembly, func(), error) {
+func initializeDrivers(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPaths, remotePaths bootstrap.RemoteConfigPaths) (*driverAssembly, func(), error) {
 	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }
 
-func initializeDriversWithDirectoryProvider(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
-	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, customRemoteConfigDirName, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+func initializeDriversWithPathsProvider(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPaths) (*driverAssembly, func(), error) {
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, customRemoteConfigDirs, customRemoteConfigPatterns, consulconfig.NewDefaultRemoteConfigPaths, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }
 
 func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, sources config.Sources) *bootstrap.Spec {
 	return bootstrap.NewSpec(application, servers, jobs, bootstrap.ConfigSources{}).Configuration(func() (config.Sources, error) { return sources, nil })
-}
-
-func initializeDriversWithNameProvider(info appinfo.AppInfo, localConfigPath bootstrap.LocalConfigPath) (*driverAssembly, func(), error) {
-	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSetWithCustomRemoteConfigName, customRemoteConfigDirName, customRemoteConfigName, componentsBoot, wire.Struct(new(driverAssembly), "*"))
-	return nil, nil, nil
 }

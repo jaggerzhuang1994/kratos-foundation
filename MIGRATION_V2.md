@@ -515,7 +515,25 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-旧驱动 provider set 统一为 `BaseProviderSet`；自定义 Job Coordinator 的变体已删除，不保留别名。默认 local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 NewConfigSources 只组装 ConfigSources；环境选择、校验和延迟加载由 bootstrap.NewSpec 实现。业务显式注入 `bootstrap.RemoteConfigDirName` 和 `bootstrap.LocalConfigPath`，没有默认远程目录。两种 PathsProvider 契约也位于 bootstrap，前两个参数依次为 `appinfo.AppInfo` 和 `environment string`；远程名称参数为 `RemoteConfigName`，本地移除名称参数，通过 AppInfo.Name() 获取。旧 consulconfig.NewSpec 移除；`bootstrap.RemoteConfigName` 默认由 `consulconfig.NewDefaultRemoteConfigName` 取 AppInfo.Name()，自定义名称使用 `consulconfig.ProviderSetWithCustomRemoteConfigName` 并由业务注入。`NewConfigSources` 增加名称参数。configs/secrets 环境路径改为 `{dir}/{env}/{name}.yaml` 和 `{dir}/{name}/{env}/*.yaml`，需迁移旧的 `{dir}/{env}/{app}/*.yaml` 片段键；默认远程改为十二层，configs 先于 secrets，每组公共先于应用、基础先于环境、单文件先于片段目录。本地目录只取应用单文件和环境应用单文件，普通文件只加载自身，否则使用 glob。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire。
+旧驱动 provider set 统一为 `BaseProviderSet`；自定义 Job Coordinator 的变体已删除，不保留别名。local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 `NewConfigSources(info, localPaths, remotePaths)` 只组装描述。业务现在分别提供 `bootstrap.LocalConfigPaths` 和 `bootstrap.RemoteConfigPaths` 两组有序字符串切片，取代旧版目录、名称和路径函数契约；自定义名称直接写在路径中。
+
+`NewSpec` 固定环境并复制选中的列表；`NewConfigManager` 先用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，再交给文件或 Consul 来源解析目录、精确路径和 glob。模板错误和空白结果返回错误，空列表禁用该来源。旧版传本地目录后只选择应用基础与环境单文件的行为，改为显式声明 `configs/{{app}}.yaml` 与 `configs/{{env}}/{{app}}.yaml` 等模板；直接传目录加载直属 YAML。远程十二层模板可由 `consulconfig.RemoteConfigDirs{"configs", "secrets"}` 和六条 `consulconfig.RemoteConfigPaths` 相对模式交给 `NewDefaultRemoteConfigPaths(dirs, paths)` 组合；环境单文件与片段仍分别为 `{dir}/{env}/{app}.yaml` 和 `{dir}/{app}/{env}/*.yaml`，更早版本的 `{dir}/{env}/{app}/*.yaml` 片段键须迁移或显式声明旧路径。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire，完整变量契约、流程图与所有权见上述文档。
+
+```mermaid
+flowchart TD
+    A([开始迁移配置组装]) --> B[业务声明两组路径模板 更新 NewConfigSources 和 Wire]
+    B --> C[重新生成 injector 并构造 NewSpec 固定环境和列表]
+    C --> D[NewConfigManager 编译与执行选中列表模板]
+    D -- 模板错误或空白结果 --> E([返回错误 修正业务模板])
+    D -- 空列表 --> W[WARN config.sources.empty]
+    D -- 成功 --> F[文件或 Consul 来源解析路径并加载]
+    F -- 读取或路径错误 --> E
+    F -- 无来源 --> W
+    F -- 成功 --> G[沿用来源加载日志和 Manager 监听]
+    W --> G
+    G --> H([应用停止后调用 cleanup])
+```
+
 
 
 ## 数据库队列完成记录保留

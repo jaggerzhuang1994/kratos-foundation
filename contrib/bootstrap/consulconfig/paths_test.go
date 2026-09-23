@@ -1,19 +1,24 @@
 package consulconfig
 
 import (
-	"os"
 	"path"
-	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
-
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 )
 
 func TestDefaultRemoteConfigPaths(t *testing.T) {
-	provider := NewDefaultRemoteConfigPathsProvider()
-	info := appinfo.New("test")
+	dirs := RemoteConfigDirs{"configs", "secrets"}
+	paths := RemoteConfigPaths{
+		"common*.yaml", "{{env}}/common*.yaml",
+		"services/{{app}}.yaml", "services/{{app}}/*.yaml",
+		"services/{{env}}/{{app}}.yaml", "services/{{app}}/{{env}}/*.yaml",
+	}
+	got := NewDefaultRemoteConfigPaths(dirs, paths)
+	render := strings.NewReplacer("{{env}}", "prod", "{{app}}", "orders")
+	for i := range got {
+		got[i] = render.Replace(got[i])
+	}
 	want := []string{
 		"configs/common*.yaml", "configs/prod/common*.yaml",
 		"configs/services/orders.yaml", "configs/services/orders/*.yaml",
@@ -22,8 +27,6 @@ func TestDefaultRemoteConfigPaths(t *testing.T) {
 		"secrets/services/orders.yaml", "secrets/services/orders/*.yaml",
 		"secrets/services/prod/orders.yaml", "secrets/services/orders/prod/*.yaml",
 	}
-	name := bootstrap.RemoteConfigName("orders")
-	got := provider(info, "prod", "services", name)
 	if !slices.Equal(got, want) {
 		t.Fatalf("paths=%v want=%v", got, want)
 	}
@@ -37,41 +40,24 @@ func TestDefaultRemoteConfigPaths(t *testing.T) {
 		}
 	}
 	got[0] = "changed"
-	if !slices.Equal(provider(info, "prod", "services", "orders"), want) {
-		t.Fatal("shared path slice")
+	if dirs[0] != "configs" || paths[0] != "common*.yaml" || NewDefaultRemoteConfigPaths(dirs, paths)[0] != "configs/common*.yaml" {
+		t.Fatal("inputs or next result were modified")
 	}
 }
 
-func TestDefaultLocalConfigPaths(t *testing.T) {
-	info := appinfo.New("test")
-	dir := filepath.Join(t.TempDir(), "literal[dir]")
-	if err := os.Mkdir(dir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	file := filepath.Join(dir, "literal[file].yaml")
-	if err := os.WriteFile(file, []byte("answer: 42"), 0600); err != nil {
-		t.Fatal(err)
-	}
+func TestDefaultRemoteConfigPathsEmptyInputs(t *testing.T) {
 	for _, tc := range []struct {
-		name, path string
-		want       []string
+		name  string
+		dirs  RemoteConfigDirs
+		paths RemoteConfigPaths
 	}{
-		{"file", file, []string{file}},
-		{"directory", dir, []string{filepath.Join(dir, info.Name()+".yaml"), filepath.Join(dir, "local", info.Name()+".yaml")}},
-		{"glob", filepath.Join(t.TempDir(), "*.yaml"), nil},
+		{"no directories", nil, RemoteConfigPaths{"common*.yaml"}},
+		{"no patterns", RemoteConfigDirs{"configs"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			want := tc.want
-			if want == nil {
-				want = []string{tc.path}
-			}
-			got, err := NewDefaultLocalConfigPathsProvider()(info, "local", bootstrap.LocalConfigPath(tc.path))
-			if err != nil || !slices.Equal(got, want) {
-				t.Fatalf("paths=%v error=%v want=%v", got, err, want)
+			if got := NewDefaultRemoteConfigPaths(tc.dirs, tc.paths); len(got) != 0 {
+				t.Fatalf("paths=%v, want empty", got)
 			}
 		})
-	}
-	if _, err := NewDefaultLocalConfigPathsProvider()(info, "local", "invalid\x00path"); err == nil {
-		t.Fatal("stat error hidden")
 	}
 }

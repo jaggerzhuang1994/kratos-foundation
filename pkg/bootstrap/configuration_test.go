@@ -4,12 +4,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consulconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
@@ -18,24 +21,24 @@ func TestLocalConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "local")
 	t.Setenv("BOOTSTRAP_TEST_VALUE", "from-env")
 	info := appinfo.New("test")
-	for _, kind := range []string{"file", "directory", "glob", "missing", "invalid glob", "empty"} {
+	for _, kind := range []string{"file", "application paths", "directory", "glob", "template glob", "missing", "invalid glob"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "config.yaml")
 			switch kind {
-			case "directory":
+			case "directory", "application paths":
 				path = filepath.Join(dir, "configs")
 			case "glob":
 				path = filepath.Join(dir, "*.yaml")
+			case "template glob":
+				path = filepath.Join(dir, "{{env}}", "{{app}}", "{{version}}", "*.yaml")
 			case "invalid glob":
 				path = "["
-			case "empty":
-				path = ""
 			}
-			sources := consulconfig.NewConfigSources(info, bootstrap.LocalConfigPath(path), "unused", "custom-name", consulconfig.NewDefaultLocalConfigPathsProvider(), func(appinfo.AppInfo, string, bootstrap.RemoteConfigDirName, bootstrap.RemoteConfigName) []string {
-				t.Fatal("local called remote provider")
-				return nil
-			})
+			sources := consulconfig.NewConfigSources(info, bootstrap.LocalConfigPaths{path}, bootstrap.RemoteConfigPaths{"{{unused}}"})
+			if kind == "application paths" {
+				sources.LocalPaths = bootstrap.LocalConfigPaths{filepath.Join(path, "{{app}}.yaml"), filepath.Join(path, "{{env}}", "{{app}}.yaml")}
+			}
 			spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
 			// 声明之后才创建文件/目录，验证路径判断与 I/O 都延迟到加载阶段。
 			write := func(path, value string) {
@@ -51,9 +54,16 @@ func TestLocalConfiguration(t *testing.T) {
 			case "file":
 				write(path, "answer: 42\n")
 			case "directory":
+				write(filepath.Join(path, "a.yaml"), "answer: 1\n")
+				write(filepath.Join(path, "b.yaml"), "answer: 42\n")
+				write(filepath.Join(path, "nested", "ignored.yaml"), "answer: 0\n")
+			case "application paths":
 				write(filepath.Join(path, info.Name()+".yaml"), "answer: 1\nbase: retained\n")
 				write(filepath.Join(path, "local", info.Name()+".yaml"), "answer: 42\n")
 				write(filepath.Join(path, "unrelated.yaml"), "invalid: [")
+			case "template glob":
+				write(filepath.Join(dir, "local", info.Name(), info.Version(), "a.yaml"), "answer: 1\n")
+				write(filepath.Join(dir, "local", info.Name(), info.Version(), "b.yaml"), "answer: 42\n")
 			case "glob":
 				write(filepath.Join(dir, "a.yaml"), "answer: 1\n")
 				write(filepath.Join(dir, "b.yaml"), "answer: 42\n")
@@ -62,7 +72,7 @@ func TestLocalConfiguration(t *testing.T) {
 			if cleanup != nil {
 				defer cleanup()
 			}
-			if kind == "invalid glob" || kind == "empty" {
+			if kind == "invalid glob" {
 				if err == nil {
 					t.Fatal("invalid path accepted")
 				}
@@ -82,7 +92,7 @@ func TestLocalConfiguration(t *testing.T) {
 			if err := manager.Load("answer", &answer); err != nil || answer != 42 {
 				t.Fatalf("answer=%d err=%v", answer, err)
 			}
-			if kind == "directory" {
+			if kind == "application paths" {
 				if err := manager.Load("base", &value); err != nil || value != "retained" {
 					t.Fatal(value, err)
 				}
@@ -93,26 +103,26 @@ func TestLocalConfiguration(t *testing.T) {
 
 func TestRemoteConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "local")
-	info := appinfo.New("test")
+	info := appinfo.New("v2")
+	original := bootstrap.RemoteConfigPaths{"configs/{{env}}/{{app}}/{{version}}/*.yaml", "{{if eq env `prod`}}secrets/shared-orders.yaml{{else}}secrets/other.yaml{{end}}"}
+	sources := consulconfig.NewConfigSources(info, bootstrap.LocalConfigPaths{"{{unused}}"}, original)
 	called := false
-	sources := consulconfig.NewConfigSources(info, "unused.yaml", "services", "shared-orders", func(appinfo.AppInfo, string, bootstrap.LocalConfigPath) ([]string, error) {
-		t.Fatal("remote called local provider")
-		return nil, nil
-	}, func(gotInfo appinfo.AppInfo, environment string, dir bootstrap.RemoteConfigDirName, name bootstrap.RemoteConfigName) []string {
+	sources.RemoteSource = func(paths ...string) config.SourceLoader {
 		called = true
-		if gotInfo != info || dir != "services" || name != "shared-orders" || environment != "prod" {
-			t.Fatalf("arguments=%s %s %s", dir, name, environment)
+		want := []string{"configs/prod/" + info.Name() + "/v2/*.yaml", "secrets/shared-orders.yaml"}
+		if !slices.Equal(paths, want) {
+			t.Fatalf("paths=%v want=%v", paths, want)
 		}
-		return []string{"configs/services/" + string(name) + ".yaml"}
-	})
-	// ConfigSources 只描述依赖；环境直到 NewSpec 才固定。
+		return func() (config.Sources, error) { return nil, nil }
+	}
+	// 环境在 NewSpec 固定；路径列表也复制，避免后续业务修改影响加载器。
 	t.Setenv("APP_ENV", "prod")
 	spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
 	if called {
 		t.Fatal("declaration resolved paths")
 	}
-	t.Setenv("APP_ENV", "local") // 环境在构造时固定，不会因随后变化切换后端。
-	t.Setenv("DISABLE_CONSUL", "true")
+	original[0] = "changed"
+	t.Setenv("APP_ENV", "local")
 	manager, cleanup, err := bootstrap.NewConfigManager(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -121,32 +131,84 @@ func TestRemoteConfiguration(t *testing.T) {
 	if manager == nil || !called {
 		t.Fatal("remote loader not used")
 	}
-	t.Setenv("APP_ENV", "prod")
-	spec = bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), consulconfig.NewConfigSources(info, "unused", "", "orders", consulconfig.NewDefaultLocalConfigPathsProvider(), consulconfig.NewDefaultRemoteConfigPathsProvider()))
-	if _, _, err := bootstrap.NewConfigManager(spec); err == nil {
-		t.Fatal("missing directory accepted")
-	}
-	for _, name := range []bootstrap.RemoteConfigName{"", "   "} {
-		sources.RemoteName = name
-		spec = bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
-		if _, _, err := bootstrap.NewConfigManager(spec); err == nil {
-			t.Fatal("blank remote name accepted")
-		}
+}
+
+func TestConfigPathTemplateErrors(t *testing.T) {
+	for _, environment := range []string{"local", "prod"} {
+		t.Run(environment, func(t *testing.T) {
+			t.Setenv("APP_ENV", environment)
+			for _, tc := range []struct{ name, pattern, want string }{
+				{"parse", "{{", "parse config path template 1"},
+				{"unknown function", "{{unknown}}", "parse config path template 1"},
+				{"execution", "{{env `unexpected`}}", "execute config path template 1"},
+				{"empty", "", "rendered an empty path"},
+				{"whitespace", "  ", "rendered an empty path"},
+				{"empty result", "{{if eq env `absent`}}config.yaml{{end}}", "rendered an empty path"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					paths := []string{"valid.yaml", tc.pattern}
+					source := func(...string) config.SourceLoader {
+						t.Fatal("template failure called source")
+						return nil
+					}
+					spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{
+						AppInfo: appinfo.New("v1"), LocalPaths: paths, RemotePaths: paths,
+						LocalSource: source, RemoteSource: source,
+					})
+					if _, _, err := bootstrap.NewConfigManager(spec); err == nil || !strings.Contains(err.Error(), tc.want) {
+						t.Fatalf("err=%v want=%s", err, tc.want)
+					}
+				})
+			}
+		})
 	}
 }
 
-func TestLocalProviderError(t *testing.T) {
-	t.Setenv("APP_ENV", "local")
-	failure := errors.New("path lookup failed")
-	sources := consulconfig.NewConfigSources(appinfo.New("test"), "unused", "unused", "", func(appinfo.AppInfo, string, bootstrap.LocalConfigPath) ([]string, error) { return nil, failure }, consulconfig.NewDefaultRemoteConfigPathsProvider())
+func TestConfigSourceFailureAndEmptyPaths(t *testing.T) {
+	failure := errors.New("source failed")
+	for _, environment := range []string{"local", "prod"} {
+		t.Run(environment, func(t *testing.T) {
+			t.Setenv("APP_ENV", environment)
+			source := func(...string) config.SourceLoader {
+				return func() (config.Sources, error) { return nil, failure }
+			}
+			sources := bootstrap.ConfigSources{AppInfo: appinfo.New("v1"), LocalSource: source, RemoteSource: source}
+			spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
+			// 空列表不调用来源构造函数，仍可从 env 加载配置。
+			manager, cleanup, err := bootstrap.NewConfigManager(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleanup()
+			if manager == nil {
+				t.Fatal("nil manager")
+			}
+			sources.LocalPaths, sources.RemotePaths = []string{"config.yaml"}, []string{"config.yaml"}
+			spec = bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
+			if _, _, err := bootstrap.NewConfigManager(spec); !errors.Is(err, failure) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestDisabledConsulConfiguration(t *testing.T) {
+	t.Setenv("APP_ENV", "prod")
+	t.Setenv("DISABLE_CONSUL", "true")
+	sources := consulconfig.NewConfigSources(appinfo.New("v1"), nil, bootstrap.RemoteConfigPaths{"configs/{{app}}/*.yaml"})
 	spec := bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), sources)
-	if _, _, err := bootstrap.NewConfigManager(spec); !errors.Is(err, failure) {
+	manager, cleanup, err := bootstrap.NewConfigManager(spec)
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer cleanup()
+	if manager == nil {
+		t.Fatal("nil manager")
 	}
 }
 
 func TestIncompleteConfigSources(t *testing.T) {
 	assertBootstrapPanic(t, "bootstrap: incomplete config sources", func() {
-		bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{LocalPath: "app.yaml"})
+		bootstrap.NewSpec(app.NewSpec(), server.NewSpec(), job.NewSpec(), bootstrap.ConfigSources{LocalPaths: []string{"app.yaml"}})
 	})
 }

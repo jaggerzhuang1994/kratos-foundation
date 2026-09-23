@@ -2,7 +2,9 @@ package bootstrap
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"text/template"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
@@ -10,81 +12,84 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
-// RemoteConfigDirName 是业务显式提供的远程配置目录名，不设默认值。
-type RemoteConfigDirName string
+// LocalConfigPaths 是业务声明的有序本地路径模板；独立类型供 Wire 区分依赖。
+type LocalConfigPaths []string
 
-// RemoteConfigName 是远程配置名称，与应用身份及远程目录独立。
-type RemoteConfigName string
-
-// LocalConfigPath 是本地文件、目录或 glob 路径，区分 Wire 中的其他字符串依赖。
-type LocalConfigPath string
-
-// RemoteConfigPathsProvider 按目录、配置名称与环境生成有序远程路径。
-// 路径可包含配置源支持的 glob 模式；每次调用返回独立列表。
-type RemoteConfigPathsProvider func(info appinfo.AppInfo, environment string, directory RemoteConfigDirName, name RemoteConfigName) []string
-
-// LocalConfigPathsProvider 按本地路径与环境生成有序本地路径。
-// 文件系统错误必须返回，不能通过空列表隐藏失败；路径解析延迟到配置加载阶段。
-type LocalConfigPathsProvider func(info appinfo.AppInfo, environment string, location LocalConfigPath) ([]string, error)
+// RemoteConfigPaths 是业务声明的有序远程路径模板；独立类型供 Wire 区分依赖。
+type RemoteConfigPaths []string
 
 // ConfigSources 描述应用默认配置来源，供 Wire 按具体类型注入。
-// 零值不登记默认来源，适用于通过 Spec.Configuration 显式声明所有来源的应用。
-// 启用默认来源时身份、路径函数及来源构造函数均须提供；路径由选中的来源校验。
-// NewSpec 复制描述，函数及 AppInfo 仍共享；构造阶段不执行配置 I/O。
+// 零值不登记默认来源；启用时须提供 AppInfo 和两个来源构造函数。
+// NewSpec 复制选中的路径列表，AppInfo 及函数仍共享；构造阶段不执行配置 I/O。
 type ConfigSources struct {
-	// AppInfo 提供配置路径解析所需的应用身份。
+	// AppInfo 提供模板变量 app 和 version。
 	AppInfo appinfo.AppInfo
-	// LocalPath 指定 local 环境使用的本地文件、目录或 glob。
-	LocalPath LocalConfigPath
-	// RemoteDir 指定远程配置目录；非 local 环境不能为空。
-	RemoteDir RemoteConfigDirName
-	// RemoteName 指定远程配置名称，独立于应用名称；非 local 环境不能为空。
-	RemoteName RemoteConfigName
-	// LocalPaths 在加载阶段解析有序本地路径并返回文件系统错误。
-	LocalPaths LocalConfigPathsProvider
-	// RemotePaths 按应用身份、环境及远程名称生成有序路径。
-	RemotePaths RemoteConfigPathsProvider
-	// LocalSource 按本地路径创建延迟加载器，资源由配置 Manager 释放。
+	// LocalPaths 指定 local 环境使用的路径模板；空列表禁用该来源。
+	LocalPaths LocalConfigPaths
+	// RemotePaths 指定其他环境使用的路径模板；空列表禁用该来源。
+	RemotePaths RemoteConfigPaths
+	// LocalSource 按模板替换后的路径创建延迟加载器，资源由配置 Manager 释放。
 	LocalSource func(...string) config.SourceLoader
-	// RemoteSource 按远程路径创建延迟加载器，资源由配置 Manager 释放。
+	// RemoteSource 按模板替换后的路径创建延迟加载器，资源由配置 Manager 释放。
 	RemoteSource func(...string) config.SourceLoader
 }
 
-// loader 在 NewSpec 中固定环境，路径解析和来源 I/O 延迟到 NewConfigManager。
+// loader 在 NewSpec 中固定环境和路径列表，模板解析和来源 I/O 延迟到 NewConfigManager。
 func (sources ConfigSources) loader() config.SourceLoader {
-	if sources.LocalSource == nil && sources.RemoteSource == nil && sources.AppInfo == nil && sources.LocalPaths == nil && sources.RemotePaths == nil && sources.LocalPath == "" && sources.RemoteDir == "" && sources.RemoteName == "" {
+	if sources.LocalSource == nil && sources.RemoteSource == nil && sources.AppInfo == nil && sources.LocalPaths == nil && sources.RemotePaths == nil {
 		return nil
 	}
-	if sources.AppInfo == nil || sources.LocalPaths == nil || sources.RemotePaths == nil || sources.LocalSource == nil || sources.RemoteSource == nil {
+	if sources.AppInfo == nil || sources.LocalSource == nil || sources.RemoteSource == nil {
 		panic("bootstrap: incomplete config sources")
 	}
 	environment := env.AppEnv()
+	patterns, source, kind := []string(sources.RemotePaths), sources.RemoteSource, "remote"
+	if environment == env.Local {
+		patterns, source, kind = sources.LocalPaths, sources.LocalSource, "local"
+	}
+	// 固定选中列表，调用方后续修改切片不影响已登记的加载器。
+	patterns = slices.Clone(patterns)
 	return func() (config.Sources, error) {
-		var loader config.SourceLoader
-		if environment == env.Local {
-			paths, err := sources.LocalPaths(sources.AppInfo, environment, sources.LocalPath)
-			if err != nil {
-				return nil, fmt.Errorf("resolve local config paths: %w", err)
-			}
-			loader = sources.LocalSource(paths...)
-		} else {
-			if strings.TrimSpace(string(sources.RemoteDir)) == "" {
-				return nil, fmt.Errorf("remote config directory is required")
-			}
-			// 名称由组装层提供，避免自定义配置名称改变应用身份。
-			if strings.TrimSpace(string(sources.RemoteName)) == "" {
-				return nil, fmt.Errorf("remote config name is required")
-			}
-			loader = sources.RemoteSource(sources.RemotePaths(sources.AppInfo, environment, sources.RemoteDir, sources.RemoteName)...)
-		}
-		loaded, err := loader()
+		paths, err := renderConfigPaths(patterns, template.FuncMap{
+			// 使用闭包返回固定环境，避免模板执行时重新读取进程环境。
+			"env":     func() string { return environment },
+			"app":     sources.AppInfo.Name,
+			"version": sources.AppInfo.Version,
+		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("resolve %s config paths: %w", kind, err)
+		}
+		// 完整列表先编译成功，再交给来源解析目录、精确路径和 glob，避免部分模板失败后执行 I/O。
+		var loaded config.Sources
+		if len(paths) > 0 {
+			loaded, err = source(paths...)()
+			if err != nil {
+				return nil, err
+			}
 		}
 		if len(loaded) == 0 {
-			// 无匹配来源或 Consul 禁用时沿用 env 启动，明确记录降级而不静默改用另一后端。
-			log.WithModule("bootstrap").With("function", "ConfigSources.loader", "event", "config.sources.empty", "remote_name", sources.RemoteName, "env", environment, "name", sources.AppInfo.Name()).Warn("No configuration sources available; continuing with env and any additional sources")
+			log.WithModule("bootstrap").With("function", "ConfigSources.loader", "event", "config.sources.empty", "env", environment, "name", sources.AppInfo.Name()).Warn("No configuration sources available; continuing with env and any additional sources")
 		}
 		return loaded, nil
 	}
+}
+
+// renderConfigPaths 使用标准 Go 文本模板；引用未知函数或空白结果必须报错，不能扩大路径匹配范围。
+func renderConfigPaths(patterns []string, functions template.FuncMap) ([]string, error) {
+	paths := make([]string, len(patterns))
+	for index, pattern := range patterns {
+		tmpl, err := template.New("config path").Funcs(functions).Option("missingkey=error").Parse(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("parse config path template %d: %w", index, err)
+		}
+		var result strings.Builder
+		if err := tmpl.Execute(&result, nil); err != nil {
+			return nil, fmt.Errorf("execute config path template %d: %w", index, err)
+		}
+		if strings.TrimSpace(result.String()) == "" {
+			return nil, fmt.Errorf("config path template %d rendered an empty path", index)
+		}
+		paths[index] = result.String()
+	}
+	return paths, nil
 }

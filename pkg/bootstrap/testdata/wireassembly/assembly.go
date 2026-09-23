@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-kratos/kratos/v2"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consulconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -49,18 +50,18 @@ func componentsBoot(_ bootstrap.InfrastructureBootstrap, components *bootstrap.S
 }
 
 type driverAssembly struct {
-	Directory bootstrap.RemoteConfigDirName
-	Name      bootstrap.RemoteConfigName
-	App       *kratos.App
-	Client    client.Factory
-	Registry  *foundationregistry.Factory
-	Config    config.Manager
+	LocalPaths  bootstrap.LocalConfigPaths
+	RemotePaths bootstrap.RemoteConfigPaths
+	App         *kratos.App
+	Client      client.Factory
+	Registry    *foundationregistry.Factory
+	Config      config.Manager
 }
 
-func customRemoteConfigDirName() bootstrap.RemoteConfigDirName {
-	return "shared-orders"
+func customRemoteConfigDirs() consulconfig.RemoteConfigDirs {
+	return consulconfig.RemoteConfigDirs{"configs", "secrets"}
 }
 
-func customRemoteConfigName() bootstrap.RemoteConfigName {
-	return "shared-config"
+func customRemoteConfigPatterns() consulconfig.RemoteConfigPaths {
+	return consulconfig.RemoteConfigPaths{"shared-orders/{{env}}/shared-config.yaml"}
 }

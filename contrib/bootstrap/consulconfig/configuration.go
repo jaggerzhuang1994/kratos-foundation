@@ -8,16 +8,13 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 )
 
-// NewConfigSources 为 bootstrap.NewSpec 组装默认来源描述，不执行环境选择或 I/O。
-func NewConfigSources(info appinfo.AppInfo, localPath bootstrap.LocalConfigPath, directory bootstrap.RemoteConfigDirName, name bootstrap.RemoteConfigName, localPaths bootstrap.LocalConfigPathsProvider, remotePaths bootstrap.RemoteConfigPathsProvider) bootstrap.ConfigSources {
+// NewConfigSources 组装业务提供的两组路径模板，不执行模板替换、环境选择或 I/O。
+func NewConfigSources(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPaths, remotePaths bootstrap.RemoteConfigPaths) bootstrap.ConfigSources {
 	return bootstrap.ConfigSources{
-		AppInfo: info, LocalPath: localPath, RemoteDir: directory, RemoteName: name,
-		LocalPaths: localPaths, RemotePaths: remotePaths,
-		LocalSource: fileconfig.AddConfigSource, RemoteSource: consulsource.AddConfigSource,
+		AppInfo:      info,
+		LocalPaths:   localPaths,
+		RemotePaths:  remotePaths,
+		LocalSource:  fileconfig.AddConfigSource,
+		RemoteSource: consulsource.AddConfigSource,
 	}
-}
-
-// NewDefaultRemoteConfigName 使用应用名作为默认远程配置名称。
-func NewDefaultRemoteConfigName(info appinfo.AppInfo) bootstrap.RemoteConfigName {
-	return bootstrap.RemoteConfigName(info.Name())
 }

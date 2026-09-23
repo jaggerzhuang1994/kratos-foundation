@@ -1,6 +1,7 @@
 package consulconfig
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
@@ -8,15 +9,9 @@ import (
 
 func TestNewConfigSources(t *testing.T) {
 	info := appinfo.New("test")
-	sources := NewConfigSources(info, "local.yaml", "services", "shared-orders", NewDefaultLocalConfigPathsProvider(), NewDefaultRemoteConfigPathsProvider())
-	if sources.AppInfo != info || sources.LocalPath != "local.yaml" || sources.RemoteDir != "services" || sources.RemoteName != "shared-orders" || sources.LocalPaths == nil || sources.RemotePaths == nil || sources.LocalSource == nil || sources.RemoteSource == nil {
+	local, remote := []string{"local/{{app}}.yaml"}, []string{"configs/{{env}}/{{app}}.yaml"}
+	sources := NewConfigSources(info, local, remote)
+	if sources.AppInfo != info || !slices.Equal(sources.LocalPaths, local) || !slices.Equal(sources.RemotePaths, remote) || sources.LocalSource == nil || sources.RemoteSource == nil {
 		t.Fatal("incomplete configuration description")
-	}
-}
-
-func TestNewDefaultRemoteConfigName(t *testing.T) {
-	info := appinfo.New("test")
-	if got := NewDefaultRemoteConfigName(info); string(got) != info.Name() {
-		t.Fatalf("name=%q want=%q", got, info.Name())
 	}
 }
