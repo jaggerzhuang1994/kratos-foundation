@@ -297,7 +297,7 @@ func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {
 				t.Fatal(err)
 			}
 			output.Reset()
-			values, _, err := (&kvSource{client: client, path: pattern}).query(context.Background(), 1, time.Second)
+			values, _, err := (&kvSource{client: client, path: pattern}).query(context.Background(), 1, time.Second, loadPhase)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -329,6 +329,40 @@ func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestInitialLoadLogsEachFileOnce(t *testing.T) {
+	var output bytes.Buffer
+	previous := log.GetLogger()
+	log.SetLogger(kratoslog.NewStdLogger(&output))
+	t.Cleanup(func() { log.SetLogger(previous) })
+	client, err := consulapi.NewClient(&consulapi.Config{HttpClient: &http.Client{Transport: consulRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		data, err := json.Marshal(consulapi.KVPairs{{Key: "configs/common.yaml", Value: []byte("feature: true")}})
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"X-Consul-Index": []string{"2"}}, Body: io.NopCloser(bytes.NewReader(data))}, nil
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := &kvSource{client: client, path: "configs/common.yaml"}
+	if _, err := source.Load(); err != nil {
+		t.Fatal(err)
+	}
+	watcher, err := source.Watch()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = watcher.Stop() })
+	if _, err := watcher.Next(); err != nil {
+		t.Fatal(err)
+	}
+	logs := output.String()
+	if strings.Count(logs, "loaded configuration file") != 1 ||
+		strings.Count(logs, "path=configs/common.yaml") != 1 {
+		t.Fatalf("unexpected initial load and watch logs: %s", logs)
 	}
 }
 

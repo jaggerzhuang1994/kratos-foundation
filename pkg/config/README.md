@@ -124,7 +124,7 @@ cancel 幂等移除订阅，首次回放前取消会跳过该次回放；不等�
 | 字段 | 含义 |
 | --- | --- |
 | `key` | 订阅范围 |
-| `subscription` | 直接调用 `Subscribe` 的源码位置，格式为 `末级目录/文件.go:行号`；无法获取时为 `<unknown>` |
+| `subscription` | 直接调用 `Subscribe` 的源码位置；通过 `NewHotReloadValue` 订阅时为其调用位置。格式为 `末级目录/文件.go:行号`；无法获取时为 `<unknown>` |
 | `changed_paths` | 仅变更事件记录，相对该订阅上次快照的绝对 JSON Pointer 路径 |
 | `found` | 仅当前快照缺失该范围时记录 false；有默认值时仍可能正常解码 |
 | `paths_truncated` | 仅路径超过 32 项时记录 true，此时列表不完整 |
@@ -140,7 +140,7 @@ INFO module=config key=job subscription=job/config_reload.go:37 changed_paths=[/
 
 根订阅和局部订阅可能记录相同变更路径，可结合 `key` 和 `subscription` 定位其订阅范围与调用点。日志只说明即将通知，不表示这些路径都被该订阅使用，也不保证解码或业务应用成功；业务是否应用仍以相应组件的结果日志为准。
 
-后续未变化、已取消或扫描失败时不记录通知事件。通知日志不再输出 `observer`、`subscription_id`、`target_type`、`initial` 字段；回调 panic 的 ERROR 日志同样使用 `subscription` 调用点，便于关联。调用点在登记时捕获；通过 `NewHotReloadValue` 等封装订阅时，记录封装内部直接调用 `Subscribe` 的位置，不向上追溯业务调用栈，也不记录回调函数的定义位置。输出受当前 Logger 级别和过滤规则控制。
+后续未变化、已取消或扫描失败时不记录通知事件。通知日志不再输出 `observer`、`subscription_id`、`target_type`、`initial` 字段；回调 panic 的 ERROR 日志同样使用 `subscription` 调用点，便于关联。调用点在登记时捕获；`NewHotReloadValue` 会跳过自身的封装层，记录调用它的位置，不记录回调函数的定义位置。其他封装层仍记录其直接调用 `Subscribe` 的位置。输出受当前 Logger 级别和过滤规则控制。
 
 存在性与值分别比较：若扫描结果中的 key 消失，无默认值通过 observer 返回 `ErrNotFound`，有默认值解码默认值；显式 null 按目标解码规则处理。源文件中省略字段不等于有效配置删除，仍受官方 merge 约束。Manager 不再使用官方 Value/Watch，因此不受其缺失 key、同 key 单 observer 和直接监听 null 的限制；resolver 等官方处理仍沿用上游行为。
 

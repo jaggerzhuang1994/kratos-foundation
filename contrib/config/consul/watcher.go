@@ -28,7 +28,7 @@ func (w *kvWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 			return nil, err
 		}
 		ctx, cancel := context.WithTimeout(w.ctx, watchWait+loadTimeout)
-		values, index, err := w.source.query(ctx, w.index, watchWait)
+		values, index, err := w.source.query(ctx, w.index, watchWait, watchPhase)
 		cancel()
 		if err == nil {
 			// Consul 要求零索引提升到1，避免空前缀查询形成忙循环。

@@ -15,7 +15,7 @@ import (
 )
 
 type subscription struct {
-	// caller 记录直接调用 Subscribe 的源码位置。
+	// caller 记录订阅入口的源码位置；热更新值跳过包内封装层。
 	caller string
 	// key 订阅路径；空串表示根配置。
 	key string
@@ -51,9 +51,14 @@ func (m *manager) Subscribe(key string, prototype any, observer Observer, defaul
 	if err != nil {
 		return nil, err
 	}
-	// 在登记处捕获直接调用点，避免异步通知时只能看到轮询栈；仅保留末级目录和文件名。
+	// 在登记处捕获调用点，避免异步通知时只能看到轮询栈；热更新值使用其业务调用点。
 	caller := "<unknown>"
 	if _, file, line, ok := runtime.Caller(1); ok {
+		if _, source, _, sourceOK := runtime.Caller(0); sourceOK && file == filepath.Join(filepath.Dir(source), "hot_reload_value.go") {
+			if _, outer, outerLine, outerOK := runtime.Caller(2); outerOK {
+				file, line = outer, outerLine
+			}
+		}
 		caller = fmt.Sprintf("%s/%s:%d", filepath.Base(filepath.Dir(file)), filepath.Base(file), line)
 	}
 	m.mu.Lock()

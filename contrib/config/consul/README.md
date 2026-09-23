@@ -2,7 +2,7 @@
 
 配置源诊断使用全局日志，声明 `module=config/consul`；配置路径使用结构化字段。
 
-每次成功读取（包括初次加载和热更新）以 INFO 记录 `loaded configuration file`，字段包含 `path`；Consul 的 `path` 为匹配后的完整 KV 键，不是输入 glob 或相对 Key。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 INFO 才能看到。
+每次 `Load` 成功读取时以 INFO 为每个匹配键记录一次 `loaded configuration file`；Manager 构造时会调用一次 `Load`。日志中的 `path` 是匹配后的完整 KV 键，不是输入 glob 或相对 Key。`Watch` 每次返回完整快照，同一键可能反复出现，因此不重复记录逐文件成功日志，即使开启 DEBUG 也是如此。Manager 对已订阅配置的首次回放和实际变化分别记录 INFO `config.watch`、`config.change`；后者只在订阅值变化时输出，并不代表每个来源文件都变了。不记录配置内容；失败或无匹配时不输出成功日志。
 
 `contrib/config/consul` 把有序 Consul KV 路径转换成 Kratos 配置源。后面的路径优先级更高，路径不能为空、包含首尾空白或重复。
 
@@ -105,8 +105,10 @@ flowchart TD
     R --> E[按完整键名排序 所有路径统一匹配完整键]
     E --> D2{匹配失败或目录标记?}
     D2 -- 是 --> S[跳过该键]
-    D2 -- 否 --> DL[INFO loaded configuration file 完整 KV 键]
-    DL --> F[复制值并按扩展名标记格式]
+    D2 -- 否 --> Q{查询阶段?}
+    Q -- Load --> LI[INFO loaded configuration file 完整 KV 键]
+    Q -- Watch --> WI[不重复记录逐文件成功日志]
+    LI & WI --> F[复制值并按扩展名标记格式]
     S --> G
     F --> G([返回完整快照及索引])
 ```

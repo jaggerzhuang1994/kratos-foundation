@@ -98,6 +98,13 @@ func configPatternPrefix(pattern string) (string, bool, error) {
 
 const loadTimeout = 10 * time.Second
 
+type queryPhase uint8
+
+const (
+	loadPhase queryPhase = iota
+	watchPhase
+)
+
 type kvSource struct {
 	// client 借用进程共享的 Consul 客户端读取配置，配置源不负责关闭。
 	client *consulapi.Client
@@ -110,7 +117,7 @@ func (s *kvSource) Load() ([]*kratosconfig.KeyValue, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
 	defer cancel()
 	for attempt := 0; ; attempt++ {
-		values, _, err := s.query(ctx, 0, 0)
+		values, _, err := s.query(ctx, 0, 0, loadPhase)
 		if err == nil || !transientConsulError(err) {
 			return values, err
 		}
@@ -125,7 +132,7 @@ func (s *kvSource) Watch() (kratosconfig.Watcher, error) {
 	return &kvWatcher{source: s, ctx: ctx, cancel: cancel}, nil
 }
 
-func (s *kvSource) query(ctx context.Context, index uint64, wait time.Duration) ([]*kratosconfig.KeyValue, uint64, error) {
+func (s *kvSource) query(ctx context.Context, index uint64, wait time.Duration, phase queryPhase) ([]*kratosconfig.KeyValue, uint64, error) {
 	options := (&consulapi.QueryOptions{WaitIndex: index, WaitTime: wait}).WithContext(ctx)
 	queryPath, glob, err := configPatternPrefix(s.path)
 	if err != nil {
@@ -164,8 +171,10 @@ func (s *kvSource) query(ctx context.Context, index uint64, wait time.Duration) 
 		if !matched || strings.HasSuffix(pair.Key, "/") {
 			continue
 		}
-		// 记录匹配后的完整 KV 键，避免相对键或输入 glob 隐藏实际来源；不输出配置值。
-		log.WithModule("config/consul").With("path", pair.Key).Info("loaded configuration file")
+		// Watch 每次返回完整快照，同一键可能未变化；逐文件成功日志只在初次 Load 输出。
+		if phase == loadPhase {
+			log.WithModule("config/consul").With("path", pair.Key).Info("loaded configuration file")
+		}
 		key := strings.TrimPrefix(pair.Key, directory)
 
 		values = append(values, &kratosconfig.KeyValue{

@@ -22,6 +22,8 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	stdgrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // builder 保存创建客户端所需的不可变依赖。
@@ -135,9 +137,26 @@ func (b *builder) newGRPCClient(ctx context.Context, spec clientSpec) (*stdgrpc.
 	opts = append(opts,
 		kratosgrpc.WithTimeout(0),
 		kratosgrpc.WithMiddleware(middlewares...),
+		kratosgrpc.WithUnaryInterceptor(grpcUnavailableContext(spec.name)),
 		kratosgrpc.WithOptions(grpcReconnectOption(), stdgrpc.WithChainStreamInterceptor(requestdebug.StreamClient(spec.middleware.GetRequestDebug()))),
 	)
 	return kratosgrpc.DialInsecure(ctx, opts...)
+}
+
+// grpcUnavailableContext 在实际 RPC 失败时补上具名连接，避免底层拨号错误只留下节点 IP。
+// 带结构化详情的业务状态原样返回；%w 保留连接失败时的 gRPC 状态码和错误链。
+func grpcUnavailableContext(name string) stdgrpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply any, cc *stdgrpc.ClientConn, invoker stdgrpc.UnaryInvoker, opts ...stdgrpc.CallOption) error {
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		if err == nil {
+			return nil
+		}
+		grpcStatus, ok := status.FromError(err)
+		if !ok || grpcStatus.Code() != codes.Unavailable || len(grpcStatus.Details()) > 0 {
+			return err
+		}
+		return fmt.Errorf("rpc client %q method %q: %w", name, method, err)
+	}
 }
 
 func (b *builder) newHTTPClient(ctx context.Context, spec clientSpec) (*kratoshttp.Client, func(), error) {

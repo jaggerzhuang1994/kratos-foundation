@@ -292,6 +292,30 @@ func (f pollingLogFunc) Log(level kratoslog.Level, fields ...any) error {
 	return f(level, fields...)
 }
 
+func TestPollingHotReloadSubscriptionCaller(t *testing.T) {
+	var subscription any
+	t.Cleanup(log.SetLogger(pollingLogFunc(func(_ kratoslog.Level, fields ...any) error {
+		for i := 0; i+1 < len(fields); i += 2 {
+			if fields[i] == "subscription" {
+				subscription = fields[i+1]
+			}
+		}
+		return nil
+	})))
+	backend := &scanBackend{values: map[string]any{"key": 1}}
+	m := &manager{backend: backend, snapshot: backend.values}
+	_, _, line, _ := runtime.Caller(0)
+	_, cancel, err := NewHotReloadValue[int](m, "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancel()
+	m.poll()
+	if want := fmt.Sprintf("config/polling_test.go:%d", line+1); subscription != want {
+		t.Fatalf("subscription = %v, want %s", subscription, want)
+	}
+}
+
 func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 	events := make(chan map[string]any, 32)
 	t.Cleanup(log.SetLogger(pollingLogFunc(func(level kratoslog.Level, fields ...any) error {

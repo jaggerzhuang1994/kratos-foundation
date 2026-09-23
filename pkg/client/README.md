@@ -122,6 +122,8 @@ HTTP/HTTPS 使用独立克隆的标准 Transport。
 
 gRPC 继续复用原来的 `ClientConn` 和 SDK 自动重连状态机，保留 1s 起步、1.6 倍增长、20% 抖动，将最大退避基准调整为 5s（含抖动最长约 6s）。连接尝试仍有自己的超时，因此黑洞网络的恢复时间还包含拨号耗时。普通 RPC 仍按原来的失败/超时语义返回；没有新增 RPC 重试策略或默认 `WaitForReady`。需要等待连接恢复的调用可自行使用有截止时间的 Context 和 `grpc.WaitForReady(true)`。
 
+单次 gRPC Unary RPC 返回无结构化详情的 `Unavailable` 时，错误文本会补充 Factory 的连接名称和完整 RPC 方法，例如 `client "orders" method "/orders.OrderService/Get"`，随后仍保留原始拨号错误。连接名称对应 `client.clients.<name>` 的键；发现节点的实际 IP 仍由 gRPC 原始错误提供。包装保留 `status.Code(err) == codes.Unavailable` 和底层错误链；带结构化详情的业务状态及其他状态错误原样返回。流式 RPC 不经过此 Unary 调用边界，当前不附加这组上下文。
+
 ```mermaid
 flowchart LR
     A[HTTP 需要新连接] --> B[拨号 尚未发送请求]
@@ -134,6 +136,11 @@ flowchart LR
     C -- 永久错误 --> G
     D --> H[响应或请求错误交给调用方]
     I[gRPC 连接断开] --> J[SDK 退避并重连同一 ClientConn]
+    J --> K{单次 Unary RPC 返回无详情的 Unavailable?}
+    K -- 是 --> L[补充连接名称与 RPC 方法 保留原始状态和错误链]
+    K -- 否 --> M[原样返回其他结果]
+    L --> N([返回调用方])
+    M --> N
 ```
 
 ```mermaid

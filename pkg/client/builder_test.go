@@ -106,6 +106,95 @@ func TestBuilderBuildsDirectGRPCClient(t *testing.T) {
 	}
 }
 
+func TestGRPCUnavailableContextPreservesStatusAndCause(t *testing.T) {
+	if err := grpcUnavailableContext("orders")(
+		context.Background(), "/orders.OrderService/Get", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			return nil
+		},
+	); err != nil {
+		t.Fatalf("successful RPC returned an error: %v", err)
+	}
+	cause := status.Error(codes.Unavailable, "dial tcp 10.0.5.121:9000: no route to host")
+	err := grpcUnavailableContext("orders")(
+		context.Background(), "/orders.OrderService/Get", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			return cause
+		},
+	)
+	if status.Code(err) != codes.Unavailable || !errors.Is(err, cause) ||
+		!strings.Contains(err.Error(), `client "orders"`) ||
+		!strings.Contains(err.Error(), "/orders.OrderService/Get") ||
+		!strings.Contains(err.Error(), "no route to host") {
+		t.Fatalf("unavailable RPC error lost client context or status: %v", err)
+	}
+	other := status.Error(codes.Aborted, "order already exists")
+	got := grpcUnavailableContext("orders")(
+		context.Background(), "/orders.OrderService/Get", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			return other
+		},
+	)
+	if got != other {
+		t.Fatalf("business status was changed: %v", got)
+	}
+	businessStatus, err := status.New(codes.Unavailable, "upstream is busy").WithDetails(&errdetails.ErrorInfo{Reason: "BUSY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	businessCause := businessStatus.Err()
+	got = grpcUnavailableContext("orders")(
+		context.Background(), "/orders.OrderService/Get", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			return businessCause
+		},
+	)
+	if got != businessCause {
+		t.Fatalf("detailed business status was changed: %v", got)
+	}
+}
+
+func TestBuilderGRPCUnavailableIncludesClientName(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	healthpb.RegisterHealthServer(server, unavailableGRPCHealthServer{})
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(listener) }()
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+		if serveErr := <-serveDone; serveErr != nil && !errors.Is(serveErr, grpc.ErrServerStopped) {
+			t.Error(serveErr)
+		}
+	})
+
+	result, err := newTestRealBuilder(t, nil).build(t.Context(), newClientSpec("orders", &config_pb.ClientOption{
+		Target: "passthrough:///" + listener.Addr().String(),
+	}, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = result.close() })
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	_, err = healthpb.NewHealthClient(result.grpcClient).Check(ctx, &healthpb.HealthCheckRequest{})
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), `client "orders"`) ||
+		!strings.Contains(err.Error(), "/grpc.health.v1.Health/Check") {
+		t.Fatalf("gRPC call error lacks client context: %v", err)
+	}
+}
+
+type unavailableGRPCHealthServer struct {
+	healthpb.UnimplementedHealthServer
+}
+
+func (unavailableGRPCHealthServer) Check(context.Context, *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
+	return nil, status.Error(codes.Unavailable, "dial tcp 10.0.5.121:9000: no route to host")
+}
+
 func TestBuilderBuildsDirectHTTPClients(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
