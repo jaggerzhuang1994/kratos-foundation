@@ -70,12 +70,12 @@ func initializeComponents(sources config.Sources, version string) (*kratos.App, 
 func newRegistrar() registry.Registrar { return nil }
 
 func initializeDrivers(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPaths, remotePaths bootstrap.RemoteConfigPaths) (*driverAssembly, func(), error) {
-	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.BaseProviderSet, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }
 
 func initializeDriversWithPathsProvider(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPaths) (*driverAssembly, func(), error) {
-	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, customRemoteConfigDirs, customRemoteConfigPatterns, consulconfig.NewDefaultRemoteConfigPaths, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, customRemoteConfigPatterns, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }
 

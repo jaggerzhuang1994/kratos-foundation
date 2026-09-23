@@ -4,16 +4,9 @@
 
 ## Wire 接入
 
-配合 `bootstrap.BaseProviderSet` 使用 `consulconfig.ProviderSet`。业务提供 `AppInfo` 及两个命名切片类型，供 Wire 区分本地和远程依赖：
+与 `bootstrap.BaseProviderSet` 配合使用时，默认选择 `consulconfig.ProviderSet`。它提供 `NewDefaultRemoteConfigDirs()`（依次返回 `configs`、`secrets`）、`NewDefaultRemoteConfigPaths`、`NewConfigSources` 和 `bootstrap.NewSpec`。业务提供 `AppInfo`、`bootstrap.LocalConfigPaths` 以及相对路径列表 `consulconfig.RemoteConfigPaths`：
 
 ```go
-// 类型定义位于 pkg/bootstrap。
-type LocalConfigPaths []string
-type RemoteConfigPaths []string
-```
-
-```go
-// 放入应用的 wireinject 文件；business.ProviderSet 和 Boot 由消费项目提供。
 func localConfigPaths() bootstrap.LocalConfigPaths {
     return bootstrap.LocalConfigPaths{
         "configs/{{app}}.yaml",
@@ -21,6 +14,28 @@ func localConfigPaths() bootstrap.LocalConfigPaths {
     }
 }
 
+func remoteConfigPatterns() consulconfig.RemoteConfigPaths {
+    return consulconfig.RemoteConfigPaths{
+        "common*.yaml",
+        "{{env}}/common*.yaml",
+        "services/{{app}}.yaml",
+        "services/{{app}}/*.yaml",
+        "services/{{env}}/{{app}}.yaml",
+        "services/{{app}}/{{env}}/*.yaml",
+    }
+}
+
+// 放入应用的 wireinject 文件；business.ProviderSet 和 Boot 由消费项目提供。
+func wireApp(info appinfo.AppInfo) (*kratos.App, func(), error) {
+    wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet,
+        localConfigPaths, remoteConfigPatterns, business.ProviderSet, Boot)
+    return nil, nil, nil
+}
+```
+
+业务需要直接指定完整远程路径时，改用 `consulconfig.BaseProviderSet`，并提供 `bootstrap.RemoteConfigPaths`；两个 consulconfig set 二选一，不要重复注册 `bootstrap.NewSpec` 或 `NewConfigSources`：
+
+```go
 func remoteConfigPaths() bootstrap.RemoteConfigPaths {
     return bootstrap.RemoteConfigPaths{
         "configs/common*.yaml",
@@ -29,14 +44,14 @@ func remoteConfigPaths() bootstrap.RemoteConfigPaths {
     }
 }
 
-func wireApp(info appinfo.AppInfo) (*kratos.App, func(), error) {
-    wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet,
+func wireAppWithFullPaths(info appinfo.AppInfo) (*kratos.App, func(), error) {
+    wire.Build(bootstrap.BaseProviderSet, consulconfig.BaseProviderSet,
         localConfigPaths, remoteConfigPaths, business.ProviderSet, Boot)
     return nil, nil, nil
 }
 ```
 
-`ProviderSet` 只包含 `bootstrap.NewSpec` 和 `NewConfigSources`，不再注入目录、配置名称或路径函数。也可将两组命名切片作为 injector 参数。业务可直接传入 `[]string` 调用 `NewConfigSources`；自定义配置名称直接写在路径中，不影响应用身份。不要同时提供另一个 `*bootstrap.Spec` provider。
+也可将这些命名切片作为 injector 参数注入。自定义配置名称直接写在路径中，不改变应用身份。`bootstrap.BaseProviderSet` 不包含 `*bootstrap.Spec` provider，两种 consulconfig set 各提供唯一实例。
 
 ## 模板变量与解析顺序
 
@@ -58,42 +73,13 @@ func wireApp(info appinfo.AppInfo) (*kratos.App, func(), error) {
 
 ## 远程目录与相对路径组合
 
-业务也可分别提供两个 `consulconfig` 命名切片：
+`consulconfig.RemoteConfigDirs` 和 `consulconfig.RemoteConfigPaths` 是两种不同的命名切片。默认 `ProviderSet` 使用 `NewDefaultRemoteConfigDirs()` 返回 `[]string{"configs", "secrets"}` 的独立切片；业务只需提供相对路径。`NewDefaultRemoteConfigPaths(dirs, paths)` 按目录列表顺序，对每个目录依次拼接全部相对路径，返回新的 `bootstrap.RemoteConfigPaths`。它不读取环境、不替换模板、不访问 Consul。
 
-```go
-// 类型定义位于 contrib/bootstrap/consulconfig。
-type RemoteConfigDirs []string
-type RemoteConfigPaths []string
-```
+目录和相对路径都可包含 `{{env}}`、`{{app}}`、`{{version}}`，组合后的完整路径在加载阶段统一替换，再由 Consul 解析路径模式。两个输入任一为空会得到空路径列表，远程来源按前述规则禁用。业务对输入列表或返回列表的修改互不影响。
 
-`NewDefaultRemoteConfigPaths(dirs, paths)` 按目录列表顺序，对每个目录依次拼接全部相对路径，返回新的 `bootstrap.RemoteConfigPaths`；不读取环境、不替换模板、不访问 Consul。目录和相对路径都可包含 `{{env}}`、`{{app}}`、`{{version}}`，组合后的完整路径在 `NewConfigManager` 加载阶段统一替换，再由 Consul 解析路径模式。两个输入任一为空会得到空路径列表，远程来源按前述规则禁用。业务对输入列表或返回列表的修改互不影响。
+上方默认接入示例的六条相对模式会生成十二层路径：先加载 configs 的六层，再加载 secrets 的六层。每组公共先于应用、基础先于环境、单文件先于目录片段。环境单文件位于 `services/{{env}}/{{app}}.yaml`，不会被基础层 `services/{{app}}/*.yaml` 混入其他环境；业务也可加入 `{{version}}`。
 
-```go
-func remoteConfigDirs() consulconfig.RemoteConfigDirs {
-    return consulconfig.RemoteConfigDirs{"configs", "secrets"}
-}
-
-func remoteConfigPatterns() consulconfig.RemoteConfigPaths {
-    return consulconfig.RemoteConfigPaths{
-        "common*.yaml",
-        "{{env}}/common*.yaml",
-        "services/{{app}}.yaml",
-        "services/{{app}}/*.yaml",
-        "services/{{env}}/{{app}}.yaml",
-        "services/{{app}}/{{env}}/*.yaml",
-    }
-}
-
-// 可在业务 wireinject 文件中组装；与直接提供 bootstrap.RemoteConfigPaths 二选一。
-func wireApp(info appinfo.AppInfo) (*kratos.App, func(), error) {
-    wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet,
-        localConfigPaths, remoteConfigDirs, remoteConfigPatterns,
-        consulconfig.NewDefaultRemoteConfigPaths, business.ProviderSet, Boot)
-    return nil, nil, nil
-}
-```
-
-上述目录列表生成十二层路径：先加载 configs 的六层，再加载 secrets 的六层。每组公共先于应用、基础先于环境、单文件先于目录片段。环境单文件位于 `services/{{env}}/{{app}}.yaml`，不会被基础层 `services/{{app}}/*.yaml` 混入其他环境；`{{version}}` 可由业务加入任一相对路径。
+需要其他目录时，可用 `consulconfig.BaseProviderSet`，由业务提供自定义 `RemoteConfigDirs`、相对 `RemoteConfigPaths` 和 `NewDefaultRemoteConfigPaths` 三个 provider；也可直接提供完整 `bootstrap.RemoteConfigPaths`。不要在默认 `ProviderSet` 中额外注入目录或组合函数，否则 Wire 会发现重复 provider。
 
 本地路径由业务直接提供 `bootstrap.LocalConfigPaths`。需要只加载应用基础与环境文件时，声明 `[]string{"configs/{{app}}.yaml", "configs/{{env}}/{{app}}.yaml"}`；传入目录则按通用文件源规则加载直属 YAML。
 
@@ -132,8 +118,8 @@ func Configure(info appinfo.AppInfo) (config.Manager, func(), error) {
 ```mermaid
 flowchart TD
     A([开始组装]) --> A1{远程路径来源?}
-    A1 -- 完整列表 --> B[业务提供 AppInfo 和两组路径模板]
-    A1 -- 目录与相对模式 --> A2[NewDefaultRemoteConfigPaths 组合完整列表]
+    A1 -- consulconfig.BaseProviderSet 完整列表 --> B[业务提供 AppInfo 和两组路径模板]
+    A1 -- consulconfig.ProviderSet 默认目录与相对模式 --> A2[NewDefaultRemoteConfigPaths 组合完整列表]
     A2 --> B
     B --> C{ConfigSources 完整?}
     C -- 零值 --> E[仅使用 env 和显式追加来源]
@@ -164,6 +150,6 @@ NewSpec 不执行 I/O 或启动 goroutine。Manager 拥有配置来源和 watche
 
 旧版 `LocalConfigPath`、`RemoteConfigDirName`、`RemoteConfigName`、两个 `*ConfigPathsProvider` 和 `ProviderSetWithCustomRemoteConfigName` 已移除。迁移为业务提供两组命名切片，`NewConfigSources(info, localPaths, remotePaths)` 只接收这三项；自定义远程名称写成路径字面量，应用名称使用 `{{app}}`。
 
-旧版本地“传目录后自动选择应用基础和环境文件”的行为须显式声明两条模板；直接传目录采用通用文件源的直属 YAML 规则。旧远程十二层可用 `RemoteConfigDirs{"configs", "secrets"}` 与六条相对模式组合保留；更新 injector 后重新执行业务 Wire 生成命令。
+旧版本地“传目录后自动选择应用基础和环境文件”的行为须显式声明两条模板；直接传目录采用通用文件源的直属 YAML 规则。旧远程十二层可由默认 `consulconfig.ProviderSet` 加业务提供的六条 `consulconfig.RemoteConfigPaths` 相对模式保留；完整路径用 `consulconfig.BaseProviderSet` 注入。更新 injector 后重新执行业务 Wire 生成命令。
 
-根目录 `make test-business` 在临时模块生成并运行[真实 Wire 用例](../../../pkg/bootstrap/testdata/wireassembly/wire.go)，覆盖路径列表参数和业务 provider。`make test` 覆盖模板错误、先替换再展开本地 glob、顺序、列表快照、环境固定及禁用 Consul 等行为；不依赖真实 Consul 服务。
+根目录 `make test-business` 在临时模块生成并运行[真实 Wire 用例](../../../pkg/bootstrap/testdata/wireassembly/wire.go)，覆盖完整路径参数与默认目录 provider。`make test` 覆盖模板错误、先替换再展开本地 glob、顺序、列表快照、环境固定及禁用 Consul 等行为；不依赖真实 Consul 服务。

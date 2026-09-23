@@ -12,6 +12,11 @@ type RemoteConfigDirs []string
 // RemoteConfigPaths 是相对于每个远程目录的有序路径模板列表。
 type RemoteConfigPaths []string
 
+// NewDefaultRemoteConfigDirs 返回独立的默认远程目录列表，configs 的优先级低于 secrets。
+func NewDefaultRemoteConfigDirs() RemoteConfigDirs {
+	return RemoteConfigDirs{"configs", "secrets"}
+}
+
 // NewDefaultRemoteConfigPaths 按目录顺序展开每组相对路径，返回独立的完整路径列表。
 // 不执行模板替换或路径模式解析；空目录列表或空路径列表会禁用远程配置来源。
 func NewDefaultRemoteConfigPaths(dirs RemoteConfigDirs, paths RemoteConfigPaths) bootstrap.RemoteConfigPaths {

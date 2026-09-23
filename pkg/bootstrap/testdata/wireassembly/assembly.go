@@ -58,10 +58,6 @@ type driverAssembly struct {
 	Config      config.Manager
 }
 
-func customRemoteConfigDirs() consulconfig.RemoteConfigDirs {
-	return consulconfig.RemoteConfigDirs{"configs", "secrets"}
-}
-
 func customRemoteConfigPatterns() consulconfig.RemoteConfigPaths {
 	return consulconfig.RemoteConfigPaths{"shared-orders/{{env}}/shared-config.yaml"}
 }

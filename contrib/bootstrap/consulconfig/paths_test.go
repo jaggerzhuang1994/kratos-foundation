@@ -7,6 +7,17 @@ import (
 	"testing"
 )
 
+func TestDefaultRemoteConfigDirs(t *testing.T) {
+	first := NewDefaultRemoteConfigDirs()
+	if !slices.Equal(first, RemoteConfigDirs{"configs", "secrets"}) {
+		t.Fatalf("directories=%v", first)
+	}
+	first[0] = "changed"
+	if !slices.Equal(NewDefaultRemoteConfigDirs(), RemoteConfigDirs{"configs", "secrets"}) {
+		t.Fatal("default directories share storage")
+	}
+}
+
 func TestDefaultRemoteConfigPaths(t *testing.T) {
 	dirs := RemoteConfigDirs{"configs", "secrets"}
 	paths := RemoteConfigPaths{
