@@ -148,7 +148,7 @@ func newManagerWithDrivers(
 			// 先停订阅再关连接，避免回调向已关闭的连接池写入参数。
 			cancelPoolUpdates()
 			if closeErr := result.close(); closeErr != nil {
-				result.log.With("error", closeErr).Error("Failed to close a database connection")
+				result.log.With("error", closeErr).Error("failed to close a database connection")
 			}
 		})
 	}, nil

@@ -49,7 +49,7 @@ func NewLogBootstrap(spec *app.Spec, manager config.Manager, logger log.Logger) 
 			err = log.ApplyRuntimeConfig(value.(*log.RuntimeConfig))
 		}
 		if err != nil {
-			logger.With("error", err).Error("Failed to apply log configuration")
+			logger.With("error", err).Error("failed to apply log configuration")
 		}
 	}, new(log.RuntimeConfig))
 	if err != nil {

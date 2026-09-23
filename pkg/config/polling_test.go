@@ -299,7 +299,7 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 		for i := 0; i+1 < len(fields); i += 2 {
 			event[fields[i].(string)] = fields[i+1]
 		}
-		if event["msg"] == "config.watch" || event["msg"] == "config.change" || event["msg"] == "Configuration observer panicked; continuing polling" {
+		if event["msg"] == "config.watch" || event["msg"] == "config.change" || event["msg"] == "configuration observer panicked; continuing polling" {
 			event["level"] = level
 			events <- event
 		}

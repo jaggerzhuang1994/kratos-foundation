@@ -56,7 +56,7 @@ func (w *watcher) run(ctx context.Context, d *discovery, name string, indices ma
 				w.err = err
 				return
 			}
-			d.logger.With("service", name, "attempt", attempt+1, "error", err).Warn("Consul discovery query failed; retrying")
+			d.logger.With("service", name, "attempt", attempt+1, "error", err).Warn("consul discovery query failed; retrying")
 			if err = backoff.Wait(ctx, attempt); err != nil {
 				w.err = err
 				return
@@ -65,7 +65,7 @@ func (w *watcher) run(ctx context.Context, d *discovery, name string, indices ma
 			continue
 		}
 		if attempt > 0 {
-			d.logger.With("service", name, "attempts", attempt).Info("Consul discovery query recovered")
+			d.logger.With("service", name, "attempts", attempt).Info("consul discovery query recovered")
 		}
 		attempt = 0
 		if !maps.Equal(indices, current) {

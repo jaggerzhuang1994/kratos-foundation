@@ -130,7 +130,7 @@ func NewApp(
 
 	var registrar *supervisedRegistrar
 	if snapshot.serviceRegistrationDisabled {
-		kratoslog.NewHelper(snapshot.logger).Infow("function", "NewApp", "event", "app.registration.disabled")
+		kratoslog.NewHelper(snapshot.logger).Infow("event", "app.registration.disabled")
 	}
 	if serviceRegistrar != nil && !snapshot.serviceRegistrationDisabled {
 		registrar = newSupervisedRegistrar(

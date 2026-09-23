@@ -95,9 +95,9 @@ func (p *StopPolicy) current() time.Duration {
 			continue
 		}
 		if err != nil {
-			p.logger.Errorf("Rejected application shutdown timeout update at version %d: %v", version, err)
+			p.logger.Errorf("rejected application shutdown timeout update at version %d: %v", version, err)
 		} else if old.timeout != next.timeout {
-			p.logger.Infof("Updated application shutdown timeout at version %d to %s", version, next.timeout)
+			p.logger.Infof("updated application shutdown timeout at version %d to %s", version, next.timeout)
 		}
 		return next.timeout
 	}

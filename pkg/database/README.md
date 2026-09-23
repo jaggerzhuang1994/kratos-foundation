@@ -146,7 +146,7 @@ flowchart TD
 
 新增 PostgreSQL 等实现时，应在独立公共 `contrib/database/<driver>` 包中调用 `database.MustRegisterDriver`，业务只需选择性空导入该包。
 
-驱动注册成功时使用全局日志记录 `module=database` 和规范化的 `driver` 名称，消息为 `Registered database driver`。MySQL、SQLite 的空导入注册均适用；不记录 DSN 或密钥，注册失败只返回错误。
+驱动注册成功时使用全局日志记录 `module=database` 和规范化的 `driver` 名称，消息为 `registered database driver`。MySQL、SQLite 的空导入注册均适用；不记录 DSN 或密钥，注册失败只返回错误。
 
 ```mermaid
 flowchart TD
@@ -157,13 +157,13 @@ flowchart TD
     D -- 是 --> F[释放锁并返回错误]
     F --> E
     D -- 否 --> G[登记工厂并释放锁]
-    G --> H[全局 INFO Registered database driver]
+    G --> H[全局 INFO registered database driver]
     H --> I([注册成功])
 ```
 
 ## 连接池热更新
 
-连接建立时已应用初始池参数；订阅在下一轮成功扫描异步回放当前值，未变化的回放或通知不记录更新日志。只有实际配置变化才应用并记录 `Updated database connection pool settings`，恢复到初始值也属于实际更新。
+连接建立时已应用初始池参数；订阅在下一轮成功扫描异步回放当前值，未变化的回放或通知不记录更新日志。只有实际配置变化才应用并记录 `updated database connection pool settings`，恢复到初始值也属于实际更新。
 
 Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime` 和 `conn_max_idle_time`。DSN、驱动、连接集合和其他非池参数决定启动时创建的资源，变更后需要重启。
 
@@ -174,16 +174,16 @@ Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_con
 ```mermaid
 flowchart TD
     A([database 订阅收到新配置]) --> B{解码与配置校验通过?}
-    B -- 否 --> C[ERROR Rejected database configuration update]
+    B -- 否 --> C[ERROR rejected database configuration update]
     B -- 是 --> D{排除池参数后与启动配置相同?}
-    D -- 否 --> E[WARN Skipped database hot update]
+    D -- 否 --> E[WARN skipped database hot update]
     D -- 是 --> D1{与最近已应用配置相同?}
     D1 -- 是 --> I
     D1 -- 否 --> F[查询原连接池：短暂持有 factory 锁后释放]
     F --> G[补齐默认值；先更新总上限，再更新空闲上限与过期时间]
     G --> G1[保存最近已应用快照 同一订阅回调串行执行]
     G1 --> H{有连接完成更新?}
-    H -- 是 --> J[INFO Updated database connection pool settings]
+    H -- 是 --> J[INFO updated database connection pool settings]
     C --> I([结束])
     E --> I
     H -- 否 --> I
@@ -248,7 +248,7 @@ flowchart TD
     E --> G[Wire cleanup 停配置订阅]
     G --> H[停采集并注销指标]
     H --> I[逆序关闭连接池]
-    I -- 关闭失败 --> J[ERROR Failed to close a database connection]
+    I -- 关闭失败 --> J[ERROR failed to close a database connection]
     I -- 成功 --> K([结束])
     J --> K
     F --> K

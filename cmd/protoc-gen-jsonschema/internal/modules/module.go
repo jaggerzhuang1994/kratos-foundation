@@ -120,7 +120,7 @@ func (m *Module) Execute(targets map[string]pgs.File, packages map[string]pgs.Pa
 
 func (m *Module) backendPhase(file pgs.File, registry *jsonschema.Registry) pgs.Artifact {
 	defer m.Push(file.Name().String()).Pop()
-	m.Debugf("FileOptions: %v", protojson.MarshalOptions{EmitUnpopulated: true}.Format(proto.GetFileOptions(file)))
+	m.Debugf("file options: %v", protojson.MarshalOptions{EmitUnpopulated: true}.Format(proto.GetFileOptions(file)))
 
 	entrypointMessage := getEntrypointFromFile(file, m.pluginOptions)
 	if entrypointMessage == nil {
@@ -150,7 +150,7 @@ func (m *Module) backendPhase(file pgs.File, registry *jsonschema.Registry) pgs.
 	content, err := m.serializer.Serialize(rootSchema, file)
 	m.CheckErr(err, fmt.Sprintf("Failed to serialize file %s", file.Name().String()))
 	fileName := m.serializer.ToFileName(file)
-	m.Debugf("GeneratedFileName: %s", fileName)
+	m.Debugf("generated file name: %s", fileName)
 
 	return pgs.GeneratorFile{Name: fileName, Contents: string(content)}
 }

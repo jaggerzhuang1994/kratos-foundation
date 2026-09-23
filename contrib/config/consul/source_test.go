@@ -302,7 +302,7 @@ func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, value := range values {
-				if !strings.Contains(output.String(), "path=configs/app/"+value.Key) || !strings.Contains(output.String(), "DEBUG") || !strings.Contains(output.String(), "function=kvSource.query") {
+				if !strings.Contains(output.String(), "path=configs/app/"+value.Key) || !strings.Contains(output.String(), "INFO") || !strings.Contains(output.String(), "loaded configuration file") {
 					t.Fatalf("missing loaded path in log: %s", output.String())
 				}
 			}

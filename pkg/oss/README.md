@@ -35,7 +35,7 @@ oss:
 
 首个 `oss.NewManager` 会冻结全局驱动注册表并持有不可变快照。所有驱动包都必须在此之前导入；冻结后调用 `RegisterDriver` 或 `MustRegisterDriver` 会失败。驱动工厂的执行不持有注册表锁。
 
-驱动注册成功时使用全局日志输出 INFO 事件 `Registered OSS driver`，包含 `module=oss` 和规范化的 `driver` 名称。空导入 Aliyun 驱动会记录 `driver=aliyun`；此时仅完成工厂注册，不代表 Bucket 已创建或远程连接成功。日志使用注册时的全局 logger，通常早于应用 logger 的组装，不记录 Bucket 配置或凭据；注册失败只返回错误，`MustRegisterDriver` 将错误转为 panic。
+驱动注册成功时使用全局日志输出 INFO 事件 `registered OSS driver`，包含 `module=oss` 和规范化的 `driver` 名称。空导入 Aliyun 驱动会记录 `driver=aliyun`；此时仅完成工厂注册，不代表 Bucket 已创建或远程连接成功。日志使用注册时的全局 logger，通常早于应用 logger 的组装，不记录 Bucket 配置或凭据；注册失败只返回错误，`MustRegisterDriver` 将错误转为 panic。
 
 ```mermaid
 flowchart TD
@@ -46,7 +46,7 @@ flowchart TD
     E -- 是 --> F[释放锁]
     F --> C
     E -- 否 --> G[写入共享工厂表并释放锁]
-    G --> H[锁外输出 INFO Registered OSS driver]
+    G --> H[锁外输出 INFO registered OSS driver]
     H --> I([返回成功])
 ```
 
@@ -90,7 +90,7 @@ flowchart TD
     P --> Q[锁外等待全部已受理创建完成]
     Q --> R[获取锁 接管缓存 释放锁]
     R --> S[锁外关闭实例]
-    S -- 失败 --> T[ERROR Failed to close an object storage client]
+    S -- 失败 --> T[ERROR failed to close an object storage client]
     S -- 成功 --> U([结束])
     T --> U
     D --> U

@@ -137,10 +137,10 @@ flowchart TD
     G -- 否 --> I[Consul 来源构造与路径校验]
     H -- 文件系统或模式错误 --> X
     H -- 无匹配 --> W
-    H -- 匹配成功 --> HL[INFO Matched local configuration files]
+    H -- 匹配成功 --> HL[INFO matched local configuration files]
     I -- 客户端或路径错误 --> X
     I -- 禁用 --> W
-    I -- 启用 --> IL[INFO Preparing Consul configuration sources]
+    I -- 启用 --> IL[INFO preparing Consul configuration sources]
     HL & IL & W --> E
     E --> J[Manager 先加载 env 再按来源顺序加载与监听]
     J -- 本地读取或 Consul KV 调用失败 --> X

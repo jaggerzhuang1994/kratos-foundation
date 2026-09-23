@@ -157,7 +157,7 @@ flowchart TD
     C --> D[Recovery / Deadline / RequestDebug / Metadata / Tracing / Metrics]
     D --> E[错误边界 / 访问日志 / 自定义中间件 / 校验 / 限流]
     E --> P{中间件成功短路?}
-    P -- 是 --> Q[INFO Request completed]
+    P -- 是 --> Q[INFO request completed]
     Q --> R[HTTP Encoder 输出非 nil reply]
     R --> Z{编码成功?}
     Z -- 是 --> J
@@ -166,19 +166,19 @@ flowchart TD
     P -- 否 --> F{注册入口?}
     F -- HandleHTTP --> G[HTTPHandler 接收派生 Request 并返回 reply 或 error]
     G --> H{业务处理成功?}
-    H -- 是 --> I[INFO Request completed]
+    H -- 是 --> I[INFO request completed]
     I --> S[ResponseEncoder 输出 reply]
     S --> Z
     F -- HandleHTTPWriter --> T[HTTPWriterHandler 接收 ResponseWriter 与派生 Request]
     T --> U{业务处理成功?}
     U -- 是 --> V[handler 写入自定义状态 Header 或响应体]
-    V --> W[INFO Request completed]
+    V --> W[INFO request completed]
     W --> J([响应完成])
-    H -- 否 --> K[INFO Request completed]
+    H -- 否 --> K[INFO request completed]
     U -- 否 --> K
     K --> L[错误边界 Normalize]
     L --> O{服务端故障?}
-    O -- 是 --> M[ERROR Request failed with a server error]
+    O -- 是 --> M[ERROR request failed with a server error]
     O -- 否 --> N[HTTP ErrorEncoder]
     M --> N
     N --> J
@@ -445,9 +445,9 @@ flowchart TD
 
 默认 HTTP/gRPC 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
 
-`Request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。故障日志始终保留 `operation`、`code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
+`request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。故障日志始终保留 `operation`、`code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
 
-最外层 `Recovered from a panic while handling a request` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
+最外层 `recovered from a panic while handling a request` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
 
 业务通过 Spec 同名替换 `errors` 或 `recovery` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC 请求链；WebSocket 异步消息回调需自行处理错误和日志。
 
@@ -468,7 +468,7 @@ flowchart TD
     N -- 是 --> O[展开 error.detail]
     N -- 否 --> K
     O --> K
-    G -. panic .-> L[ERROR Recovered from a panic: 类型]
+    G -. panic .-> L[ERROR recovered from a panic: 类型]
     L --> P{请求 debug?}
     P -- 是 --> Q[展开 stack]
     P -- 否 --> M

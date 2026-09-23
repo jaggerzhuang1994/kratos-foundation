@@ -153,7 +153,7 @@ flowchart TD
  C -- 是 --> Z([退出；不等待在途业务回调])
  C -- 否 --> D[锁外 Scan 完整配置]
  D --> E{Scan 成功?}
- E -- 否 --> F[ERROR Failed to scan configuration；保留旧快照]
+ E -- 否 --> F[ERROR failed to scan configuration；保留旧快照]
  F --> B
  E -- 是 --> G[获取 mu；检查关闭状态]
  G -- 已关闭 --> G1[释放 mu]
@@ -170,7 +170,7 @@ flowchart TD
  L1 -- 否 --> L3[INFO config.change；追加变更路径；截断时 paths_truncated=true]
  L2 --> M
  L3 --> M[锁外按登记顺序解码并执行回调]
- M -- panic --> N[ERROR Configuration observer panicked；继续其余订阅]
+ M -- panic --> N[ERROR configuration observer panicked；继续其余订阅]
  M -- 正常或解码错误 --> O[继续其余订阅]
  N --> O
  O --> U{还有订阅?}
@@ -201,7 +201,7 @@ flowchart TD
  G -- 否 --> H[保留回调已发布的快照]
  H --> Z
  C -- 并发通知 --> I{通知解码成功?}
- I -- 否 --> J[WARN Failed to update the subscribed configuration value；保留旧值]
+ I -- 否 --> J[WARN failed to update the subscribed configuration value；保留旧值]
  I -- 是 --> K[原子读取共享快照及版本]
  K --> L{CAS 发布通知值及递增版本成功?}
  L -- 否 --> K

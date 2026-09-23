@@ -86,7 +86,7 @@ flowchart TD
     B --> C[锁外按输出端 level、根 level、env 顺序合并 校验并准备候选输出]
     C --> D{成功?}
     D -- 否 --> E[锁外关闭新建候选 保留原策略]
-    E --> W[Bootstrap ERROR Failed to apply log configuration]
+    E --> W[Bootstrap ERROR failed to apply log configuration]
     W --> Z([返回错误])
     D -- 是 --> F[获取共享写锁 等待旧日志退出]
     F --> G{版本仍匹配?}
@@ -272,16 +272,16 @@ debugLogger.Info("request failed") // 请求级 debug：计算并输出 error.st
 ```go
 log.WithModule("config/file").
     With("files", matches).
-    Info("Matched local configuration files")
+    Info("matched local configuration files")
 ```
 
 以上片段中的 `matches` 是已经匹配到的文件列表。`WithModule` 返回借用当前全局输出的 Logger，不创建文件或 cleanup；已有视图持续应用共享日志设置，但后续 `SetLogger` 不会替换它借用的输出。因此应在调用处获取，避免在包初始化时长期保存启动 fallback 的视图；输出仍由原所有者释放。
 
-`Info/Warn/Error/Debug/Fatal` 和对应 `f` 方法使用当前 `msgKey`；Foundation 包级消息方法也遵循此规则。配置 `log.msg_key: message` 会让上述日志输出 `message=Matched local configuration files`。`module` 是保留字段，不能用作 msgKey；设置时会告警并保留旧值。附加字段使用 `With`，不要手写 `"msg"` 再包装 `fmt.Sprintf`。`Log` 和 `*w` 是原始键值入口，保留调用者提供的字段，不自动猜测或重命名消息字段。
+`Info/Warn/Error/Debug/Fatal` 和对应 `f` 方法使用当前 `msgKey`；Foundation 包级消息方法也遵循此规则。配置 `log.msg_key: message` 会让上述日志输出 `message=matched local configuration files`。`module` 是保留字段，不能用作 msgKey；设置时会告警并保留旧值。附加字段使用 `With`，不要手写 `"msg"` 再包装 `fmt.Sprintf`。`Log` 和 `*w` 是原始键值入口，保留调用者提供的字段，不自动猜测或重命名消息字段。
 
 `log.Context(ctx)` 保留 Kratos Helper 返回类型，它在构造时捕获当前消息字段名；需要已保存视图持续跟随动态消息字段配置 时，使用 `log.WithModule("orders").WithContext(ctx)`。
 
-消息直接说明发生了什么、失败了什么以及实际采取的回退；`function`、`error`、路径、配置键等作为独立字段。避免把 `function | phase | context` 拼进消息。稳定的 `event` 字段可继续用于检索，不能替代可读的诊断说明。
+消息直接说明发生了什么、失败了什么以及实际采取的回退；日志自带 `caller`，不再重复写入 `function`，`error`、路径、配置键等仍作为独立字段。避免把阶段和上下文拼进消息。稳定的 `event` 字段可继续用于检索，不能替代可读的诊断说明。
 
 绑定 Logger 及调用均未指定模块时兜底 `unknown`。通过 `log.SetLogger` 或 Bootstrap 绑定后，直接调用 Kratos 全局入口的 SDK 日志归属 `kratos`，包括 HTTP/gRPC 启停日志。Kratos 代理仅在包初始化时安装一次，当前输出目标由原子指针维护；切换不再调用官方非线程安全的 SetLogger，不增加输出资源。
 

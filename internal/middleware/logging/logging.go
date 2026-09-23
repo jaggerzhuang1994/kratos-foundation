@@ -105,7 +105,7 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 				"code", foundationerrors.Code(foundationerrors.Normalize(err)),
 				"reason", foundationerrors.Reason(err),
 				"latency", time.Since(started).String(),
-			).Info("Request completed")
+			).Info("request completed")
 			return reply, err
 		}
 	}

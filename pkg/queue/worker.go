@@ -207,7 +207,7 @@ func (w *Worker[T]) Start(ctx context.Context) error {
 	}
 	if w.disabled {
 		// 复用已有停止信号和协调 goroutine，禁用消费不构造伪 Store，也不进入领取循环。
-		w.log.WithContext(ctx).Debugw("function", "Start", "event", "consumer.disabled", "queue", w.config.Queue)
+		w.log.WithContext(ctx).Debugw("event", "consumer.disabled", "queue", w.config.Queue)
 		<-runCtx.Done()
 		return nil
 	}

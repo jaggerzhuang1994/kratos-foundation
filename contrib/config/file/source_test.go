@@ -85,7 +85,7 @@ func TestNewSourcesHandlesEmptyUnmatchedInvalidAndDuplicatePaths(t *testing.T) {
 	if len(deduplicated) != 1 {
 		t.Fatalf("NewSources(duplicates) count = %d, want 1", len(deduplicated))
 	}
-	for _, event := range []string{"No local configuration files matched the pattern", "Matched local configuration files"} {
+	for _, event := range []string{"no local configuration files matched the pattern", "matched local configuration files"} {
 		if !strings.Contains(output.String(), event) {
 			t.Fatalf("global log missing %q: %s", event, output.String())
 		}

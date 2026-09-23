@@ -37,7 +37,7 @@ func (s *fileSource) Load() ([]*kratosconfig.KeyValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.WithModule("config/file").With("function", "fileSource.Load", "path", s.path).Debug("Loaded configuration file")
+	log.WithModule("config/file").With("path", s.path).Debug("loaded configuration file")
 	return values, nil
 }
 

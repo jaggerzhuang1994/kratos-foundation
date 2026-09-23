@@ -126,13 +126,13 @@ func (h *healthState) ready(ctx context.Context) (ready bool) {
 		// 仅记录探针结果变化，不在每次请求上写日志；检查名由组装层提供，不记录原始错误。
 		if h.lastStatus.Swap(status) != status {
 			if ready {
-				log.WithModule("server/health").With("event", "readiness.changed", "status", status).Info("Service is ready to accept requests")
+				log.WithModule("server/health").With("event", "readiness.changed", "status", status).Info("service is ready to accept requests")
 			} else {
 				log.WithModule("server/health").With(
 					"event", "readiness.changed",
 					"status", status,
 					"check", failedCheck,
-				).Warn("Service is not ready to accept requests")
+				).Warn("service is not ready to accept requests")
 			}
 		}
 	}()

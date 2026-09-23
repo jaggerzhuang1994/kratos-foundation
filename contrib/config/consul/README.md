@@ -2,7 +2,7 @@
 
 配置源诊断使用全局日志，声明 `module=config/consul`；配置路径使用结构化字段。
 
-每次成功读取（包括初次加载和热更新）以 DEBUG 记录 `Loaded configuration file`，字段包含 `function` 和 `path`；Consul 的 `path` 为匹配后的完整 KV 键，不是输入 glob 或相对 Key。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 DEBUG 才能看到。
+每次成功读取（包括初次加载和热更新）以 INFO 记录 `loaded configuration file`，字段包含 `path`；Consul 的 `path` 为匹配后的完整 KV 键，不是输入 glob 或相对 Key。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 INFO 才能看到。
 
 `contrib/config/consul` 把有序 Consul KV 路径转换成 Kratos 配置源。后面的路径优先级更高，路径不能为空、包含首尾空白或重复。
 
@@ -32,7 +32,7 @@ flowchart TD
  Z -- 是 --> C
  Z -- 否 --> G{路径合法且无重复?}
  G -- 否 --> H([返回路径错误；保留共享客户端])
- G -- 是 --> I[INFO Preparing Consul configuration sources]
+ G -- 是 --> I[INFO preparing Consul configuration sources]
  I --> J[按顺序创建 Source，Manager 执行 Load/Watch]
  J --> K{初始快照有效?}
  K -- 否 --> L[停止已创建的 watcher 并返回错误]
@@ -105,7 +105,7 @@ flowchart TD
     R --> E[按完整键名排序 所有路径统一匹配完整键]
     E --> D2{匹配失败或目录标记?}
     D2 -- 是 --> S[跳过该键]
-    D2 -- 否 --> DL[DEBUG Loaded configuration file 完整 KV 键]
+    D2 -- 否 --> DL[INFO loaded configuration file 完整 KV 键]
     DL --> F[复制值并按扩展名标记格式]
     S --> G
     F --> G([返回完整快照及索引])

@@ -40,7 +40,7 @@ func NewHotReloadValue[T any](config Manager, key string, optionalDefault ...*T)
 			log.WithModule("config").With(
 				"key", key,
 				"error", err,
-			).Warn("Failed to update the subscribed configuration value; retaining the previous value")
+			).Warn("failed to update the subscribed configuration value; retaining the previous value")
 			return
 		}
 		for {

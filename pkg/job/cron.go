@@ -122,16 +122,16 @@ func (c *cron_) start() {
 
 func (c *cron_) run() {
 	defer close(c.done)
-	c.log.With("function", "cron.run").Info("starting cron server")
+	c.log.Info("starting cron server")
 	c.cron.Start()
 	applied := make(map[string]*cronRegistration)
 	ids := make(map[string]cron.EntryID)
 	for {
 		select {
 		case <-c.stopCh:
-			c.log.With("function", "cron.run").Info("stopping cron server")
+			c.log.Info("stopping cron server")
 			<-c.cron.Stop().Done()
-			c.log.With("function", "cron.run").Info("cron server stopped")
+			c.log.Info("cron server stopped")
 			return
 		case <-c.wake:
 			c.mu.Lock()

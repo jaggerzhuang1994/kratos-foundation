@@ -86,7 +86,7 @@ func TestPublicDriverRegistryFunctions(t *testing.T) {
 			t.Fatalf("missing %q in %s", want, buffer.String())
 		}
 	}
-	if got := strings.Count(buffer.String(), "Registered OSS driver"); got != 2 {
+	if got := strings.Count(buffer.String(), "registered OSS driver"); got != 2 {
 		t.Fatalf("successful registration log count = %d, want 2", got)
 	}
 	if got := RegisteredDrivers(); !slices.Equal(got, []string{"alpha", "zeta"}) {

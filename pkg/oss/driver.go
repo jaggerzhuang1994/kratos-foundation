@@ -89,7 +89,7 @@ func RegisterDriver(name string, factory DriverFactory) error {
 		return err
 	}
 	// register 已释放注册表锁，日志输出不会阻塞锁内注册与查询。
-	log.WithModule("oss").With("driver", normalizeDriverName(name)).Info("Registered OSS driver")
+	log.WithModule("oss").With("driver", normalizeDriverName(name)).Info("registered OSS driver")
 	return nil
 }
 

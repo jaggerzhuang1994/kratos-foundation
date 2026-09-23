@@ -465,7 +465,7 @@ flowchart LR
 
 ## 日志消息与自定义 msgKey
 
-全局及实例消息方法统一应用当前 `msgKey`。调用方改用 `log.WithModule("config/file").With("files", matches).Info("Matched local configuration files")`，其中 `matches` 为已匹配的文件列表，避免通过 `Infow("msg", ...)` 写死消息字段。原始 `Log/*w` 仍保留调用者给定的键值。
+全局及实例消息方法统一应用当前 `msgKey`。调用方改用 `log.WithModule("config/file").With("files", matches).Info("matched local configuration files")`，其中 `matches` 为已匹配的文件列表，避免通过 `Infow("msg", ...)` 写死消息字段。原始 `Log/*w` 仍保留调用者给定的键值。
 
 模块视图借用获取时的全局输出，持续应用共享设置，但不跟随之后的 SetLogger；在使用处获取。`Context` 返回的 Kratos Helper 捕获构造时消息字段名，长期保存时优先使用模块 Logger 的 WithContext 视图。消息文案改为具体描述，函数、错误和业务上下文保留为独立字段；原先按管道分隔消息字符串检索的规则需同步调整。流程及完整契约见 [消息输出规则](pkg/log/README.md#字段过滤与去重)。
 

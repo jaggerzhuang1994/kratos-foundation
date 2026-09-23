@@ -426,7 +426,7 @@ func TestCleanupUsesStartupBudgetAndReportsForcedClose(t *testing.T) {
 		if closes.Load() != 1 {
 			t.Fatalf("closes=%d", closes.Load())
 		}
-		if !recorder.hasRecord("Timed out waiting for client leases to be released; force-closing connections", map[string]any{"connections": 1, "timeout": time.Second}) {
+		if !recorder.hasRecord("timed out waiting for client leases to be released; force-closing connections", map[string]any{"connections": 1, "timeout": time.Second}) {
 			t.Fatal("missing forced-close diagnostic")
 		}
 		release()

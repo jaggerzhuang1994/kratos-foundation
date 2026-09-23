@@ -24,7 +24,7 @@ const disableConsul = "DISABLE_CONSUL"
 // newClient 仅在首次访问时读取 env；客户端及连接池随进程退出回收。
 func newClient() (Client, bool, error) {
 	if env.GetEnvAsBool(disableConsul) || (env.IsLocal() && env.GetEnv(api.HTTPAddrEnvName) == "") {
-		log.WithModule("consul").Warn("Consul client is disabled")
+		log.WithModule("consul").Warn("consul client is disabled")
 		return nil, true, nil
 	}
 	config := api.DefaultConfig()
@@ -32,7 +32,7 @@ func newClient() (Client, bool, error) {
 		return nil, false, errors.New("consul address is empty")
 	}
 	// 将域名交给 SDK 和 transport，不在初始化时固定其解析结果。
-	log.WithModule("consul").With("address", config.Address).Info("Initializing Consul client and checking the cluster leader")
+	log.WithModule("consul").With("address", config.Address).Info("initializing Consul client and checking the cluster leader")
 	client, err := api.NewClient(config)
 	if err != nil {
 		return nil, false, fmt.Errorf("create Consul client: %w", err)

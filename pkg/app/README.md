@@ -52,7 +52,7 @@ flowchart TD
 
 一次性 Job 可在构造应用前调用 `spec.DisableServiceRegistration()`（`app.Spec` 和 `bootstrap.Spec` 均提供）。
 默认不关闭；显式关闭优先于注入的非 nil Registrar，App 不再调用 Register/Deregister，
-并记录 `INFO function=NewApp event=app.registration.disabled`。重复声明安全，冻结后调用会 panic(app.ErrSpecFrozen)，不支持热更新。
+并记录 `INFO event=app.registration.disabled`，日志自带 `caller`。重复声明安全，冻结后调用会 panic(app.ErrSpecFrozen)，不支持热更新。
 该开关与 `ExitWhenDone` 独立，不改变 HTTP/gRPC、健康监听或客户端发现。
 
 开关仅作用于 App 使用 Registrar 的阶段，不跳过 Wire 中 Registrar provider 与 Registry Factory 的构造或配置校验；

@@ -64,6 +64,6 @@ func runRedisJob(ctx context.Context, manager redis.Manager, name string, logger
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
-	logger.WithModule("maintenance").WithContext(ctx).With("job_name", name, "value", value).Info("Collected Redis maintenance data")
+	logger.WithModule("maintenance").WithContext(ctx).With("job_name", name, "value", value).Info("collected Redis maintenance data")
 	return nil
 }

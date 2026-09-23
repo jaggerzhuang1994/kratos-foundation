@@ -2,7 +2,7 @@
 
 配置源诊断使用全局日志，声明 `module=config/file`；未匹配路径和匹配文件列表使用结构化字段。
 
-每次成功读取（包括初次加载和热更新）以 DEBUG 记录 `Loaded configuration file`，字段包含 `function` 和 `path`；文件源的 `path` 为实际加载文件的绝对路径（符号链接保留链接路径）。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 DEBUG 才能看到。
+每次成功读取（包括初次加载和热更新）以 DEBUG 记录 `loaded configuration file`，日志自带 `caller`，并包含 `path` 字段；文件源的 `path` 为实际加载文件的绝对路径（符号链接保留链接路径）。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 DEBUG 才能看到。
 
 `contrib/config/file` 把目录、具体文件路径或 `filepath.Glob` 模式转换成 Kratos 配置源。按 PathList 输入顺序处理，每项匹配结果按文件名字典序排列，后面的文件优先级更高；重叠模式命中的同一路径只加载一次，保留第一次出现的位置。
 
@@ -50,7 +50,7 @@ flowchart TD
     C -- 是 --> B[读取完整快照]
     C -- 否 --> E{路径暂时不存在?}
     B -->|失败| E
-    B -->|成功| DL[DEBUG Loaded configuration file]
+    B -->|成功| DL[DEBUG loaded configuration file]
     DL --> H([返回完整快照])
     E -- 是 --> D[保留旧值并可取消退避]
     D --> T
@@ -64,15 +64,15 @@ flowchart TD
     A([开始]) --> B[逐项解析文件 目录或 glob 并过滤非普通文件]
     B --> C{路径解析成功?}
     C -- 否 --> D[返回错误]
-    C -- 是 --> F[对未匹配项记录全局 WARN: No local configuration files matched the pattern]
+    C -- 是 --> F[对未匹配项记录全局 WARN: no local configuration files matched the pattern]
     F --> E{合并去重后是否有文件?}
     E -- 否 --> G[返回 nil Sources]
-    E -- 是 --> O[全局 INFO: Matched local configuration files]
+    E -- 是 --> O[全局 INFO: matched local configuration files]
     O --> H[按顺序创建文件 Source]
     H -- 成功 --> J[返回全部底层 Sources 交给 Manager]
     H -- 失败 --> D
     J --> R[Manager 调用 Load 读取文件]
-    R -- 成功 --> DL[DEBUG Loaded configuration file]
+    R -- 成功 --> DL[DEBUG loaded configuration file]
     R -- 失败 --> D
     DL --> L([结束])
     D --> L

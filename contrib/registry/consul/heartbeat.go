@@ -40,10 +40,10 @@ func (r *registrar) heartbeat(ctx context.Context, payload *api.AgentServiceRegi
 		}
 		if err != nil {
 			if !retryable(err) {
-				r.logger.With("service.id", payload.ID, "attempt", attempt+1, "error", err).Error("Consul heartbeat stopped after a non-retryable failure")
+				r.logger.With("service.id", payload.ID, "attempt", attempt+1, "error", err).Error("consul heartbeat stopped after a non-retryable failure")
 				return
 			}
-			r.logger.With("service.id", payload.ID, "attempt", attempt+1, "error", err).Warn("Consul heartbeat failed; retrying")
+			r.logger.With("service.id", payload.ID, "attempt", attempt+1, "error", err).Warn("consul heartbeat failed; retrying")
 			if err = backoff.Wait(ctx, attempt); err != nil {
 				return
 			}
@@ -51,7 +51,7 @@ func (r *registrar) heartbeat(ctx context.Context, payload *api.AgentServiceRegi
 			continue
 		}
 		if attempt > 0 {
-			r.logger.With("service.id", payload.ID, "attempts", attempt).Info("Consul heartbeat recovered")
+			r.logger.With("service.id", payload.ID, "attempts", attempt).Info("consul heartbeat recovered")
 		}
 		attempt = 0
 		timer := time.NewTimer(time.Duration(r.config.healthCheckIntervalSeconds) * time.Second)

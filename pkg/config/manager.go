@@ -97,7 +97,7 @@ func NewManager(sources Sources) (Manager, func(), error) {
 	}
 	return manager, func() {
 		if closeErr := manager.close(); closeErr != nil {
-			log.WithModule("config").With("error", closeErr).Error("Failed to close the configuration manager")
+			log.WithModule("config").With("error", closeErr).Error("failed to close the configuration manager")
 		}
 	}, nil
 }

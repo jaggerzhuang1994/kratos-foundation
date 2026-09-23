@@ -126,7 +126,7 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 		}
 		releases = append(releases, func() {
 			if releaseErr := unregister(); releaseErr != nil {
-				logger.With("queue", name, "error", releaseErr).Error("Failed to unregister queue statistics")
+				logger.With("queue", name, "error", releaseErr).Error("failed to unregister queue statistics")
 			}
 		})
 		workerName, handler := consumerName, m.handleTask

@@ -92,14 +92,14 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 	if g.policy == SkipIfRunning {
 		g.mu.Unlock()
 		g.metrics.reportSkipped(ctx, g.name, "already_running")
-		g.log.WithContext(ctx).With("function", "executionGate.acquire", "job", g.name).Warn("job skipped")
+		g.log.WithContext(ctx).With("job", g.name).Warn("job skipped")
 		return false, nil
 	}
 	if g.limit >= 0 && g.pending >= g.limit {
 		event := DelayOverflow{Name: g.name, Policy: g.policy, MaxPendingRuns: g.limit}
 		g.mu.Unlock()
 		g.metrics.reportSkipped(ctx, g.name, "pending_full")
-		g.log.WithContext(ctx).With("function", "executionGate.acquire", "job", g.name, "max_pending_runs", event.MaxPendingRuns).Warn("Skipped job trigger because the pending-run queue is full")
+		g.log.WithContext(ctx).With("job", g.name, "max_pending_runs", event.MaxPendingRuns).Warn("skipped job trigger because the pending-run queue is full")
 		if g.overflow != nil {
 			return false, handleDelayOverflow(ctx, event, g.overflow)
 		}

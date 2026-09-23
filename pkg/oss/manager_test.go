@@ -263,7 +263,7 @@ func TestPublicNewManagerIsLazyAndCleanupIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if line := string(written); !strings.Contains(line, "owner=assets") || !strings.Contains(line, "close failed") || strings.Count(line, "Failed to close an object storage client") != 1 {
+	if line := string(written); !strings.Contains(line, "owner=assets") || !strings.Contains(line, "close failed") || strings.Count(line, "failed to close an object storage client") != 1 {
 		t.Fatalf("cleanup must report once through its injected logger: %s", line)
 	}
 	if _, err := manager.Bucket("assets"); !errors.Is(err, ErrManagerClosed) {

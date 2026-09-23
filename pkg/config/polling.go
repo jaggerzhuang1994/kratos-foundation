@@ -93,7 +93,7 @@ func (m *manager) poll() {
 	var next map[string]any
 	if err := m.backend.Scan(&next); err != nil {
 		log.WithModule("config").With("error", err).
-			Error("Failed to scan configuration; retaining the previous snapshot")
+			Error("failed to scan configuration; retaining the previous snapshot")
 		return
 	}
 	// 只在锁内发布快照并复制订阅表；扫描、比较、解码及业务回调均不持锁。
@@ -149,7 +149,7 @@ func (s *subscription) notify(value any, found bool) {
 	defer func() {
 		if recover() != nil {
 			log.WithModule("config").With("key", s.key, "subscription", s.caller).
-				Error("Configuration observer panicked; continuing polling")
+				Error("configuration observer panicked; continuing polling")
 		}
 	}()
 	target := s.decoder.NewTarget()

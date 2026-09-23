@@ -32,7 +32,7 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 					"error.detail", log.DebugOnly(kratoslog.Valuer(func(context.Context) any {
 						return fmt.Sprintf("%+v", err)
 					})),
-				).Error("Request failed with a server error")
+				).Error("request failed with a server error")
 			}
 			return reply, err
 		}
@@ -51,7 +51,7 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 						"operation", requestOperation(ctx),
 						"panic_type", fmt.Sprintf("%T", recovered),
 						"stack", log.DebugOnly(stack),
-					).Error("Recovered from a panic while handling a request")
+					).Error("recovered from a panic while handling a request")
 					reply = nil
 					err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithMetadata(map[string]string{"err_stack": stack})
 				}

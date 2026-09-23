@@ -194,7 +194,7 @@ func (c *websocketClient) resolve() {
 				<-c.messageSlots
 			}
 			if errors.Is(err, websocket.ErrReadLimit) && c.Logger != nil {
-				c.With("error", err, "max_message_bytes", c.maxMessageBytes).Warn("WebSocket message exceeded the configured size limit")
+				c.With("error", err, "max_message_bytes", c.maxMessageBytes).Warn("message exceeded the configured WebSocket size limit")
 			}
 			if c.onErrorHandler != nil {
 				c.onErrorHandler.OnError(c, err)

@@ -33,18 +33,18 @@ type Sources []config.Source
 func newSources(client baseconsul.Client, paths PathList) (Sources, error) {
 	logger := log.WithModule("config/consul")
 	if len(paths) == 0 {
-		logger.With("reason", "empty paths").Warn("Remote configuration is disabled")
+		logger.With("reason", "empty paths").Warn("remote configuration is disabled")
 		return nil, nil
 	}
 	if client == nil {
-		logger.With("reason", "consul client not initialized").Warn("Remote configuration is disabled")
+		logger.With("reason", "consul client not initialized").Warn("remote configuration is disabled")
 		return nil, nil
 	}
 	if err := validatePaths(paths); err != nil {
 		return nil, err
 	}
 
-	logger.With("paths", paths).Info("Preparing Consul configuration sources")
+	logger.With("paths", paths).Info("preparing Consul configuration sources")
 	sources := make(Sources, 0, len(paths))
 	for _, p := range paths {
 		sources = append(sources, &kvSource{client: client, path: p})
@@ -165,7 +165,7 @@ func (s *kvSource) query(ctx context.Context, index uint64, wait time.Duration) 
 			continue
 		}
 		// 记录匹配后的完整 KV 键，避免相对键或输入 glob 隐藏实际来源；不输出配置值。
-		log.WithModule("config/consul").With("function", "kvSource.query", "path", pair.Key).Debug("Loaded configuration file")
+		log.WithModule("config/consul").With("path", pair.Key).Info("loaded configuration file")
 		key := strings.TrimPrefix(pair.Key, directory)
 
 		values = append(values, &kratosconfig.KeyValue{

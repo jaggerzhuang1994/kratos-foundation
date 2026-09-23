@@ -15,7 +15,7 @@ flowchart TD
  C -- 否 --> D[等待首次调用结束，读取已发布结果]
  C -- 是 --> E[读取 env 固定启用决策及连接配置]
  E --> F{已禁用?}
- F -- 是 --> G[WARN Consul client is disabled；缓存 disabled=true]
+ F -- 是 --> G[WARN consul client is disabled；缓存 disabled=true]
  F -- 否 --> H[INFO 初始化；构造客户端并探测 leader，限时10秒]
  H --> I{成功?}
  I -- 否 --> J[缓存初始化错误，不再创建客户端]

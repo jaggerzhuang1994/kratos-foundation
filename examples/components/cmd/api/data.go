@@ -116,7 +116,7 @@ func (s *dataService) Run(ctx context.Context, runID string) (runErr error) {
 		}
 		return errors.New("deleted demo order still exists")
 	}
-	s.logger.WithContext(ctx).With("run_id", runID, "cache_hits", 3, "cache_misses", 1).Info("Completed the database and cache demonstration")
+	s.logger.WithContext(ctx).With("run_id", runID, "cache_hits", 3, "cache_misses", 1).Info("completed the database and cache demonstration")
 	return nil
 }
 
@@ -180,6 +180,6 @@ func (s *dataService) exerciseLock(ctx context.Context, key string) (runErr erro
 	if err := lease.Refresh(ctx, time.Minute); err != nil {
 		return fmt.Errorf("refresh order lease: %w", err)
 	}
-	s.logger.WithContext(ctx).With("key", key, "contended", true).Info("Refreshed the distributed lock lease")
+	s.logger.WithContext(ctx).With("key", key, "contended", true).Info("refreshed the distributed lock lease")
 	return nil
 }

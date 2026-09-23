@@ -185,7 +185,7 @@ func TestConsumerRecoveryBackoffGrowsAndResetsAfterCommit(t *testing.T) {
 	}
 	var attempts []string
 	for _, line := range strings.Split(string(data), "\n") {
-		if strings.Contains(line, "Reconnecting the Kafka consumer after a connection failure") {
+		if strings.Contains(line, "reconnecting the Kafka consumer after a connection failure") {
 			attempts = append(attempts, line)
 		}
 	}
@@ -381,7 +381,7 @@ func TestConsumerCancellationKeepsSDKAliveUntilLeaveGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, event := range []string{"Kafka consumer is ready", "Failed to leave the Kafka consumer group"} {
+	for _, event := range []string{"kafka consumer is ready", "failed to leave the Kafka consumer group"} {
 		var matched string
 		for _, line := range strings.Split(string(written), "\n") {
 			if strings.Contains(line, event) {

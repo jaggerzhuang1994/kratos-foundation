@@ -158,7 +158,7 @@ func (w *Worker[T]) notifyFailure(ctx context.Context, event FailureEvent) {
 	}
 	if err != nil {
 		// 回调可能包含业务敏感数据，只记录受控事件和任务定位信息。
-		w.log.WithContext(ctx).Errorw("function", "notifyFailure", "event", "failure.callback_failed", "queue", event.Queue, "task.id", event.Task.ID)
+		w.log.WithContext(ctx).Errorw("event", "failure.callback_failed", "queue", event.Queue, "task.id", event.Task.ID)
 	}
 }
 

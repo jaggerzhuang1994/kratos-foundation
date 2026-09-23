@@ -73,7 +73,7 @@ func newManagerWithDrivers(
 	cleanup := func() {
 		cleanupOnce.Do(func() {
 			if closeErr := m.close(); closeErr != nil {
-				logger.With("error", closeErr).Error("Failed to close an object storage client")
+				logger.With("error", closeErr).Error("failed to close an object storage client")
 			}
 		})
 	}
