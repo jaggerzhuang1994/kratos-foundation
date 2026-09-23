@@ -515,9 +515,9 @@ flowchart LR
 
 ## 基础 ProviderSet 命名与默认 Spec
 
-旧驱动 provider set 统一为 `BaseProviderSet`；自定义 Job Coordinator 的变体已删除，不保留别名。local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 `NewConfigSources(info, localPaths, remotePaths)` 只组装描述。业务现在提供 `bootstrap.LocalConfigPaths` 和 `consulconfig.RemoteConfigPaths` 相对路径列表；默认 `consulconfig.ProviderSet` 提供 `configs`、`secrets` 两个目录并组合完整路径。需要直接注入 `bootstrap.RemoteConfigPaths` 时改用 `consulconfig.BaseProviderSet`。这些契约取代旧版目录、名称和路径函数；自定义名称直接写在路径中。
+旧驱动 provider set 统一为 `BaseProviderSet`；自定义 Job Coordinator 的变体已删除，不保留别名。local/Consul 配置选择使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)：`bootstrap.NewSpec(application, servers, jobs, sources)` 统一构造 Spec，contrib 的 `NewConfigSources(info, localPaths, remotePaths)` 只组装描述。业务现在提供 `bootstrap.LocalConfigPaths`、`consulconfig.ConsulConfigPrefix` 和 `consulconfig.ConsulConfigPaths` 相对路径列表；`consulconfig.ProviderSet` 将业务前缀与相对模式组合为完整路径。需要直接注入 `bootstrap.RemoteConfigPaths` 时改用 `consulconfig.BaseProviderSet`。这些契约取代旧版目录、名称和路径函数；自定义名称直接写在路径中。
 
-`NewSpec` 固定环境并复制选中的列表；`NewConfigManager` 先用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，再交给文件或 Consul 来源解析目录、精确路径和 glob。模板错误和空白结果返回错误，空列表禁用该来源。旧版传本地目录后只选择应用基础与环境单文件的行为，改为显式声明 `configs/{{app}}.yaml` 与 `configs/{{env}}/{{app}}.yaml` 等模板；直接传目录加载直属 YAML。远程十二层模板可由默认 `consulconfig.ProviderSet` 和六条 `consulconfig.RemoteConfigPaths` 相对模式组合；环境单文件与片段仍分别为 `{dir}/{env}/{app}.yaml` 和 `{dir}/{app}/{env}/*.yaml`，更早版本的 `{dir}/{env}/{app}/*.yaml` 片段键须迁移或显式声明旧路径。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire，完整变量契约、流程图与所有权见上述文档。
+`NewSpec` 固定环境并复制选中的列表；`NewConfigManager` 先用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，再交给文件或 Consul 来源解析目录、精确路径和 glob。模板错误和空白结果返回错误，空列表禁用该来源。旧版传本地目录后只选择应用基础与环境单文件的行为，改为显式声明 `configs/{{app}}.yaml` 与 `configs/{{env}}/{{app}}.yaml` 等模板；直接传目录加载直属 YAML。远程十二层模板可由业务前缀 `{"configs", "secrets"}`、六条 `consulconfig.ConsulConfigPaths` 相对模式和 `consulconfig.ProviderSet` 组合；环境单文件与片段仍分别为 `{dir}/{env}/{app}.yaml` 和 `{dir}/{app}/{env}/*.yaml`，更早版本的 `{dir}/{env}/{app}/*.yaml` 片段键须迁移或显式声明旧路径。首次加载优先级不改变现有热更新合并语义。修改 provider 后重新生成 Wire，完整变量契约、流程图与所有权见上述文档。
 
 ```mermaid
 flowchart TD

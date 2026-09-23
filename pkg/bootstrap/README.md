@@ -120,7 +120,7 @@ flowchart TD
 
 基础组装使用 `BaseProviderSet`，具体后端由具名驱动配置选择。
 
-采用 local 文件、其他环境 Consul 的约定时，添加 [consulconfig.ProviderSet](../../contrib/bootstrap/consulconfig/README.md)。该集合通过 NewConfigSources 为 `bootstrap.NewSpec` 提供 ConfigSources，并默认组合 `configs`、`secrets` 两个远程目录；业务注入 AppInfo、LocalConfigPaths 和相对的 `consulconfig.RemoteConfigPaths`。需要直接提供完整的 `bootstrap.RemoteConfigPaths` 时使用 `consulconfig.BaseProviderSet`。NewSpec 固定环境并复制选中的路径列表；NewConfigManager 加载时先使用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，全部成功后交给来源解析目录、精确路径和 glob。空列表禁用该来源，模板错误返回错误。远程目录与相对模式的组合函数位于 contrib，本地路径由业务直接声明，具体契约、覆盖顺序与迁移说明见上述文档。`bootstrap.BaseProviderSet` 本身不包含此可选配置约定，也不重复提供 bootstrap.NewSpec。
+采用 local 文件、其他环境 Consul 的约定时，添加 [consulconfig.ProviderSet](../../contrib/bootstrap/consulconfig/README.md)。该集合通过 NewConfigSources 为 `bootstrap.NewSpec` 提供 ConfigSources，并组合业务提供的远程前缀与相对模式；业务注入 AppInfo、LocalConfigPaths、`consulconfig.ConsulConfigPrefix` 和相对的 `consulconfig.ConsulConfigPaths`。需要直接提供完整的 `bootstrap.RemoteConfigPaths` 时使用 `consulconfig.BaseProviderSet`。NewSpec 固定环境并复制选中的路径列表；NewConfigManager 加载时先使用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，全部成功后交给来源解析目录、精确路径和 glob。空列表禁用该来源，模板错误返回错误。远程前缀与相对模式的组合函数位于 contrib，本地路径由业务直接声明，具体契约、覆盖顺序与迁移说明见上述文档。`bootstrap.BaseProviderSet` 本身不包含此可选配置约定，也不重复提供 bootstrap.NewSpec。
 
 | 构造函数 | 返回标记 | 组装职责 |
 | --- | --- | --- |

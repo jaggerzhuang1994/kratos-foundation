@@ -7,25 +7,14 @@ import (
 	"testing"
 )
 
-func TestDefaultRemoteConfigDirs(t *testing.T) {
-	first := NewDefaultRemoteConfigDirs()
-	if !slices.Equal(first, RemoteConfigDirs{"configs", "secrets"}) {
-		t.Fatalf("directories=%v", first)
-	}
-	first[0] = "changed"
-	if !slices.Equal(NewDefaultRemoteConfigDirs(), RemoteConfigDirs{"configs", "secrets"}) {
-		t.Fatal("default directories share storage")
-	}
-}
-
 func TestDefaultRemoteConfigPaths(t *testing.T) {
-	dirs := RemoteConfigDirs{"configs", "secrets"}
-	paths := RemoteConfigPaths{
+	prefixes := ConsulConfigPrefix{"configs", "secrets"}
+	paths := ConsulConfigPaths{
 		"common*.yaml", "{{env}}/common*.yaml",
 		"services/{{app}}.yaml", "services/{{app}}/*.yaml",
 		"services/{{env}}/{{app}}.yaml", "services/{{app}}/{{env}}/*.yaml",
 	}
-	got := NewDefaultRemoteConfigPaths(dirs, paths)
+	got := NewDefaultRemoteConfigPaths(prefixes, paths)
 	render := strings.NewReplacer("{{env}}", "prod", "{{app}}", "orders")
 	for i := range got {
 		got[i] = render.Replace(got[i])
@@ -51,22 +40,38 @@ func TestDefaultRemoteConfigPaths(t *testing.T) {
 		}
 	}
 	got[0] = "changed"
-	if dirs[0] != "configs" || paths[0] != "common*.yaml" || NewDefaultRemoteConfigPaths(dirs, paths)[0] != "configs/common*.yaml" {
+	if prefixes[0] != "configs" || paths[0] != "common*.yaml" || NewDefaultRemoteConfigPaths(prefixes, paths)[0] != "configs/common*.yaml" {
 		t.Fatal("inputs or next result were modified")
+	}
+}
+
+func TestDefaultRemoteConfigPathsNestedPrefix(t *testing.T) {
+	got := NewDefaultRemoteConfigPaths(
+		ConsulConfigPrefix{"configs/services/", "secrets/{{env}}/services"},
+		ConsulConfigPaths{"{{app}}.yaml", "{{app}}/*.yaml"},
+	)
+	want := []string{
+		"configs/services/{{app}}.yaml",
+		"configs/services/{{app}}/*.yaml",
+		"secrets/{{env}}/services/{{app}}.yaml",
+		"secrets/{{env}}/services/{{app}}/*.yaml",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("paths=%v want=%v", got, want)
 	}
 }
 
 func TestDefaultRemoteConfigPathsEmptyInputs(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		dirs  RemoteConfigDirs
-		paths RemoteConfigPaths
+		name     string
+		prefixes ConsulConfigPrefix
+		paths    ConsulConfigPaths
 	}{
-		{"no directories", nil, RemoteConfigPaths{"common*.yaml"}},
-		{"no patterns", RemoteConfigDirs{"configs"}, nil},
+		{"no prefixes", nil, ConsulConfigPaths{"common*.yaml"}},
+		{"no patterns", ConsulConfigPrefix{"configs"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NewDefaultRemoteConfigPaths(tc.dirs, tc.paths); len(got) != 0 {
+			if got := NewDefaultRemoteConfigPaths(tc.prefixes, tc.paths); len(got) != 0 {
 				t.Fatalf("paths=%v, want empty", got)
 			}
 		})

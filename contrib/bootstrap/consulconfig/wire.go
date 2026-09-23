@@ -11,5 +11,5 @@ var BaseProviderSet = wire.NewSet(
 	NewConfigSources,
 )
 
-// ProviderSet 在 BaseProviderSet 上提供默认远程目录及组合函数；业务提供 AppInfo、LocalConfigPaths 和相对 RemoteConfigPaths。
-var ProviderSet = wire.NewSet(BaseProviderSet, NewDefaultRemoteConfigDirs, NewDefaultRemoteConfigPaths)
+// ProviderSet 在 BaseProviderSet 上提供路径组合函数；业务提供 AppInfo、LocalConfigPaths、ConsulConfigPrefix 和相对 ConsulConfigPaths。
+var ProviderSet = wire.NewSet(BaseProviderSet, NewDefaultRemoteConfigPaths)

@@ -75,7 +75,7 @@ func initializeDrivers(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPat
 }
 
 func initializeDriversWithPathsProvider(info appinfo.AppInfo, localPaths bootstrap.LocalConfigPaths) (*driverAssembly, func(), error) {
-	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, customRemoteConfigPatterns, componentsBoot, wire.Struct(new(driverAssembly), "*"))
+	wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet, customConsulConfigPrefix, customRemoteConfigPatterns, componentsBoot, wire.Struct(new(driverAssembly), "*"))
 	return nil, nil, nil
 }
 

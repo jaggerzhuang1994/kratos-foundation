@@ -1,10 +1,10 @@
 # Consul 配置组装
 
-`consulconfig` 为 `bootstrap.NewSpec` 提供本地文件和 Consul 配置源构造函数。业务分别声明两个有序 `[]string` 列表；bootstrap 先执行 Go `text/template` 替换，再将结果交给对应配置源解析精确路径、目录或 glob。
+`consulconfig` 为 `bootstrap.NewSpec` 提供本地文件和 Consul 配置源构造函数。业务声明本地路径、远程前缀和相对路径列表；远程列表先组合，bootstrap 再执行 Go `text/template` 替换，最后由配置源解析精确路径、目录或 glob。
 
 ## Wire 接入
 
-与 `bootstrap.BaseProviderSet` 配合使用时，默认选择 `consulconfig.ProviderSet`。它提供 `NewDefaultRemoteConfigDirs()`（依次返回 `configs`、`secrets`）、`NewDefaultRemoteConfigPaths`、`NewConfigSources` 和 `bootstrap.NewSpec`。业务提供 `AppInfo`、`bootstrap.LocalConfigPaths` 以及相对路径列表 `consulconfig.RemoteConfigPaths`：
+与 `bootstrap.BaseProviderSet` 配合使用时，默认选择 `consulconfig.ProviderSet`。它提供 `NewDefaultRemoteConfigPaths`、`NewConfigSources` 和 `bootstrap.NewSpec`。业务提供 `AppInfo`、`bootstrap.LocalConfigPaths`、有序前缀 `consulconfig.ConsulConfigPrefix`，以及相对路径列表 `consulconfig.ConsulConfigPaths`：
 
 ```go
 func localConfigPaths() bootstrap.LocalConfigPaths {
@@ -14,8 +14,12 @@ func localConfigPaths() bootstrap.LocalConfigPaths {
     }
 }
 
-func remoteConfigPatterns() consulconfig.RemoteConfigPaths {
-    return consulconfig.RemoteConfigPaths{
+func consulConfigPrefix() consulconfig.ConsulConfigPrefix {
+    return consulconfig.ConsulConfigPrefix{"configs", "secrets"}
+}
+
+func remoteConfigPatterns() consulconfig.ConsulConfigPaths {
+    return consulconfig.ConsulConfigPaths{
         "common*.yaml",
         "{{env}}/common*.yaml",
         "services/{{app}}.yaml",
@@ -28,7 +32,7 @@ func remoteConfigPatterns() consulconfig.RemoteConfigPaths {
 // 放入应用的 wireinject 文件；business.ProviderSet 和 Boot 由消费项目提供。
 func wireApp(info appinfo.AppInfo) (*kratos.App, func(), error) {
     wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet,
-        localConfigPaths, remoteConfigPatterns, business.ProviderSet, Boot)
+        localConfigPaths, consulConfigPrefix, remoteConfigPatterns, business.ProviderSet, Boot)
     return nil, nil, nil
 }
 ```
@@ -71,15 +75,15 @@ func wireAppWithFullPaths(info appinfo.AppInfo) (*kratos.App, func(), error) {
 - Consul：使用 `path.Match` 语法；支持精确键、目录直属 `*.yaml` 及完整 glob。每项结果按键名字典序排列。启用客户端时校验空白、重复和非法模式；客户端禁用时不执行来源路径校验。详见[Consul 配置源](../../config/consul/README.md)。
 - 列表越靠后，初次加载优先级越高。现有 Manager 热更新按各来源独立合并，不重算全源优先级，低优先级来源的后续更新可能覆盖已有高优先级值；详见[来源与合并](../../../pkg/config/README.md#来源与合并)。
 
-## 远程目录与相对路径组合
+## 远程前缀与相对路径组合
 
-`consulconfig.RemoteConfigDirs` 和 `consulconfig.RemoteConfigPaths` 是两种不同的命名切片。默认 `ProviderSet` 使用 `NewDefaultRemoteConfigDirs()` 返回 `[]string{"configs", "secrets"}` 的独立切片；业务只需提供相对路径。`NewDefaultRemoteConfigPaths(dirs, paths)` 按目录列表顺序，对每个目录依次拼接全部相对路径，返回新的 `bootstrap.RemoteConfigPaths`。它不读取环境、不替换模板、不访问 Consul。
+`consulconfig.ConsulConfigPrefix` 和 `consulconfig.ConsulConfigPaths` 是两种不同的命名切片。前缀由业务提供，没有内置默认值；例如上方示例显式选择 `configs`、`secrets`。`NewDefaultRemoteConfigPaths(prefixes, paths)` 按前缀列表顺序，对每个前缀依次拼接全部相对路径，返回新的 `bootstrap.RemoteConfigPaths`。它不读取环境、不替换模板、不访问 Consul。
 
-目录和相对路径都可包含 `{{env}}`、`{{app}}`、`{{version}}`，组合后的完整路径在加载阶段统一替换，再由 Consul 解析路径模式。两个输入任一为空会得到空路径列表，远程来源按前述规则禁用。业务对输入列表或返回列表的修改互不影响。
+前缀和相对路径都可包含 `{{env}}`、`{{app}}`、`{{version}}`，组合后的完整路径在加载阶段统一替换，再由 Consul 解析路径模式。前缀或相对路径列表为空会得到空路径列表，远程来源按前述规则禁用。业务对输入列表或返回列表的修改互不影响。
 
-上方默认接入示例的六条相对模式会生成十二层路径：先加载 configs 的六层，再加载 secrets 的六层。每组公共先于应用、基础先于环境、单文件先于目录片段。环境单文件位于 `services/{{env}}/{{app}}.yaml`，不会被基础层 `services/{{app}}/*.yaml` 混入其他环境；业务也可加入 `{{version}}`。
+上方示例的两个前缀与六条相对模式会生成十二层路径：先加载 configs 的六层，再加载 secrets 的六层。每组公共先于应用、基础先于环境、单文件先于目录片段。环境单文件位于 `services/{{env}}/{{app}}.yaml`，不会被基础层 `services/{{app}}/*.yaml` 混入其他环境；业务也可加入 `{{version}}`。
 
-需要其他目录时，可用 `consulconfig.BaseProviderSet`，由业务提供自定义 `RemoteConfigDirs`、相对 `RemoteConfigPaths` 和 `NewDefaultRemoteConfigPaths` 三个 provider；也可直接提供完整 `bootstrap.RemoteConfigPaths`。不要在默认 `ProviderSet` 中额外注入目录或组合函数，否则 Wire 会发现重复 provider。
+前缀可包含多级路径或模板变量，例如 `configs/services/{{env}}`。业务自行决定前缀顺序；需要直接提供完整 `bootstrap.RemoteConfigPaths` 时使用 `consulconfig.BaseProviderSet`。不要在 `consulconfig.ProviderSet` 中额外注入组合函数，否则 Wire 会发现重复 provider。
 
 本地路径由业务直接提供 `bootstrap.LocalConfigPaths`。需要只加载应用基础与环境文件时，声明 `[]string{"configs/{{app}}.yaml", "configs/{{env}}/{{app}}.yaml"}`；传入目录则按通用文件源规则加载直属 YAML。
 
@@ -119,7 +123,7 @@ func Configure(info appinfo.AppInfo) (config.Manager, func(), error) {
 flowchart TD
     A([开始组装]) --> A1{远程路径来源?}
     A1 -- consulconfig.BaseProviderSet 完整列表 --> B[业务提供 AppInfo 和两组路径模板]
-    A1 -- consulconfig.ProviderSet 默认目录与相对模式 --> A2[NewDefaultRemoteConfigPaths 组合完整列表]
+    A1 -- consulconfig.ProviderSet 业务前缀与相对模式 --> A2[NewDefaultRemoteConfigPaths 组合完整列表]
     A2 --> B
     B --> C{ConfigSources 完整?}
     C -- 零值 --> E[仅使用 env 和显式追加来源]
@@ -148,8 +152,8 @@ NewSpec 不执行 I/O 或启动 goroutine。Manager 拥有配置来源和 watche
 
 ## 迁移与验证
 
-旧版 `LocalConfigPath`、`RemoteConfigDirName`、`RemoteConfigName`、两个 `*ConfigPathsProvider` 和 `ProviderSetWithCustomRemoteConfigName` 已移除。迁移为业务提供两组命名切片，`NewConfigSources(info, localPaths, remotePaths)` 只接收这三项；自定义远程名称写成路径字面量，应用名称使用 `{{app}}`。
+旧版 `LocalConfigPath`、`RemoteConfigDirName`、`RemoteConfigName`、两个 `*ConfigPathsProvider` 和 `ProviderSetWithCustomRemoteConfigName` 已移除。使用 `consulconfig.ProviderSet` 时，业务提供本地路径、远程前缀和相对路径三个命名切片；手工调用 `NewConfigSources(info, localPaths, remotePaths)` 时传入已经组合好的完整远程路径。自定义远程名称写成路径字面量，应用名称使用 `{{app}}`。
 
-旧版本地“传目录后自动选择应用基础和环境文件”的行为须显式声明两条模板；直接传目录采用通用文件源的直属 YAML 规则。旧远程十二层可由默认 `consulconfig.ProviderSet` 加业务提供的六条 `consulconfig.RemoteConfigPaths` 相对模式保留；完整路径用 `consulconfig.BaseProviderSet` 注入。更新 injector 后重新执行业务 Wire 生成命令。
+旧版本地“传目录后自动选择应用基础和环境文件”的行为须显式声明两条模板；直接传目录采用通用文件源的直属 YAML 规则。旧远程十二层可由业务前缀 `{"configs", "secrets"}`、六条 `consulconfig.ConsulConfigPaths` 相对模式和 `consulconfig.ProviderSet` 保留；完整路径用 `consulconfig.BaseProviderSet` 注入。更新 injector 后重新执行业务 Wire 生成命令。
 
-根目录 `make test-business` 在临时模块生成并运行[真实 Wire 用例](../../../pkg/bootstrap/testdata/wireassembly/wire.go)，覆盖完整路径参数与默认目录 provider。`make test` 覆盖模板错误、先替换再展开本地 glob、顺序、列表快照、环境固定及禁用 Consul 等行为；不依赖真实 Consul 服务。
+根目录 `make test-business` 在临时模块生成并运行[真实 Wire 用例](../../../pkg/bootstrap/testdata/wireassembly/wire.go)，覆盖完整路径参数与业务前缀 provider。`make test` 覆盖模板错误、先替换再展开本地 glob、顺序、列表快照、环境固定及禁用 Consul 等行为；不依赖真实 Consul 服务。

@@ -125,7 +125,7 @@ flowchart LR
 
 `pkg/bootstrap` 集中提供各组件的 `XXXBootstrap` 与 `NewXXXBootstrap`，领域包只提供声明自身依赖的普通构造函数；`pkg/app` 只定义应用依赖与构造函数。Wire 按 `InfrastructureBootstrap → Bootstrap（业务提供）→ StartupReady → NewKratosApp` 分阶段；业务 provider 显式依赖基础设施完成标记，阶段内不规定额外顺序。Bootstrap 只在构造期同步组装；Runtime 仅在 `application.Run()` 时启动。
 
-`BaseProviderSet` 统一构造配置源链与具名注册/发现实例，并为队列提供复用应用观测依赖的 `queue.Observability`。local/Consul 配置默认使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)，业务提供 AppInfo、LocalConfigPaths 和相对 RemoteConfigPaths；默认远程目录为 `configs`、`secrets`。提供完整远程路径时使用 `consulconfig.BaseProviderSet`。`bootstrap.NewSpec` 登记加载器，路径先用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，再由文件或 Consul 来源解析目录、精确路径和 glob。默认 ProviderSet 组合目录与相对模式，本地路径由业务直接声明。
+`BaseProviderSet` 统一构造配置源链与具名注册/发现实例，并为队列提供复用应用观测依赖的 `queue.Observability`。local/Consul 配置默认使用 [consulconfig.ProviderSet](contrib/bootstrap/consulconfig/README.md)，业务提供 AppInfo、LocalConfigPaths、ConsulConfigPrefix 和相对 ConsulConfigPaths；远程前缀由业务决定。提供完整远程路径时使用 `consulconfig.BaseProviderSet`。`bootstrap.NewSpec` 登记加载器，路径先用 Go template 替换 `{{env}}`、`{{app}}`、`{{version}}`，再由文件或 Consul 来源解析目录、精确路径和 glob。默认 ProviderSet 组合前缀与相对模式，本地路径由业务直接声明。
 
 ## 日志
 
