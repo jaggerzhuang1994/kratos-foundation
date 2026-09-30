@@ -10,7 +10,7 @@
 
 ## 事件命名
 
-事件名统一为 `<领域>.<对象>.<动作>`，首段与所属领域一致（`app`、`config`、`server`、`client`、`job`、`queue`、`kafka`、`database`、`redis`、`oss`、`registry`、`consul`、`log`），检索时可直接用 `event=queue.*` 等前缀归类；示例业务事件统一使用 `demo.` 前缀，演示业务事件不得借用框架领域前缀。每条事件带一句简短 msg。旧名到新名的映射见 [CHANGELOG](CHANGELOG.md#未发布)。
+事件名统一为 `<领域>.<对象>.<动作>`，首段与所属领域一致（`app`、`config`、`server`、`client`、`job`、`queue`、`kafka`、`database`、`redis`、`oss`、`registry`、`consul`、`log`），检索时可直接用 `event=queue.*` 等前缀归类；示例业务事件统一使用 `demo.` 前缀，演示业务事件不得借用框架领域前缀。每条事件带一句简短 msg。旧名到新名的映射见 [CHANGELOG](CHANGELOG.md#v240)。
 
 ## 逐包清单
 

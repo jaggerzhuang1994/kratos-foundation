@@ -2,7 +2,22 @@
 
 本文件记录面向调用方的版本变化。版本是否已经发布以 Git tag 和对应提交为准；“计划中”内容不能作为已发布能力依赖。
 
-## 未发布
+## v2.4.0
+
+本版本包含不兼容变更，升级前逐项确认下面的“升级风险”。
+
+### 升级风险
+
+- **HTTP 监听地址可能静默改变**：HTTP 监听改由 Foundation 持有，`HTTP().Option(http.Address/Network/Listener(...))` 会被最终设置覆盖。只通过原生 option 指定地址、未配置 `server.http.addr` 的应用，升级后监听默认的 `0.0.0.0:8000`，不会报错。升级前把地址迁到 `server.http.addr` / `server.http.network` 配置，自定义监听改用 `HTTP().Listener(listener)`。
+- **Redis 队列可能启动失败**：`contrib/queue/redis.NewStore` 在构造期要求连接启用 `context_timeout_enabled`，未启用时返回错误并中止启动（此前仅 `Stats` 调用失败）。升级前在对应 Redis 连接配置中设置 `context_timeout_enabled: true`。
+- **编译期不兼容**：`bootstrap.NewServerBootstrap`、`bootstrap.NewJobBootstrap` 末尾增加业务 `Bootstrap` 标记参数，Wire 组装重新生成即可，手工调用需传入业务 Boot 返回的标记；`server.HTTPBuilder` 接口新增 `Listener` 方法，自行实现该接口的代码需要补齐。
+- **日志契约变化**：事件名统一加领域前缀，按旧事件名编写的日志查询和告警需按下方迁移表替换；`server.endpoint.registered` 与 `job.execution.started/finished` 由 INFO 降为 DEBUG。
+
+### Added
+
+- Runtime 可选实现 `AbortStartup(context.Context) error`；Endpoint 或 BeforeStart 失败时，应用按登记逆序回收尚未启动的资源（如已准备的 HTTP 监听）。
+- `server.HTTPBuilder.Listener` 声明由 Foundation 接管并释放的自定义监听。
+- AES 字段支持 `*AESDecryptString` / `*AESDecryptBytes`，nil 指针写为 SQL `NULL`。
 
 ### Changed
 
@@ -10,11 +25,11 @@
 - `server.assembled` 以 `http`、`grpc`、`management` 配置地址和 `stop_delay` 替代 `http_enabled`、`grpc_enabled`、`management_listeners`；`config.loaded` 的 `sources` 由 Go 类型名改为来源包名（如 `[env file]`）。
 - Queue 投递失败不再记录 `enqueue.failed`，错误同步返回给投递方，由 span 状态与投递指标表达；`queue.failure.callback_failed` 增加 `reason=error|panic|timeout`。
 - 访问摘要删除 `component` 字段，事件名直接区分 `server.request.completed` 与 `client.request.completed`。
-- `NewServerBootstrap`、`NewJobBootstrap` 末尾增加业务 `Bootstrap` 标记参数，二者不再相互依赖；HTTP 监听改由 Foundation 持有，原生 `http.Address/Network/Listener` 选项被最终设置覆盖，自定义监听改用 `HTTPBuilder.Listener`；Runtime 可选实现 `AbortStartup` 回收启动前资源。`contrib/queue/redis.NewStore` 在构造期要求连接启用 `context_timeout_enabled`；AES 字段支持指针类型表示 `NULL`。迁移细节见 [V2 迁移指南](MIGRATION_V2.md)。
+- `NewServerBootstrap` 与 `NewJobBootstrap` 分别依赖业务 Boot 完成标记，二者不再相互依赖；应用在 Ready 前请求停止时，等待 Ready 的 Job 立即退出。
 
 ### Migration
 
-按事件名检索或告警的日志查询需要替换为新名称：
+API 与配置迁移细节见 [V2 迁移指南](MIGRATION_V2.md)。按事件名检索或告警的日志查询需要替换为新名称：
 
 | 旧事件 | 新事件 |
 | --- | --- |
@@ -29,7 +44,11 @@
 | `gorm.query` | `database.gorm.query` |
 | `consul.heartbeat.*`、`consul.discovery.*`、`consul.registration.restored`、`consul.cleanup.failed` | 分别加 `registry.` 前缀 |
 
-## v2.1.0（计划中，尚未发布）
+## v2.1.1 – v2.3.3
+
+未在本文件记录，变更以对应 Git tag 的提交历史为准。
+
+## v2.1.0
 
 ### Added
 
