@@ -141,7 +141,7 @@ func newManager(
 ) (*Manager, error) {
 	if options.ErrorHandler == nil {
 		options.ErrorHandler = func(ctx context.Context, name string, err error) {
-			log.WithContext(ctx).With("job", name, "error", err).Error("job failed")
+			log.WithContext(ctx).With("event", "job.failed", "job", name, "error", err).Error("job failed")
 		}
 	}
 

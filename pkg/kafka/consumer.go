@@ -105,7 +105,7 @@ func (c *consumer) consume(ctx context.Context, instance string, handler Deliver
 			firstReadRetries++
 		}
 		if c.logger != nil {
-			c.logger.WithContext(ctx).With("consumer", instance, "attempt", attempt+1, "error", err).Warn("reconnecting the Kafka consumer after a connection failure")
+			c.logger.WithContext(ctx).With("event", "kafka.consumer.reconnecting", "connection", c.config.Connection, "topic", c.config.Topic, "group", c.config.Group, "consumer", instance, "attempt", attempt+1, "error", err).Warn("kafka consumer reconnecting")
 		}
 		if err := backoff.Wait(ctx, attempt); err != nil {
 			return err
@@ -143,12 +143,13 @@ func (c *consumer) consumeClient(
 		cancel()
 		client.CloseAllowingRebalance()
 		if leaveErr != nil && c.logger != nil {
-			c.logger.WithContext(leaveCtx).With("consumer", instance, "error", leaveErr).Warn("failed to leave the Kafka consumer group")
+			c.logger.WithContext(leaveCtx).With("event", "kafka.consumer.leave_failed", "connection", c.config.Connection, "topic", c.config.Topic, "group", c.config.Group, "consumer", instance, "error", leaveErr).Warn("kafka consumer leave failed")
 		}
 	}()
 
 	if c.logger != nil {
-		c.logger.WithContext(ctx).With("destination", c.config.Topic, "group", c.config.Group, "consumer", instance).Debug("kafka consumer is ready")
+		// 创建客户端不代表已经连接 Broker 或提交消息，只记录本地会话准备完成。
+		c.logger.WithContext(ctx).With("event", "kafka.consumer.session_prepared", "connection", c.config.Connection, "topic", c.config.Topic, "group", c.config.Group, "consumer", instance).Debug("kafka consumer session prepared")
 	}
 	for {
 		fetches := client.PollRecords(ctx, c.config.MaxPollRecords)

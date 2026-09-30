@@ -72,6 +72,7 @@ func newManagerWithDrivers(
 	}
 	// 每个具名连接单独 gorm.Open，方言、ClauseBuilders、回调和配置均不共享。
 	connections := make(map[string]*gorm.DB, len(config.GetConnections()))
+	enabledDrivers := make(map[string]struct{})
 	for _, name := range slices.Sorted(maps.Keys(config.GetConnections())) {
 		connection := config.GetConnections()[name]
 		aesPlugin, err := newAESFieldPlugin(name, connection.GetAes())
@@ -96,6 +97,7 @@ func newManagerWithDrivers(
 			return fail(fmt.Errorf("register database AES field plugin for %q: %w", name, err))
 		}
 		connections[name] = db
+		enabledDrivers[normalizeDriverName(connection.GetDriver())] = struct{}{}
 	}
 	metricsCollector, err := newMetricsCollector(
 		connectionFactory,
@@ -142,13 +144,16 @@ func newManagerWithDrivers(
 		connectionFactory: connectionFactory,
 		metricsCollector:  metricsCollector,
 	}
+	databaseLogger.With("event", "database.manager.ready", "connections", len(connections), "drivers", slices.Sorted(maps.Keys(enabledDrivers))).Info("database manager ready")
 	var cleanupOnce sync.Once
 	return result, func() {
 		cleanupOnce.Do(func() {
 			// 先停订阅再关连接，避免回调向已关闭的连接池写入参数。
 			cancelPoolUpdates()
 			if closeErr := result.close(); closeErr != nil {
-				result.log.With("error", closeErr).Error("failed to close a database connection")
+				result.log.With("event", "database.cleanup.failed", "error", closeErr).Error("database manager cleanup failed")
+			} else {
+				result.log.With("event", "database.manager.closed").Info("database manager closed")
 			}
 		})
 	}, nil

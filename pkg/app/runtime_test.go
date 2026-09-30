@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/transport"
@@ -25,7 +27,7 @@ func TestAppServerPropagatesFailureAndStopsOnce(t *testing.T) {
 	server := &testServer{startErr: failure}
 	stopCalls := 0
 	stop := func() error { stopCalls++; return nil }
-	runner := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	runner.initServers(1)
 	runner.stop = stop
 	runtime := runner.wrapServer(server)
@@ -48,7 +50,7 @@ func TestAppServerPropagatesFailureAndStopsOnce(t *testing.T) {
 func TestAppServerTreatsStopRequestAsCleanShutdown(t *testing.T) {
 	server := &testServer{startErr: ErrStopRequested}
 	stopCalls := 0
-	runner := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	runner.initServers(1)
 	runner.stop = func() error { stopCalls++; return nil }
 	runtime := runner.wrapServer(server)
@@ -65,7 +67,7 @@ func TestAppServerDoesNotSwallowJoinedStopRequestFailure(t *testing.T) {
 	failure := errors.New("start failed")
 	server := &testServer{startErr: errors.Join(ErrStopRequested, failure)}
 	stopCalls := 0
-	runner := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	runner.initServers(1)
 	runner.stop = func() error { stopCalls++; return nil }
 	runtime := runner.wrapServer(server)
@@ -93,7 +95,7 @@ func (s *endpointTestServer) Endpoint() (*url.URL, error) {
 }
 
 func TestAppCompletionWaitCompletesOrTimesOutAndRunsFinalHooks(t *testing.T) {
-	empty := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	empty := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	empty.initServers(0)
 	if err := empty.wait(time.Second); err != nil {
 		t.Fatalf("empty tracker wait = %v", err)
@@ -101,7 +103,7 @@ func TestAppCompletionWaitCompletesOrTimesOutAndRunsFinalHooks(t *testing.T) {
 
 	afterStopErr := errors.New("after stop failed")
 	afterCalls := 0
-	lifecycle := newApp(appSnapshot{afterStop: []HookFunc{
+	lifecycle := newTestApp(t, appSnapshot{afterStop: []HookFunc{
 		func(context.Context) error {
 			afterCalls++
 			return afterStopErr
@@ -132,7 +134,7 @@ func TestAppCompletionWaitCompletesOrTimesOutAndRunsFinalHooks(t *testing.T) {
 func TestAppServerPreservesEndpointContract(t *testing.T) {
 	want := &url.URL{Scheme: "grpc", Host: "127.0.0.1:9000"}
 	server := &endpointTestServer{endpoint: want}
-	lifecycle := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	lifecycle := newTestApp(t, appSnapshot{context: context.Background()}, newStaticStopPolicy(time.Second))
 	lifecycle.initServers(1)
 	lifecycle.stop = func() error { return nil }
 	wrapped := lifecycle.wrapServer(server)
@@ -210,7 +212,7 @@ func TestStopAfterFailureAggregatesRootStopWaitAndCleanupFailures(t *testing.T) 
 	cause := errors.New("after-start failed")
 	stopErr := errors.New("application stop failed")
 	afterStopErr := errors.New("cleanup failed")
-	lifecycle := newApp(appSnapshot{
+	lifecycle := newTestApp(t, appSnapshot{
 		afterStop: []HookFunc{func(context.Context) error { return afterStopErr }},
 	}, newStaticStopPolicy(time.Second))
 	lifecycle.initServers(0)
@@ -229,7 +231,7 @@ func TestStopAfterFailureAggregatesRootStopWaitAndCleanupFailures(t *testing.T) 
 
 func TestStopAfterFailureReportsTrackerDeadline(t *testing.T) {
 	cause := errors.New("after-start failed")
-	lifecycle := newApp(appSnapshot{}, newStaticStopPolicy(time.Millisecond))
+	lifecycle := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Millisecond))
 	lifecycle.initServers(1)
 	lifecycle.stop = func() error { return nil }
 	err := lifecycle.stopAfterFailure(context.Background(), cause)
@@ -243,7 +245,7 @@ func TestStopBeforeStartPreservesFirstFailureAndCleanupErrors(t *testing.T) {
 	late := errors.New("application stopping")
 	stopErr := errors.New("stop failed")
 	cleanupErr := errors.New("cleanup failed")
-	lifecycle := newApp(appSnapshot{
+	lifecycle := newTestApp(t, appSnapshot{
 		afterStop: []HookFunc{func(context.Context) error { return cleanupErr }},
 	}, newStaticStopPolicy(time.Second))
 	lifecycle.recordFailure(root)
@@ -258,4 +260,34 @@ func TestStopBeforeStartPreservesFirstFailureAndCleanupErrors(t *testing.T) {
 	if errors.Is(err, late) {
 		t.Fatalf("shutdown noise replaced the first failure: %v", err)
 	}
+}
+
+func TestAbortStartupUsesOneUncanceledBudgetAndContinuesAfterTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		type contextKey string
+		const key contextKey = "startup"
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key, "retained"))
+		cancel()
+		var events []string
+		first := &startupRollbackTestRuntime{name: "first", events: &events, abortContext: func(ctx context.Context) error {
+			if ctx.Value(key) != "retained" || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Errorf("later cleanup context=%v value=%v", ctx.Err(), ctx.Value(key))
+			}
+			return ctx.Err()
+		}}
+		last := &startupRollbackTestRuntime{name: "last", events: &events, abortContext: func(ctx context.Context) error {
+			if ctx.Value(key) != "retained" || ctx.Err() != nil {
+				t.Errorf("first cleanup context=%v value=%v", ctx.Err(), ctx.Value(key))
+			}
+			<-ctx.Done()
+			return ctx.Err()
+		}}
+		lifecycle := newTestApp(t, appSnapshot{runtimes: []Runtime{first, last}}, newStaticStopPolicy(time.Second))
+		if err := lifecycle.abortStartup(ctx); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			t.Fatalf("abortStartup error=%v, want only deadline exceeded", err)
+		}
+		if want := []string{"abort:last", "abort:first"}; !reflect.DeepEqual(events, want) {
+			t.Fatalf("abortStartup events=%v, want %v", events, want)
+		}
+	})
 }

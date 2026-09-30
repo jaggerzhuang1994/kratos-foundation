@@ -21,7 +21,7 @@ import (
 
 // newDiscovery 把共享 Consul 客户端适配为 Kratos 发现实现。
 //
-// 客户端由驱动创建并拥有，调用方不单独构造此适配器。
+// 客户端借自进程单例，驱动和业务都不接管共享连接的关闭。
 func newDiscovery(
 	logger log.Logger,
 	config config.Reader,

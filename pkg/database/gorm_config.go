@@ -132,7 +132,7 @@ func (handler *gormLogHandler) Handle(ctx context.Context, record slog.Record) e
 	fields = appendGORMLogAttributes(fields, handler.groups, attributes, record.Message == "SQL executed")
 	if record.Message == "SQL executed" {
 		// GORM slog logger 将查询字段放在 trace 组内；输出时展平，便于日志系统直接检索。
-		fields = append([]any{"event", "gorm.query"}, fields...)
+		fields = append([]any{"event", "database.gorm.query"}, fields...)
 		if record.Level == slog.LevelWarn && handler.slowThreshold > 0 {
 			fields = append(fields, "slow_threshold", handler.slowThreshold)
 		}
@@ -180,7 +180,7 @@ func appendGORMLogAttributes(
 		attribute.Value = attribute.Value.Resolve()
 		if attribute.Value.Kind() == slog.KindGroup {
 			nextGroups := groups
-			if attribute.Key != "" && !(isQuery && attribute.Key == "trace") {
+			if attribute.Key != "" && (!isQuery || attribute.Key != "trace") {
 				nextGroups = append(append([]string(nil), groups...), attribute.Key)
 			}
 			fields = appendGORMLogAttributes(fields, nextGroups, attribute.Value.Group(), isQuery)

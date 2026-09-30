@@ -3,7 +3,6 @@ package database
 import (
 	"bytes"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 
@@ -66,25 +65,29 @@ func TestDriverRegistryConcurrentNames(t *testing.T) {
 	wait.Wait()
 }
 
-func TestRegisterDriverLogsSuccessfulRegistration(t *testing.T) {
+func TestRegisterDriverPerformsNoLogIO(t *testing.T) {
 	previous, previousRegistry := foundationlog.GetLogger(), databaseDrivers
 	t.Cleanup(func() { foundationlog.SetLogger(previous); databaseDrivers = previousRegistry })
 	databaseDrivers = newDriverRegistry()
 	var buffer bytes.Buffer
 	foundationlog.SetLogger(kratoslog.NewStdLogger(&buffer))
-	if err := RegisterDriver(" SQLite3 ", stubDriver); err != nil {
+	opened := false
+	factory := func(DriverConfig) (DriverConnection, error) { opened = true; return DriverConnection{}, nil }
+	if err := RegisterDriver(" SQLite3 ", factory); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"module=database", "driver=sqlite3", "registered database driver"} {
-		if !strings.Contains(buffer.String(), want) {
-			t.Fatalf("missing %q in %s", want, buffer.String())
-		}
+	MustRegisterDriver("another", factory)
+	if names := RegisteredDrivers(); !slices.Equal(names, []string{"another", "sqlite3"}) {
+		t.Fatalf("registered names=%v", names)
+	}
+	if opened || buffer.Len() != 0 {
+		t.Fatalf("registration executed factory or log I/O: opened=%v logs=%s", opened, buffer.String())
 	}
 	buffer.Reset()
 	if err := RegisterDriver("sqlite3", stubDriver); err == nil {
 		t.Fatal("duplicate accepted")
 	}
 	if buffer.Len() != 0 {
-		t.Fatal("failed registration logged success")
+		t.Fatal("registration performed log I/O")
 	}
 }

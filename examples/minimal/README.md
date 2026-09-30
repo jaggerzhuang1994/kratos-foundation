@@ -79,3 +79,5 @@ flowchart TD
 需要观察数据库、Redis、Kafka、Queue、OSS 等真实操作指标时，运行独立的 [components 演示](../components/README.md)。
 
 示例已导入 Consul 注册驱动并配置 `registry.instances.default`。`app.registry` 默认选择此实例；本地未设置 `CONSUL_HTTP_ADDR` 时驱动自动禁用，也可显式设置 `DISABLE_CONSUL=true` 跳过注册。生产环境按 Consul 驱动文档配置环境变量。
+
+启动时 flag 解析成功后、Wire initialize 之前输出 INFO `command.starting`（command/version/env/config_path）；来源选择与 config.loaded 记录配置来源和加载结果，app.assembled 在 Run 之前输出身份及运行摘要。早期事件使用启动 fallback，不回放到后来创建的日志文件。完整事件与启动流程见[应用日志](../../pkg/app/README.md#应用日志)及[组件示例启动流程](../components/README.md#启动和业务日志)。

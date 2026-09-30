@@ -32,8 +32,17 @@ func (*AESDecryptString) Value(
 	if err != nil {
 		return nil, fmt.Errorf("encrypt database field %s: %w", field.Name, err)
 	}
-	plain, ok := fieldValue.(AESDecryptString)
-	if !ok {
+	var plain AESDecryptString
+	switch value := fieldValue.(type) {
+	case AESDecryptString:
+		plain = value
+	case *AESDecryptString:
+		// 可空字段仍先校验密钥；nil 只改变 SQL 值，不绕过字段加密配置契约。
+		if value == nil {
+			return nil, nil
+		}
+		plain = *value
+	default:
 		return nil, fmt.Errorf("encrypt database field %s: unexpected value type %T", field.Name, fieldValue)
 	}
 	return fieldCipher.algorithm.EncryptString(string(plain), string(fieldCipher.key))
@@ -99,8 +108,16 @@ func (*AESDecryptBytes) Value(
 	if err != nil {
 		return nil, fmt.Errorf("encrypt database field %s: %w", field.Name, err)
 	}
-	plain, ok := fieldValue.(AESDecryptBytes)
-	if !ok {
+	var plain AESDecryptBytes
+	switch value := fieldValue.(type) {
+	case AESDecryptBytes:
+		plain = value
+	case *AESDecryptBytes:
+		if value == nil {
+			return nil, nil
+		}
+		plain = *value
+	default:
 		return nil, fmt.Errorf("encrypt database field %s: unexpected value type %T", field.Name, fieldValue)
 	}
 	return fieldCipher.algorithm.Encrypt([]byte(plain), fieldCipher.key)

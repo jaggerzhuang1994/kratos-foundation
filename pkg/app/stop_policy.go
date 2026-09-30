@@ -29,10 +29,10 @@ type StopPolicy struct {
 	logger stopPolicyLogger
 }
 
-// stopPolicyLogger 保留消息方法，让 Foundation 实例按当前 msgKey 输出，同时兼容外部 Kratos Logger。
+// stopPolicyLogger 保留结构化事件方法，同时兼容 Foundation 和外部 Kratos Logger。
 type stopPolicyLogger interface {
-	Infof(string, ...any)
-	Errorf(string, ...any)
+	Infow(...any)
+	Warnw(...any)
 }
 
 // NewStopPolicy 通过点分路径订阅停机超时，cleanup 取消订阅。
@@ -95,9 +95,9 @@ func (p *StopPolicy) current() time.Duration {
 			continue
 		}
 		if err != nil {
-			p.logger.Errorf("rejected application shutdown timeout update at version %d: %v", version, err)
+			p.logger.Warnw("event", "app.stop_policy.rejected", "version", version, "stop_timeout", old.timeout, "error", err, "msg", "stop timeout update rejected; keeping previous")
 		} else if old.timeout != next.timeout {
-			p.logger.Infof("updated application shutdown timeout at version %d to %s", version, next.timeout)
+			p.logger.Infow("event", "app.stop_policy.updated", "version", version, "stop_timeout", next.timeout, "msg", "stop timeout updated")
 		}
 		return next.timeout
 	}

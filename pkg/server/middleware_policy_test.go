@@ -3,15 +3,14 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/go-kratos/kratos/v2/transport"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
@@ -132,15 +131,8 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 	}
 }
 
-type policyUpdateLogger struct {
-	foundationlog.Logger
-	updates int
-}
-
-func (l *policyUpdateLogger) Info(values ...any) { l.updates++ }
-
 func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
-	logger := &policyUpdateLogger{Logger: newRuntimeTestLogger(t)}
+	logger := newEndpointLog()
 	manager := &serverManagerStub{}
 	initial := proto.CloneOf(defaultConfig)
 	policies, cleanup, err := newMiddlewarePolicies(manager, logger, initial,
@@ -150,25 +142,33 @@ func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
 	}
 	defer cleanup()
 	manager.observer("server", proto.CloneOf(initial), nil)
-	if logger.updates != 0 {
+	if len(*logger.entries) != 0 {
 		t.Fatal("initial snapshot logged as update")
 	}
 	next := proto.CloneOf(initial)
 	next.Logging = &config_pb.Middleware_Logging{Disable: proto.Bool(!initial.GetLogging().GetDisable())}
 	manager.observer("server", next, nil)
-	if logger.updates != 1 {
-		t.Fatalf("changed config logged %d updates", logger.updates)
+	if len(*logger.entries) != 1 || (*logger.entries)[0].level != "info" || (*logger.entries)[0].fields["event"] != "server.middleware.updated" {
+		t.Fatalf("changed config logs = %#v", *logger.entries)
 	}
 	manager.observer("server", proto.CloneOf(next), nil)
-	if logger.updates != 1 {
+	if len(*logger.entries) != 1 {
 		t.Fatal("duplicate snapshot logged as update")
 	}
 	current := policies.current
 	restartOnly := proto.CloneOf(next)
 	restartOnly.Http.Addr = proto.String("127.0.0.1:18000")
 	manager.observer("server", restartOnly, nil)
-	if policies.current != current || logger.updates != 1 {
+	if policies.current != current || len(*logger.entries) != 1 {
 		t.Fatal("restart-only server change replaced middleware policy")
+	}
+	manager.observer("server", &config_pb.Server{Metadata: &config_pb.Middleware_Metadata{Prefix: []string{" "}}}, nil)
+	if len(*logger.entries) != 2 {
+		t.Fatalf("rejected config logs = %#v", *logger.entries)
+	}
+	rejected := (*logger.entries)[1]
+	if rejected.level != "warn" || rejected.fields["event"] != "server.middleware.update.rejected" || rejected.fields["config_key"] != "server" || rejected.fields["error"] == nil {
+		t.Fatalf("rejected config log = %#v", rejected)
 	}
 }
 

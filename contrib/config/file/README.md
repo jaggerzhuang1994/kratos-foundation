@@ -1,8 +1,8 @@
 # 文件配置源
 
-配置源诊断使用全局日志，声明 `module=config/file`；未匹配路径和匹配文件列表使用结构化字段。
+配置源诊断使用全局日志，声明 `module=config/file`；WARN config.file.empty 记录未匹配 pattern，INFO config.file.selected 记录选中的 files。
 
-每次成功读取（包括初次加载和热更新）以 DEBUG 记录 `loaded configuration file`，日志自带 `caller`，并包含 `path` 字段；文件源的 `path` 为实际加载文件的绝对路径（符号链接保留链接路径）。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 DEBUG 才能看到。
+每次成功读取（包括初次加载和热更新）以 DEBUG 记录 `event=config.file.loaded`，日志自带 `caller`，并包含 `path` 字段；文件源的 `path` 为实际加载文件的绝对路径（符号链接保留链接路径）。不记录配置内容；失败或无匹配时不输出此成功日志。需将当前日志输出级别设为 DEBUG 才能看到。
 
 `contrib/config/file` 把目录、具体文件路径或 `filepath.Glob` 模式转换成 Kratos 配置源。按 PathList 输入顺序处理，每项匹配结果按文件名字典序排列，后面的文件优先级更高；重叠模式命中的同一路径只加载一次，保留第一次出现的位置。
 
@@ -39,20 +39,25 @@ defer cleanup()
 空列表返回 nil；空路径项、非法模式、文件状态或目录读取错误返回错误。
 空目录和未匹配项会记录警告并跳过，全部未匹配时返回 nil。示例应用显式检查配置文件存在；框架不按环境附加非空限制。
 
-文件监听绑定父目录，文件被原子替换后仍能接收后续变更；普通父目录被移走重建时会重新绑定监听。已选中的文件暂时不存在时保留最后有效配置，使用 100ms 至 5s 的指数退避与抖动等待重建，`Stop` 会取消等待。文件删除不会发布空快照或撤销旧配置，而是等待原路径恢复。
+文件监听绑定父目录，文件被原子替换后仍能接收后续变更；普通父目录被移走重建时会重新绑定监听。已选中的文件暂时不存在时保留最后有效配置，使用 100ms 至 5s 的指数退避与抖动等待重建，首次缺失记录 WARN config.file.waiting，恢复后记录一次 INFO config.file.recovered 与 attempts，退避期间不逐次刷屏。文件事件溢出记录 WARN config.file.events_lost 后重新读取完整快照；`Stop` 会取消等待。文件删除不会发布空快照或撤销旧配置，而是等待原路径恢复。
 
 目录和 glob 都只在构造时展开，不会自动加入之后新增的匹配文件；需要重新构造配置源才能重新选择。这是与旧目录源动态增删行为的区别。符号链接文件同时监听真实目标的写入和链接所在父目录的替换；链接切换目标后移除旧目标监听，并在发布快照前绑定新目标。不承诺跟踪任意祖先符号链接的替换。监控父目录的方式符合 [fsnotify 的原子写入建议](https://github.com/fsnotify/fsnotify#watching-a-file-doesnt-work-well)。
 
 ```mermaid
 flowchart TD
+    OV([事件溢出]) --> OW[WARN config.file.events_lost]
+    OW --> T
     A([父目录 文件或真实目标变更]) --> T[解析目标路径 移除旧目标并绑定新目标]
     T --> C{绑定成功?}
     C -- 是 --> B[读取完整快照]
     C -- 否 --> E{路径暂时不存在?}
     B -->|失败| E
-    B -->|成功| DL[DEBUG loaded configuration file]
-    DL --> H([返回完整快照])
-    E -- 是 --> D[保留旧值并可取消退避]
+    B -->|成功| DL[DEBUG config.file.loaded]
+    DL --> R{本次曾等待恢复?}
+    R -- 是 --> RL[INFO config.file.recovered]
+    R -- 否 --> H([返回完整快照])
+    RL --> H
+    E -- 是 --> D[首次 WARN config.file.waiting 保留旧值并可取消退避]
     D --> T
     E -- 否 --> I([返回错误])
     F[Stop] --> G[取消退避并关闭文件监听]
@@ -64,15 +69,15 @@ flowchart TD
     A([开始]) --> B[逐项解析文件 目录或 glob 并过滤非普通文件]
     B --> C{路径解析成功?}
     C -- 否 --> D[返回错误]
-    C -- 是 --> F[对未匹配项记录全局 WARN: no local configuration files matched the pattern]
+    C -- 是 --> F[对未匹配项记录全局 WARN config.file.empty]
     F --> E{合并去重后是否有文件?}
     E -- 否 --> G[返回 nil Sources]
-    E -- 是 --> O[全局 INFO: matched local configuration files]
+    E -- 是 --> O[全局 INFO config.file.selected]
     O --> H[按顺序创建文件 Source]
     H -- 成功 --> J[返回全部底层 Sources 交给 Manager]
     H -- 失败 --> D
     J --> R[Manager 调用 Load 读取文件]
-    R -- 成功 --> DL[DEBUG loaded configuration file]
+    R -- 成功 --> DL[DEBUG config.file.loaded]
     R -- 失败 --> D
     DL --> L([结束])
     D --> L

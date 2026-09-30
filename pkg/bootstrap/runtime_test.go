@@ -4,10 +4,15 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"os/signal"
+	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	configtext "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
@@ -69,7 +74,7 @@ func TestServerBootstrapPropagatesRegistrationFailure(t *testing.T) {
 				spec.Grpc().Register(func(server.GRPCServer) error { return failure })
 			}
 			logger, metrics, tracing := serverTestDependencies(t, testconfig.Empty(t))
-			_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, testconfig.Empty(t), logger, metrics, tracing)
+			_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, testconfig.Empty(t), logger, metrics, tracing, bootstrap.Bootstrap{})
 			if !errors.Is(err, failure) {
 				t.Fatalf("error = %v", err)
 			}
@@ -103,7 +108,7 @@ func TestServerBootstrapConfigOnlyListeners(t *testing.T) {
 			logger, meter, tracer := serverTestDependencies(t, manager)
 			tracked := &serverSubscriptionTracker{Manager: manager}
 			assemble := func() {
-				_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, tracked, logger, meter, tracer)
+				_, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, tracked, logger, meter, tracer, bootstrap.Bootstrap{})
 				if cleanup != nil {
 					cleanup()
 				}
@@ -152,18 +157,17 @@ func TestJobBootstrapSelection(t *testing.T) {
 			case "invalid":
 				spec.Job().RegisterCron("invalid", "not a schedule", job.TaskFunc(func(context.Context) error { return nil }))
 			}
-			prepareServer(t, spec)
 			if selection == "frozen" {
 				_, _ = app.NewApp(context.Background(), spec.application, nil, nil, nil)
 			}
 			logger, tracer, meter := newTestObservability(t)
 			if selection == "frozen" {
 				assertBootstrapPanic(t, app.ErrSpecFrozen, func() {
-					_, _ = bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer)
+					_, _ = bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer, bootstrap.Bootstrap{})
 				})
 				return
 			}
-			_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer)
+			_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, meter, tracer, bootstrap.Bootstrap{})
 			if (err != nil) != (selection == "invalid") {
 				t.Fatal(err)
 			}
@@ -212,14 +216,14 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		result error
-	}{{"completed", nil}, {"failed", failure}} {
+	}{{"completed", nil}, {"failed", failure}, {"completed with failure", errors.Join(job.ErrCompleted, failure)}} {
 		t.Run(tt.name, func(t *testing.T) {
 			components := newTestSpec()
 			components.Job().RegisterOnce("once", job.TaskFunc(func(context.Context) error { return tt.result })).ExitWhenDone()
 			jobLogger, tracer, meter := newTestObservability(t)
 			spec := components.application
 			prepareServer(t, components)
-			if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer); err != nil {
+			if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer, bootstrap.Bootstrap{}); err != nil {
 				t.Fatal(err)
 			}
 			spec.RegisterAppInfo(appinfo.New("test"))
@@ -245,7 +249,7 @@ func TestJobBootstrapPreservesCompletionAndFailure(t *testing.T) {
 			if tt.result == nil && err != nil {
 				t.Fatalf("completed job: %v", err)
 			}
-			if tt.result != nil && !errors.Is(err, tt.result) {
+			if tt.result != nil && !errors.Is(err, failure) {
 				t.Fatalf("job failure = %v, want %v", err, tt.result)
 			}
 			if ctx.Err() != nil {
@@ -271,7 +275,7 @@ func TestJobBootstrapWaitsForApplicationReady(t *testing.T) {
 	})).ExitWhenDone()
 	jobLogger, tracer, meter := newTestObservability(t)
 	prepareServer(t, components)
-	if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer); err != nil {
+	if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer, bootstrap.Bootstrap{}); err != nil {
 		t.Fatal(err)
 	}
 	components.application.RegisterAppInfo(appinfo.New("test"))
@@ -312,12 +316,102 @@ func TestJobBootstrapWaitsForApplicationReady(t *testing.T) {
 	}
 }
 
-// 任务测试按 Wire 顺序构造服务器；关闭业务监听，避免生命周期测试占用固定端口。
+// Ready 前停止必须收敛 Job 的等待，不能依赖 Kratos 传入的启动 Context 被取消。
+func TestJobBootstrapStopsBeforeApplicationReady(t *testing.T) {
+	// 系统信号线程不属于 synctest bubble，先在外部初始化后再运行真实 App。
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGUSR2)
+	t.Cleanup(func() { signal.Stop(signals) })
+	failure := errors.New("after-start initialization failed")
+	for _, tt := range []struct {
+		name    string
+		failure error
+	}{{"explicit stop", nil}, {"after-start failure", failure}} {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				components := newTestSpec()
+				hookEntered := make(chan struct{})
+				releaseHook := make(chan struct{})
+				jobStarted := make(chan struct{})
+				components.AfterStart(func(context.Context) error {
+					close(hookEntered)
+					<-releaseHook
+					return tt.failure
+				})
+				components.Job().RegisterOnce("once", job.TaskFunc(func(context.Context) error {
+					close(jobStarted)
+					return nil
+				})).ExitWhenDone()
+				jobLogger, tracer, meter := newTestObservability(t)
+				prepareServer(t, components)
+				if _, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, jobLogger, meter, tracer, bootstrap.Bootstrap{}); err != nil {
+					t.Fatal(err)
+				}
+				components.application.RegisterAppInfo(appinfo.New("test"))
+				logger := kratoslog.NewStdLogger(io.Discard)
+				components.application.RegisterLogger(logger)
+				source, err := configtext.NewSource("app", foundationconfig.JSONFormat, `{"app":{"stop_timeout":"1s"}}`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				configs, cleanupConfig, err := foundationconfig.NewManager(foundationconfig.Sources{source})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(cleanupConfig)
+				configuration, err := app.NewConfig(configs)
+				if err != nil {
+					t.Fatal(err)
+				}
+				policy, cleanup, err := app.NewStopPolicy(configuration, configs, logger)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(cleanup)
+				application, err := app.NewApp(context.Background(), components.application, configuration, policy, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				result := make(chan error, 1)
+				go func() { result <- application.Run() }()
+				<-hookEntered
+				synctest.Wait()
+				if tt.failure == nil {
+					if err := application.Stop(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				close(releaseHook)
+				synctest.Wait()
+				err = <-result
+				if tt.failure == nil && err != nil {
+					t.Fatalf("stopped before Ready: %v", err)
+				}
+				if tt.failure != nil && !errors.Is(err, tt.failure) {
+					t.Fatalf("Run error = %v, want startup failure", err)
+				}
+				if errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("Job Ready wait exhausted stop budget: %v", err)
+				}
+				select {
+				case <-jobStarted:
+					t.Fatal("job ran after stopping before Ready")
+				default:
+				}
+				if components.application.Ready() {
+					t.Fatal("stopped application became Ready")
+				}
+			})
+		})
+	}
+}
+
+// 需要组合服务器的任务测试关闭业务监听，避免生命周期测试占用固定端口。
 func prepareServer(t *testing.T, spec *testSpec) bootstrap.ServerBootstrap {
 	t.Helper()
 	logger, tracer, meter := newTestObservability(t)
 	manager := testconfig.New(t, "server", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true)}})
-	marker, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, manager, logger, meter, tracer)
+	marker, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, manager, logger, meter, tracer, bootstrap.Bootstrap{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +477,7 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 			}
 			spec := components.application
 			prepareServer(t, components)
-			_, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, logger, metrics, tracing)
+			_, err := bootstrap.NewJobBootstrap(components.application, components.jobs, nil, logger, metrics, tracing, bootstrap.Bootstrap{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -406,7 +500,7 @@ func TestJobBootstrapUsesConfiguration(t *testing.T) {
 	spec.Job().RegisterCron("configured", "", job.TaskFunc(func(context.Context) error { return nil }))
 	cfg := testconfig.New(t, "job", &config_pb.Job{Cron: map[string]*config_pb.CronJob{"configured": {Schedule: proto.String("@hourly")}}})
 	logger, tracing, metrics := newTestObservability(t)
-	if _, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, cfg, logger, metrics, tracing); err != nil {
+	if _, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, cfg, logger, metrics, tracing, bootstrap.Bootstrap{}); err != nil {
 		t.Fatal(err)
 	}
 }

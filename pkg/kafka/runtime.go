@@ -127,7 +127,7 @@ func (r *ConsumerRuntime) Start(ctx context.Context) error {
 		return fmt.Errorf("queue consumer runtime %q start context is nil", r.config.Name)
 	}
 
-	r.logEvent(ctx, logDebug, "kafka.consumer.started")
+	r.logEvent(ctx, logInfo, "kafka.consumer.started", "kafka consumer started")
 	var state consumerRunState
 	runCtx, cancel := newConsumerContext(ctx, &state)
 	coordDone := make(chan struct{})
@@ -157,15 +157,15 @@ func (r *ConsumerRuntime) Start(ctx context.Context) error {
 	canceledByRuntime := state.consumerReturned()
 	if normalized := normalizeConsumerError(err, canceledByRuntime); normalized == nil && err != nil {
 		// 仅归一化由 Start Context 或 Stop 信号触发的取消，保留 Consumer 自发返回的同类错误。
-		r.logEvent(ctx, logDebug, "kafka.consumer.stopped")
+		r.logEvent(ctx, logInfo, "kafka.consumer.stopped", "kafka consumer stopped")
 		return nil
 	}
 	if err != nil {
 		r.telemetry.RecordRuntimeFailure(ctx, r.config.Destination, r.config.Name)
-		r.logEvent(ctx, logError, "kafka.consumer.failed")
+		r.logEvent(ctx, logError, "kafka.consumer.failed", "kafka consumer failed")
 		return err
 	}
-	r.logEvent(ctx, logDebug, "kafka.consumer.stopped")
+	r.logEvent(ctx, logInfo, "kafka.consumer.stopped", "kafka consumer stopped")
 	return nil
 }
 

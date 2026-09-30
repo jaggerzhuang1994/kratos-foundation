@@ -71,9 +71,9 @@ func TestMonitoringListenerPlacementAndRouteIsolation(t *testing.T) {
 			for i, srv := range extras {
 				hasMetrics := tt.metricsAddr != "" && (i == 0)
 				hasHealth := tt.healthAddr != "" && (tt.metricsAddr == "" || tt.metricsAddr == tt.healthAddr || i == 1)
-				probe(srv, "/metrics", hasMetrics)
-				probe(srv, "/readyz", hasHealth)
-				probe(srv, "/orders", false)
+				probe(srv.HTTPServer, "/metrics", hasMetrics)
+				probe(srv.HTTPServer, "/readyz", hasHealth)
+				probe(srv.HTTPServer, "/orders", false)
 			}
 		})
 	}

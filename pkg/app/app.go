@@ -6,6 +6,8 @@ import (
 	"maps"
 	"net/url"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -15,14 +17,20 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // App 持有 Kratos 应用及启动、停止所需的状态；组装阶段由 bootstrap 管理。
 type App struct {
 	// App 提供底层 Kratos 应用生命周期入口。
 	*kratos.App
+	// logger 借用本应用登记的输出，生命周期日志不依赖当前全局绑定。
+	logger kratoslog.Logger
 	// stop 执行幂等停止，并共享第一次停止的结果。
 	stop func() error
+	// runtimes 保留冻结时的原始运行时，供启动前失败按登记逆序回收预创建资源。
+	runtimes []Runtime
 
 	// serversMu 保护 Start 返回与 Stop 完成的计数和完成通知。
 	serversMu sync.Mutex
@@ -53,6 +61,8 @@ type App struct {
 	ready atomic.Bool
 	// readySignal 在首次成功 ready 时关闭并广播，不由停止路径重复关闭。
 	readySignal chan struct{}
+	// stoppingSignal 与 Spec 共享，由首次停止请求解除所有 Ready 等待。
+	stoppingSignal chan struct{}
 	// stopping 原子标记已请求停止。
 	stopping atomic.Bool
 	// stopOnce 保证停机状态与预算只初始化一次。
@@ -110,7 +120,17 @@ func NewApp(
 	// Bootstrap 贡献比静态配置更接近实际进程状态，因此同名元数据覆盖配置。
 	maps.Copy(metadata, snapshot.metadata)
 
+	environment := metadata["env"]
+	if environment == "" {
+		environment = env.AppEnv()
+	}
 	application := newApp(snapshot, stopPolicy)
+	identity := []any{"service.id", snapshot.appInfo.ID(), "service.name", snapshot.appInfo.Name(), "service.version", snapshot.appInfo.Version(), "env", environment}
+	if logger, ok := snapshot.logger.(foundationlog.Logger); ok {
+		application.logger = logger.WithModule("app").With(identity...)
+	} else {
+		application.logger = kratoslog.With(snapshot.logger, append([]any{"module", "app"}, identity...)...)
+	}
 	stop := onceStop(func() error {
 		application.requestStop()
 		return application.App.Stop()
@@ -130,7 +150,7 @@ func NewApp(
 
 	var registrar *supervisedRegistrar
 	if snapshot.serviceRegistrationDisabled {
-		kratoslog.NewHelper(snapshot.logger).Infow("event", "app.registration.disabled")
+		application.logEvent(snapshot.context, kratoslog.LevelDebug, "app.registration.disabled", "service registration disabled")
 	}
 	if serviceRegistrar != nil && !snapshot.serviceRegistrationDisabled {
 		registrar = newSupervisedRegistrar(
@@ -149,7 +169,6 @@ func NewApp(
 		// App 将父 Context 取消转为统一 Stop；直接传递取消状态会
 		// 绕过 BeforeStop、服务注销和统一错误收敛。
 		kratos.Context(context.WithoutCancel(snapshot.context)),
-		kratos.Logger(snapshot.logger),
 		kratos.Server(servers...),
 		// 每个受监督运行时使用冻结后的 StopPolicy 截止时间，关闭 Kratos 的第二层
 		// 超时可以避免嵌套截止时间让后注册的运行时拿不到完整预算。
@@ -209,7 +228,25 @@ func NewApp(
 
 	application.App = newKratosApplication(options...)
 	spec.application.Store(application)
+	// 只输出身份和执行摘要，不展开任意 metadata、命令参数或配置值。
+	application.logEvent(snapshot.context, kratoslog.LevelInfo, "app.assembled", "application assembled",
+		"hostname", metadata["hostname"], "pid", os.Getpid(),
+		"executable", filepath.Base(os.Args[0]), "go_version", runtime.Version(),
+		"runtimes", len(snapshot.runtimes), "service_registration", registrar != nil)
 	return application, nil
+}
+
+// logEvent 使用稳定事件名组织生命周期；msg 与其它领域日志保持同一可读格式。
+func (a *App) logEvent(ctx context.Context, level kratoslog.Level, event, message string, fields ...any) {
+	logger := a.logger
+	if base, ok := logger.(foundationlog.Logger); ok {
+		// 跳过这个适配方法，caller 指向实际的生命周期节点。
+		logger = base.WithContext(ctx).WithCallerDepth(2)
+	} else {
+		logger = kratoslog.WithContext(ctx, logger)
+	}
+	keyvals := append([]any{"event", event}, fields...)
+	kratoslog.NewHelper(logger).Log(level, append(keyvals, kratoslog.DefaultMessageKey, message)...)
 }
 
 // newApp 从冻结快照初始化应用状态，并保留可热更新的停机策略引用。
@@ -218,15 +255,22 @@ func newApp(snapshot appSnapshot, stopPolicy *StopPolicy) *App {
 	if readySignal == nil {
 		readySignal = make(chan struct{})
 	}
+	stoppingSignal := snapshot.stoppingSignal
+	if stoppingSignal == nil {
+		stoppingSignal = make(chan struct{})
+	}
 	return &App{
-		parent:      snapshot.context,
-		parentDone:  make(chan struct{}),
-		beforeStart: append([]HookFunc(nil), snapshot.beforeStart...),
-		afterStart:  append([]HookFunc(nil), snapshot.afterStart...),
-		beforeStop:  append([]HookFunc(nil), snapshot.beforeStop...),
-		afterStop:   append([]HookFunc(nil), snapshot.afterStop...),
-		stopPolicy:  stopPolicy,
-		readySignal: readySignal,
+		logger:         snapshot.logger,
+		parent:         snapshot.context,
+		parentDone:     make(chan struct{}),
+		runtimes:       append([]Runtime(nil), snapshot.runtimes...),
+		beforeStart:    append([]HookFunc(nil), snapshot.beforeStart...),
+		afterStart:     append([]HookFunc(nil), snapshot.afterStart...),
+		beforeStop:     append([]HookFunc(nil), snapshot.beforeStop...),
+		afterStop:      append([]HookFunc(nil), snapshot.afterStop...),
+		stopPolicy:     stopPolicy,
+		readySignal:    readySignal,
+		stoppingSignal: stoppingSignal,
 	}
 }
 
@@ -258,6 +302,8 @@ var ErrStopRequested = errors.New("application stop requested")
 var ErrSpecFrozen = errors.New("app spec is frozen")
 
 // Runtime 定义可启动和停止的应用运行时。
+// 运行时可选实现 AbortStartup(context.Context) error，在 Endpoint 或 BeforeStart
+// 失败时回收尚未启动的资源。该操作应幂等、响应取消，不能替代已启动运行时的 Stop。
 type Runtime interface {
 	Start(context.Context) error
 	Stop(context.Context) error

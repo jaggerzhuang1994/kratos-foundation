@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
@@ -22,6 +24,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	goredis "github.com/redis/go-redis/v9"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/protobuf/proto"
@@ -39,14 +42,12 @@ func (p disabledTracingProvider) Tracer(name string, options ...trace.TracerOpti
 }
 
 func TestNewManagerBuildsCachesAndCleansUpConfiguredClients(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "redis.log")
 	loggerState, releaseLogger, err := testlog.New(testlog.Config{
 		Level:      kratoslog.LevelInfo,
 		TimeFormat: time.RFC3339,
 		Std:        testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
-		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
-			Disable: true,
-			Level:   kratoslog.LevelInfo,
-		}},
+		File:       testlog.FileConfig{OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelInfo}, Path: logPath, Rotating: testlog.RotatingConfig{Disable: true}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +93,14 @@ func TestNewManagerBuildsCachesAndCleansUpConfiguredClients(t *testing.T) {
 
 	cleanup()
 	cleanup()
+	written, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs := string(written)
+	if !strings.Contains(logs, "event=redis.manager.ready") || strings.Count(logs, "event=redis.manager.closed") != 1 || strings.Contains(logs, "\nERROR ") {
+		t.Fatalf("manager lifecycle logs=%s", logs)
+	}
 	if manager.Default() != nil {
 		t.Fatal("cleanup left the default client visible")
 	}
@@ -444,6 +453,126 @@ func TestManagerMetricsSeparateConnectionsAtSameAddress(t *testing.T) {
 	if !names["cache"] || !names["locks"] || len(names) != 2 {
 		t.Fatalf("connection metrics collapsed: %v", names)
 	}
+}
+
+func TestManagerCleanupReleasesMetricsCallbacksBeforeReuse(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider, releaseMetrics, err := metrics.NewProvider(appinfo.New("redis-metrics-cleanup"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer releaseMetrics()
+		newManager := func(size int32) *manager {
+			t.Helper()
+			option := localConnectionOption("127.0.0.1:1")
+			option.PoolSize = proto.Int32(size)
+			m := newLocalTestManager(map[string]connectionOption{"cache": option})
+			m.conf.Metrics = &config_pb.RedisMetrics{}
+			m.metrics = provider
+			if _, err := m.Connection("cache"); err != nil {
+				t.Fatal(err)
+			}
+			return m
+		}
+		original := newManager(4)
+		defer func() {
+			if err := original.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		if got := redisPoolMaximum(t, provider); got != 4 {
+			t.Fatalf("initial pool maximum = %v, want 4", got)
+		}
+		if err := original.Close(); err != nil {
+			t.Fatal(err)
+		}
+		// Close 只发送 SDK 回收信号；等其异步注销完成后才检查样本和创建替代实例。
+		synctest.Wait()
+		if got := redisPoolMaximum(t, provider); got != 0 {
+			t.Fatalf("closed pool maximum = %v, want no samples", got)
+		}
+		replacement := newManager(8)
+		defer func() {
+			if err := replacement.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		if got := redisPoolMaximum(t, provider); got != 8 {
+			t.Fatalf("replacement pool maximum = %v, want 8 without closed pool", got)
+		}
+	})
+}
+
+type failingRedisMetricsProvider struct {
+	metrics.Provider
+	err error
+}
+
+func (p failingRedisMetricsProvider) MeterProvider() otelmetric.MeterProvider {
+	return failingRedisMeterProvider{MeterProvider: p.Provider.MeterProvider(), err: p.err}
+}
+
+type failingRedisMeterProvider struct {
+	otelmetric.MeterProvider
+	err error
+}
+
+func (p failingRedisMeterProvider) Meter(name string, options ...otelmetric.MeterOption) otelmetric.Meter {
+	return failingRedisMeter{Meter: p.MeterProvider.Meter(name, options...), err: p.err}
+}
+
+type failingRedisMeter struct {
+	otelmetric.Meter
+	err error
+}
+
+func (m failingRedisMeter) Float64Histogram(string, ...otelmetric.Float64HistogramOption) (otelmetric.Float64Histogram, error) {
+	return nil, m.err
+}
+
+func TestManagerMetricsInstallFailureReleasesRegisteredCallback(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider, releaseMetrics, err := metrics.NewProvider(appinfo.New("redis-metrics-rollback"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer releaseMetrics()
+		failure := errors.New("create command histogram failed")
+		m := newLocalTestManager(map[string]connectionOption{"cache": localConnectionOption("127.0.0.1:1")})
+		m.conf.Metrics = &config_pb.RedisMetrics{}
+		m.metrics = failingRedisMetricsProvider{Provider: provider, err: failure}
+		if client, err := m.Connection("cache"); client != nil || !errors.Is(err, failure) {
+			t.Fatalf("Connection = %v, err = %v", client, err)
+		}
+		// SDK 先登记池回调再安装命令 hook；后一阶段失败也必须注销前一阶段的资源。
+		synctest.Wait()
+		if got := redisPoolMaximum(t, provider); got != 0 {
+			t.Fatalf("failed construction pool maximum = %v, want no samples", got)
+		}
+		if len(m.connections) != 0 || len(m.metricsClose) != 0 {
+			t.Fatal("failed construction left managed resources")
+		}
+		if err := m.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func redisPoolMaximum(t testing.TB, provider metrics.Provider) float64 {
+	t.Helper()
+	families, err := provider.PrometheusGatherer().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var maximum float64
+	for _, family := range families {
+		if family.GetName() == "db_client_connections_max" {
+			for _, sample := range family.Metric {
+				maximum += sample.GetGauge().GetValue()
+			}
+		}
+	}
+	return maximum
 }
 
 // externalIntegrationManager 只连接显式测试地址，不借用开发者已有 Redis 配置。

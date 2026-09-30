@@ -126,19 +126,3 @@ func TestStatsRedis(t *testing.T) {
 		t.Fatalf("bounded: %+v %v", got, err)
 	}
 }
-
-func TestStatsRequiresContextTimeout(t *testing.T) {
-	client := goredis.NewClient(&goredis.Options{Addr: "unused"})
-	t.Cleanup(func() {
-		if err := client.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	store, err := NewStore(testManager{client: client}, Config{Connection: "test", KeyPrefix: "stats"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.Stats(context.Background(), time.Now()); err == nil {
-		t.Fatal("unbounded context accepted")
-	}
-}

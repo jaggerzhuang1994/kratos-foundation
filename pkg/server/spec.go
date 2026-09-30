@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/go-kratos/kratos/v2/middleware"
@@ -21,8 +22,10 @@ type HTTPBuilder interface {
 	Middleware(...middleware.Middleware) HTTPBuilder
 	// MiddlewareSpec 追加带名称或显式优先级的中间件。
 	MiddlewareSpec(...MiddlewareSpec) HTTPBuilder
-	// Option 追加原生 Kratos HTTP ServerOption。
+	// Option 追加原生协议选项；Address/Network/Listener 由 Foundation 最终覆盖。
 	Option(...http.ServerOption) HTTPBuilder
+	// Listener 声明由启用的 HTTP 运行时接管的监听器；nil 使用配置地址惰性绑定。
+	Listener(net.Listener) HTTPBuilder
 	// Register 追加应用路由注册回调。
 	Register(...HTTPEndpoint) HTTPBuilder
 	// WebSocket 注册一条 WebSocket 路径及事件处理器，默认消息上限 1 MiB。
@@ -58,6 +61,8 @@ type httpSpec struct {
 	middlewares []MiddlewareSpec
 	// options 传给 HTTP 服务构造函数的选项。
 	options []http.ServerOption
+	// listener 由调用方显式声明，启用 HTTP 并开始构造服务器后转交运行时释放。
+	listener net.Listener
 	// registrations 按声明顺序保存 HTTP 与 WebSocket 路由。
 	registrations []httpRegistration
 }
@@ -201,6 +206,12 @@ func (s *httpSpec) Option(options ...http.ServerOption) HTTPBuilder {
 			s.options = append(s.options, option)
 		}
 	}
+	return s
+}
+
+// Listener 替换自定义监听声明；被替换的对象仍由调用方持有，构造后不得再次修改 Spec。
+func (s *httpSpec) Listener(listener net.Listener) HTTPBuilder {
+	s.listener = listener
 	return s
 }
 

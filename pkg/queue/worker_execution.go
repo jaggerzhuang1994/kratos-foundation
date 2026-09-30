@@ -27,10 +27,12 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		"task.message_version", task.MessageVersion,
 		"attempts", reservation.Attempts,
 	)
-	logger.Infow("event", "task.execution.started")
+	// 每个领取都有指标与 span，逐次执行日志仅在 Debug 排障时输出。
+	logger.Debugw("event", "queue.task.execution.started", "msg", "task execution started")
 	defer func() {
-		logger.Infow(
-			"event", "task.execution.finished",
+		logger.Debugw(
+			"event", "queue.task.execution.finished",
+			"msg", "task execution finished",
 			"result", executionResult,
 			"duration", time.Since(started),
 		)
@@ -95,7 +97,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		}
 		w.telemetry.RecordFailure(spanCtx, span, w.config.Queue, w.config.Name, failureResult)
 		if err == nil {
-			w.log.WithContext(spanCtx).Errorw("event", "task.failed", "queue", w.config.Queue, "task.id", task.ID, "reason", reason, "cause", cause, "task.message_version", task.MessageVersion, "attempts", reservation.Attempts)
+			w.log.WithContext(spanCtx).Errorw("event", "queue.task.failed", "msg", "task failed", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "reason", reason, "cause", cause, "task.message_version", task.MessageVersion, "attempts", reservation.Attempts)
 			w.notifyFailure(spanCtx, FailureEvent{Queue: w.config.Queue, FailedTask: FailedTask{Task: task.Clone(), Attempts: reservation.Attempts, Reason: reason, FailedAt: failedAt}, Cause: cause, MaxAttempts: w.retry.MaxAttempts})
 		}
 	default:
@@ -107,7 +109,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		err = w.store.Release(operationCtx, reservation, time.Now().UTC().Add(delay))
 		if err == nil {
 			w.telemetry.RecordRetry(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts)
-			w.log.WithContext(spanCtx).Warnw("event", "retry.scheduled", "queue", w.config.Queue, "task.id", task.ID, "task.message_version", task.MessageVersion, "cause", cause, "attempts", reservation.Attempts, "retry_after", delay)
+			w.log.WithContext(spanCtx).Warnw("event", "queue.retry.scheduled", "msg", "task retry scheduled", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "task.message_version", task.MessageVersion, "cause", cause, "attempts", reservation.Attempts, "retry_after", delay)
 		}
 	}
 	if err != nil {
@@ -157,15 +159,24 @@ func (w *Worker[T]) notifyFailure(ctx context.Context, event FailureEvent) {
 		err = ctx.Err()
 	}
 	if err != nil {
-		// 回调可能包含业务敏感数据，只记录受控事件和任务定位信息。
-		w.log.WithContext(ctx).Errorw("event", "failure.callback_failed", "queue", event.Queue, "task.id", event.Task.ID)
+		// 回调可能包含业务敏感数据，只记录受控分类和任务定位信息，不输出原始错误或 panic 值。
+		reason := "error"
+		switch {
+		case errors.Is(err, errFailureCallbackPanicked):
+			reason = "panic"
+		case errors.Is(err, context.DeadlineExceeded):
+			reason = "timeout"
+		}
+		w.log.WithContext(ctx).Errorw("event", "queue.failure.callback_failed", "msg", "failure callback failed", "queue", event.Queue, "worker", w.config.Name, "task.id", event.Task.ID, "reason", reason)
 	}
 }
+
+var errFailureCallbackPanicked = errors.New("queue failure callback panicked")
 
 func invokeFailure(ctx context.Context, callback func(context.Context, FailureEvent) error, event FailureEvent) (err error) {
 	defer func() {
 		if recover() != nil {
-			err = errors.New("queue failure callback panicked")
+			err = errFailureCallbackPanicked
 		}
 	}()
 	return callback(ctx, event)

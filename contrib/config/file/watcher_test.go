@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -66,6 +67,17 @@ func waitFileValue(t *testing.T, watcher config.Watcher, expected string) {
 }
 
 func TestFileWatcherSurvivesRemovalRecreationAndAtomicReplacement(t *testing.T) {
+	events := make(chan map[string]any, 8)
+	t.Cleanup(log.SetLogger(fileLogFunc(func(level kratoslog.Level, fields ...any) error {
+		event := map[string]any{"level": level}
+		for i := 0; i+1 < len(fields); i += 2 {
+			event[fields[i].(string)] = fields[i+1]
+		}
+		if event["event"] == "config.file.waiting" || event["event"] == "config.file.recovered" {
+			events <- event
+		}
+		return nil
+	})))
 	directory := t.TempDir()
 	path := filepath.Join(directory, "config.yaml")
 	if err := os.WriteFile(path, []byte("value: initial\n"), 0o600); err != nil {
@@ -79,7 +91,12 @@ func TestFileWatcherSurvivesRemovalRecreationAndAtomicReplacement(t *testing.T) 
 	select {
 	case result := <-pending:
 		t.Fatalf("temporary removal terminated or published missing file: %+v", result)
-	case <-time.After(50 * time.Millisecond):
+	case event := <-events:
+		if event["event"] != "config.file.waiting" || event["level"] != kratoslog.LevelWarn || event["path"] != path || event["error"] == nil {
+			t.Fatalf("waiting event=%v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing retry event")
 	}
 	if err := os.WriteFile(path, []byte("value: restored\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -91,6 +108,14 @@ func TestFileWatcherSurvivesRemovalRecreationAndAtomicReplacement(t *testing.T) 
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("recreated file never recovered")
+	}
+	select {
+	case event := <-events:
+		if event["event"] != "config.file.recovered" || event["level"] != kratoslog.LevelInfo || event["path"] != path || event["attempts"].(int) < 1 {
+			t.Fatalf("recovery event=%v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing recovery event")
 	}
 	replacement := filepath.Join(directory, "replacement.tmp")
 	if err := os.WriteFile(replacement, []byte("value: replaced\n"), 0o600); err != nil {
@@ -272,5 +297,33 @@ func TestFileSourceLoadLogsSuccessfulPath(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "loaded configuration file") {
 		t.Fatal("failed read logged as successful")
+	}
+}
+
+type fileLogFunc func(kratoslog.Level, ...any) error
+
+func (f fileLogFunc) Log(level kratoslog.Level, fields ...any) error { return f(level, fields...) }
+
+// 事件由测试独占的 channel 提供，不向 fsnotify 自有生产 channel 写入。
+func TestFileWatcherWarnsAndObservesCancellationOnEventOverflow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var event map[string]any
+	t.Cleanup(log.SetLogger(fileLogFunc(func(level kratoslog.Level, fields ...any) error {
+		event = map[string]any{"level": level}
+		for i := 0; i+1 < len(fields); i += 2 {
+			event[fields[i].(string)] = fields[i+1]
+		}
+		cancel()
+		return nil
+	})))
+	notifications := &fsnotify.Watcher{Errors: make(chan error, 1)}
+	notifications.Errors <- fsnotify.ErrEventOverflow
+	watcher := &fileWatcher{source: &fileSource{path: "config.yaml"}, notifications: notifications, ctx: ctx, cancel: cancel}
+	if _, err := watcher.Next(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("overflow cancellation=%v", err)
+	}
+	if event["event"] != "config.file.events_lost" || event["level"] != kratoslog.LevelWarn || event["path"] != "config.yaml" || event["error"] != fsnotify.ErrEventOverflow {
+		t.Fatalf("overflow event=%v", event)
 	}
 }

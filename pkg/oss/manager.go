@@ -69,11 +69,18 @@ func newManagerWithDrivers(
 		return nil, nil, err
 	}
 	logger = logger.WithModule("oss")
+	enabledDrivers := make(map[string]struct{})
+	for _, definition := range m.definitions {
+		enabledDrivers[definition.driver] = struct{}{}
+	}
+	logger.With("event", "oss.manager.ready", "buckets", len(m.definitions), "drivers", slices.Sorted(maps.Keys(enabledDrivers))).Info("object storage manager ready")
 	var cleanupOnce sync.Once
 	cleanup := func() {
 		cleanupOnce.Do(func() {
 			if closeErr := m.close(); closeErr != nil {
-				logger.With("error", closeErr).Error("failed to close an object storage client")
+				logger.With("event", "oss.cleanup.failed", "error", closeErr).Error("object storage manager cleanup failed")
+			} else {
+				logger.With("event", "oss.manager.closed").Info("object storage manager closed")
 			}
 		})
 	}

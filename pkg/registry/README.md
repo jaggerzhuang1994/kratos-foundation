@@ -67,7 +67,7 @@ flowchart TD
  X --> R
 ```
 
-Consul 连接构造使用 `newClient` 的初始化日志及 10 秒 leader 探测预算；错误交给调用方的启动边界处理。cleanup 正常先注销、停止监听，客户端始终归进程所有；心跳取消沿用 Registrar 的操作 channel 串行化策略，不增加新的业务锁。该 channel 获取超时会记录 `newDriver.cleanup` 错误。配置源与注册发现共享 SDK 客户端，驱动 cleanup 不关闭它。详见[单例生命周期](../../internal/consul/README.md)。
+Consul 连接构造使用 `newClient` 的初始化日志及 10 秒 leader 探测预算；错误交给调用方的启动边界处理。cleanup 正常先注销、停止监听，客户端始终归进程所有；心跳取消沿用 Registrar 的操作 channel 串行化策略，不增加新的业务锁。该 channel 获取超时会记录 ERROR `registry.consul.cleanup.failed`（`error`）。配置源与注册发现共享 SDK 客户端，驱动 cleanup 不关闭它。详见[单例生命周期](../../internal/consul/README.md)。
 
 ## 迁移
 

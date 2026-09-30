@@ -34,6 +34,7 @@ func TestCronLoggerTranslatesFieldsAndSuppressesDuplicateEvents(t *testing.T) {
 	}
 	logs := string(written)
 	for _, fragment := range []string{
+		"event=job.cron.event", "cron.event=retire", "event=job.cron.failed",
 		fmt.Sprintf("caller=job/log_test.go:%d", line+1),
 		"msg=retire",
 		"msg=cron error",

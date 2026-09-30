@@ -272,12 +272,12 @@ debugLogger.Info("request failed") // 请求级 debug：计算并输出 error.st
 ```go
 log.WithModule("config/file").
     With("files", matches).
-    Info("matched local configuration files")
+    Info("configuration files selected")
 ```
 
 以上片段中的 `matches` 是已经匹配到的文件列表。`WithModule` 返回借用当前全局输出的 Logger，不创建文件或 cleanup；已有视图持续应用共享日志设置，但后续 `SetLogger` 不会替换它借用的输出。因此应在调用处获取，避免在包初始化时长期保存启动 fallback 的视图；输出仍由原所有者释放。
 
-`Info/Warn/Error/Debug/Fatal` 和对应 `f` 方法使用当前 `msgKey`；Foundation 包级消息方法也遵循此规则。配置 `log.msg_key: message` 会让上述日志输出 `message=matched local configuration files`。`module` 是保留字段，不能用作 msgKey；设置时会告警并保留旧值。附加字段使用 `With`，不要手写 `"msg"` 再包装 `fmt.Sprintf`。`Log` 和 `*w` 是原始键值入口，保留调用者提供的字段，不自动猜测或重命名消息字段。
+`Info/Warn/Error/Debug/Fatal` 和对应 `f` 方法使用当前 `msgKey`；Foundation 包级消息方法也遵循此规则。配置 `log.msg_key: message` 会让上述日志输出 `message=configuration files selected`。`module` 是保留字段，不能用作 msgKey；设置时会告警并保留旧值。附加字段使用 `With`，不要手写 `"msg"` 再包装 `fmt.Sprintf`。`Log` 和 `*w` 是原始键值入口，保留调用者提供的字段，不自动猜测或重命名消息字段。
 
 `log.Context(ctx)` 保留 Kratos Helper 返回类型，它在构造时捕获当前消息字段名；需要已保存视图持续跟随动态消息字段配置 时，使用 `log.WithModule("orders").WithContext(ctx)`。
 
@@ -394,7 +394,7 @@ go vet ./pkg/log/...
 
 这使官方 Config 的异步退出日志不会与 Bootstrap 修改 SDK 全局 Logger 的字段发生竞争。官方 Config.Close 不等待其最终日志协程结束；Manager cleanup 会停止所有子来源 worker 并取消业务订阅。App 构造覆盖 `kratos.Logger(nil)`，不再临时设置或恢复 SDK 全局 Logger；应用运行日志通过固定代理路由到 Bootstrap 安装的目标。
 
-官方 Config 解码或合并失败的日志会拼入完整配置。固定代理将这两类消息替换为安全摘要，保留级别和模块，避免泄露环境模板展开后的凭据；其他 SDK 消息保持原样。该保护依赖当前 Kratos 错误格式，并由真实默认 decoder 的回归用例验证。业务直接输出配置内容或绕过本桥接设置官方 Logger 不在此保护范围。
+官方 Config 解码或合并失败的日志会拼入完整配置。固定代理将这两类消息替换为安全摘要，保留级别和模块，避免泄露环境模板展开后的凭据；配置正常取消消息归为 DEBUG config.watcher.stopped，配置拒绝摘要带 config.source.rejected；其他 SDK 消息保持原样。该保护依赖当前 Kratos 错误格式，并由真实默认 decoder 的回归用例验证。业务直接输出配置内容或绕过本桥接设置官方 Logger 不在此保护范围。
 
 ```mermaid
 flowchart TD
@@ -414,4 +414,30 @@ flowchart TD
  M -- 是 --> N[原子恢复旧绑定]
  M -- 否 --> O
  N --> O
+```
+
+## 事件与级别
+
+Foundation 自有运行事件使用稳定的点分 `event` 和 `module`。事件名统一为 `<领域>.<对象>.<动作>`，首段与所属领域一致（`app.*`、`config.*`、`server.*`、`client.*`、`job.*`、`queue.*`、`kafka.*`、`database.*`、`registry.*` 等），可用 `event=queue.*` 这类前缀归类；业务自定义事件应使用业务自己的前缀，避免与框架事件混淆。每条事件都带一句简短 msg 解释结果。已有 caller 不再附 function。service.id/name/version、env 由 Bootstrap 提供；有请求、任务或连接 Context 时调用 WithContext，保留 trace/span/request 字段。启动身份摘要及逐包事件出口见[包职责与日志审查](../../PACKAGE_REVIEW.md)。
+
+| 级别 | 使用范围 |
+| --- | --- |
+| DEBUG | 高频执行开始/成功、配置首次订阅回放、路由与来源读取详情、正常 watcher 取消、预期准入拒绝 |
+| INFO | 应用/Worker 生命周期、配置加载与有效变更、资源构造/关闭、故障恢复、业务阶段汇总、单行访问结果摘要 |
+| WARN | 保留旧配置、重试/退避、配额或并发准入限制、探针超时、强制关闭 |
+| ERROR | 最终失败、恢复的 panic、无法向调用方返回的 cleanup/通知失败 |
+
+同步底层操作将错误返回给能够决定下一步的调用方；不为每次校验、正常读取或每个 SQL/Redis/OSS 调用重复输出日志。App 的终态是运行级汇总，与任务或资源的故障事件有不同定位范围，Runtime 转发层不另记原错误。原错误字段仍须由生产错误的一方避免夹带业务敏感内容；不打印配置全文、argv、密码、令牌、原始消息载荷或任意 panic 原文。文件输出自身关闭失败直接向 stderr 写一次 ERROR module=log event=log.file.cleanup.failed，避免递归使用已经关闭的 Logger。
+
+```mermaid
+flowchart TD
+ A([产生执行结果]) --> C{谁能决定后续处理?}
+ C -- 底层同步操作 --> R([返回错误 交给处理边界])
+ C -- 处理边界或无返回值清理 --> D{事件语义?}
+ D -- 高频正常细节 --> B[DEBUG event 定位字段]
+ D -- 生命周期 有效变更 汇总或恢复 --> I[INFO event 定位字段]
+ D -- 可恢复失败或保留旧值 --> W[WARN event 原因或 error]
+ D -- 最终失败或 panic --> E[ERROR event 安全错误上下文]
+ B & I & W & E --> L[通过已有日志管线 级别过滤 字段过滤 与去重]
+ L --> O([输出到已配置的目标])
 ```

@@ -323,7 +323,7 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 		for i := 0; i+1 < len(fields); i += 2 {
 			event[fields[i].(string)] = fields[i+1]
 		}
-		if event["msg"] == "config.watch" || event["msg"] == "config.change" || event["msg"] == "configuration observer panicked; continuing polling" {
+		if event["event"] == "config.watch" || event["event"] == "config.change" || event["event"] == "config.observer.panicked" {
 			event["level"] = level
 			events <- event
 		}
@@ -380,7 +380,11 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 				if key == "" {
 					key = "<root>"
 				}
-				if event["level"] != kratoslog.LevelInfo || event["module"] != "config" ||
+				wantLevel := kratoslog.LevelInfo
+				if step.initial {
+					wantLevel = kratoslog.LevelDebug
+				}
+				if event["level"] != wantLevel || event["module"] != "config" ||
 					event["key"] != key || event["subscription"] != wantCaller {
 					t.Fatalf("unexpected event: %v", event)
 				}
@@ -393,10 +397,10 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 					}
 				}
 				if step.initial {
-					if _, present := event["changed_paths"]; present || event["msg"] != "config.watch" {
+					if _, present := event["changed_paths"]; present || event["event"] != "config.watch" {
 						t.Fatalf("unexpected initial event: %v", event)
 					}
-				} else if event["msg"] != "config.change" || !reflect.DeepEqual(event["changed_paths"], []string{"/key"}) {
+				} else if event["event"] != "config.change" || !reflect.DeepEqual(event["changed_paths"], []string{"/key"}) {
 					t.Fatalf("unexpected change event: %v", event)
 				}
 				for _, value := range event {
@@ -442,7 +446,7 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 	if len(events) != 2 {
 		t.Fatalf("got %d events, want replay and panic", len(events))
 	}
-	for _, level := range []kratoslog.Level{kratoslog.LevelInfo, kratoslog.LevelError} {
+	for _, level := range []kratoslog.Level{kratoslog.LevelDebug, kratoslog.LevelError} {
 		event := <-events
 		if event["subscription"] != fmt.Sprintf("config/polling_test.go:%d", line+1) || event["level"] != level {
 			t.Fatalf("unexpected subscription caller: %v", event)
@@ -454,4 +458,21 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 		}
 	}
 
+}
+
+func TestPollingScanFailureLogsWarningAndRetainsSnapshot(t *testing.T) {
+	var event map[string]any
+	t.Cleanup(log.SetLogger(pollingLogFunc(func(level kratoslog.Level, fields ...any) error {
+		event = map[string]any{"level": level}
+		for i := 0; i+1 < len(fields); i += 2 {
+			event[fields[i].(string)] = fields[i+1]
+		}
+		return nil
+	})))
+	cause := errors.New("scan failed")
+	m := &manager{backend: &scanBackend{err: cause}, snapshot: map[string]any{"key": 1}}
+	m.poll()
+	if m.snapshot["key"] != 1 || event["event"] != "config.snapshot.rejected" || event["level"] != kratoslog.LevelWarn || event["error"] != cause {
+		t.Fatalf("snapshot=%v event=%v", m.snapshot, event)
+	}
 }

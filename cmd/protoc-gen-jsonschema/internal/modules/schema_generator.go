@@ -18,6 +18,10 @@ func buildFromMessage(pluginOptions *proto.PluginOptions, message pgs.Message, m
 	fillSchemaByObjectKeywords(pluginOptions, schema, mo.GetObject())
 
 	for _, field := range message.Fields() {
+		// 与字段遍历使用同一阈值，隐藏字段不能留下属性引用或 required 约束。
+		if proto.GetFieldOptions(field).GetVisibilityLevel() < pluginOptions.GetVisibilityLevel() {
+			continue
+		}
 		propName := toPropertyName(field, pluginOptions.GetPreserveProtoFieldNames())
 		fieldSchema := &jsonschema.Schema{Ref: toRefId(field)}
 		if !pluginOptions.GetMandatoryNullable() && (field.InRealOneOf() || field.HasOptionalKeyword()) || proto.GetFieldOptions(field).GetNullable() {

@@ -94,45 +94,54 @@ flowchart TD
 
 采用**允许重投、有限重试**的执行模型。存储可靠且领取正常完成时，未确认任务可重投；领取后、执行前反复崩溃也可能耗尽次数进入失败状态，不保证 Handler 至少实际执行一次或最终成功。业务成功后、确认前崩溃仍会重投，必须依靠业务幂等。超时 Context 无法强杀忽略取消的 Go Handler；它可能超过租约并与重投任务同时执行。Worker 不启动额外 Handler goroutine，不自动续租；较长任务应配置相应执行窗口与租约，或在业务中拆成可恢复的小任务。
 
-Start 阻塞运行且实例只能启动一次。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。存储故障或损坏记录返回错误，由 Worker 记录 `ERROR storage.failed` 后退出，应用 supervisor 决定后续动作；不自动把存储失败当作成功确认。损坏记录的隔离与修复方式见对应 Store 文档。
+Start 阻塞运行且实例只能启动一次。进入消费阶段记录一次 `INFO event=queue.worker.started`，包含 queue、worker、concurrency 和 processing_enabled；运行退出时记录一次 `INFO event=queue.worker.stopped`。空队列轮询不写 Info，逐次成功由指标统计。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。存储故障或损坏记录返回错误，由 Worker 记录 `ERROR queue.storage.failed` 后退出，应用 supervisor 决定后续动作；不自动把存储失败当作成功确认。损坏记录的隔离与修复方式见对应 Store 文档。
 
 ```mermaid
 flowchart TD
     A([Post]) --> B[复制校验并注入trace]
     B -- 无效 --> C([返回校验错误])
     B -- 有效 --> D[外部Store写入任务 / Database可参与业务事务]
-    D -- 失败 --> E[ERROR enqueue.failed]
+    D -- 失败 --> E[标记 span 与投递指标 不记日志]
     E --> C
     D -- 成功 --> F([返回任务ID / 外层事务仍需提交])
-    G([多个Worker并发入口]) --> H[外部Store原子领取或恢复过期租约]
+    G([多个Worker并发入口]) --> GS[INFO queue.worker.started]
+    GS --> H[外部Store原子领取或恢复过期租约]
     H -- 空队列 --> I{Context取消?}
     I -- 否 --> J[可取消轮询等待]
     J --> H
-    I -- 是 --> Z([停止并等待循环退出])
+    I -- 是 --> Z[取消并等待同实例循环退出]
+    Z --> ZL[INFO queue.worker.stopped]
+    ZE([正常停止])
     H -- 成功 --> K[原子边界结束 新token与attempts已保存]
-    K --> KS[INFO task.execution.started]
+    K --> KS[DEBUG queue.task.execution.started]
     KS --> L{消息版本匹配且未超次数?}
     L -- 是 --> M[原子边界外执行Handler 带超时Context]
     L -- 否 --> R[按token持久化失败]
     M -- 成功 --> N[按token确认完成 由后端删除或保留]
     M -- 可重试错误或超时 --> O[按token释放 写下次可执行时间]
     M -- 永久失败或次数耗尽 --> R
-    M -- 应用取消 --> P[INFO task.execution.finished result=stopped duration]
-    N -- 成功 --> P[INFO task.execution.finished result=success duration]
-    O -- 成功 --> Q[WARN Worker retry.scheduled]
-    R -- 成功 --> S[ERROR Worker task.failed]
-    Q --> Q1[INFO task.execution.finished result=retry duration]
-    S --> S1[INFO task.execution.finished result=failed duration]
+    M -- 应用取消 --> PS[DEBUG queue.task.execution.finished result=stopped duration]
+    PS --> Z
+    N -- 成功 --> P[DEBUG queue.task.execution.finished result=success duration]
+    O -- 成功 --> Q[WARN Worker queue.retry.scheduled]
+    R -- 成功 --> S[ERROR Worker queue.task.failed]
+    Q --> Q1[DEBUG queue.task.execution.finished result=retry duration]
+    S --> S1[DEBUG queue.task.execution.finished result=failed duration]
     P --> H
     Q1 & S1 --> H
-    N & O & R -- 纯租约冲突 --> T[WARN Worker lease.lost]
+    N & O & R -- 纯租约冲突 --> TL[DEBUG queue.task.execution.finished result=storage_error duration]
+    TL --> T[WARN Worker queue.lease.lost]
     T --> H
-    H & N & O & R -- 存储故障 --> U[ERROR Worker storage.failed]
-    U --> U1[INFO task.execution.finished result=storage_error duration]
-    U1 --> V([取消同实例循环 等待退出 返回错误])
+    N & O & R -- 存储故障 --> U1[DEBUG queue.task.execution.finished result=storage_error duration]
+    U1 --> U[ERROR Worker queue.storage.failed]
+    H -- 领取故障 --> U
+    U --> Z
+    ZL --> ZR{是否存储故障?}
+    ZR -- 是 --> V([返回存储错误])
+    ZR -- 否 --> ZE
 ```
 
-每个有效领取在 Handler 调度前记录 `INFO event=task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `INFO event=task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
+按需开启模块 Debug 后，每个有效领取在 Handler 调度前记录 `DEBUG event=queue.task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `DEBUG event=queue.task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
 
 Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Post 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
 

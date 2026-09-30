@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	"net/url"
 	"sync"
 	"time"
 
+	"github.com/go-kratos/kratos/v2"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/transport"
 )
 
@@ -23,9 +26,11 @@ func (s *serverCallbacks) Stop(ctx context.Context) error  { return s.stop(ctx) 
 type endpointServer struct {
 	// Server 提供被包装运行时的启停能力。
 	transport.Server
-	// Endpointer 保留被包装服务器的端点声明能力。
-	transport.Endpointer
+	// endpoint 保留端点查询，并将 SDK 启动前查询失败转为统一回滚。
+	endpoint func() (*url.URL, error)
 }
+
+func (s *endpointServer) Endpoint() (*url.URL, error) { return s.endpoint() }
 
 // wrapServer 将 App 的故障传播、完成计数和停止预算绑定到单个服务。
 func (a *App) wrapServer(server transport.Server) transport.Server {
@@ -67,7 +72,16 @@ func (a *App) wrapServer(server transport.Server) transport.Server {
 		},
 	}
 	if endpoint, ok := server.(transport.Endpointer); ok {
-		return &endpointServer{Server: callbacks, Endpointer: endpoint}
+		return &endpointServer{Server: callbacks, endpoint: func() (*url.URL, error) {
+			resolved, err := endpoint.Endpoint()
+			if err == nil {
+				return resolved, nil
+			}
+			// SDK 在 BeforeStart 之前解析端点，失败时还没有 Start/Stop 协程。
+			// 在这个入口回滚，才能同时覆盖 Foundation App 和底层 Kratos App 的 Run。
+			ctx := kratos.NewContext(a.parent, a.App)
+			return nil, a.stopBeforeStart(ctx, err)
+		}}
 	}
 	return callbacks
 }
@@ -150,7 +164,39 @@ func (a *App) stopAfterFailure(ctx context.Context, cause error) error {
 	return errors.Join(cause, stopErr, waitErr, afterStopErr)
 }
 
-// stopBeforeStart 收敛启动前故障；此时没有运行时需要等待。
+// startupAborter 只回收运行时尚未启动的资源，不启动或停止普通自定义运行时。
+type startupAborter interface {
+	AbortStartup(context.Context) error
+}
+
+// abortStartup 用本次冻结的预算逆序回滚全部原始运行时，包括当前查询失败的端点。
+func (a *App) abortStartup(ctx context.Context) error {
+	cleanupCtx := a.shutdownContext(ctx)
+	cancel := func() {}
+	if timeout := a.stopTimeout(); timeout > 0 {
+		cleanupCtx, cancel = context.WithTimeout(cleanupCtx, timeout)
+	}
+	defer cancel()
+	var errs []error
+	aborted := 0
+	for index := len(a.runtimes) - 1; index >= 0; index-- {
+		if runtime, ok := a.runtimes[index].(startupAborter); ok {
+			aborted++
+			if err := runtime.AbortStartup(cleanupCtx); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	err := errors.Join(errs...)
+	if err != nil {
+		a.logEvent(cleanupCtx, kratoslog.LevelError, "app.startup.abort.failed", "startup rollback failed", "runtimes", aborted, "error", err)
+	} else {
+		a.logEvent(cleanupCtx, kratoslog.LevelInfo, "app.startup.aborted", "startup rolled back", "runtimes", aborted)
+	}
+	return err
+}
+
+// stopBeforeStart 收敛启动前故障；先回滚预创建资源，再执行最终停止钩子。
 func (a *App) stopBeforeStart(ctx context.Context, cause error) error {
 	a.recordFailure(cause)
 	if errors.Is(cause, errAppStopping) {
@@ -160,8 +206,9 @@ func (a *App) stopBeforeStart(ctx context.Context, cause error) error {
 	}
 	a.requestStop()
 	stopErr := a.stop()
+	abortErr := a.abortStartup(ctx)
 	afterStopErr := a.runAfterStop(ctx)
-	return errors.Join(cause, stopErr, afterStopErr)
+	return errors.Join(cause, stopErr, abortErr, afterStopErr)
 }
 
 // isCancellationOnly 只将所有叶子都为取消的错误树视为正常停止，保留合并的真实故障。

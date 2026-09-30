@@ -22,7 +22,7 @@ func (l *loggerAdapter) Level() kgo.LogLevel {
 
 // Log 把 franz-go 结构化日志转发到 Foundation Logger。
 func (l *loggerAdapter) Log(level kgo.LogLevel, message string, keyvals ...any) {
-	logger := l.log.With(keyvals...)
+	logger := l.log.With(keyvals...).With("event", "kafka.sdk")
 	switch level {
 	case kgo.LogLevelError:
 		logger.Error(message)

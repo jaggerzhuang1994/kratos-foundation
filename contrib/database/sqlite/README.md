@@ -17,3 +17,5 @@ flowchart TD
 ```
 
 init 不读取配置或创建连接；调用方借用连接，不重复关闭。错误返回 Manager 处理，本适配器不重复记录日志。
+
+本包同名 `driver_test.go` 除登记及连接构造外，还通过公共 Database Manager 验证真实 SQLite 的 CRUD 和 cleanup；Manager 自身的组装、具名隔离、插件及事务核心契约继续在 `pkg/database/manager_test.go` 验证。

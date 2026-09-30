@@ -175,7 +175,7 @@ flowchart TD
 
 ClassifyError 可把领域错误映射为 `queue.Permanent(err)` 或返回普通错误；返回 nil 保留原错误，不能把执行失败改成成功。坏消息和已标记的永久错误不交给分类器。panic 和实际 Context 超时由 Worker 统一处理，不保证交给分类器。
 
-`OnFailed(ctx, event)` 仅在 `Store.Fail` 成功后同步执行，覆盖永久错误、坏消息、未注册类型、重试耗尽及执行前领取次数耗尽。事件包含独立 Task 副本、Attempts、MaxAttempts、Reason、Cause 和 FailedAt，不要求坏消息能够解码成业务类型。回调错误、panic、超时记录 `ERROR failure.callback_failed`，不回滚归档、不重新执行消息；回调必须响应 Context。
+`OnFailed(ctx, event)` 仅在 `Store.Fail` 成功后同步执行，覆盖永久错误、坏消息、未注册类型、重试耗尽及执行前领取次数耗尽。事件包含独立 Task 副本、Attempts、MaxAttempts、Reason、Cause 和 FailedAt，不要求坏消息能够解码成业务类型。回调错误、panic、超时记录 `ERROR queue.failure.callback_failed`，`reason=error|panic|timeout`，不输出回调错误原文或 panic 值；不回滚归档、不重新执行消息；回调必须响应 Context。
 
 **执行失败不等于归档成功；归档成功也不等于通知必达。** 归档存储失败或租约丢失不会触发回调；归档之后、回调之前崩溃可能丢通知。必须送达的业务通知需可靠任务或持久化事件设计，不能依赖此回调或在回调内简单发送一次。运维管理继续使用 `Store.Failed(ctx, limit)` 和 `Store.Retry(ctx, id, at)`，查询返回独立副本、limit 为 1–1000，重试清零领取次数；不自动扫描重试或提供全局查找。
 
@@ -184,43 +184,43 @@ flowchart TD
     A([业务 Post]) --> B{校验与编码成功?}
     B -- 否 --> Z([返回错误])
     B -- 是 --> C[Queue 调用外部 Store 入队]
-    C -- 失败 --> D[ERROR enqueue.failed]
+    C -- 失败 --> D[标记 span 与投递指标 不记日志]
     D --> Z
     C -- 成功 --> E([返回 ID 事务仍需提交])
     F([Worker Start]) --> G{禁用?}
-    G -- 是 --> H[DEBUG consumer.disabled 等待取消或 Stop]
+    G -- 是 --> H[DEBUG queue.consumer.disabled 等待取消或 Stop]
     H --> END([退出])
     G -- 否 --> I[并发入口 Store 原子领取 竞争租约]
     I -- 空 --> W[可取消轮询]
     W --> I
     I -- 成功 --> J[原子操作提交释放锁 固定 token 和次数]
-    J --> JS[INFO task.execution.started]
+    J --> JS[DEBUG queue.task.execution.started]
     JS --> K{次数及类型有效?}
     K -- 否 --> FAIL[按 token 调用 Store.Fail]
     K -- 是 --> L{解码和校验成功?}
     L -- 否 --> FAIL
     L -- 是 --> M[原子边界外 BeforeHandle 等待及处理中间件 协作超时]
-    M -- 应用取消 --> STOP[INFO task.execution.finished result=stopped duration]
+    M -- 应用取消 --> STOP[DEBUG queue.task.execution.finished result=stopped duration]
     STOP --> END
     M -- 成功 --> ACK[按 token Ack]
     M -- 错误或超时 --> N{永久失败或耗尽?}
     N -- 是 --> FAIL
     N -- 否 --> R[按 token Release 保存重试排期]
-    R -- 成功 --> RL[WARN retry.scheduled]
-    ACK -- 成功 --> AL[INFO task.execution.finished result=success duration]
-    FAIL -- 成功 --> FL[ERROR task.failed]
+    R -- 成功 --> RL[WARN queue.retry.scheduled]
+    ACK -- 成功 --> AL[DEBUG queue.task.execution.finished result=success duration]
+    FAIL -- 成功 --> FL[ERROR queue.task.failed]
     FL --> CB{配置 OnFailed?}
-    CB -- 否 --> FF[INFO task.execution.finished result=failed duration]
+    CB -- 否 --> FF[DEBUG queue.task.execution.finished result=failed duration]
     CB -- 是 --> CALL[原子边界外调用回调 独立超时预算]
     CALL -- 成功 --> FF
-    CALL -- 错误或 panic 或超时 --> CL[ERROR failure.callback_failed]
+    CALL -- 错误或 panic 或超时 --> CL[ERROR queue.failure.callback_failed]
     CL --> FF
-    RL --> RF[INFO task.execution.finished result=retry duration]
+    RL --> RF[DEBUG queue.task.execution.finished result=retry duration]
     RF & FF & AL --> I
-    I & FAIL & ACK & R -- 存储故障 --> SL[ERROR storage.failed]
-    SL --> SF[INFO task.execution.finished result=storage_error duration]
+    I & FAIL & ACK & R -- 存储故障 --> SL[ERROR queue.storage.failed]
+    SL --> SF[DEBUG queue.task.execution.finished result=storage_error duration]
     SF --> END
-    FAIL & ACK & R -- 纯租约冲突 --> LL[WARN lease.lost]
+    FAIL & ACK & R -- 纯租约冲突 --> LL[WARN queue.lease.lost]
     LL --> I
     W -- 取消 --> END
 ```
@@ -252,6 +252,6 @@ flowchart TD
 | ConsumerConfig / Config | WorkerConfig |
 | Queue.Start / Queue.Stop / RegisterQueueWorker | 将 Worker 登记到 Spec.RegisterRuntime |
 
-`DisableProcessing` 仅停用 Worker，不影响 Post。现有 `consumer.disabled` 日志事件及 `queue_consumer_*` 指标名称保持不变，避免监控漂移。
+`DisableProcessing` 仅停用 Worker，不影响 Post。停用时记录 `DEBUG queue.consumer.disabled`（v2.3.x 及更早为 `consumer.disabled`）；`queue_consumer_*` 指标名称保持不变，避免监控漂移。
 
 实现与测试按队列投递、Worker 生命周期、处理适配、单次执行、重试、存储契约和观测七项职责归并，见[文件组织](README.md#文件组织)。Queue 和 Worker 均不拥有底层连接。

@@ -67,10 +67,10 @@ flowchart TD
     H --> I[Body.Close 释放请求 Context 与响应体]
     I --> J([请求结束])
     F --> J
-    K[cleanup 超时 WARN factory.cleanup timeout] --> L[状态锁内摘除连接 锁外关闭资源]
+    K[cleanup 超时 WARN client.cleanup.timeout] --> L[状态锁内摘除连接 锁外关闭资源]
     L --> M[资源取消信号中断请求与响应体读取]
     M --> H
-    L --> N[INFO client closed 或 ERROR client close failed]
+    L --> N[INFO client.closed 或 ERROR client.close.failed]
 ```
 
 根级 `client.fallback_timeout`、`client.max_timeout`、`client.min_budget` 为每个客户端提供默认值；根字段省略时分别为 **10s、0s、0s**。单个 `client.clients.<name>.deadline` 按字段覆盖根配置，未配置 deadline 或未列在 clients 中的名称也继承根配置。时长必须是合法的非负 Protobuf Duration，超出 Go duration 范围时沿用现有饱和转换；有效 min_budget 不能超过正数 fallback_timeout 或 max_timeout，合并后的客户端和路由策略也参与校验。
@@ -84,7 +84,7 @@ flowchart TD
     A([加载或更新 client 配置]) --> B[单个 client 字段优先 缺失字段继承根配置]
     B --> C[根字段缺失采用 10s / 0s / 0s / default]
     C --> D{根策略和合并策略有效?}
-    D -- 否 --> E([构造返回错误；更新记录 ERROR client config update rejected 并保留旧配置])
+    D -- 否 --> E([构造返回错误；更新记录 WARN client.config.rejected 并保留旧配置])
     D -- 是 --> F[按有效配置创建或更新版本 复用下方租约与状态锁流程]
     F --> G([后续调用使用新策略])
 ```
@@ -162,32 +162,40 @@ flowchart TD
     O -- 是 --> AK[执行请求]
     M -- 否 --> P[登记或复用构建 释放锁]
     P --> Q[锁外创建传输并启动 discovery watcher 不等待首个 HTTP 节点]
-    Q --> R{构建失败或调用 Context 取消?}
+    P -- Acquire Context 取消 --> PS([只返回等待错误 共享构建仍由 Factory 持有])
+    Q --> R{构建失败?}
     R -- 是 --> S([返回错误 不授予租约])
     R -- 否 --> T[状态锁内发布仍有效版本 释放锁]
-    T --> J
+    T --> T1[锁外 INFO client.created 连接名 协议 版本]
+    T1 --> J
     AJ --> U[release 状态锁内减少引用并分离待关连接 释放锁]
     AK --> U
     F --> V[配置订阅回调 校验新配置]
     V --> W{有效?}
-    W -- 否 --> X[ERROR client config update rejected 保留旧配置]
+    W -- 否 --> X[WARN client.config.rejected 保留旧配置]
     W -- 是 --> Y[状态锁内更新版本并标记旧版退休 释放锁]
     F --> Z[cleanup 取消订阅]
     Z --> AA[状态锁内标记关闭及版本退休 释放锁]
     AA --> AB[锁外取消未完成构建]
     U --> AC[锁外关闭已退休且无租约的连接]
-    Y --> AC
-    AB --> AO[锁外关闭无租约连接 记录 INFO client closed 或 ERROR client close failed]
+    Y --> Y0{cleanup_timeout 发生变化?}
+    Y0 -- 是 --> YW[锁外 WARN client.config.restart_required]
+    YW --> Y1{有效连接配置变化?}
+    Y0 -- 否 --> Y1
+    Y1 -- 是 --> Y2[锁外 INFO client.config.applied 影响连接数]
+    Y2 --> AC
+    Y1 -- 否 --> AC
+    AB --> AO[锁外关闭无租约连接 记录 INFO client.closed 或 ERROR client.close.failed]
     AC --> AD{关闭失败?}
-    AD -- 是 --> AE[ERROR client close failed]
-    AD -- 否 --> AF[INFO client closed]
+    AD -- 是 --> AE[ERROR client.close.failed]
+    AD -- 否 --> AF[INFO client.closed]
     AE --> AI([本次释放或配置更新结束])
     AF --> AI
     AO --> AG{预算内活动归零?}
     AG -- 是 --> AH([清理完成])
     AG -- 否 --> AT[状态锁内摘除仍被租用的所有版本 释放锁]
-    AT --> AU[WARN factory.cleanup timeout]
-    AU --> AV[锁外强制关闭 记录 client closed 或 client close failed]
+    AT --> AU[WARN client.cleanup.timeout]
+    AU --> AV[锁外强制关闭 记录 INFO client.closed 或 ERROR client.close.failed]
     AV --> AH
 ```
 
@@ -198,6 +206,16 @@ flowchart TD
 ## 模块日志
 
 工厂生命周期日志和 HTTP/gRPC 访问日志使用 module=client，禁用、级别和字段过滤统一由 `log.modules` 热更新；不再提供 `client.log`。单个客户端的 `middleware.logging.disable` 仍可独立关闭访问日志。
+
+| event | 级别 | 关键字段与边界 |
+| --- | --- | --- |
+| `client.created` / `client.closed` | INFO | `client`、`revision`、`protocol`；关闭增加 `reason`。创建只表示传输资源发布成功，不表示上游已连通 |
+| `client.config.applied` | INFO | `clients`：有效配置发生变化的连接数；回放或重复通知不记录 |
+| `client.config.rejected` / `client.config.restart_required` | WARN | 拒绝保留旧配置，前者包含 `error`；后者 `setting=cleanup_timeout`，需重启应用 |
+| `client.cleanup.timeout` | WARN | `timeout`、`pending`、`connections`，排空超时后强制释放 |
+| `client.close.failed` | ERROR | 连接身份、`reason`、`error`；无返回值释放边界只记录一次 |
+
+生命周期日志在状态锁外输出。共享构建及资源释放属于后台资源生命周期，没有 Acquire 调用的请求 trace；实际 HTTP/gRPC 请求继续由访问日志和 tracing 中间件绑定请求 Context。构造、拨号和业务调用的同步错误仍返回调用边界，不额外记录失败日志。
 
 单个客户端设置 `middleware.tracing.disable: true` 或全局 `tracing.disable: true` 时，不记录、采样或导出客户端 Span，但仍创建或延续非采样 SpanContext，并向下游传播 TraceID/SpanID。这使同一请求中的业务日志继续包含 `trace.id`、`span.id`；不会创建 exporter。全局 Provider 在构造期禁用后，修改客户端中间件开关只能改变配置快照，不能恢复记录与导出，恢复真实 tracing 需要重启。
 

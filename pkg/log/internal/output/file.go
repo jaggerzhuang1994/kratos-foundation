@@ -119,7 +119,7 @@ func newFileLoggerCleanup(closer io.Closer) func() {
 	return func() {
 		once.Do(func() {
 			if err := closer.Close(); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "close file logger: %v\n", err)
+				_, _ = fmt.Fprintf(os.Stderr, "ERROR module=log event=log.file.cleanup.failed error=%q\n", err)
 			}
 		})
 	}

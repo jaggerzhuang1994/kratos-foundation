@@ -205,9 +205,12 @@ func (w *Worker[T]) Start(ctx context.Context) error {
 		return nil
 	default:
 	}
+	// 生命周期事件每个实例只输出一次，不能依赖高频任务日志判断 Worker 是否启动。
+	w.log.WithContext(ctx).Infow("event", "queue.worker.started", "msg", "queue worker started", "queue", w.config.Queue, "worker", w.config.Name, "concurrency", w.config.Concurrency, "processing_enabled", !w.disabled)
+	defer w.log.WithContext(ctx).Infow("event", "queue.worker.stopped", "msg", "queue worker stopped", "queue", w.config.Queue, "worker", w.config.Name)
 	if w.disabled {
 		// 复用已有停止信号和协调 goroutine，禁用消费不构造伪 Store，也不进入领取循环。
-		w.log.WithContext(ctx).Debugw("event", "consumer.disabled", "queue", w.config.Queue)
+		w.log.WithContext(ctx).Debugw("event", "queue.consumer.disabled", "msg", "queue processing disabled", "queue", w.config.Queue, "worker", w.config.Name)
 		<-runCtx.Done()
 		return nil
 	}
@@ -218,7 +221,7 @@ func (w *Worker[T]) Start(ctx context.Context) error {
 	err := group.Wait()
 	if err != nil {
 		w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
-		w.log.WithContext(ctx).Errorw("event", "storage.failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
+		w.log.WithContext(ctx).Errorw("event", "queue.storage.failed", "msg", "queue storage failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
 		return err
 	}
 	return nil
@@ -266,7 +269,7 @@ func (w *Worker[T]) run(ctx context.Context) error {
 		}
 		if err := w.execute(ctx, reservation, now); err != nil {
 			if errorOnly(err, ErrLeaseLost) {
-				w.log.WithContext(ctx).Warnw("event", "lease.lost", "queue", w.config.Queue, "task.id", reservation.Task.ID)
+				w.log.WithContext(ctx).Warnw("event", "queue.lease.lost", "msg", "task lease lost", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID)
 				continue
 			}
 			if ctx.Err() != nil && errorOnly(err, ctx.Err()) {

@@ -46,7 +46,7 @@ func TestGORMLoggerWritesStructuredQueries(t *testing.T) {
 	content := string(written)
 	for _, fragment := range []string{
 		"INFO ",
-		"event=gorm.query",
+		"event=database.gorm.query",
 		"duration=",
 		"rows=2",
 		"sql=SELECT * FROM users",
@@ -124,7 +124,7 @@ func TestGORMLoggerWritesStructuredSlowAndFailedQueries(t *testing.T) {
 				SlowThreshold: durationpb.New(time.Millisecond),
 			},
 			begin:    time.Now().Add(-time.Second),
-			contains: []string{"WARN ", "event=gorm.query", "slow_threshold=1ms", "rows=3", "sql=SELECT slow"},
+			contains: []string{"WARN ", "event=database.gorm.query", "slow_threshold=1ms", "rows=3", "sql=SELECT slow"},
 		},
 		{
 			name: "failed query",
@@ -133,7 +133,7 @@ func TestGORMLoggerWritesStructuredSlowAndFailedQueries(t *testing.T) {
 			},
 			begin:    time.Now(),
 			err:      errors.New("driver failed"),
-			contains: []string{"ERROR ", "event=gorm.query", "err=driver failed", "rows=3", "sql=SELECT failed"},
+			contains: []string{"ERROR ", "event=database.gorm.query", "err=driver failed", "rows=3", "sql=SELECT failed"},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

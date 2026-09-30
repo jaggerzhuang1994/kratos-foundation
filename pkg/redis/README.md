@@ -40,6 +40,41 @@ if err != nil {
 
 配置解析位于同包 `config.go`，连接延迟创建、遥测安装、缓存和幂等关闭状态由 `manager.go` 的非导出实现持有。业务只能借用 `Default` 或 `Connection` 返回的 client，不应单独关闭；统一由 cleanup 释放。
 
+cleanup 在现有 Manager 互斥锁内标记关闭并接管 client 与指标回收信号，在锁外通知 redisotel 注销回调、关闭全部连接池。每个 client 有独立回收信号；指标安装中途失败也发送此信号并关闭未发布 client，避免遗留捕获旧池的观察回调。redisotel 的注销由 SDK goroutine 异步完成，cleanup 返回只保证已发送回收信号、连接池已关闭，不保证该时刻所有池指标样本已消失；回调完成回收后不会把旧池容量累加到后续实例。组装层仍按逆序释放 Manager 和 Metrics Provider，业务应在 cleanup 前停止使用借用的 client。
+
+```mermaid
+flowchart TD
+    A0([构造 Manager 初始化默认 client]) --> A
+    A([Connection 并发入口]) --> B[获取 Manager 互斥锁 检查关闭与缓存]
+    B -- 已关闭 --> C[释放锁 返回 ErrManagerClosed]
+    B -- 缓存命中 --> D[释放锁 返回借用 client]
+    B -- 新连接 --> E[创建 client 并安装追踪]
+    E -- 失败 --> S[关闭未发布 client]
+    S --> H
+    E -- 成功或已禁用 --> T{启用指标?}
+    T -- 否 --> I
+    T -- 是 --> U[创建独立回收信号 安装池回调和命令 hook]
+    U --> F{指标安装成功?}
+    F -- 否 --> G[关闭独立指标回收信号并关闭未发布 client]
+    G --> H[释放锁 返回安装及关闭错误]
+    F -- 是 --> I[登记 client 与可选回收信号 释放锁]
+    I --> D
+    J([cleanup 并发入口]) --> K[获取锁 标记 closed 接管 client 和回收信号 释放锁]
+    K --> L[锁外关闭全部指标回收信号]
+    L --> M[关闭连接池 聚合错误]
+    M -- 失败 --> N[ERROR redis.cleanup.failed]
+    M -- 成功 --> V[INFO redis.manager.closed]
+    V --> O([cleanup 结束])
+    N --> O
+    G -. SDK 异步处理信号 .-> P[注销已登记的池观察回调]
+    L -. SDK 异步处理信号 .-> P
+    P --> Q([指标回收完成])
+    C --> R([Connection 结束])
+    D --> R
+    R -. 仅构造默认 client 成功 .-> A1[INFO redis.manager.ready 默认连接名]
+    H --> R
+```
+
 Redis 锁、Job 协调和 Queue 等具体组合位于对应 `contrib` 包，由业务/Wire 显式选择，不根据字符串 driver 分发。
 
 拨号失败时沿用同一个 client 重建连接，不重建 Manager。`dialer_retries` 表示一轮拨号的最大尝试次数（默认 5），`dialer_retry_timeout` 为首次等待间隔（默认 100ms）；后续等待逐次翻倍、封顶 5s，并加入 80%–100% 抖动。拨号成功结束本轮，下一轮重新从初始间隔开始；Context 取消会打断等待。SDK 的固定次数拨号循环设为一次，避免叠加重试。
@@ -85,4 +120,4 @@ flowchart LR
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
 
-日志通过 `WithModule("redis")` 声明归属，使用 `log.modules` 热更新级别、禁用和追加过滤；`redis.log` 已移除。规则见 [log](../log/README.md#模块策略)。
+日志通过 `WithModule("redis")` 声明归属，使用 `log.modules` 热更新级别、禁用和追加过滤；`redis.log` 已移除。启动默认 client 构造完成记录 INFO `redis.manager.ready`（`default` 连接名），这不代表已验证服务端连通；cleanup 成功记录 INFO `redis.manager.closed`，失败只记录一次 ERROR `redis.cleanup.failed`（`error`）。日志均在 Manager 状态锁外输出；命令和拨号错误返回调用方，不在低层重复记录。规则见 [log](../log/README.md#模块策略)。

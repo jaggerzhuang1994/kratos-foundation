@@ -197,6 +197,9 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 	}
 	logs := string(written)
 	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, "event=job.execution.") && !strings.HasPrefix(line, "DEBUG ") {
+			t.Fatalf("execution lifecycle must remain Debug: %s", line)
+		}
 		if strings.Contains(line, "job=canceled-failure") && strings.Contains(line, "result=stopped") {
 			t.Fatalf("business failure logged as normal cancellation: %s", line)
 		}
@@ -208,8 +211,8 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 		t.Fatalf("middleware duplicated final error logging: %s", logs)
 	}
 	for _, fragment := range []string{
-		"msg=job.execution.started",
-		"msg=job.execution.finished",
+		"event=job.execution.started",
+		"event=job.execution.finished",
 		"result=success",
 		"result=failure",
 		"result=stopped",

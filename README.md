@@ -49,7 +49,7 @@ Foundation 应用组件使用同一 Kubernetes 对象范围下钻；健康探测
 
 ### 加载与部署
 
-框架不会自动寻找 `config.example.yaml`。应用将需要的配置复制到部署文件，替换地址、连接名和凭据，并通过 [`contrib/config/file`](contrib/config/file/README.md) 的 `NewSources(logger, PathList{...})` 或 [`contrib/config/consul`](contrib/config/consul/README.md) 创建源，再交给 `config.NewManager`。只有应用显式构造的组件才会消费对应配置块；删除数据库或 Redis 配置时，也应调整相应组件的组装。
+框架不会自动寻找 `config.example.yaml`。应用将需要的配置复制到部署文件，替换地址、连接名和凭据，并通过 [`contrib/config/file`](contrib/config/file/README.md) 的 `NewSources(PathList{...})` 或 [`contrib/config/consul`](contrib/config/consul/README.md) 创建源，再交给 `config.NewManager`。只有应用显式构造的组件才会消费对应配置块；删除数据库或 Redis 配置时，也应调整相应组件的组装。
 
 Manager 默认每秒 Scan 一次完整配置并串行通知变化，可用启动环境变量 `CONFIG_POLL_INTERVAL` 调整；支持缺失 key 与同 key 多订阅。Load 读取最近扫描快照。Sources 初次按传入顺序加载，更新采用 Kratos 默认 merge；不保证删除回退、固定来源优先级或 null 清空。`$VAR` / `${VAR}` 在原始 KeyValue 的 JSON/YAML 解析前通过 Compose 模板替换环境变量，支持默认值和必填检查；普通变量未设置时为空。合并后保留官方 resolver；业务源使用 `$${key:default}` 将配置引用留到第二阶段。具体边界见 [环境变量模板](pkg/config/README.md#环境变量模板)。凭据应由实际部署配置源或受信任的进程环境提供，示例中的占位值不能用于连接真实服务。
 
@@ -87,7 +87,7 @@ flowchart TD
 
 ### TLS/mTLS 责任边界
 
-Foundation 配置管理的业务 HTTP、gRPC 和独立管理监听默认使用明文，通用 gRPC Factory 也只提供内部明文拨号；TLS/mTLS 由入口网关、Service Mesh 或同类平台层终止与认证。原生 `HTTPBuilder.Option` / `GRPCBuilder.Option` 是不受配置约束的底层扩展口，可以注入自定义 Listener 或 TLS，使用后由业务自行承担完整安全和生命周期责任，不再属于这条平台基线；HTTP Client 的 HTTPS 用于确需 TLS 的外部目标。默认应用监听和内部调用只能位于受信任网络，管理端口必须通过网络策略或仅本机绑定限制访问；不得把明文端口直接暴露到互联网或其他不可信网络。Kafka、数据库等基础设施客户端仍按各自驱动配置安全连接。
+Foundation 配置管理的业务 HTTP、gRPC 和独立管理监听默认使用明文，通用 gRPC Factory 也只提供内部明文拨号；TLS/mTLS 由入口网关、Service Mesh 或同类平台层终止与认证。业务 HTTP 自定义监听通过 `HTTPBuilder.Listener` 转交 Foundation 管理；未提供监听时按配置地址和网络绑定。TLS 仍可通过原生 Option 注入。gRPC 原生 Listener/TLS 扩展保持原有契约。业务自行承担这些扩展的安全责任，监听所有权和启动失败回滚见 [Server 文档](pkg/server/README.md#http-监听所有权与启动回滚)；HTTP Client 的 HTTPS 用于确需 TLS 的外部目标。默认应用监听和内部调用只能位于受信任网络，管理端口必须通过网络策略或仅本机绑定限制访问；不得把明文端口直接暴露到互联网或其他不可信网络。Kafka、数据库等基础设施客户端仍按各自驱动配置安全连接。
 
 ```mermaid
 flowchart LR
@@ -244,3 +244,7 @@ v1/v2 混合调用继续兼容 HTTP JSON、gRPC `ErrorInfo`、`x-md-*` metadata 
 ## 驱动组装入口
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。
+
+## 包职责与日志
+
+本仓库的逐包职责、拆分判断与日志出口见[包职责与日志审查](PACKAGE_REVIEW.md)。应用运行前，配置来源选择及加载完成有 INFO 摘要，`server.assembled` 记录业务/管理监听地址与停机等待，`app.assembled` 记录应用身份、环境、主机、PID、可执行文件、Go 版本、Runtime 数量和服务注册开关。事件名统一为 `<领域>.<对象>.<动作>`（如 `queue.task.failed`、`server.request.completed`），可按前缀归类检索。命令入口示例另外记录 `command.starting`。不输出配置全文或 argv；逐任务和逐条消息成功使用 DEBUG，访问结果保留单行 INFO 摘要，配置拒绝保留旧值使用 WARN，最终失败在处理边界记录 ERROR。日志受当前输出级别和过滤策略控制，详见[日志契约](pkg/log/README.md#事件与级别)。

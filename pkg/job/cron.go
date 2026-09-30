@@ -63,7 +63,7 @@ func newCron(
 	if errorHandler == nil {
 		errorHandler = func(ctx context.Context, name string, err error) {
 			log.WithContext(ctx).
-				With("job", name, "error", err).
+				With("event", "job.failed", "job", name, "error", err).
 				Error("cron job failed")
 		}
 	}
@@ -122,16 +122,16 @@ func (c *cron_) start() {
 
 func (c *cron_) run() {
 	defer close(c.done)
-	c.log.Info("starting cron server")
+	c.log.With("event", "job.cron.started").Info("cron scheduler started")
 	c.cron.Start()
 	applied := make(map[string]*cronRegistration)
 	ids := make(map[string]cron.EntryID)
 	for {
 		select {
 		case <-c.stopCh:
-			c.log.Info("stopping cron server")
+			c.log.With("event", "job.cron.stopping").Info("cron scheduler stopping")
 			<-c.cron.Stop().Done()
-			c.log.Info("cron server stopped")
+			c.log.With("event", "job.cron.stopped").Info("cron scheduler stopped")
 			return
 		case <-c.wake:
 			c.mu.Lock()
@@ -257,11 +257,11 @@ func (s *schedule) Next(now time.Time) time.Time {
 	// 立即执行只能消费一次，否则 cron 每次计算都返回 now 并形成忙循环。
 	if s.immediately && !s.immediatelyScheduled {
 		s.immediatelyScheduled = true
-		s.log.Debug("scheduling job immediately")
+		s.log.With("event", "job.scheduled", "immediate", true).Debug("job scheduled")
 		return now
 	}
 
 	next := s.schedule.Next(now)
-	s.log.With("next", next.Format(time.RFC3339), "left", time.Until(next)).Debug("job scheduled")
+	s.log.With("event", "job.scheduled", "next", next.Format(time.RFC3339), "left", time.Until(next)).Debug("job scheduled")
 	return next
 }

@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // BucketConfig 是 Manager 为每次驱动构造提供的独立配置快照。
@@ -88,8 +86,7 @@ func RegisterDriver(name string, factory DriverFactory) error {
 	if err := ossDrivers.register(name, factory); err != nil {
 		return err
 	}
-	// register 已释放注册表锁，日志输出不会阻塞锁内注册与查询。
-	log.WithModule("oss").With("driver", normalizeDriverName(name)).Info("registered OSS driver")
+	// contrib init 也使用此入口；登记工厂不执行日志或其他 I/O。
 	return nil
 }
 

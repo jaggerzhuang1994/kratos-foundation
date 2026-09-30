@@ -12,6 +12,7 @@ import (
 	"time"
 
 	kratosconfig "github.com/go-kratos/kratos/v2/config"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	consulapi "github.com/hashicorp/consul/api"
 )
 
@@ -83,6 +84,7 @@ func TestWatcherIncludesPureDeletionAndEmptySnapshot(t *testing.T) {
 func TestWatcherRecoversServerFailureAndReportsAuthorizationFailure(t *testing.T) {
 	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			events := captureConsulEvents(t)
 			var requests atomic.Int32
 			input, _ := consulTestSource(t, func(w http.ResponseWriter, r *http.Request) {
 				if requests.Add(1) == 1 || status == http.StatusForbidden {
@@ -102,8 +104,13 @@ func TestWatcherRecoversServerFailureAndReportsAuthorizationFailure(t *testing.T
 				if err == nil || requests.Load() != 1 {
 					t.Fatalf("authorization failure = %v, requests=%d", err, requests.Load())
 				}
+				if len(events) != 0 {
+					t.Fatal("permanent failure logged retry or recovery")
+				}
 			} else if err != nil || len(values) != 1 {
 				t.Fatalf("recovered snapshot = %v, %v", values, err)
+			} else {
+				assertConsulRecoveryEvents(t, events, "watch")
 			}
 		})
 	}
@@ -169,6 +176,7 @@ func TestWatcherStopCancelsRecoveryBackoff(t *testing.T) {
 }
 
 func TestWatcherClampsZeroIndexAndResetsRolledBackIndex(t *testing.T) {
+	events := captureConsulEvents(t)
 	indexes := []string{"0", "0", "7", "2", "3"}
 	queries := []string{"", "1", "1", "7", ""}
 	var requests atomic.Int32
@@ -191,5 +199,12 @@ func TestWatcherClampsZeroIndexAndResetsRolledBackIndex(t *testing.T) {
 		if _, err := nextConsulValues(t, watcher); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if len(events) != 1 {
+		t.Fatalf("index reset events=%d", len(events))
+	}
+	event := <-events
+	if event["event"] != "config.consul.index.reset" || event["level"] != kratoslog.LevelWarn || event["previous_index"] != uint64(7) || event["index"] != uint64(2) {
+		t.Fatalf("index reset=%v", event)
 	}
 }

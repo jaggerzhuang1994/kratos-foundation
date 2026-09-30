@@ -58,11 +58,11 @@ job:
 
 `NewManager(logger, spec, tracing, metrics, configManager)` 构造时读取并验证配置；configManager 可显式传 nil，表示只用静态声明。Bootstrap 正常注入应用 config.Manager。Start 再读取最新快照并建立 `job` 订阅，Stop 取消订阅；不额外返回 cleanup。由 App 管理 Start/Stop，应用先停止任务，再清理 Config Manager、日志和遥测资源。
 
-每次更新先完整校验全部任务，任一表达式、策略、容量或名称无效则整批拒绝，记录 `ERROR job.config.rejected` 并保留上一份有效规则；初次构造或启动时无效则返回错误。合法变更记录 `INFO job.config.applied`。Config Manager 按轮询快照通知，短时间多次更新可能合并。
+每次更新先完整校验全部任务，任一表达式、策略、容量或名称无效则整批拒绝，记录 `WARN job.config.rejected` 并保留上一份有效规则；初次构造或启动时无效则返回错误。合法变更记录 `INFO job.config.applied`。Config Manager 按轮询快照通知，短时间多次更新可能合并。
 
 新表达式重新计算后续调度，旧周期不补跑。调度控制循环通过替换 robfig 条目应用更新，不等待正在执行的 Task。`run_immediately` 仅在 Manager 首次 Start 且任务启用时生效；构造后、Start 前的配置变化仍会影响本次启动。启动时禁用则跳过立即执行，运行中修改此字段、重新启用或修改定时规则都不会补触发。进程重启创建新的 Manager 后重新判断，不是跨进程生命周期只执行一次。
 
-`disabled: true` 先在现有 gate 锁内关闭新调用准入，再由调度控制循环移除条目；与禁用同时发生的调用，以是否已经取得执行或等待名额为界。已经执行和已经排队的调用继续完成，不取消任务 Context。有效配置快照中将 disabled 设为 false、删除覆盖或设为 null 后从当前时间恢复后续周期（源文件省略字段是否能删除旧值仍遵循 Config 合并语义），不补跑停用期间的周期。禁用时仍校验表达式、并发策略和容量，不能借此隐藏非法配置。配置变更仍通过 `job.config.applied` / `job.config.rejected` 记录。
+`disabled: true` 先在现有 gate 锁内关闭新调用准入，再由调度控制循环移除条目；与禁用同时发生的调用，以是否已经取得执行或等待名额为界。已经执行和已经排队的调用继续完成，不取消任务 Context。有效配置快照中将 disabled 设为 false、删除覆盖或设为 null 后从当前时间恢复后续周期（源文件省略字段是否能删除旧值仍遵循 Config 合并语义），不补跑停用期间的周期。禁用时仍校验表达式、并发策略和容量，不能借此隐藏非法配置。有效更新记录 `INFO event=job.config.applied`；无效更新保留旧规则，记录 `WARN event=job.config.rejected`。
 
 并发规则与容量作用于后续触发；正在执行的任务继续，已经排队的调用仍等待串行执行。切换策略保留运行计数，AllowOverlap 改成 Skip/Delay 时不会丢失旧调用。缩容不丢弃已有等待，只限制新增等待；切到 AllowOverlap 后，新调用可能先于旧等待执行，不保证严格 FIFO 或公平性。容量只限制 Delay 的等待数，不限制 AllowOverlap 的并行数。
 
@@ -75,7 +75,7 @@ flowchart TD
  D -- 失败 --> X
  D -- 成功 --> E[启动调度控制循环和任务]
  U([Config 异步回调]) --> V[锁外解析整批快照]
- V -- 无效 --> W[ERROR job.config.rejected 保留旧规则]
+ V -- 无效 --> W[WARN job.config.rejected 保留旧规则]
  V -- 有效 --> L[获取 Manager 状态锁]
  L --> S{正在停机?}
  S -- 是 --> Z[释放锁 忽略更新]
@@ -99,7 +99,7 @@ flowchart TD
 
 ## Delay 容量
 
-`DelayIfRunning` 默认最多一轮执行、一轮等待。`max_pending_runs=0` 不保留等待，-1 表示无界等待；小于 -1 或最大 int 拒绝。满额触发跳过并记录 WARN，不调用 ErrorHandler。需要逐轮可靠处理的工作使用持久队列。
+`DelayIfRunning` 默认最多一轮执行、一轮等待。`max_pending_runs=0` 不保留等待，-1 表示无界等待；小于 -1 或最大 int 拒绝。满额触发跳过并记录 `WARN event=job.trigger.skipped reason=pending_full`，不调用 ErrorHandler；SkipIfRunning 使用同一事件并标记 `reason=already_running`。需要逐轮可靠处理的工作使用持久队列。
 
 `WithDelayOverflowHandler(func(context.Context, job.DelayOverflow) error)` 可注入满额通知，事件含 Name、Policy、MaxPendingRuns。回调在锁外同步调用，不占执行名额；可能并发发生，业务负责并发安全、超时和去重。回调成功仍跳过本轮，错误或 panic 转换结果交给 Cron ErrorHandler；框架不重试。配置热更新不替换此回调。
 
@@ -116,9 +116,9 @@ flowchart TD
  C1 -- 否 --> D{允许重叠 或没有运行和等待?}
  D -- 是 --> E[增加运行数 释放锁]
  D -- 否 --> F{Skip 策略?}
- F -- 是 --> S[释放锁 增加 skipped reason=already_running WARN job skipped]
+ F -- 是 --> S[释放锁 增加 skipped reason=already_running WARN job.trigger.skipped]
  F -- 否 --> G{Delay 等待已满?}
- G -- 是 --> H[释放锁 增加 skipped reason=pending_full WARN pending-run queue is full]
+ G -- 是 --> H[释放锁 增加 skipped reason=pending_full WARN job.trigger.skipped]
  H --> I[锁外调用可选业务通知 含外部超时]
  I -- 错误或 panic --> J[交给 ErrorHandler]
  I -- 成功 --> Z([跳过结束])
@@ -134,9 +134,9 @@ flowchart TD
  R & M & J & S --> Z
 ```
 
-通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 会先等待 `app.Spec` 发出 Ready 信号，即 Kratos 已进入 AfterStart 且 Foundation 的 AfterStart hook 全部完成后，才调用 `Manager.Start`。该信号不等待阻塞型 Runtime.Start 返回；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，自定义 Runtime 若有必须先于 Job 完成的初始化，应放入启动 hook 或 readiness check。等待期间若应用取消则不启动任务。直接使用 `Manager` 不带这个应用级门闩，调用方自行决定何时调用 Start。
+通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 会先等待 `app.Spec` 发出 Ready 信号，即 Kratos 已进入 AfterStart 且 Foundation 的 AfterStart hook 全部完成后，才调用 `Manager.Start`。该信号不等待阻塞型 Runtime.Start 返回；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，自定义 Runtime 若有必须先于 Job 完成的初始化，应放入启动 hook 或 readiness check。等待期间收到 App 的停止请求或调用方 Context 取消时，不启动任务并返回取消错误；因此 Ready 前显式停止或启动后钩子失败也能解除等待。App 的共享停止信号由现有 stopOnce 关闭，Ready 已发布后仍优先拒绝已开始的停机。直接使用 `Manager` 不带这个应用级门闩，调用方自行决定何时调用 Start。
 
-Manager 真正启动前按注册顺序逐条记录 `INFO event=job.registered`，包含任务名、kind、最终生效的 schedule、`registration.caller` 与 enabled；Once/Daemon 的 schedule 分别为 `once`/`daemon`。这些日志完成后才启动 Cron、Once 和 Daemon。Cron 调度器内部的 `wake`、`run`、`schedule`、`start`、`stop` 事件不再重复输出。
+Manager 真正启动前按注册顺序逐条记录 `INFO event=job.registered`，包含任务名、kind、最终生效的 schedule、`registration.caller` 与 enabled；Once/Daemon 的 schedule 分别为 `once`/`daemon`。这些日志完成后才启动 Cron、Once 和 Daemon。Cron 生命周期分别记录 `INFO event=job.cron.started|job.cron.stopping|job.cron.stopped`，调度计算使用 `DEBUG event=job.scheduled`。Cron 调度器内部的 `wake`、`run`、`schedule`、`start`、`stop` 事件不再重复输出。
 
 一次性任务可在业务 Boot 中独立关闭服务注册；前置条件是已由 Wire 注入共享的 `*bootstrap.Spec`。
 任务完成退出与注册开关互不隐含，注册中心 provider 仍会构造并校验配置，见 [App 开关说明](../app/README.md#独立关闭服务注册)。
@@ -150,21 +150,34 @@ spec.Job().RegisterOnce("finish", job.TaskFunc(func(ctx context.Context) error {
 
 `ExitWhenDone` 要求至少注册一个 Once，且 Spec 只能包含 Once；混入 Cron 或 Daemon 会在 `NewManager` 校验时返回错误。该模式在所有 Once 任务成功完成后返回 `job.ErrCompleted`；组装层 `bootstrap.NewJobBootstrap` 的适配器将该结果转换为 `app.ErrStopRequested`，请求正常停机。任务自身的失败原样保留。直接使用 Manager 时，由调用方处理 `job.ErrCompleted`。
 
+Once 的聚合结果通过同步交接确定唯一错误出口：Start 接收到结果时仍通过返回值处理，不再调用 ErrorHandler；运行 Context 已取消、结果无法交给 Start 时，剩余真实失败同步交给 `WithErrorHandler`（默认记录 `ERROR event=job.failed`，任务分类为 `once`）。父 Context 取消仍让 Start 及时返回取消错误，不等待尚未结束的任务。
+
+Stop 等待任务和结果聚合协程，包括上述 ErrorHandler，等待受 Stop 的 Context 限制。Stop 成功只表示这些受管执行已结束，任务失败由选中的错误出口处理，不作为 Stop 返回值再次上报。ErrorHandler 收到已取消的运行 Context，业务应响应取消并为外部通知自行设限；超时返回不能强制终止未退出的 Task 或 ErrorHandler。
+
 ```mermaid
 flowchart TD
     A([声明 ExitWhenDone]) --> B{至少一个任务且全部为 Once?}
     B -- 否 --> C([NewManager 返回校验错误])
     B -- 是 --> BA[Bootstrap Runtime 等待应用 Ready]
-    BA -- 应用取消 --> J
+    BA -- App stopOnce 广播停止或调用方 Context 取消 --> BW([不启动 Manager 或任务；返回取消错误])
     BA -- Ready --> BB[逐条 INFO job.registered]
     BB --> D[Manager Start 并发执行 Once]
-    D -- 全部完成 --> E{存在任务失败?}
+    D -- 全部完成 --> Q{同步交接是否成功?}
+    Q -- Start 接收 --> E{存在任务失败?}
     E -- 是 --> F([Start 返回聚合错误，应用按失败处理])
     E -- 否 --> G[Start 返回 ErrCompleted]
     G --> H[Bootstrap 转为 ErrStopRequested]
     H --> I([应用正常停机])
     D -- Stop 或父 Context 取消 --> J[取消任务并开始收敛]
-    J --> K([退出等待；Stop 的等待受其 Context 限制])
+    J --> JS[父 Context 取消时 Start 及时返回；Stop 等待任务与汇总协程]
+    JS --> JA[等待在途 Once 结束并汇总非取消故障]
+    JA --> Q
+    Q -- 运行 Context 已取消 --> R{存在真实任务失败?}
+    R -- 是 --> RH[锁外同步调用既有 ErrorHandler]
+    RH --> RL[默认 ERROR event=job.failed；自定义由业务处理]
+    R -- 否 --> K([全部执行结束；Stop 成功])
+    RL --> K
+    JS -- Stop 等待超时 --> KT([Stop 返回 Context 错误；未退出执行继续收敛])
 ```
 
 停止期间只忽略正常返回和纯 Context 取消错误。若任务把取消与业务失败通过 `errors.Join` 合并，业务失败仍交给原有错误处理边界，不会当作正常停止而丢弃。
@@ -176,12 +189,12 @@ flowchart TD
     B -- 是 --> D{结果为空或错误树全部叶子匹配取消原因?}
     D -- 是 --> E[视为正常停止]
     D -- 否 --> C
-    C --> F[由原有返回值或 ErrorHandler 处理]
+    C --> F[由 Start 返回值或取消后的 ErrorHandler 唯一处理]
     E --> G([结束])
     F --> G
 ```
 
-`bootstrap.NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing)` 只构造和登记有任务的 Runtime，空 Spec 不登记。Job 不依赖 app/bootstrap，不管理全局容器，也没有 Coordinator、锁租约或 Redis 适配。`manager.go` 管构造，`manager_lifecycle.go` 管启停，`config.go` 管优先级，`config_reload.go` 管订阅与更新，`concurrent_policy.go` 管持续存在的本进程执行状态。
+`bootstrap.NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing, boot)` 只构造和登记有任务的 Runtime，空 Spec 不登记。Job 不依赖 app/bootstrap，不管理全局容器，也没有 Coordinator、锁租约或 Redis 适配。`manager.go` 管构造，`manager_lifecycle.go` 管启停，`config.go` 管优先级，`config_reload.go` 管订阅与更新，`concurrent_policy.go` 管持续存在的本进程执行状态。
 
 任务和中间件通过 `job.JobNameFromContext(ctx)` 读取注册名；非任务 Context 返回空字符串。
 
@@ -191,17 +204,17 @@ flowchart TD
 
 参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
 
-任务中间件在每次实际执行前记录 `INFO event=job.execution.started`，并在退出时始终记录一次 `INFO event=job.execution.finished`，携带 `result=success|failure|stopped` 和 `duration`。失败详情与 panic 堆栈仍只交给最终 ErrorHandler，避免同一错误重复记录；默认处理器携带 Context 记录一次最终错误，自定义 `WithErrorHandler` 时由业务负责最终错误日志。
+高频成功默认通过指标统计，按需开启模块 Debug 查看逐次执行。任务中间件在每次实际执行前记录 `DEBUG event=job.execution.started`，并在退出时始终记录一次 `DEBUG event=job.execution.finished`，携带 `result=success|failure|stopped` 和 `duration`。失败详情与 panic 堆栈仍只交给最终 ErrorHandler，避免同一错误重复记录；默认处理器携带 Context 记录一次最终错误，自定义 `WithErrorHandler` 时由业务负责最终错误日志。
 
 ```mermaid
 flowchart TD
- A([执行任务]) --> B[INFO job.execution.started]
+ A([执行任务]) --> B[DEBUG job.execution.started]
  B --> C{执行结果}
- C -- 成功 --> D[INFO job.execution.finished result=success duration]
- C -- 正常取消 --> E[INFO job.execution.finished result=stopped duration]
- C -- 错误或 panic --> I[INFO job.execution.finished result=failure duration]
+ C -- 成功 --> D[DEBUG job.execution.finished result=success duration]
+ C -- 正常取消 --> E[DEBUG job.execution.finished result=stopped duration]
+ C -- 错误或 panic --> I[DEBUG job.execution.finished result=failure duration]
  I --> F[恢复 panic 后调用最终 ErrorHandler]
- F --> G[默认 ERROR job failed 或 cron job failed；自定义由业务处理]
+ F --> G[默认 ERROR event=job.failed；自定义由业务处理]
  D --> H([结束])
  E --> H
  G --> H

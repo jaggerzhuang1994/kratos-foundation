@@ -100,6 +100,7 @@ func TestLoadBoundsRemoteRequestAndPreservesError(t *testing.T) {
 }
 
 func TestLoadRetriesTemporaryResponseAndDecodesWholePrefix(t *testing.T) {
+	events := captureConsulEvents(t)
 	var requests atomic.Int32
 	input, _ := consulTestSource(t, func(w http.ResponseWriter, _ *http.Request) {
 		if requests.Add(1) == 1 {
@@ -116,6 +117,7 @@ func TestLoadRetriesTemporaryResponseAndDecodesWholePrefix(t *testing.T) {
 	if err != nil || len(values) != 1 || values[0].Key != "value.yaml" || values[0].Format != "yaml" || requests.Load() != 2 {
 		t.Fatalf("Load=%v err=%v requests=%d", values, err, requests.Load())
 	}
+	assertConsulRecoveryEvents(t, events, "load")
 }
 
 func TestConsulRetryClassification(t *testing.T) {
@@ -302,7 +304,7 @@ func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, value := range values {
-				if !strings.Contains(output.String(), "path=configs/app/"+value.Key) || !strings.Contains(output.String(), "INFO") || !strings.Contains(output.String(), "loaded configuration file") {
+				if !strings.Contains(output.String(), "path=configs/app/"+value.Key) || !strings.Contains(output.String(), "DEBUG") || !strings.Contains(output.String(), "event=config.consul.loaded") {
 					t.Fatalf("missing loaded path in log: %s", output.String())
 				}
 			}
@@ -556,5 +558,46 @@ func TestConsulOutageRecoversWithOfficialMerge(t *testing.T) {
 	// 官方默认合并不会因空来源结果删除此前的覆盖值。
 	if value, _ := hot.GetCurrent(); !value.Enabled {
 		t.Fatal("empty update unexpectedly deleted cached value")
+	}
+}
+
+type configLogFunc func(kratoslog.Level, ...any) error
+
+func (f configLogFunc) Log(level kratoslog.Level, fields ...any) error { return f(level, fields...) }
+func captureConsulEvents(t *testing.T) chan map[string]any {
+	t.Helper()
+	events := make(chan map[string]any, 32)
+	t.Cleanup(log.SetLogger(configLogFunc(func(level kratoslog.Level, fields ...any) error {
+		event := map[string]any{"level": level}
+		for i := 0; i+1 < len(fields); i += 2 {
+			event[fields[i].(string)] = fields[i+1]
+		}
+		if event["event"] == "config.consul.retrying" || event["event"] == "config.consul.recovered" || event["event"] == "config.consul.index.reset" {
+			events <- event
+		}
+		return nil
+	})))
+	return events
+}
+func assertConsulRecoveryEvents(t *testing.T, events chan map[string]any, operation string) {
+	t.Helper()
+	if len(events) != 2 {
+		t.Fatalf("recovery events = %d", len(events))
+	}
+	for i, want := range []string{"config.consul.retrying", "config.consul.recovered"} {
+		event := <-events
+		level := kratoslog.LevelWarn
+		if i == 1 {
+			level = kratoslog.LevelInfo
+		}
+		if event["event"] != want || event["level"] != level || event["operation"] != operation || event["path"] != "settings/*" {
+			t.Fatalf("recovery event = %v", event)
+		}
+		if i == 0 && event["error"] == nil {
+			t.Fatal("retry lacks cause")
+		}
+		if i == 1 && event["attempts"] != 1 {
+			t.Fatalf("recovery attempts=%v", event)
+		}
 	}
 }

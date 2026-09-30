@@ -24,7 +24,7 @@ const disableConsul = "DISABLE_CONSUL"
 // newClient 仅在首次访问时读取 env；客户端及连接池随进程退出回收。
 func newClient() (Client, bool, error) {
 	if env.GetEnvAsBool(disableConsul) || (env.IsLocal() && env.GetEnv(api.HTTPAddrEnvName) == "") {
-		log.WithModule("consul").Warn("consul client is disabled")
+		log.WithModule("consul").With("event", "consul.client.disabled").Info("consul client disabled")
 		return nil, true, nil
 	}
 	config := api.DefaultConfig()
@@ -32,7 +32,8 @@ func newClient() (Client, bool, error) {
 		return nil, false, errors.New("consul address is empty")
 	}
 	// 将域名交给 SDK 和 transport，不在初始化时固定其解析结果。
-	log.WithModule("consul").With("address", config.Address).Info("initializing Consul client and checking the cluster leader")
+	// env 地址可能含 URL 用户信息；初始化日志只记录安全的探测预算。
+	log.WithModule("consul").With("event", "consul.client.probing", "timeout", probeTimeout).Info("checking consul cluster leader")
 	client, err := api.NewClient(config)
 	if err != nil {
 		return nil, false, fmt.Errorf("create Consul client: %w", err)
@@ -47,5 +48,6 @@ func newClient() (Client, bool, error) {
 	if leader == "" {
 		return nil, false, errors.New("check Consul leader: no elected leader")
 	}
+	log.WithModule("consul").With("event", "consul.client.ready").Info("consul client ready")
 	return client, false, nil
 }

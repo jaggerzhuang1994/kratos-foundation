@@ -2,6 +2,8 @@ package consul
 
 import (
 	"fmt"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -174,4 +176,59 @@ func TestSingletonCachesFailureAndDisabledState(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 初始化失败由调用边界处理；这里验证安全字段及预期禁用的级别，不记录 env 原地址。
+func TestNewClientLogsSafeLifecycleEvents(t *testing.T) {
+	var records []consulCapturedLog
+	restore := foundationlog.SetLogger(consulCaptureLogger{records: &records})
+	t.Cleanup(restore)
+	t.Setenv("APP_ENV", "dev")
+	t.Setenv("DISABLE_CONSUL", "true")
+	t.Setenv("CONSUL_HTTP_ADDR", "http://test-user:test-secret@127.0.0.1:1")
+	if _, disabled, err := newClient(); err != nil || !disabled {
+		t.Fatalf("disabled=%v err=%v", disabled, err)
+	}
+	if len(records) != 1 || records[0].level != kratoslog.LevelInfo || records[0].fields["event"] != "consul.client.disabled" {
+		t.Fatalf("disabled logs=%+v", records)
+	}
+	t.Setenv("DISABLE_CONSUL", "false")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`"leader:8300"`)) }))
+	defer server.Close()
+	t.Setenv("CONSUL_HTTP_ADDR", server.URL)
+	if _, disabled, err := newClient(); err != nil || disabled {
+		t.Fatalf("ready=%v err=%v", disabled, err)
+	}
+	if len(records) != 3 || records[1].fields["event"] != "consul.client.probing" || records[1].fields["timeout"] != probeTimeout || records[2].fields["event"] != "consul.client.ready" {
+		t.Fatalf("ready logs=%+v", records)
+	}
+	// 不支持的 scheme 在 SDK 构造期拒绝，不会访问带用户信息的远端地址。
+	t.Setenv("CONSUL_HTTP_ADDR", "ftp://test-user:test-secret@consul.invalid:8500")
+	if _, _, err := newClient(); err == nil {
+		t.Fatal("unsupported address scheme accepted")
+	}
+	for _, record := range records {
+		if record.level != kratoslog.LevelInfo || record.fields["module"] != "consul" || record.fields["address"] != nil {
+			t.Fatalf("unsafe lifecycle fields=%+v", record)
+		}
+		text := fmt.Sprint(record.fields)
+		if strings.Contains(text, "test-user") || strings.Contains(text, "test-secret") {
+			t.Fatalf("credentials in log: %s", text)
+		}
+	}
+}
+
+type consulCapturedLog struct {
+	level  kratoslog.Level
+	fields map[string]any
+}
+type consulCaptureLogger struct{ records *[]consulCapturedLog }
+
+func (l consulCaptureLogger) Log(level kratoslog.Level, keyvals ...any) error {
+	fields := make(map[string]any, len(keyvals)/2)
+	for i := 0; i+1 < len(keyvals); i += 2 {
+		fields[keyvals[i].(string)] = keyvals[i+1]
+	}
+	*l.records = append(*l.records, consulCapturedLog{level: level, fields: fields})
+	return nil
 }

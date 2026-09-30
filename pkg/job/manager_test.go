@@ -256,9 +256,9 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 		t.Fatal(err)
 	}
 	if logs := string(written); !strings.Contains(logs, "module=job") || !strings.Contains(logs, "job=invoice") ||
-		!strings.Contains(logs, "msg=job.registered") || !strings.Contains(logs, "kind=once") ||
+		!strings.Contains(logs, "event=job.registered") || !strings.Contains(logs, "kind=once") ||
 		!strings.Contains(logs, "schedule=once") || !strings.Contains(logs, "registration.caller=") ||
-		!strings.Contains(logs, "msg=job.execution.finished") {
+		!strings.Contains(logs, "event=job.execution.finished") {
 		t.Fatalf("one-shot logs = %s", logs)
 	}
 }

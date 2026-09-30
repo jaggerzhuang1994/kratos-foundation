@@ -207,17 +207,18 @@ func messageID(message *Message) string {
 type logLevel uint8
 
 const (
-	logDebug logLevel = iota
+	logInfo logLevel = iota
 	logError
 )
 
-func (r *ConsumerRuntime) logEvent(ctx context.Context, level logLevel, event string) {
+func (r *ConsumerRuntime) logEvent(ctx context.Context, level logLevel, event, message string) {
 	if r.log == nil {
 		return
 	}
 	logger := r.log.WithContext(ctx)
 	fields := []any{
 		"event", event,
+		"msg", message,
 		"kafka.destination", r.config.Destination,
 		"kafka.consumer", r.config.Name,
 	}
@@ -225,7 +226,7 @@ func (r *ConsumerRuntime) logEvent(ctx context.Context, level logLevel, event st
 		logger.Errorw(fields...)
 		return
 	}
-	logger.Debugw(fields...)
+	logger.Infow(fields...)
 }
 
 func (r *ConsumerRuntime) logRetry(ctx context.Context, message *Message, attempt int) {
@@ -234,6 +235,7 @@ func (r *ConsumerRuntime) logRetry(ctx context.Context, message *Message, attemp
 	}
 	r.log.WithContext(ctx).Warnw(
 		"event", "kafka.consume.retry",
+		"msg", "kafka message retry scheduled",
 		"kafka.destination", r.config.Destination,
 		"kafka.consumer", r.config.Name,
 		"message.id", messageID(message),
@@ -248,6 +250,7 @@ func (r *ConsumerRuntime) logConsumeFailed(ctx context.Context, message *Message
 	}
 	r.log.WithContext(ctx).Errorw(
 		"event", "kafka.consume.failed",
+		"msg", "kafka message failed",
 		"kafka.destination", r.config.Destination,
 		"kafka.consumer", r.config.Name,
 		"message.id", messageID(message),
@@ -262,6 +265,7 @@ func (r *ConsumerRuntime) logDeadLettered(ctx context.Context, message *Message,
 	}
 	r.log.WithContext(ctx).Warnw(
 		"event", "kafka.consume.dead_lettered",
+		"msg", "kafka message sent to dead letter",
 		"kafka.destination", r.config.Destination,
 		"kafka.consumer", r.config.Name,
 		"kafka.dead_letter_destination", r.config.DeadLetterDestination,
@@ -276,6 +280,7 @@ func (r *ConsumerRuntime) logDeadLetterFailed(ctx context.Context, message *Mess
 	}
 	r.log.WithContext(ctx).Errorw(
 		"event", "kafka.dead_letter.failed",
+		"msg", "kafka dead letter publish failed",
 		"kafka.destination", r.config.Destination,
 		"kafka.consumer", r.config.Name,
 		"kafka.dead_letter_destination", r.config.DeadLetterDestination,

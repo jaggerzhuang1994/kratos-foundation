@@ -161,14 +161,14 @@ func (c *websocketClient) resolve() {
 	defer func() {
 		if r := recover(); r != nil {
 			if c.Logger != nil {
-				c.Errorf("resolve panic: %v\n%s", r, debug.Stack())
+				c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "resolve", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("recovered websocket handler panic")
 			}
 		}
 	}()
 	defer func() {
 		if err := c.close(false); err != nil {
 			if c.Logger != nil {
-				c.With("error", err).Warn("websocket connection close failed")
+				c.WithContext(c.request.Context()).With("event", "server.websocket.close.failed", "error", err).Error("websocket connection close failed")
 			}
 		}
 		// close 已取消连接上下文；等待业务处理自行响应取消，避免 OnClose 与其清理逻辑竞争。
@@ -194,7 +194,7 @@ func (c *websocketClient) resolve() {
 				<-c.messageSlots
 			}
 			if errors.Is(err, websocket.ErrReadLimit) && c.Logger != nil {
-				c.With("error", err, "max_message_bytes", c.maxMessageBytes).Warn("message exceeded the configured WebSocket size limit")
+				c.WithContext(c.request.Context()).With("event", "server.websocket.message.rejected", "reason", "size_limit", "error", err, "max_message_bytes", c.maxMessageBytes).Warn("rejected oversized websocket message")
 			}
 			if c.onErrorHandler != nil {
 				c.onErrorHandler.OnError(c, err)
@@ -209,7 +209,7 @@ func (c *websocketClient) resolve() {
 				defer func() {
 					if r := recover(); r != nil {
 						if c.Logger != nil {
-							c.Errorf("onMessageHandler panic: %v\n%s", r, debug.Stack())
+							c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_message", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("recovered websocket handler panic")
 						}
 					}
 				}()

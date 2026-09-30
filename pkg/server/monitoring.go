@@ -16,7 +16,7 @@ import (
 
 // configureMonitoring 在构造期按地址归并监听，只创建 Server，不打开 socket。
 // 运行时由 Bootstrap/App 统一启停；独立端口不继承业务路由、鉴权、TLS 或 Filter。
-func configureMonitoring(config componentConfig, business HTTPServer, health *healthState, provider metrics.Provider) ([]HTTPServer, []registeredEndpoint, error) {
+func configureMonitoring(config componentConfig, business HTTPServer, health *healthState, provider metrics.Provider) ([]*httpRuntime, []registeredEndpoint, error) {
 	conf := config.GetHttp()
 	mainAddr := conf.GetAddr()
 	if business != nil && (conf.GetNetwork() == "tcp" || conf.GetNetwork() == "tcp4" || conf.GetNetwork() == "tcp6" || conf.GetNetwork() == "") {
@@ -69,23 +69,23 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 			return nil, nil, err
 		}
 	}
-	extras := make([]HTTPServer, 0, 2)
+	extras := make([]*httpRuntime, 0, 2)
 	endpoints := make([]registeredEndpoint, 0, 5)
-	byAddress := make(map[string]HTTPServer)
+	byAddress := make(map[string]*httpRuntime)
 	target := func(addr string) HTTPServer {
 		if addr == "" {
 			return business
 		}
 		if srv := byAddress[addr]; srv != nil {
-			return srv
+			return srv.HTTPServer
 		}
-		srv := kratoshttp.NewServer(kratoshttp.Address(addr), kratoshttp.Timeout(0))
+		srv := newManagedHTTPServer("tcp", addr, nil, kratoshttp.Timeout(0))
 		// 独立管理端口只挂载明确的监控处理器，避免回退到全局 DefaultServeMux。
 		srv.Handler = http.NotFoundHandler()
 		srv.ReadHeaderTimeout = 5 * time.Second
 		byAddress[addr] = srv
 		extras = append(extras, srv)
-		return srv
+		return srv.HTTPServer
 	}
 	if metricsEnabled {
 		srv := target(metricsAddr)

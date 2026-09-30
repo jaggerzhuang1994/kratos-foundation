@@ -32,8 +32,8 @@ flowchart TD
     K --> L
     L --> M{地址与监控路径有效?}
     M -- 否 --> X
-    M -- 是 --> JK[按稳定顺序逐条 INFO endpoint.registered]
-    JK --> N[INFO NewRuntime server.assembled 记录协议开关和管理监听数量]
+    M -- 是 --> JK[按稳定顺序逐条 DEBUG server.endpoint.registered]
+    JK --> N[INFO NewRuntime server.assembled 记录业务 HTTP、gRPC、管理监听地址和 stop_delay]
     N --> O([返回 Runtime 和 cleanup 由 App 启停及 Wire 释放])
 ```
 
@@ -47,7 +47,7 @@ func Boot(spec *bootstrap.Spec) bootstrap.Bootstrap {
 }
 ```
 
-`HTTP().Register(...)`、`HTTP().WebSocket(...)` 和 `HTTP().WebSocketWithConfig(...)` 共享同一条有序声明流，底层服务器严格按照 Spec 调用顺序注册。路由发生重叠时，仍采用 Kratos 底层路由器的先注册优先语义；调用方不应依赖旧版“先注册全部 HTTP、再注册全部 WebSocket”的分组行为。启动阶段的 `endpoint.registered` 日志为了稳定对比仍按路径和方法排序，不表示实际注册顺序。
+`HTTP().Register(...)`、`HTTP().WebSocket(...)` 和 `HTTP().WebSocketWithConfig(...)` 共享同一条有序声明流，底层服务器严格按照 Spec 调用顺序注册。路由发生重叠时，仍采用 Kratos 底层路由器的先注册优先语义；调用方不应依赖旧版“先注册全部 HTTP、再注册全部 WebSocket”的分组行为。启动阶段的 `server.endpoint.registered` 日志为了稳定对比仍按路径和方法排序，不表示实际注册顺序。
 
 Wire 通过 `app.NewSpec`、`server.NewSpec`、`job.NewSpec` 创建共享声明，注入 `bootstrap.NewSpec`；`NewServerBootstrap` 直接接收同一 app.Spec/server.Spec，并将 Boot 纳入前置依赖。`NewServerBootstrap` 在 Boot 完成后构造服务器，内部登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；不启动服务。成功返回的 cleanup 由 Wire 在应用停止后逆序执行，构造失败会回滚。完整示例见 [bootstrap](../bootstrap/README.md)。它返回的 ServerBootstrap 标记注入 NewRuntimeBootstrap，保证服务器登记先完成。
 
@@ -57,7 +57,8 @@ flowchart LR
  A1 --> B[NewServerBootstrap 构造并登记 Runtime]
  B --> C{构造和内部登记成功?}
  C -- 否 --> D([释放资源 返回错误])
- C -- 是 --> J[NewJobBootstrap 构造并登记任务]
+ A1 --> J[NewJobBootstrap 构造并登记任务]
+ C -- 是 --> G
  J -- 构造失败 --> D
  J --> G[NewRuntimeBootstrap 接收 ServerBootstrap 和 JobBootstrap]
  B -- 冻结后登记等契约违规 --> P([panic 编程错误])
@@ -68,11 +69,64 @@ flowchart LR
 
 手工调用 `server.NewRuntime` 时，调用方负责 `SetReadinessSource`，将 `Servers()` 中的非 nil 业务 Runtime 和 `ManagementServers()` 登记到应用 Spec；冻结后登记会 panic；Runtime 的 Start/Stop 由 App 监督，构造 cleanup 由调用方在应用停止后释放。
 
+## HTTP 监听所有权与启动回滚
+
+业务及独立管理 HTTP 的监听由 Foundation 持有，通过 Kratos 的 `http.Listener` 注入；路由注册回调仍接收原生 `*http.Server`，生成接口、中间件、编码器和 TLS 能力继续由 Kratos 提供。`NewRuntime` 不打开 socket：业务 HTTP 在应用解析 Endpoint 时准备监听，管理 HTTP 在 Start 时准备。手工使用时，启停和端点查询必须经过 `Runtime.Servers()` / `ManagementServers()` 返回的运行时；路由注册回调只登记路由，不直接调用原生 Server 的 Endpoint、Start 或 Stop。应用就绪后可从 `App.Endpoint()` 读取发现地址。
+
+`server.http.network` 与 `server.http.addr` 在构造期读取，省略时分别使用 `tcp` 与 `0.0.0.0:8000`；显式空地址回落到 `:0`，显式空 network 不通过配置校验。原生 `HTTPBuilder.Option(http.Network/Address/Listener(...))` **不再决定监听**，会被 Foundation 的最终监听设置覆盖；地址和网络迁移到配置，自定义监听迁移到 `HTTP().Listener(listener)`。未提供 Listener 时按配置绑定，已提供时使用其实际监听。`http.Endpoint`、TLS、PathPrefix、编码器及其他协议选项继续按原有顺序应用。监听地址需重启生效。
+
+```go
+// 在业务 Boot 中声明；listener 来自业务显式构造。
+spec.HTTP().Listener(listener).Register(registerHTTP)
+```
+
+自定义 Listener 在启用 HTTP 并进入服务器构造后转交 Runtime，后续构造失败会关闭它；构造前校验或配置失败、HTTP 被禁用、或声明被替换时，监听仍归调用方。Runtime 已接管后，调用方不得继续 Accept 或关闭它。SDK Stop、启动失败回滚和 provider cleanup 共享同一次底层 Close；cleanup 幂等，必须在 App 退出后调用，释放后须创建新的 Runtime，不能重新启动旧实例。
+
+SDK Endpoint 自身解析失败、后续 Endpoint 失败或 BeforeStart 失败时，应用通过可选 `AbortStartup(ctx)` 逆序回滚已准备的监听，再执行 AfterStop；回滚绕过 stop_delay，原始错误和回收错误均保留。正常 Stop 先执行原有 HTTP Shutdown 排空，再确保监听释放；TLS 等 Serve 前置失败也会关闭监听。此保证针对 Foundation 管理的 HTTP，原生或自定义 Runtime 的资源由其自身生命周期契约负责。
+
+每个监听的互斥锁只保护创建状态、监听发布和关闭状态；绑定、Accept、底层 Close 及回调在锁外执行。并发准备共享同一次结果；回收开始后先标记关闭并取消未完成的绑定，准备调用方负责回收未发布的监听。Start 准备与回收等待支持传入 Context 取消；Kratos 的 Endpoint 接口不接收 Context，自动端点准备使用 Background，父 Context 取消须待该查询返回后进入启动前回滚。`net.Listener.Close` 没有 Context 参数，业务提供的阻塞 Close 无法被强制中断。请求处理不获取这些状态锁。provider cleanup 无法返回错误时，仅一次记录 `ERROR server.listener.cleanup.failed`；其他错误交由调用方处理。
+
+```mermaid
+flowchart TD
+    A([构造 HTTP Runtime 不绑定]) --> B{Endpoint 或 Start 准备监听}
+    B --> C[获取监听锁 检查关闭状态及创建状态]
+    C -- 已关闭 --> X([释放锁 返回关闭结果 不重新绑定])
+    C -- 缓存失败 释放锁 --> Z
+    C -- 创建中 --> W[释放锁 等待同一创建结果或 Context 取消]
+    W -- 取消 --> X
+    W -- 成功 --> G
+    W -- 失败 --> Z
+    C -- 已准备或提供监听 释放锁 --> G
+    C -- 可创建 --> D[标记创建中 释放锁]
+    D --> E[锁外调用 ListenConfig.Listen]
+    E --> F[获取锁 发布监听或发现已关闭 释放锁]
+    F -- 绑定失败或关闭抢先 --> R[锁外回收未发布监听]
+    R --> Z([返回原始错误及回收错误])
+    F -- 成功 --> G[SDK 解析 Endpoint]
+    G -- 解析失败 --> L
+    G -- 后续 Endpoint 或 BeforeStart 失败 --> H[应用逆序 AbortStartup]
+    H --> L
+    G -- 启动 --> I[SDK Serve INFO HTTP server listening]
+    I -- TLS或Serve失败 --> S[Start 返回时回收监听]
+    S --> L
+    I -- 正常停机 --> J[INFO HTTP server stopping 等待 Shutdown]
+    J -- 预算耗尽 --> K[WARN force stop 关闭连接]
+    K --> L
+    J -- 完成 --> L
+    A -- provider cleanup --> L[获取锁 标记关闭并取出监听及取消函数 释放锁]
+    L --> M[锁外取消绑定并关闭监听 等待创建完成]
+    M --> N{回收错误或等待超时?}
+    N -- 是且provider cleanup --> O[ERROR server.listener.cleanup.failed]
+    N -- 是且可返回错误 --> Z
+    O --> P([资源释放完成])
+    N -- 否 --> P
+```
+
 协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、requestdebug、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
 
 `server.tracing.disable: true` 或全局 `tracing.disable: true` 会停止服务端 Span 的记录、采样和导出，但常驻 tracing 中间件仍使用非采样 Provider 创建或延续请求 SpanContext。因此访问日志和业务日志仍能读取 `trace.id`、`span.id`，下游客户端也可继续传播同一条 TraceID；此模式不会创建 exporter。运行期重新启用 server tracing 时恢复使用构造期注入的真实 Provider；若全局 Provider 在构造期已禁用，则仍只能保留关联 ID，需重启才能恢复记录和导出。
 
-`NewRuntime` 在业务 HTTP、WebSocket、gRPC 和监控处理器组装完成后、服务启动前，按 HTTP 路径/方法及 gRPC 完整方法名的稳定顺序逐条记录 `INFO event=endpoint.registered`。HTTP 字段为 `transport=http, method, path, service, listener`；metrics/health 的 `service` 分别为对应能力，`listener` 为 `business` 或独立管理地址。gRPC 还包含实际服务名，`path` 采用 `/<service>/<method>`。业务路由来自底层 Server 的最终注册表，监控处理器由 Foundation 在挂载成功后补入；禁用的协议或监控能力不输出对应端点。
+`NewRuntime` 在业务 HTTP、WebSocket、gRPC 和监控处理器组装完成后、服务启动前，按 HTTP 路径/方法及 gRPC 完整方法名的稳定顺序逐条记录 `DEBUG event=server.endpoint.registered`。HTTP 字段为 `transport=http, method, path, service, listener`；metrics/health 的 `service` 分别为对应能力，`listener` 为 `business` 或独立管理地址。gRPC 还包含实际服务名，`path` 采用 `/<service>/<method>`。业务路由来自底层 Server 的最终注册表，业务 HTTP/gRPC 的 `listener=business`，监控处理器由 Foundation 在挂载成功后补入；禁用的协议或监控能力不输出对应端点。默认 Info 级别仅保留 `event=server.assembled` 组装摘要和 SDK 启停日志；摘要字段为 `http`、`grpc`（配置地址，禁用为 `disabled`）、`management`（独立管理监听地址列表）和 `stop_delay`，`:0` 等动态端口以 SDK 的 listening 日志为准；需要核对逐路由详情时启用 Debug。
 
 访问日志中的 `deadline.source` 和 `deadline.remaining` 使用 `log.DebugOnly`：普通 Info 请求日志默认省略；请求 Context 启用 debug 时，即使访问日志事件仍是 Info，也会展开这些字段。默认 `filter_empty=true` 会移除未展开的整组键值。
 
@@ -81,14 +135,14 @@ flowchart LR
 ```mermaid
 flowchart TD
     A([构造或串行中间件订阅回调]) --> B{完整配置校验通过?}
-    B -- 否 --> C[构造返回错误 或 ERROR server middleware config update rejected]
+    B -- 否 --> C[构造返回错误 或 WARN server.middleware.update.rejected]
     C --> D([保留旧策略 结束])
     B -- 是 --> E[构造变化项 包括外部 Aegis BBR]
     E --> F{构造成功?}
     F -- 否 --> C
     F -- 是 --> G[首次创建 或逐项原子发布策略]
     G --> H{属于热更新?}
-    H -- 是 --> M[INFO server middleware config updated]
+    H -- 是 --> M[INFO server.middleware.updated]
     H -- 否 --> I([结束])
     M --> I
     J[并发请求] --> K[原子读取各策略快照 无额外锁]
@@ -157,7 +211,7 @@ flowchart TD
     C --> D[Recovery / Deadline / RequestDebug / Metadata / Tracing / Metrics]
     D --> E[错误边界 / 访问日志 / 自定义中间件 / 校验 / 限流]
     E --> P{中间件成功短路?}
-    P -- 是 --> Q[INFO request completed]
+    P -- 是 --> Q[INFO server.request.completed]
     Q --> R[HTTP Encoder 输出非 nil reply]
     R --> Z{编码成功?}
     Z -- 是 --> J
@@ -166,19 +220,19 @@ flowchart TD
     P -- 否 --> F{注册入口?}
     F -- HandleHTTP --> G[HTTPHandler 接收派生 Request 并返回 reply 或 error]
     G --> H{业务处理成功?}
-    H -- 是 --> I[INFO request completed]
+    H -- 是 --> I[INFO server.request.completed]
     I --> S[ResponseEncoder 输出 reply]
     S --> Z
     F -- HandleHTTPWriter --> T[HTTPWriterHandler 接收 ResponseWriter 与派生 Request]
     T --> U{业务处理成功?}
     U -- 是 --> V[handler 写入自定义状态 Header 或响应体]
-    V --> W[INFO request completed]
+    V --> W[INFO server.request.completed]
     W --> J([响应完成])
-    H -- 否 --> K[INFO request completed]
+    H -- 否 --> K[INFO server.request.completed]
     U -- 否 --> K
     K --> L[错误边界 Normalize]
     L --> O{服务端故障?}
-    O -- 是 --> M[ERROR request failed with a server error]
+    O -- 是 --> M[ERROR server.request.failed]
     O -- 否 --> N[HTTP ErrorEncoder]
     M --> N
     N --> J
@@ -196,7 +250,7 @@ spec.HTTP().WebSocketWithConfig("/ws", handler, server.WebSocketConfig{
 })
 ```
 
-`MaxMessageBytes=0` 使用默认值，`-1` 显式恢复不限制消息大小的旧行为，小于 `-1` 在 Spec 校验时拒绝。这是端点构造期配置，不来自 YAML，也不热更新。超限数据不会交给 `OnMessage`；框架尝试发送 1009 关闭帧，记录 `WARN readMessage | websocket message too large`，将包含 `websocket.ErrReadLimit` 的错误交给已提供的 `OnError`，随后按原有关闭路径执行 `OnClose`。网络已失效时不保证对端收到关闭帧。大文件建议通过上传接口或应用层分片传输。
+`MaxMessageBytes=0` 使用默认值，`-1` 显式恢复不限制消息大小的旧行为，小于 `-1` 在 Spec 校验时拒绝。这是端点构造期配置，不来自 YAML，也不热更新。超限数据不会交给 `OnMessage`；框架尝试发送 1009 关闭帧，记录 `WARN event=server.websocket.message.rejected, reason=size_limit`，将包含 `websocket.ErrReadLimit` 的错误交给已提供的 `OnError`，随后按原有关闭路径执行 `OnClose`。网络已失效时不保证对端收到关闭帧。大文件建议通过上传接口或应用层分片传输。
 
 `MaxInFlightMessages=0` 使用默认值 **1**，因此旧注册入口和未显式配置的端点仍按接收顺序串行执行 `OnMessage`；负数在 Spec 校验时拒绝。大于 1 时，同一连接最多并发执行对应数量的消息处理任务，不同连接仍各自独立。达到上限后读循环暂停读取，依靠 TCP/WebSocket 背压限制继续进入进程的消息，不额外维护无界业务队列。并行模式只保证消息按线路顺序读取，不保证 `OnMessage` 完成或响应写入顺序；handler、其共享依赖及连接级业务状态必须支持并发访问，需要严格顺序的协议应保持默认值 1。框架继续用连接写锁串行写帧，但锁获取顺序不等于消息接收顺序。
 
@@ -209,24 +263,28 @@ flowchart TD
     A([HTTP 升级请求]) --> B[中间件派生身份 metadata 和握手截止时间]
     B --> C[OnHandshake 使用派生上下文]
     C --> D{握手与 Gorilla 升级成功?}
-    D -- 否 --> E[WARN websocket upgrade failed]
-    E --> F([返回请求错误 释放握手上下文])
+    D -- 否 --> E[DEBUG server.websocket.upgrade.failed]
+    E --> EF{请求错误边界判定为服务端故障?}
+    EF -- 是 --> EG[ERROR server.request.failed]
+    EF -- 否 --> F([返回请求错误 释放握手上下文])
+    EG --> F
     D -- 是 --> Z[设置接收上限 保留上下文值 创建独立连接取消函数]
     Z --> G[准备连接与事件处理器]
     G --> V{hub 锁内检查 是否已停机?}
     V -- 是 --> W[释放 hub 锁 Close 取消上下文并关闭连接]
-    W --> X[关闭失败时 WARN websocket connection close failed]
-    X --> Y[WARN websocket server is stopping]
+    W --> X[关闭失败时 ERROR server.websocket.close.failed]
+    X --> Y[DEBUG server.websocket.connection.rejected reason=server_stopping]
     Y --> S
     V -- 否 --> H[hub 锁内登记连接 释放锁后启动读循环]
     H --> I[OnConnect 使用连接上下文]
     I --> AD{有可用消息处理槽?}
+    I -. panic .-> L
     AD -- 否 --> AE[暂停读取 等待槽位或连接取消]
     AE -- 槽位释放 --> AD
     AE -- 连接取消 --> L
     AD -- 是 --> AA[占用槽位并按传输及解压后上限读取一条消息]
     AA --> J{读取结果?}
-    J -- 超限 --> AB[尝试发送 1009 并记录 WARN readMessage message too large]
+    J -- 超限 --> AB[尝试发送 1009 并记录 WARN server.websocket.message.rejected]
     AB --> AJ[释放本次读取占用的槽位]
     J -- 其他读失败 --> AJ
     AJ --> K[OnError]
@@ -234,18 +292,22 @@ flowchart TD
     AC --> AD
     AC --> AF{任务执行结果?}
     AF -- 完成 --> AG[释放消息处理槽]
-    AF -- panic --> AH[ERROR onMessageHandler panic]
+    AF -- panic --> AH[ERROR server.websocket.panic.recovered stage=on_message]
     AH --> AG
     AG --> AD
     K --> L[closeOnce 内取消连接上下文]
+    K -. panic .-> L
     M[并发 Close 或停机关闭] --> L
     L --> N[写锁内发送可选关闭帧并关闭 socket 释放写锁]
     N --> AI[等待所有在途 OnMessage 退出]
     AI --> O{关闭错误?}
-    O -- 是 --> P[读循环 WARN websocket connection close failed]
+    O -- 是 --> P[读循环 ERROR server.websocket.close.failed]
     O -- 否 --> Q[OnClose 读取已取消的连接上下文]
     P --> Q
-    Q --> R[hub 锁内移除连接 释放锁]
+    Q --> AP{清理后仍有 panic?}
+    AP -- 是 --> AQ[ERROR server.websocket.panic.recovered stage=resolve]
+    AP -- 否 --> R[hub 锁内移除连接 释放锁]
+    AQ --> R
     R --> S([连接结束])
     T[停机超时 强制 abort] --> U[取消连接上下文并直接关闭 socket]
     U --> K
@@ -326,7 +388,7 @@ spec.Health().Checks(server.ReadinessCheck{Name: "database", Check: sqlDB.PingCo
 执行，只注册接收业务流量必需的依赖。检查函数必须支持 Context、可并发调用、无写入副作用；
 超时通知不能强杀不合作的检查函数，框架不另起可能泄漏的 goroutine 包装检查。
 配置在组装后固定；不得并发修改 Spec 或 SetReadinessSource。普通探针不逐次记录日志，readiness
-结果变化记录 `event=readiness.changed`（成功 INFO、失败 WARN），只包含状态和检查名。
+HTTP 状态变化记录 `event=server.readiness.changed`：恢复为 INFO，实际依赖失败或探针超时为 WARN，初始化未就绪、主动停机摘流及探针正常取消为 DEBUG。日志绑定探针 Context，并包含 `transport=http`、就绪路径、状态、`reason` 和实际失败检查名，不输出依赖错误原文；应用状态变化不会归因于成功的依赖检查。该服务状态事件使用进程日志绑定，多个监听共享同一份状态。连续 503 即使原因变化也不重复记录，事件用于状态变化诊断，不替代探针状态或逐依赖指标。
 
 ```mermaid
 flowchart TD
@@ -345,9 +407,14 @@ flowchart TD
     L -- 否 --> G
     G --> M{readiness 结果变化?}
     J --> M
-    M -- 是 --> N[INFO 或 WARN readiness.changed]
+    M -- 是 --> N{readiness 变化来源?}
+    N -- 恢复 --> NP[INFO server.readiness.changed]
+    N -- 依赖失败或探针超时 --> NW[WARN server.readiness.changed]
+    N -- 初始化或摘流或正常取消 --> ND[DEBUG server.readiness.changed]
     M -- 否 --> O([结束])
-    N --> O
+    NP --> O
+    NW --> O
+    ND --> O
     E --> O
     C --> O
 ```
@@ -390,10 +457,10 @@ server:
 地址使用 `host:port`，IPv6 使用 `[::1]:9001`，不接受 URL 或服务名端口。比较会规范化数字端口、
 IP 表示及 `0.0.0.0`/空 host；不通过 DNS 推断 localhost 与 IP 等价，也不猜测 IPv4/IPv6 的系统
 绑定重叠。不同地址因通配绑定或端口占用发生冲突时，启动失败并触发应用统一停止。复用依据是
-`server.http.addr` 配置；不要用原生 `HTTP.Option(http.Address(...))` 隐式改写需要参与复用的地址。
+`server.http.addr` 配置；原生 `HTTP.Option(http.Address(...))` 不再改写监听地址。使用自定义 Listener 时，配置中的业务地址仍用于监控复用规划，须与实际地址保持一致。
 
 端点路径均相对于所选监听的根路径，独立于业务 PathPrefix、Filter 和鉴权。独立监听不继承业务
-路由、WebSocket、业务原生 Option 或全局 DefaultServeMux，默认使用普通 HTTP；TLS/mTLS 由平台网关或 Service Mesh 终止，必须通过绑定地址和网络策略把业务及管理监听限制在受信任网络，禁止直接暴露到不可信网络。`HTTPBuilder.Option` / `GRPCBuilder.Option` 可以注入原生 Listener 或 TLS，但它们是不受 Foundation 配置治理的业务自管扩展，不能据此推断独立管理监听也获得相同 TLS，也不属于默认平台责任边界。
+路由、WebSocket、业务原生 Option 或全局 DefaultServeMux，默认使用普通 HTTP；TLS/mTLS 由平台网关或 Service Mesh 终止，必须通过绑定地址和网络策略把业务及管理监听限制在受信任网络，禁止直接暴露到不可信网络。业务 HTTP 自定义监听通过 `HTTPBuilder.Listener` 声明，TLS 仍可通过原生 Option 注入；gRPC 原生 Listener/TLS 扩展保持现有契约。不能据此推断独立管理监听也获得相同 TLS，也不属于默认平台责任边界。
 同一监听上的 metrics 和健康路径不能冲突，不同监听可以使用相同路径。
 
 `Health().Checks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
@@ -434,7 +501,7 @@ flowchart TD
 ```
 
 中间件配置订阅在下一轮成功扫描异步回放当前值，内容相同的回放或重复通知不会打印 `server middleware config updated`；
-只有配置实际变化且成功应用后才记录更新日志，非法更新仍记录 rejected 并保留旧配置。
+只有配置实际变化且成功应用后才记录 `INFO event=server.middleware.updated`；非法更新记录 `WARN event=server.middleware.update.rejected, config_key=server, error` 并保留旧配置。
 
 ## 集成测试与边界用法
 
@@ -443,13 +510,13 @@ flowchart TD
 
 ## 请求错误边界与安全日志
 
-默认 HTTP/gRPC 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
+默认 HTTP/gRPC unary 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
 
-`request failed with a server error` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。故障日志始终保留 `operation`、`code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
+`ERROR event=server.request.failed` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。传输上下文存在时，故障日志保留 `transport`、`endpoint`、`operation`，并始终记录 `code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要分别使用稳定的 `INFO event=server.request.completed` 与 `event=client.request.completed`，字段为 kind/operation/code/reason/latency，不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
 
-最外层 `recovered from a panic while handling a request` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
+最外层 `ERROR event=server.request.panic.recovered` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
 
-业务通过 Spec 同名替换 `errors` 或 `recovery` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC 请求链；WebSocket 异步消息回调需自行处理错误和日志。
+业务通过 Spec 同名替换 `errors` 或 `recovery` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC unary 请求链。WebSocket 升级错误在本层只记录 `DEBUG event=server.websocket.upgrade.failed`，仍返回给请求错误边界按现有规则处理；普通未分类的握手错误可能被归为 500，业务拒绝应返回明确的结构化 4xx。WebSocket 读循环及异步消息 panic 由连接边界记录一次 `ERROR event=server.websocket.panic.recovered`，包含连接 Context、`transport=websocket`、`path`、`stage` 和 `panic_type`，不记录原始 panic 值或消息正文；纯堆栈仍仅在连接 Context 启用 debug 时展开。正常断开与停机拒绝不额外告警；超限消息为 Warn，框架无法向调用方返回的关闭失败为 Error。业务回调返回/消费的错误仍由业务处理。
 
 ```mermaid
 flowchart TD
@@ -462,19 +529,21 @@ flowchart TD
     F --> G
     G --> H[Normalize: 保留已知状态或安全兜底]
     H --> I{服务端故障?}
-    I -- 是 --> J[ERROR 摘要: code reason error]
+    I -- 是 --> J[ERROR server.request.failed: code reason error]
     I -- 否 --> K([返回安全协议错误或成功])
     J --> N{请求 debug?}
     N -- 是 --> O[展开 error.detail]
     N -- 否 --> K
     O --> K
-    G -. panic .-> L[ERROR recovered from a panic: 类型]
+    G -. panic .-> L[ERROR server.request.panic.recovered: 类型]
     L --> P{请求 debug?}
     P -- 是 --> Q[展开 stack]
     P -- 否 --> M
     Q --> M
     M([安全 500])
 ```
+
+Kratos `grpc.Middleware` 只应用于 unary 调用；本包额外在 gRPC 流建立时恢复 `request_debug`，没有将整条 unary 中间件链扩展到流。通过 `GRPC().Option(grpc.StreamInterceptor(...))` 登记的业务 stream interceptor 须自行提供需要的鉴权、panic 恢复、截止时间及观测边界。
 
 服务端与客户端指标使用归一化后的 HTTP 状态计数，保留 422 等非标准 gRPC 映射的状态；指标观察不改变业务调用方收到的原始错误。
 

@@ -213,4 +213,7 @@ func TestAccessLogsOmitBodiesAndErrorDetails(t *testing.T) {
 	if !strings.Contains(string(data), "code=500") {
 		t.Fatalf("status missing: %s", data)
 	}
+	if strings.Count(string(data), "event=server.request.completed") != 1 || strings.Count(string(data), "event=client.request.completed") != 1 {
+		t.Fatalf("access event missing: %s", data)
+	}
 }

@@ -41,7 +41,7 @@ func (h commandHook) ProcessPipelineHook(next goredis.ProcessPipelineHook) gored
 func TestStoreKeyPrefix(t *testing.T) {
 	for _, prefix := range []string{"app:queue:email", "app:queue:report", "app:{email}", "custom:", " custom ", strings.Repeat("p", 65)} {
 		t.Run(prefix, func(t *testing.T) {
-			client := goredis.NewClient(&goredis.Options{Addr: "unused"})
+			client := goredis.NewClient(&goredis.Options{Addr: "unused", ContextTimeoutEnabled: true})
 			t.Cleanup(func() {
 				if err := client.Close(); err != nil {
 					t.Error(err)
@@ -85,7 +85,7 @@ func TestStore(t *testing.T) {
 	if _, err := NewStore(testManager{err: sentinel}, Config{Connection: "redis", KeyPrefix: "test"}); !errors.Is(err, sentinel) {
 		t.Fatal(err)
 	}
-	client := goredis.NewClient(&goredis.Options{Addr: "unused"})
+	client := goredis.NewClient(&goredis.Options{Addr: "unused", ContextTimeoutEnabled: true})
 	t.Cleanup(func() {
 		if err := client.Close(); err != nil {
 			t.Error(err)
@@ -534,5 +534,29 @@ func TestStoreRedisKeyTypeFailurePreservesState(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// 构造期拒绝会忽略存储截止时间的连接，且不修改 Manager 借出的配置。
+func TestStoreRequiresContextTimeout(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enabled=%t", enabled), func(t *testing.T) {
+			client := goredis.NewClient(&goredis.Options{Addr: "unused", ContextTimeoutEnabled: enabled})
+			t.Cleanup(func() {
+				if err := client.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			store, err := NewStore(testManager{client: client}, Config{Connection: "test", KeyPrefix: "tasks"})
+			if enabled && (err != nil || store == nil) {
+				t.Fatalf("enabled context timeout: store=%v err=%v", store, err)
+			}
+			if !enabled && (err == nil || store != nil) {
+				t.Fatalf("unbounded storage connection accepted: store=%v err=%v", store, err)
+			}
+			if client.Options().ContextTimeoutEnabled != enabled {
+				t.Fatal("borrowed connection options changed")
+			}
+		})
 	}
 }

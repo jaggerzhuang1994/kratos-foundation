@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,9 +14,10 @@ import (
 )
 
 func TestExecutionGateReportsSkipAndBalancedWaitMetrics(t *testing.T) {
+	log, path := testFileModuleLog(t)
 	synctest.Test(t, func(t *testing.T) {
 		metrics := &admissionMetricsRecorder{}
-		gate := newExecutionGate(testModuleLog(t), "metrics", cronConfig{policy: DelayIfRunning, pending: 1}, nil, metrics)
+		gate := newExecutionGate(log, "metrics", cronConfig{policy: DelayIfRunning, pending: 1}, nil, metrics)
 		release := make(chan struct{})
 		run := gate.middleware(func(context.Context) error { <-release; return nil })
 		done := make(chan error, 2)
@@ -85,6 +87,21 @@ func TestExecutionGateReportsSkipAndBalancedWaitMetrics(t *testing.T) {
 			t.Fatalf("disabled skips = %d, want 1", got)
 		}
 	})
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, reason := range []string{"pending_full", "already_running"} {
+		var found bool
+		for _, line := range strings.Split(string(written), "\n") {
+			if strings.Contains(line, "reason="+reason) && strings.Contains(line, "event=job.trigger.skipped") && strings.HasPrefix(line, "WARN ") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("skip log lacks Warn event and reason %s: %s", reason, written)
+		}
+	}
 }
 
 type admissionMetricsRecorder struct {

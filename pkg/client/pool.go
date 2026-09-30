@@ -131,6 +131,7 @@ func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Contex
 	}
 
 	var rejected *retiredClient
+	published := false
 	f.mu.Lock()
 	if buildErr == nil {
 		call.cancel = nil
@@ -138,6 +139,7 @@ func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Contex
 	if !f.closed && slot.current == version && slot.build == call {
 		if buildErr == nil {
 			version.client = result
+			published = true
 		} else {
 			call.err = fmt.Errorf(
 				"build client %q revision %d protocol %s target %q: %w",
@@ -163,6 +165,10 @@ func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Contex
 	}
 	f.mu.Unlock()
 
+	// 资源发布状态已在锁内确定，日志与外部关闭均在锁外执行。
+	if published {
+		f.logger.WithContext(ctx).With("event", "client.created", "client", slot.name, "revision", version.revision, "protocol", version.spec.protocol.String()).Info("client created")
+	}
 	if rejected != nil {
 		f.closeAndLog(*rejected)
 	}
@@ -226,10 +232,10 @@ func (f *factory) closeAndLog(retired retiredClient) {
 		"reason", string(retired.reason),
 	)
 	if err := retired.result.close(); err != nil {
-		logger.With("error", err).Error("client close failed")
+		logger.With("event", "client.close.failed", "error", err).Error("client close failed")
 		return
 	}
-	logger.Info("client closed")
+	logger.With("event", "client.closed").Info("client closed")
 }
 
 type clientResult struct {

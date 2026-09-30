@@ -2,12 +2,14 @@ package consul
 
 import (
 	"encoding/json"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	configconsul "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/consul"
 	baseconsul "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/consul"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 
 	configtext "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
@@ -107,5 +109,48 @@ func TestDriverRejectsConnectionOptions(t *testing.T) {
 		if err == nil {
 			t.Fatal("removed connection option accepted")
 		}
+	}
+}
+
+func TestDriverCleanupReportsOperationTimeoutWithInstanceFields(t *testing.T) {
+	recorder := captureConsulEvents(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`"leader:8300"`))
+	}))
+	defer server.Close()
+	t.Setenv("DISABLE_CONSUL", "false")
+	t.Setenv("CONSUL_HTTP_ADDR", server.URL)
+	source, err := configtext.NewSource("cleanup", "json", `{"registry":{"instances":{"cleanup":{"driver":"consul"}}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, closeManager, err := config.NewManager(config.Sources{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeManager()
+	factory, cleanup, err := registry.NewFactory(manager, log.WithModule("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	capability, err := factory.Registrar("cleanup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := capability.(*registrar)
+	synctest.Test(t, func(t *testing.T) {
+		// 无登记或后台心跳；测试拥有 channel，快进既有预算模拟另一个生命周期操作未返回。
+		r.operations = make(chan struct{}, 1)
+		r.operations <- struct{}{}
+		cleanup()
+		<-r.operations
+	})
+	recorder.requireEvent(t, "registry.consul.cleanup.failed", kratoslog.LevelError, "instance", "cleanup", "module", "registry", "driver", "consul")
+	cleanup()
+	select {
+	case record := <-recorder:
+		t.Fatalf("duplicate cleanup log: %+v", record)
+	default:
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +36,7 @@ func TestFactoryUpdateKeepsOldClientUntilFinalRelease(t *testing.T) {
 		t.Fatalf("close count after release = %d, want 1", got)
 	}
 	recorder.requireRecord(t, "client closed", map[string]any{
+		"event": "client.closed", "level": kratoslog.LevelInfo,
 		"client":   "orders",
 		"revision": uint64(1),
 		"protocol": "HTTP",
@@ -350,6 +352,8 @@ func TestFactoryUpdateLogsCloseFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder.requireRecord(t, "client close failed", map[string]any{
+		"event":    "client.close.failed",
+		"level":    kratoslog.LevelError,
 		"client":   "orders",
 		"revision": uint64(1),
 		"protocol": "HTTP",

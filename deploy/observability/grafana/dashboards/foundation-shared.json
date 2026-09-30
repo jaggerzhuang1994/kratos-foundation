@@ -1,0 +1,1509 @@
+{
+  "editable": true,
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "uid": "foundation-shared-resources",
+  "title": "Foundation · 共享资源与健康",
+  "version": 1,
+  "tags": [
+    "Foundation",
+    "diagnostics"
+  ],
+  "links": [
+    {
+      "title": "服务总览",
+      "type": "link",
+      "url": "/d/ack-service-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "容器与节点",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "应用组件",
+      "type": "link",
+      "url": "/d/ack-application-components",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "共享资源与健康",
+      "type": "link",
+      "url": "/d/foundation-shared-resources",
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "01 · 共享 Queue — 同一逻辑队列快照去重",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "title": "逻辑队列任务数（按状态）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (env,cluster,queue_destination,state) (queue_tasks{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{queue_destination}} / {{state}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "同一逻辑队列多个observer取max，禁止sum。不同Store必须配置不同逻辑队列名；max不能自动识别后端冲突。 各逻辑队列与状态独立画线，不跨队列或环境堆叠。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "最老就绪等待年龄",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (env,cluster,queue_destination) (queue_oldest_ready_age_seconds{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"} and (queue_stats_collection_success{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"} == 1) and (queue_stats_oldest_ready_known{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"} == 1))",
+          "legendFormat": "{{env}} / {{cluster}} · {{queue_destination}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "只包含当前Ready任务的AvailableAt年龄；重试/延迟排期会改变它，不是任务自创建以来总年龄。统计失败或年龄未知不输出样本，不能解释为空队列。 每个observer先按完整标签匹配采集成功和年龄可用性，再对共享队列取max。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "统计采集状态（最差observer）",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,queue_destination) (queue_stats_collection_success{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{queue_destination}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "0表示失败或未知，1才表示可用；无样本保持空白。部分observer失败时也须处理，不被成功副本掩盖。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "失败 / 未知",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "可用",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "精确年龄可用性（最差observer）",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,queue_destination) (queue_stats_oldest_ready_known{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{queue_destination}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "0表示失败或未知，1才表示可用；无样本保持空白。部分observer失败时也须处理，不被成功副本掩盖。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "失败 / 未知",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "可用",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Queue observer 采集明细",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,namespace,app,instance,queue_destination) (queue_stats_collection_success{env=~\"${env}\",cluster=~\"${cluster}\",queue_destination=~\"${queue_name}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "observer属于采集进程；这里的目标明细与共享库存分开，不把同一库存副本当成每Pod局部任务数。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "环境"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "采集集群"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "应用"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "统计状态"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "失败",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "成功",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "env": 0,
+              "cluster": 1,
+              "queue_destination": 2,
+              "Value": 3,
+              "namespace": 4,
+              "app": 5,
+              "instance": 6
+            },
+            "renameByName": {
+              "env": "环境",
+              "cluster": "采集集群",
+              "queue_destination": "逻辑队列",
+              "namespace": "命名空间",
+              "app": "应用",
+              "instance": "采集地址",
+              "kafka_cluster": "Kafka集群",
+              "consumergroup": "消费组",
+              "topic": "Topic",
+              "partition": "分区",
+              "probe": "探测",
+              "Value": "统计状态"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "02 · Kafka Lag — cluster / group / topic / partition",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 8,
+      "title": "消费组 Topic 总 Lag",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (env,cluster,kafka_cluster,consumergroup,topic) (max by (env,cluster,kafka_cluster,consumergroup,topic,partition) (kafka_consumergroup_lag{env=~\"${env}\",cluster=~\"${cluster}\",kafka_cluster=~\"${kafka_cluster}\",consumergroup=~\"${consumer_group}\",topic=~\"${broker_topic}\"} >= 0))",
+          "legendFormat": "{{env}} / {{cluster}} · {{kafka_cluster}} / {{consumergroup}} / {{topic}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "先按同一分区max去exporter副本，再求Topic合计；负值为未知并排除，不当0。缺失分区可能使合计不完整，须同时检查未知分区与exporter抓取状态。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "积压最多分区 Top 20",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, max by (env,cluster,kafka_cluster,consumergroup,topic,partition) (kafka_consumergroup_lag{env=~\"${env}\",cluster=~\"${cluster}\",kafka_cluster=~\"${kafka_cluster}\",consumergroup=~\"${consumer_group}\",topic=~\"${broker_topic}\"} >= 0))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "保留真实Kafka集群/消费组/Topic/分区；不按应用Pod归属。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kafka集群"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "消费组"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Topic"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "分区"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lag"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "环境"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "采集集群"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Lag",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "kafka_cluster": 0,
+              "consumergroup": 1,
+              "topic": 2,
+              "partition": 3,
+              "Value": 4,
+              "env": 5,
+              "cluster": 6
+            },
+            "renameByName": {
+              "env": "环境",
+              "cluster": "采集集群",
+              "queue_destination": "逻辑队列",
+              "namespace": "命名空间",
+              "app": "应用",
+              "instance": "探测地址",
+              "kafka_cluster": "Kafka集群",
+              "consumergroup": "消费组",
+              "topic": "Topic",
+              "partition": "分区",
+              "probe": "探测",
+              "Value": "Lag"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "位点未知的分区",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,kafka_cluster,consumergroup,topic,partition) (kafka_consumergroup_lag{env=~\"${env}\",cluster=~\"${cluster}\",kafka_cluster=~\"${kafka_cluster}\",consumergroup=~\"${consumer_group}\",topic=~\"${broker_topic}\"}) < 0",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "负Lag不代表没有积压。没有返回的分区不会出现在此表，仍需核对过滤、权限和已提交位点。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kafka集群"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "消费组"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Topic"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "分区"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "位点状态"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "环境"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "采集集群"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "位点状态"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "-1": {
+                        "text": "未知",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "kafka_cluster": 0,
+              "consumergroup": 1,
+              "topic": 2,
+              "partition": 3,
+              "Value": 4,
+              "env": 5,
+              "cluster": 6
+            },
+            "renameByName": {
+              "env": "环境",
+              "cluster": "采集集群",
+              "queue_destination": "逻辑队列",
+              "namespace": "命名空间",
+              "app": "应用",
+              "instance": "探测地址",
+              "kafka_cluster": "Kafka集群",
+              "consumergroup": "消费组",
+              "topic": "Topic",
+              "partition": "分区",
+              "probe": "探测",
+              "Value": "位点状态"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Kafka exporter 抓取状态",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,kafka_cluster,instance) (up{foundation_kafka=\"true\",env=~\"${env}\",cluster=~\"${cluster}\",kafka_cluster=~\"${kafka_cluster}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{kafka_cluster}} / {{instance}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "采集目标须附加foundation_kafka=true及kafka_cluster；up=1不保证所有消费组/Topic/分区完整返回。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "抓取失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "抓取成功",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "03 · 实际 HTTP 健康探测 — readiness / liveness / 采集",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 13,
+      "title": "readyz / healthz 实际探测状态",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,app,instance,probe) (probe_success{foundation_probe=\"true\",env=~\"${env}\",cluster=~\"${cluster}\",app=~\"${probe_app}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{app}} / {{instance}} / {{probe}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "probe_success与up分别表示实际HTTP探测结果和探测结果能否采集；二者不能互相替代。未配置目标留空，不伪造成功。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "成功",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "探测器抓取状态",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (env,cluster,app,instance,probe) (up{foundation_probe=\"true\",env=~\"${env}\",cluster=~\"${cluster}\",app=~\"${probe_app}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{app}} / {{instance}} / {{probe}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "probe_success与up分别表示实际HTTP探测结果和探测结果能否采集；二者不能互相替代。未配置目标留空，不伪造成功。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "成功",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "实际 HTTP 状态码",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (env,cluster,app,instance,probe) (probe_http_status_code{foundation_probe=\"true\",env=~\"${env}\",cluster=~\"${cluster}\",app=~\"${probe_app}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "仅成功200符合当前blackbox模块；0可能代表没有收到HTTP响应。接口返回503与探测器不可达须结合up判断。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP状态码"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "探测"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "应用"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "探测地址"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 215
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "环境"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "采集集群"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "Value": 0,
+              "probe": 1,
+              "app": 2,
+              "instance": 3,
+              "env": 4,
+              "cluster": 5
+            },
+            "renameByName": {
+              "env": "环境",
+              "cluster": "采集集群",
+              "queue_destination": "逻辑队列",
+              "namespace": "命名空间",
+              "app": "应用",
+              "instance": "探测地址",
+              "kafka_cluster": "Kafka集群",
+              "consumergroup": "消费组",
+              "topic": "Topic",
+              "partition": "分区",
+              "probe": "探测",
+              "Value": "HTTP状态码"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "HTTP 探测耗时",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 47,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (env,cluster,app,instance,probe) (probe_duration_seconds{foundation_probe=\"true\",env=~\"${env}\",cluster=~\"${cluster}\",app=~\"${probe_app}\"})",
+          "legendFormat": "{{env}} / {{cluster}} · {{app}} / {{instance}} / {{probe}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "一次探测包含连接与响应处理；并非业务方法P95。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "共享资源口径与接入",
+      "type": "text",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 24,
+        "h": 4
+      },
+      "targets": [],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Queue** 必须显式 RegisterStats；逻辑队列名需唯一标识同一Store。多个observer读取同一库存仅去重，不累加；年龄未知看可用性。\n\n**Kafka Lag** 来自共享Broker已提交位点，logical destination不一定等于Topic/Group。需独立exporter并附加 `foundation_kafka=true`、`env/cluster/kafka_cluster`。\n\n**健康探测** 需blackbox目标带 `foundation_probe=true` 和 `probe`，分别请求readyz/healthz。空白表示未接入、无样本或目标缺失，不能解释为健康。此页不受应用页的Node/Pod筛选影响。"
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
+        "name": "env",
+        "label": "环境",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"up|queue_tasks|kafka_consumergroup_lag\"}, env)",
+          "refId": "env"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "cluster",
+        "label": "采集集群",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values({__name__=~\"up|queue_tasks|kafka_consumergroup_lag\",env=~\"${env}\"}, cluster)",
+          "refId": "cluster"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "queue_name",
+        "label": "逻辑 Queue",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(queue_tasks{env=~\"${env}\",cluster=~\"${cluster}\"}, queue_destination)",
+          "refId": "queue_name"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "kafka_cluster",
+        "label": "Kafka 集群",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(kafka_consumergroup_lag{env=~\"${env}\",cluster=~\"${cluster}\"}, kafka_cluster)",
+          "refId": "kafka_cluster"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "consumer_group",
+        "label": "消费组",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(kafka_consumergroup_lag{env=~\"${env}\",cluster=~\"${cluster}\",kafka_cluster=~\"${kafka_cluster}\"}, consumergroup)",
+          "refId": "consumer_group"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "broker_topic",
+        "label": "实际 Topic",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(kafka_consumergroup_lag{env=~\"${env}\",cluster=~\"${cluster}\",kafka_cluster=~\"${kafka_cluster}\",consumergroup=~\"${consumer_group}\"}, topic)",
+          "refId": "broker_topic"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "probe_app",
+        "label": "探测应用",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(up{foundation_probe=\"true\",env=~\"${env}\",cluster=~\"${cluster}\"}, app)",
+          "refId": "probe_app"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      }
+    ]
+  },
+  "description": "Queue共享Store、Kafka位点和HTTP健康探测；不按业务Pod/Node归属，不需要Kubernetes元数据。"
+}

@@ -33,7 +33,7 @@ type Store struct {
 
 var _ queue.Store = (*Store)(nil)
 
-// NewStore 解析配置与连接，不发送 Redis 命令，也不创建后台 goroutine。
+// NewStore 解析配置与连接，要求连接启用 ContextTimeoutEnabled；不发送 Redis 命令或创建后台 goroutine。
 func NewStore(manager foundationredis.Manager, config Config) (*Store, error) {
 	config.Connection = strings.TrimSpace(config.Connection)
 	if config.Connection == "" || strings.TrimSpace(config.KeyPrefix) == "" {
@@ -42,6 +42,10 @@ func NewStore(manager foundationredis.Manager, config Config) (*Store, error) {
 	client, err := manager.Connection(config.Connection)
 	if err != nil {
 		return nil, fmt.Errorf("resolve queue redis connection: %w", err)
+	}
+	// 全部存储操作共享调用方的截止时间；借用连接不能改写选项，配置错误须在启动时暴露。
+	if !client.Options().ContextTimeoutEnabled {
+		return nil, errors.New("redis queue requires context timeout enabled")
 	}
 	// 前缀由业务管理；不散列或规范化，避免改变业务指定的 Redis 命名空间。
 	prefix := config.KeyPrefix + ":"

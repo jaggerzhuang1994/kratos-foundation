@@ -48,6 +48,8 @@ type manager struct {
 	mu sync.Mutex
 	// connections 受管客户端缓存，默认连接在构造期创建，其他连接延迟创建；受 mu 保护。
 	connections map[string]*redis.Client
+	// metricsClose 保存各 client 的指标回收信号，受 mu 保护；SDK 在收到信号后异步注销回调。
+	metricsClose map[string]chan struct{}
 	// defaultConn 与 connections 共享的默认客户端；受 mu 保护，仅由 Manager 关闭。
 	defaultConn *redis.Client
 	// closed 关闭后拒绝创建客户端，受 mu 保护。
@@ -87,11 +89,14 @@ func NewManager(
 		return nil, nil, err
 	}
 
+	moduleLogger.With("event", "redis.manager.ready", "default", config.GetDefault()).Info("redis manager ready")
 	var cleanupOnce sync.Once
 	cleanup := func() {
 		cleanupOnce.Do(func() {
 			if closeErr := c.Close(); closeErr != nil {
-				c.With("error", closeErr).Error("redis manager cleanup failed")
+				c.With("event", "redis.cleanup.failed", "error", closeErr).Error("redis manager cleanup failed")
+			} else {
+				c.With("event", "redis.manager.closed").Info("redis manager closed")
 			}
 		})
 	}
@@ -237,18 +242,26 @@ func (m *manager) newConnection(name string) (*redis.Client, error) {
 	}
 
 	if !m.conf.GetMetrics().GetDisable() {
+		closed := make(chan struct{})
 		err := redisotel.InstrumentMetrics(cc,
 			redisotel.WithMeterProvider(m.metrics.MeterProvider()),
+			redisotel.WithCloseChan(closed),
 			// 同一地址可配置多个独立连接池，必须保留具名连接身份，避免观测样本冲突。
 			redisotel.WithAttributes(attribute.String("redis_connection", name)),
 		)
 		if err != nil {
+			// 安装后续 hook 失败时，SDK 可能已经登记池回调；同样必须发出回收信号。
+			close(closed)
 			return cc, fmt.Errorf(
 				"instrument redis connection %q metrics: %w",
 				name,
 				err,
 			)
 		}
+		if m.metricsClose == nil {
+			m.metricsClose = make(map[string]chan struct{})
+		}
+		m.metricsClose[name] = closed
 	}
 
 	return cc, nil
@@ -273,8 +286,14 @@ func (m *manager) Close() error {
 		}
 		m.connections = nil
 		m.defaultConn = nil
+		metricsClose := m.metricsClose
+		m.metricsClose = nil
 		m.mu.Unlock()
 
+		// 回收信号只发送一次；SDK 异步注销，Close 不等待其内部 goroutine 完成。
+		for _, closed := range metricsClose {
+			close(closed)
+		}
 		closeErrors := make([]error, 0, len(clients))
 		for index, client := range clients {
 			if err := wrapRedisCloseError(

@@ -129,12 +129,13 @@ func newMiddlewarePolicies(
 				)
 			}
 			if updateErr != nil {
-				logger.With("error", updateErr).Error(
+				// 更新拒绝后继续使用旧策略，属于可恢复故障；不输出完整配置。
+				logger.With("event", "server.middleware.update.rejected", "config_key", "server", "error", updateErr).Warn(
 					"server middleware config update rejected",
 				)
 				return
 			}
-			logger.Info("server middleware config updated")
+			logger.With("event", "server.middleware.updated", "config_key", "server").Info("server middleware config updated")
 		},
 		defaultConfig,
 	)

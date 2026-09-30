@@ -11,12 +11,15 @@ import (
 	"testing"
 	"time"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/hashicorp/consul/api"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 func TestWatchRecoversAfterEstablishedOutage(t *testing.T) {
+	recorder := captureConsulEvents(t)
 	var stage atomic.Int32
 	failed := make(chan struct{}, 8)
 	d := newTestDiscovery(t, func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +36,9 @@ func TestWatchRecoversAfterEstablishedOutage(t *testing.T) {
 			writeServices(w, 1, true)
 		}
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	type contextKey struct{}
+	d.(*discovery).logger = foundationlog.WithModule("consul").With("context.marker", kratoslog.Valuer(func(ctx context.Context) any { return ctx.Value(contextKey{}) }))
+	ctx, cancel := context.WithTimeout(context.WithValue(context.Background(), contextKey{}, "watch-context"), 4*time.Second)
 	defer cancel()
 	watcher, err := d.Watch(ctx, "app")
 	if err != nil {
@@ -53,6 +58,8 @@ func TestWatchRecoversAfterEstablishedOutage(t *testing.T) {
 	}
 	stage.Store(2)
 	got, err := watcher.Next()
+	recorder.requireEvent(t, "registry.consul.discovery.retry", kratoslog.LevelWarn, "service", "app", "context.marker", "watch-context")
+	recorder.requireEvent(t, "registry.consul.discovery.recovered", kratoslog.LevelInfo, "service", "app", "context.marker", "watch-context")
 	if err != nil || len(got) != 0 {
 		t.Fatalf("recovery=%v,%v", got, err)
 	}

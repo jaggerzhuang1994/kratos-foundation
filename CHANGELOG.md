@@ -2,6 +2,33 @@
 
 本文件记录面向调用方的版本变化。版本是否已经发布以 Git tag 和对应提交为准；“计划中”内容不能作为已发布能力依赖。
 
+## 未发布
+
+### Changed
+
+- 日志事件名统一为 `<领域>.<对象>.<动作>`，可按 `event=queue.*`、`event=server.*` 前缀归类；App 生命周期事件补充固定 msg，`app.assembled` 增加 `pid`。
+- `server.assembled` 以 `http`、`grpc`、`management` 配置地址和 `stop_delay` 替代 `http_enabled`、`grpc_enabled`、`management_listeners`；`config.loaded` 的 `sources` 由 Go 类型名改为来源包名（如 `[env file]`）。
+- Queue 投递失败不再记录 `enqueue.failed`，错误同步返回给投递方，由 span 状态与投递指标表达；`queue.failure.callback_failed` 增加 `reason=error|panic|timeout`。
+- 访问摘要删除 `component` 字段，事件名直接区分 `server.request.completed` 与 `client.request.completed`。
+- `NewServerBootstrap`、`NewJobBootstrap` 末尾增加业务 `Bootstrap` 标记参数，二者不再相互依赖；HTTP 监听改由 Foundation 持有，原生 `http.Address/Network/Listener` 选项被最终设置覆盖，自定义监听改用 `HTTPBuilder.Listener`；Runtime 可选实现 `AbortStartup` 回收启动前资源。`contrib/queue/redis.NewStore` 在构造期要求连接启用 `context_timeout_enabled`；AES 字段支持指针类型表示 `NULL`。迁移细节见 [V2 迁移指南](MIGRATION_V2.md)。
+
+### Migration
+
+按事件名检索或告警的日志查询需要替换为新名称：
+
+| 旧事件 | 新事件 |
+| --- | --- |
+| `request.completed`（component=server/client） | `server.request.completed` / `client.request.completed` |
+| `request.failed`、`request.panic.recovered` | `server.request.failed`、`server.request.panic.recovered` |
+| `readiness.changed`、`endpoint.registered` | `server.readiness.changed`、`server.endpoint.registered` |
+| `websocket.*` | `server.websocket.*` |
+| `worker.started`、`worker.stopped`、`consumer.disabled` | `queue.worker.started`、`queue.worker.stopped`、`queue.consumer.disabled` |
+| `task.execution.started`、`task.execution.finished`、`task.failed` | `queue.task.execution.started`、`queue.task.execution.finished`、`queue.task.failed` |
+| `retry.scheduled`、`lease.lost`、`storage.failed`、`failure.callback_failed` | `queue.retry.scheduled`、`queue.lease.lost`、`queue.storage.failed`、`queue.failure.callback_failed` |
+| `enqueue.failed` | 已删除，改为处理 `Dispatch`/`Post` 返回的错误 |
+| `gorm.query` | `database.gorm.query` |
+| `consul.heartbeat.*`、`consul.discovery.*`、`consul.registration.restored`、`consul.cleanup.failed` | 分别加 `registry.` 前缀 |
+
 ## v2.1.0（计划中，尚未发布）
 
 ### Added

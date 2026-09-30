@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -117,7 +118,8 @@ func (h *healthState) wrap(next http.Handler) http.Handler {
 }
 
 func (h *healthState) ready(ctx context.Context) (ready bool) {
-	failedCheck := "application"
+	failedCheck := ""
+	reason := "application_not_ready"
 	defer func() {
 		status := int32(http.StatusServiceUnavailable)
 		if ready {
@@ -126,29 +128,67 @@ func (h *healthState) ready(ctx context.Context) (ready bool) {
 		// 仅记录探针结果变化，不在每次请求上写日志；检查名由组装层提供，不记录原始错误。
 		if h.lastStatus.Swap(status) != status {
 			if ready {
-				log.WithModule("server/health").With("event", "readiness.changed", "status", status).Info("service is ready to accept requests")
+				log.WithContext(ctx).WithModule("server/health").With("event", "server.readiness.changed", "transport", "http", "path", h.config.ReadinessPath, "status", status).Info("service is ready to accept requests")
 			} else {
-				log.WithModule("server/health").With(
-					"event", "readiness.changed",
+				logger := log.WithContext(ctx).WithModule("server/health").With(
+					"event", "server.readiness.changed",
+					"transport", "http",
+					"path", h.config.ReadinessPath,
 					"status", status,
 					"check", failedCheck,
-				).Warn("service is not ready to accept requests")
+					"reason", reason,
+				)
+				// 初始化、主动摘流和普通探针取消不告警；真实依赖故障与探针超时仍可排障。
+				if reason == "dependency_failed" || reason == "probe_timeout" {
+					logger.Warn("service is not ready to accept requests")
+				} else {
+					logger.Debug("service is not ready to accept requests")
+				}
 			}
 		}
 	}()
-	if h.stopped.Load() || h.applicationReady == nil || !h.applicationReady() {
+	if h.stopped.Load() {
+		reason = "server_stopping"
+		return false
+	}
+	if h.applicationReady == nil || !h.applicationReady() {
 		return false
 	}
 	ctx, cancel := context.WithTimeout(ctx, h.config.Timeout)
 	defer cancel()
 	for _, check := range h.config.Checks {
-		failedCheck = check.Name
-		if ctx.Err() != nil || check.Check(ctx) != nil {
+		if err := ctx.Err(); err != nil {
+			reason = probeFailureReason(err)
+			return false
+		}
+		if err := check.Check(ctx); err != nil {
+			// 仅失败分支标记检查名，避免应用状态变化被误记为最后一个成功依赖失败。
+			failedCheck = check.Name
+			reason = "dependency_failed"
+			if contextErr := ctx.Err(); contextErr != nil && errors.Is(err, contextErr) {
+				reason = probeFailureReason(contextErr)
+			}
 			return false
 		}
 	}
 	// 依赖检查期间可能收到停机请求；返回前再次检查。
-	return ctx.Err() == nil && !h.stopped.Load() && h.applicationReady()
+	if err := ctx.Err(); err != nil {
+		reason = probeFailureReason(err)
+		return false
+	}
+	if h.stopped.Load() {
+		reason = "server_stopping"
+		return false
+	}
+	return h.applicationReady()
+}
+
+// probeFailureReason 区分客户端正常取消与健康检查预算耗尽，不输出取消错误原文。
+func probeFailureReason(err error) string {
+	if err == context.Canceled {
+		return "probe_canceled"
+	}
+	return "probe_timeout"
 }
 
 // SetReadinessSource 在组装阶段绑定应用就绪状态，必须在启动 HTTP 前调用。

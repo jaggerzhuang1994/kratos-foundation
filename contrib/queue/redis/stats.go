@@ -39,10 +39,6 @@ return result
 // Stats 返回精确状态计数；Ready 超过 1000 时年龄未知，不扫描全部载荷。
 // OldestReadyAt 使用当前 AvailableAt，与数据库后端一致；不改变任何任务状态。
 func (s *Store) Stats(ctx context.Context, now time.Time) (queue.Stats, error) {
-	// 借用连接不能改写选项；关闭 Context 超时时拒绝采样，避免指标请求超过其截止时间。
-	if !s.client.Options().ContextTimeoutEnabled {
-		return queue.Stats{}, errors.New("redis queue stats requires context timeout enabled")
-	}
 	values, err := s.client.Eval(ctx, statsScript, s.keys, now.UnixMilli()).Slice()
 	if err != nil {
 		return queue.Stats{}, fmt.Errorf("read redis queue stats: %w", err)

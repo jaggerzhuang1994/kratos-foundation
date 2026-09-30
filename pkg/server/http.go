@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 	"net/url"
@@ -91,23 +92,28 @@ func newHTTPServer(
 	spec *Spec,
 	logger log.Logger,
 	websockets *websocketHub,
-) (HTTPServer, error) {
+) (*httpRuntime, error) {
 	if config.GetHttp().GetDisable() {
 		return nil, nil
 	}
 
-	srv := http.NewServer(opts...)
+	conf := config.GetHttp()
+	runtime := newManagedHTTPServer(conf.GetNetwork(), conf.GetAddr(), spec.http.listener, opts...)
+	srv := runtime.HTTPServer
+	fail := func(err error) (*httpRuntime, error) {
+		return nil, errors.Join(err, runtime.AbortStartup(context.Background()))
+	}
 	var websocket *websocketServer
 	for _, registration := range spec.http.registrations {
 		if registration.endpoint != nil {
 			if err := registration.endpoint(srv); err != nil {
-				return nil, fmt.Errorf("register HTTP endpoint: %w", err)
+				return fail(fmt.Errorf("register HTTP endpoint: %w", err))
 			}
 			continue
 		}
 		if registration.websocket != nil {
 			if websockets == nil {
-				return nil, fmt.Errorf("websocket hub is nil")
+				return fail(errors.New("websocket hub is nil"))
 			}
 			if websocket == nil {
 				websocket = newWebSocketServer(logger, srv, websockets)
@@ -122,13 +128,13 @@ func newHTTPServer(
 			)
 		}
 	}
-	return srv, nil
+	return runtime, nil
 }
 
 // HTTPServerOptions 聚合构造 HTTPServer 所需的 Kratos option。
 type httpServerOptions []http.ServerOption
 
-// newHTTPServerOptions 把业务 option 放在基础配置之后，使显式配置拥有最终决定权。
+// newHTTPServerOptions 保留业务协议选项的覆盖顺序；监听选项由 Foundation 在构造时最终设置。
 func newHTTPServerOptions(
 	config componentConfig,
 	middlewares middlewareSet,
@@ -136,12 +142,6 @@ func newHTTPServerOptions(
 ) httpServerOptions {
 	conf := config.GetHttp()
 	var opts httpServerOptions
-	if conf.GetNetwork() != "" {
-		opts = append(opts, http.Network(conf.GetNetwork()))
-	}
-	if conf.GetAddr() != "" {
-		opts = append(opts, http.Address(conf.GetAddr()))
-	}
 	if conf.GetEndpoint() != nil {
 		opts = append(opts, http.Endpoint(&url.URL{
 			Scheme: conf.GetEndpoint().GetScheme(),

@@ -24,8 +24,52 @@ func TestAESFieldValueTypesExposePlaintextAndGORMColumnTypes(t *testing.T) {
 		t.Fatalf("AES bytes type = value %v generic %q database %q", binary.Bytes(), binary.GormDataType(), binary.GormDBDataType(nil, nil))
 	}
 	if !isAESFieldType(reflect.TypeFor[AESDecryptString]()) || !isAESFieldType(reflect.TypeFor[AESDecryptBytes]()) ||
+		!isAESFieldType(reflect.TypeFor[*AESDecryptString]()) || !isAESFieldType(reflect.TypeFor[*AESDecryptBytes]()) ||
 		isAESFieldType(reflect.TypeFor[string]()) || isAESFieldType(nil) {
 		t.Fatal("AES field type classification is incorrect")
+	}
+}
+
+func TestAESFieldValueTypesSerializeNullableValues(t *testing.T) {
+	field := &schema.Field{Name: "Secret"}
+	cipher := mustAESFieldCipher(t)
+	ctx := context.WithValue(context.Background(), aesFieldContextKey{}, aesFieldState{connection: "primary", cipher: cipher})
+	text := AESDecryptString("plain text")
+	binary := AESDecryptBytes("plain bytes")
+	for _, input := range []struct {
+		name  string
+		value any
+		write func(context.Context, *schema.Field, reflect.Value, any) (any, error)
+	}{
+		{"string", &text, text.Value},
+		{"bytes", &binary, binary.Value},
+		{"nil string", (*AESDecryptString)(nil), text.Value},
+		{"nil bytes", (*AESDecryptBytes)(nil), binary.Value},
+	} {
+		t.Run(input.name, func(t *testing.T) {
+			encoded, err := input.write(ctx, field, reflect.Value{}, input.value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.HasPrefix(input.name, "nil ") {
+				if encoded != nil {
+					t.Fatalf("nullable Value = %#v, want SQL NULL", encoded)
+				}
+			} else if input.name == "string" {
+				plain, err := cipher.algorithm.DecryptString(encoded.(string), string(cipher.key))
+				if err != nil || plain != string(text) {
+					t.Fatalf("decrypted string = %q, err = %v", plain, err)
+				}
+			} else {
+				plain, err := cipher.algorithm.Decrypt(encoded.([]byte), cipher.key)
+				if err != nil || !bytes.Equal(plain, binary) {
+					t.Fatalf("decrypted bytes = %q, err = %v", plain, err)
+				}
+			}
+			if _, err := input.write(context.Background(), field, reflect.Value{}, input.value); !errors.Is(err, ErrAESConfigMissing) {
+				t.Fatalf("nullable Value without cipher = %v", err)
+			}
+		})
 	}
 }
 

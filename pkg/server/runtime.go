@@ -1,10 +1,12 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/transport"
@@ -20,9 +22,9 @@ type Runtime struct {
 	// health 业务和管理端口共享的健康状态。
 	health *healthState
 	// management 独立管理 HTTP 服务，由应用统一启停。
-	management []HTTPServer
+	management []*httpRuntime
 	// http 业务 HTTP 服务；禁用时为 nil。
-	http HTTPServer
+	http *httpRuntime
 	// grpc 业务 gRPC 服务；禁用时为 nil。
 	grpc GRPCServer
 	// websockets 跟踪 WebSocket 连接并协调停机的连接集合。
@@ -57,7 +59,24 @@ func NewRuntime(
 	if err != nil {
 		return nil, nil, err
 	}
+	var httpServer *httpRuntime
+	var management []*httpRuntime
+	closeListeners := func() error {
+		var errs []error
+		for index := len(management) - 1; index >= 0; index-- {
+			if err := management[index].AbortStartup(context.Background()); err != nil {
+				errs = append(errs, fmt.Errorf("close management HTTP listener %s://%s: %w", management[index].listener.network, management[index].listener.address, err))
+			}
+		}
+		if httpServer != nil {
+			if err := httpServer.AbortStartup(context.Background()); err != nil {
+				errs = append(errs, fmt.Errorf("close business HTTP listener %s://%s: %w", httpServer.listener.network, httpServer.listener.address, err))
+			}
+		}
+		return errors.Join(errs...)
+	}
 	fail := func(err error) (*Runtime, func(), error) {
+		err = errors.Join(err, closeListeners())
 		cleanup()
 		return nil, nil, err
 	}
@@ -65,7 +84,7 @@ func NewRuntime(
 	httpOptions := newHTTPServerOptions(config, middlewares, spec)
 	websockets := newWebSocketHub()
 	health := configuredHealth(config, spec)
-	httpServer, err := newHTTPServer(
+	httpServer, err = newHTTPServer(
 		config,
 		httpOptions,
 		spec,
@@ -80,24 +99,46 @@ func NewRuntime(
 	if err != nil {
 		return fail(err)
 	}
-	management, monitoringEndpoints, err := configureMonitoring(config, httpServer, health, metricsProvider)
+	var business HTTPServer
+	if httpServer != nil {
+		business = httpServer.HTTPServer
+	}
+	var monitoringEndpoints []registeredEndpoint
+	management, monitoringEndpoints, err = configureMonitoring(config, business, health, metricsProvider)
 	if err != nil {
 		return fail(err)
 	}
-	if err := logRegisteredEndpoints(logger, httpServer, grpcServer, monitoringEndpoints); err != nil {
+	if err := logRegisteredEndpoints(logger, business, grpcServer, monitoringEndpoints); err != nil {
 		return fail(err)
 	}
-	logger.With("event", "server.assembled",
-		"http_enabled", httpServer != nil, "grpc_enabled", grpcServer != nil,
-		"management_listeners", len(management)).Info("server.assembled")
+	// 记录配置的监听地址而非实际绑定端口；:0 等动态端口以 SDK 启动时的 listening 日志为准。
+	httpAddress, grpcAddress := "disabled", "disabled"
+	if httpServer != nil {
+		httpAddress = httpServer.listener.address
+	}
+	if grpcServer != nil {
+		grpcAddress = cmp.Or(config.GetGrpc().GetAddr(), ":0")
+	}
+	managementAddresses := make([]string, len(management))
+	for index, server := range management {
+		managementAddresses[index] = server.listener.address
+	}
+	logger.With("event", "server.assembled", "http", httpAddress, "grpc", grpcAddress,
+		"management", managementAddresses, "stop_delay", config.GetStopDelay().AsDuration()).Info("assembled servers")
 	return &Runtime{
-		health:     health,
-		management: management,
-		http:       httpServer,
-		grpc:       grpcServer,
-		websockets: websockets,
-		stopDelay:  config.GetStopDelay().AsDuration(),
-	}, func() { health.stopped.Store(true); cleanup() }, nil
+			health:     health,
+			management: management,
+			http:       httpServer,
+			grpc:       grpcServer,
+			websockets: websockets,
+			stopDelay:  config.GetStopDelay().AsDuration(),
+		}, sync.OnceFunc(func() {
+			health.stopped.Store(true)
+			if err := closeListeners(); err != nil {
+				logger.With("event", "server.listener.cleanup.failed", "transport", "http", "management_listeners", len(management), "error", err).Error("failed to release HTTP listeners")
+			}
+			cleanup()
+		}), nil
 }
 
 type registeredEndpoint struct {
@@ -117,6 +158,7 @@ func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer
 				transport: "http",
 				method:    routeInfo.Method,
 				path:      routeInfo.Path,
+				listener:  "business",
 			})
 			return nil
 		}); err != nil {
@@ -131,6 +173,7 @@ func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer
 					service:   service,
 					method:    method.Name,
 					path:      "/" + service + "/" + method.Name,
+					listener:  "business",
 				})
 			}
 		}
@@ -146,13 +189,13 @@ func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer
 	})
 	for _, endpoint := range endpoints {
 		logger.With(
-			"event", "endpoint.registered",
+			"event", "server.endpoint.registered",
 			"transport", endpoint.transport,
 			"method", endpoint.method,
 			"path", endpoint.path,
 			"service", endpoint.service,
 			"listener", endpoint.listener,
-		).Info("endpoint.registered")
+		).Debug("registered endpoint")
 	}
 	return nil
 }
@@ -251,6 +294,14 @@ func (s *stopRuntime) runBeforeStop(ctx context.Context) error {
 	return s.beforeStop(ctx)
 }
 
+// AbortStartup 透传启动前回滚，不执行停止延迟或尚未启动的业务停止回调。
+func (s *stopRuntime) AbortStartup(ctx context.Context) error {
+	if runtime, ok := s.Server.(interface{ AbortStartup(context.Context) error }); ok {
+		return runtime.AbortStartup(ctx)
+	}
+	return nil
+}
+
 // ManagementServers 返回独立监控监听的运行时；不实现 Endpointer，避免注册成业务发现地址。
 // 使用 NewServerBootstrap 时内部自动登记；手工组装须与 Servers 返回值一起登记。
 func (r *Runtime) ManagementServers() []transport.Server {
@@ -265,4 +316,9 @@ func (r *Runtime) ManagementServers() []transport.Server {
 type managementRuntime struct {
 	// Server 被委托启停的管理服务。
 	transport.Server
+}
+
+// AbortStartup 保留管理监听的回滚能力，同时仍不暴露 Endpointer。
+func (s *managementRuntime) AbortStartup(ctx context.Context) error {
+	return s.Server.(interface{ AbortStartup(context.Context) error }).AbortStartup(ctx)
 }

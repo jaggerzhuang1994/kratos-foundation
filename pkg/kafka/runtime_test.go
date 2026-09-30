@@ -7,11 +7,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
 func TestConsumerRuntimeStopCancelsConsumeAndWaitsForExit(t *testing.T) {
 	raw := newBlockingConsumer()
-	runtime := newTestConsumerRuntime(t, raw, nil, func(context.Context, *Message) error { return nil })
+	observability := newMetricTestObservability(t)
+	logs := newRecordingLogger()
+	observability.Logger = logs
+	runtime := newTestConsumerRuntimeWithObservability(t, raw, nil, observability, func(context.Context, *Message) error { return nil })
 	startDone := make(chan error, 1)
 	go func() { startDone <- runtime.Start(context.Background()) }()
 	raw.waitStarted(t)
@@ -22,6 +27,14 @@ func TestConsumerRuntimeStopCancelsConsumeAndWaitsForExit(t *testing.T) {
 	}
 	if err := <-startDone; err != nil {
 		t.Fatalf("Start returned stop cancellation: %v", err)
+	}
+	for _, event := range []string{"kafka.consumer.started", "kafka.consumer.stopped"} {
+		if strings.Count(logs.String(), "event"+event) != 1 {
+			t.Fatalf("lifecycle log lacks unique %s: %s", event, logs.String())
+		}
+	}
+	if level, ok := logs.lastLevel(); !ok || level != kratoslog.LevelInfo {
+		t.Fatalf("stopped log level = %v, %v; want Info", level, ok)
 	}
 }
 

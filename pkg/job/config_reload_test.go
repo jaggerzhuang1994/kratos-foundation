@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -88,7 +90,8 @@ func TestConfigurationBeforeStartUsesLatestImmediateSetting(t *testing.T) {
 
 func TestRealConfigSubscriptionReschedulesAndStops(t *testing.T) {
 	t.Setenv("CONFIG_POLL_INTERVAL", "100ms")
-	logger, tracing, metrics := newTestObservability(t)
+	_, tracing, metrics := newTestObservability(t)
+	logger, path := testFileFoundationLogger(t)
 	synctest.Test(t, func(t *testing.T) {
 		source := testconfig.NewMutableSource(t, "job", &config_pb.Job{Cron: map[string]*config_pb.CronJob{"refresh": {Schedule: proto.String("@every 1h"), RunImmediately: proto.Bool(false)}}})
 		cfg, cleanup, err := config.NewManager(config.Sources{source})
@@ -142,6 +145,19 @@ func TestRealConfigSubscriptionReschedulesAndStops(t *testing.T) {
 			t.Fatal("job ran after stop")
 		}
 	})
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(written), "\n") {
+		if strings.Contains(line, "event=job.config.rejected") {
+			if !strings.HasPrefix(line, "WARN ") || !strings.Contains(line, "keeping previous rules") {
+				t.Fatalf("config fallback log = %s, want Warn with retained rules", line)
+			}
+			return
+		}
+	}
+	t.Fatalf("config rejection log missing: %s", written)
 }
 
 // blockingSubscription 模拟 Start 建立订阅时 Stop 已经开始，不依赖真实时间或 I/O。

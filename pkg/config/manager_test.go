@@ -3,9 +3,15 @@ package config
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type testSource struct {
@@ -250,5 +256,49 @@ func TestNewSourcesFiltersNilWithoutReordering(t *testing.T) {
 	sources := NewSources(nil, first, nil, second)
 	if len(sources) != 2 || sources[0] != first || sources[1] != second {
 		t.Fatal(sources)
+	}
+}
+
+func TestManagerLogsSourcesAfterLoadWithoutValues(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			events := make(chan map[string]any, 8)
+			t.Cleanup(log.SetLogger(pollingLogFunc(func(level kratoslog.Level, fields ...any) error {
+				event := map[string]any{"level": level}
+				for i := 0; i+1 < len(fields); i += 2 {
+					event[fields[i].(string)] = fields[i+1]
+				}
+				if event["event"] == "config.loaded" {
+					events <- event
+				}
+				return nil
+			})))
+			source := newTestSource(`{"password":"private-test-value"}`)
+			if fail {
+				source.loadErr = errors.New("load failed")
+			}
+			_, cleanup, err := NewManager(Sources{source})
+			if fail {
+				if err == nil || len(events) != 0 {
+					t.Fatalf("failed load logged success: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleanup()
+			if len(events) != 1 {
+				t.Fatalf("loaded events = %d", len(events))
+			}
+			event := <-events
+			if event["level"] != kratoslog.LevelInfo || event["source_count"] != 2 || event["poll_interval"] != time.Second {
+				t.Fatalf("load event = %v", event)
+			}
+			kinds, ok := event["sources"].([]string)
+			if !ok || !slices.Equal(kinds, []string{"env", "config"}) || strings.Contains(fmt.Sprint(event), "private-test-value") {
+				t.Fatalf("source summary = %v", event)
+			}
+		})
 	}
 }

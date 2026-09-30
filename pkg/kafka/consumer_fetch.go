@@ -25,9 +25,9 @@ func (c *consumer) logFetchEvents(ctx context.Context, instance string, fetches 
 		var groupSession *kgo.ErrGroupSession
 		switch {
 		case errors.As(fetchError.Err, &dataLoss):
-			logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Error("kafka reported data loss while fetching records")
+			logger.With("event", "kafka.fetch.data_loss", "connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Error("kafka fetch data loss")
 		case errors.As(fetchError.Err, &groupSession):
-			logger.With("connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Warn("kafka consumer group session was lost")
+			logger.With("event", "kafka.consumer.session_lost", "connection", c.config.Connection, "group", c.config.Group, "consumer", instance, "topic", fetchError.Topic, "partition", fetchError.Partition, "error", err).Warn("kafka consumer session lost")
 		}
 	}
 }

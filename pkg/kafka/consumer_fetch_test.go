@@ -171,8 +171,8 @@ func TestConsumerLogsRecoverableKafkaProtocolEvents(t *testing.T) {
 	logs := string(written)
 	for _, fragment := range []string{
 		"module=kafka", "connection=main", "group=billing", "consumer=worker-1", "topic=orders", "partition=1",
-		"kafka reported data loss while fetching records",
-		"kafka consumer group session was lost",
+		"event=kafka.fetch.data_loss",
+		"event=kafka.consumer.session_lost",
 		"orders[1]",
 		"orders[2]",
 	} {

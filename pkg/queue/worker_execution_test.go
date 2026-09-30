@@ -47,11 +47,14 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 				t.Fatalf("outcome %s snapshot %s", outcome, r.Task.Payload)
 			}
 			logs := strings.Join(obs.Logger.(*testLog).events, "\n")
-			if !strings.Contains(logs, "eventtask.execution.started") ||
-				!strings.Contains(logs, "eventtask.execution.finished") ||
+			if !strings.Contains(logs, "DEBUG eventqueue.task.execution.started") ||
+				!strings.Contains(logs, "DEBUG eventqueue.task.execution.finished") ||
 				!strings.Contains(logs, "result"+tc.result) ||
 				!strings.Contains(logs, "duration") {
 				t.Fatalf("incomplete execution lifecycle log: %s", logs)
+			}
+			if strings.Contains(logs, "INFO eventqueue.task.execution.") || strings.Contains(logs, "data") || strings.Contains(logs, "token") {
+				t.Fatalf("noisy or unsafe execution log: %s", logs)
 			}
 			if tc.name != "success" {
 				cause := map[string]string{"retry": "handler_error", "exhausted": "handler_error", "crashed repeatedly": "attempts_exhausted", "permanent": "handler_error", "unknown type": "handler_missing", "panic": "panic"}[tc.name]
@@ -172,7 +175,11 @@ func TestFailureNotificationAfterArchive(t *testing.T) {
 				t.Fatalf("err=%v notified=%v archived=%v task=%s", err, notified, archived, r.Task.ID)
 			}
 			logs := strings.Join(obs.Logger.(*testLog).events, "\n")
-			if strings.Contains(logs, "private callback") || (notified && !strings.Contains(logs, "failure.callback_failed")) {
+			wantReason := "reasonerror"
+			if tc.callbackPanic {
+				wantReason = "reasonpanic"
+			}
+			if strings.Contains(logs, "private callback") || (notified && (!strings.Contains(logs, "queue.failure.callback_failed") || !strings.Contains(logs, wantReason))) {
 				t.Fatalf("callback logs: %s", logs)
 			}
 		})
@@ -190,8 +197,9 @@ func TestFailureCallbackSuccessAndTimeout(t *testing.T) {
 				return nil
 			}, log: obs.Logger, config: workerConfig{StorageTimeout: time.Second}}
 			worker.notifyFailure(context.Background(), FailureEvent{FailedTask: FailedTask{Task: &Task{ID: "id"}}})
-			logged := strings.Contains(strings.Join(obs.Logger.(*testLog).events, "\n"), "failure.callback_failed")
-			if logged != timeout {
+			logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+			logged := strings.Contains(logs, "queue.failure.callback_failed")
+			if logged != timeout || (timeout && !strings.Contains(logs, "reasontimeout")) {
 				t.Fatalf("callback failure logged=%v timeout=%v", logged, timeout)
 			}
 		})

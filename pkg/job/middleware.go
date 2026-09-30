@@ -97,7 +97,8 @@ func loggingMiddleware(log moduleLog) Middleware {
 			err = errJobPanicked
 			started := time.Now()
 			logger := log.WithContext(ctx)
-			logger.With("event", "job.execution.started").Info("job.execution.started")
+			// 逐次执行为高频观测，默认由指标统计，按需打开 Debug 排障。
+			logger.With("event", "job.execution.started").Debug("job execution started")
 			defer func() {
 				result := "failure"
 				if err == nil {
@@ -106,7 +107,7 @@ func loggingMiddleware(log moduleLog) Middleware {
 					result = "stopped"
 				}
 				// 失败详情仍只交给最终 ErrorHandler，结束事件保持稳定且不泄漏业务错误。
-				logger.With("event", "job.execution.finished", "result", result, "duration", time.Since(started)).Info("job.execution.finished")
+				logger.With("event", "job.execution.finished", "result", result, "duration", time.Since(started)).Debug("job execution finished")
 			}()
 			return next(ctx)
 		}

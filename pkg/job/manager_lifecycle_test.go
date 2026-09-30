@@ -49,25 +49,35 @@ func TestNewManagerClassifiesAndSchedulesJobs(t *testing.T) {
 }
 
 func TestManagerExitWhenDoneRequestsApplicationStopAndClosesDone(t *testing.T) {
-	run := 0
-	spec := NewSpec().RegisterOnce("migrate", TaskFunc(func(context.Context) error { run++; return nil })).ExitWhenDone().(*Spec)
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !manager.IsOneShot() {
-		t.Fatal("ExitWhenDone not retained")
-	}
-	err = manager.Start(context.Background())
-	if err != ErrCompleted {
-		t.Fatalf("Start error = %v, want ErrStopRequested", err)
-	}
-	if run != 1 {
-		t.Fatalf("runs = %d, want 1", run)
-	}
-	waitFor(t, manager.done)
-	if err := manager.Stop(context.Background()); err != nil {
-		t.Fatal(err)
+	failure := errors.New("migration failed")
+	for _, tt := range []struct {
+		name   string
+		result error
+		want   error
+	}{{"completed", nil, ErrCompleted}, {"failed", failure, failure}} {
+		t.Run(tt.name, func(t *testing.T) {
+			run := 0
+			spec := NewSpec().Option(WithErrorHandler(func(context.Context, string, error) {
+				t.Error("result consumed by Start was also sent to ErrorHandler")
+			})).RegisterOnce("migrate", TaskFunc(func(context.Context) error { run++; return tt.result })).ExitWhenDone().(*Spec)
+			manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !manager.IsOneShot() {
+				t.Fatal("ExitWhenDone not retained")
+			}
+			if err := manager.Start(context.Background()); !errors.Is(err, tt.want) {
+				t.Fatalf("Start error = %v, want %v", err, tt.want)
+			}
+			if run != 1 {
+				t.Fatalf("runs = %d, want 1", run)
+			}
+			waitFor(t, manager.done)
+			if err := manager.Stop(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -211,35 +221,66 @@ func TestManagerParentCancellationStopsRunningDaemon(t *testing.T) {
 }
 
 func TestManagerParentCancellationStopsOneShotWait(t *testing.T) {
-	started := make(chan struct{})
-	release := make(chan struct{})
-	spec := NewSpec().RegisterOnce("migration", TaskFunc(func(ctx context.Context) error {
-		close(started)
-		<-release
-		return ctx.Err()
-	})).ExitWhenDone().(*Spec)
-	manager, err := newManager(
-		testModuleLog(t),
-		nil,
-		spec,
-		newManagerOptions(spec),
-		&testScheduler{},
-		&testParser{},
-		nil,
-	)
-	if err != nil {
-		t.Fatal(err)
+	failure := errors.New("persist migration result failed")
+	for _, tt := range []struct {
+		name         string
+		result       func(context.Context) error
+		wantReported bool
+	}{
+		{"normal exit", func(context.Context) error { return nil }, false},
+		{"cancellation", func(ctx context.Context) error { return ctx.Err() }, false},
+		{"business failure", func(context.Context) error { return failure }, true},
+		{"joined business failure", func(ctx context.Context) error { return errors.Join(ctx.Err(), failure) }, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			started := make(chan struct{})
+			release := make(chan struct{})
+			reported := make(chan error, 2)
+			spec := NewSpec().Option(WithErrorHandler(func(ctx context.Context, name string, err error) {
+				if name != "once" || ctx.Err() != context.Canceled {
+					t.Errorf("error context = (%q, %v), want once with cancellation", name, ctx.Err())
+				}
+				reported <- err
+			})).RegisterOnce("migration", TaskFunc(func(ctx context.Context) error {
+				close(started)
+				<-release
+				return tt.result(ctx)
+			})).ExitWhenDone().(*Spec)
+			manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			startDone := make(chan error, 1)
+			go func() { startDone <- manager.Start(ctx) }()
+			waitFor(t, started)
+			cancel()
+			// 任务尚未释放时 Start 必须先返回，故障随后由聚合协程唯一上报。
+			if err := waitForValue(t, startDone); !errors.Is(err, context.Canceled) {
+				t.Fatalf("Start error = %v, want context canceled", err)
+			}
+			close(release)
+			if err := manager.Stop(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantReported {
+				select {
+				case err := <-reported:
+					if !errors.Is(err, failure) {
+						t.Fatalf("reported = %v, want %v", err, failure)
+					}
+				default:
+					t.Fatal("failure after cancellation was not reported")
+				}
+			}
+			select {
+			case err := <-reported:
+				t.Fatalf("unexpected or duplicate error report: %v", err)
+			default:
+			}
+		})
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	startDone := make(chan error, 1)
-	go func() { startDone <- manager.Start(ctx) }()
-	waitFor(t, started)
-	cancel()
-	if err := waitForValue(t, startDone); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Start error = %v, want context canceled", err)
-	}
-	close(release)
-	waitFor(t, manager.done)
 }
 
 func TestManagerStopBeforeStartPreventsLaterLaunch(t *testing.T) {

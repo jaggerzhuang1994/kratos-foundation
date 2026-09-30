@@ -62,7 +62,7 @@ wire.Build(
 
 领域 Spec 是共享可变声明，不拥有运行时资源，也没有 cleanup。直接注入领域 Spec 不会绕过 Wire 的组装顺序要求：业务声明 provider 仍应依赖 `InfrastructureBootstrap`，在 Boot 返回前完成修改；调用方应在组件构造开始前完成声明。
 
-Boot 返回 `Bootstrap`，NewServerBootstrap 依赖该标记；NewJobBootstrap 显式依赖 ServerBootstrap，保证配置加载 → 业务声明 → Server → Job 的单向顺序；NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
+Boot 返回 `Bootstrap`，NewServerBootstrap 与 NewJobBootstrap 分别依赖该标记，保证配置加载 → 业务声明 → 组件构造；Server 与 Job 不相互依赖，Wire 可以按实际依赖以任意顺序构造二者。NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
 NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；这是唯一的 StartupReady 构造入口。这里的 `StartupReady` 是构造阶段完成标记，不等于运行期应用已经 Ready。运行期 Ready 由 `app.Spec` 在 Kratos 进入 AfterStart 且 Foundation 的 AfterStart hook 成功后关闭内部信号；它不等待阻塞型 Runtime.Start 返回。Job Bootstrap 登记的 Runtime 会等待该信号再启动任务。
 Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则形成循环；Boot 只接收 *bootstrap.Spec，直接调用 BeforeStart 等方法登记应用贡献。
 停机策略直接使用 `app.NewStopPolicy(config, manager, logger)`，不依赖组件标记或服务器等待时间。建议总停机预算为服务器等待和资源清理预留足够时间，不做跨组件硬校验。
@@ -129,13 +129,13 @@ flowchart TD
 | `NewTracingBootstrap()` | `TracingBootstrap` | 设置日志中的 trace/span 动态字段 |
 | `NewMetricsBootstrap(spec, meter)` | `MetricsBootstrap` | 将默认 Meter 注入 App Context |
 | `NewServerBootstrap(application, servers, manager, logger, metrics, tracing, boot)` | `ServerBootstrap` | 按统一 Spec 构造和登记服务器，返回 cleanup |
-| `NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
+| `NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing, boot)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
 
 构造参数统一按 Spec、配置依赖、组件专属依赖、观测依赖（Logger、Metrics、Tracing）、阶段完成标记排列；不存在的类别直接省略。纯阶段聚合函数按阶段顺序接收标记。参数位置只用于阅读，Wire 仍按类型解析依赖；组装顺序由完成标记建立，见下方流程图。
 
 AppInfoBootstrap 和 MetricsBootstrap 只返回完成标记；LogBootstrap、ServerBootstrap、JobBootstrap 仍返回真实配置/构造错误，LogBootstrap 和 ServerBootstrap 额外返回 `func()` cleanup。冻结后登记及重复 AppInfo/Logger 登记会直接 panic；ServerBootstrap 在自身登记 panic 时释放刚构造的资源，但 Wire 只为 error 返回生成回滚分支，不保证 panic 时释放整条依赖链。其他资源的 cleanup 来自领域构造函数，由 Wire 在构造返回 error 或调用方退出时逆序执行。Bootstrap 不启动 Runtime。ServerBootstrap 由 NewServerBootstrap 在业务 Boot 后构造并登记服务器，再注入 NewRuntimeBootstrap 作为前置依赖；服务器 cleanup 独立归 Wire 所有。
 
-`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap → NewJobBootstrap 按顺序构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后标记组装完成，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `NewKratosApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 Wire 提供的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
+`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap 与 NewJobBootstrap 各自在 Boot 完成后构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后标记组装完成，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `NewKratosApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 Wire 提供的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
 
 Wire 只执行最终返回值的依赖链。仅把构造函数放进 set 不保证执行；业务必须让每项贡献被最终标记引用。阶段内只保留实际依赖：仅在最终业务 provider 接收基础设施标记，不会推迟其所有参数的构造。
 
@@ -147,10 +147,11 @@ flowchart TD
     C -- 是 --> D[NewXXXBootstrap 同步登记贡献]
     D -- 违规登记 --> P([panic 编程错误])
     D --> F[业务 Boot 立即登记自定义 Runtime 并返回 Bootstrap]
-    F --> S[NewServerBootstrap → NewJobBootstrap 依次构造登记]
-    S -- 违规登记 --> P
-    S -- 构造返回 error --> X
-    S --> F1[NewRuntimeBootstrap 标记组装完成]
+    F --> S[NewServerBootstrap 构造登记服务器]
+    F --> T[NewJobBootstrap 构造登记任务]
+    S & T -- 违规登记 --> P
+    S & T -- 构造返回 error --> X
+    S & T --> F1[NewRuntimeBootstrap 汇合两个完成标记]
     F1 --> G[NewApplicationBootstrap 汇合基础设施并返回 StartupReady]
     G --> H[NewKratosApp 调用 app.NewApp 冻结 Spec]
     H --> I{App 构造成功?}
@@ -160,8 +161,8 @@ flowchart TD
     J --> K([组装完成])
 ```
 
-构造错误由调用方处理，登记函数本身不重复记录日志。NewLogBootstrap 安装共享同一输出的全局派生 Logger；App Spec 另行派生带 `module=kratos` 的 Logger 传给 Kratos App，
-不会给全局或其他组件日志附加该模块。全局派生 Logger 保留独立的 cleanup 身份，不增加固定 caller 跳过层数；默认模式由日志包统一识别 Kratos 全局函数及 Context/Helper 包装。深度统一按过滤包装后的调用点计数，详见 [日志 caller 规则](../log/README.md#caller-depth)。
+构造错误由调用方处理，登记函数本身不重复记录日志。AppInfo 登记进程共享的 service ID/name/version 与 env；配置来源选择、Manager 加载完成及最终 app.assembled 负责启动摘要，日志策略热更新失败以 WARN log.policy.rejected 保留旧策略。NewLogBootstrap 安装共享同一输出的全局派生 Logger；App Spec 保存原 Logger，由 NewApp 单次派生 `module=app` 的生命周期视图；Kratos SDK 使用已有稳定全局代理的 `module=kratos`，
+不改变原 Logger 或其他组件的模块。全局派生 Logger 保留独立的 cleanup 身份，不增加固定 caller 跳过层数；默认模式由日志包统一识别 Kratos 全局函数及 Context/Helper 包装。深度统一按过滤包装后的调用点计数，详见 [日志 caller 规则](../log/README.md#caller-depth)。
 日志全局安装沿用单应用、逆序释放的约定；多个应用并发安装或交错释放全局 Logger 不受本包保障。优先将实例 Logger 显式注入组件。
 
 `JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `Worker[T]` 隐式满足 `app.Runtime`；应用入口通过 `q.Worker` 绑定业务方法，再调用 `spec.RegisterRuntime(worker)`。`Queue[T]` 只负责投递。
@@ -169,7 +170,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A([App 并发启动 Job Runtime]) --> B[等待 app.Spec Ready 信号]
-    B -- 应用取消或启动失败 --> H([不启动任务并退出])
+    B -- App请求停止或调用方Context取消 --> H([不启动任务并退出])
     B -- Kratos 进入 AfterStart 且 hook 成功 --> B1[逐条 INFO job.registered]
     B1 --> B2[适配器调用 Manager.Start]
     B2 --> C{返回结果}
@@ -182,7 +183,7 @@ flowchart TD
     G --> I
 ```
 
-真实 Wire 生成、逆序 cleanup 与失败回滚由 `wire_integration_test.go` 在临时模块验证，不提交或手改生成副本。
+真实 Wire 生成、逆序 cleanup 与失败回滚由 `wire_test.go` 在临时模块验证，不提交或手改生成副本。
 该 fixture 还启动 HTTP 订单服务并访问临时 SQLite，检查事务提交、回滚、具名连接隔离和旧配置拒绝；
 通过根目录 `make test-business` 运行，验收范围及发布检查见 [v2 迁移清单](../../MIGRATION_V2.md)。
 
@@ -284,3 +285,5 @@ flowchart TD
 ```
 
 可执行示例见 `examples/minimal/cmd/api/bootstrap.go`，对应生成入口为仓库根目录执行 `make -C examples/minimal generate`。
+
+启动与配置事件的字段、级别和来源选择流程见[逐包日志审查](../../PACKAGE_REVIEW.md#启动与配置日志)。

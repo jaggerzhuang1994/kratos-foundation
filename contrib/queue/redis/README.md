@@ -6,7 +6,16 @@
 
 ## 构造与所有权
 
-业务组装层先构造 `pkg/redis.Manager`，再显式调用：
+业务组装层先构造 `pkg/redis.Manager`，连接必须配置 `context_timeout_enabled: true`，再显式调用：
+
+```yaml
+redis:
+  connections:
+    default:
+      addr: 127.0.0.1:6379
+      context_timeout_enabled: true
+```
+
 
 ```go
 store, err := redisqueue.NewStore(redisManager, redisqueue.Config{
@@ -19,7 +28,7 @@ if err != nil {
 // 将 store 注入 pkg/queue 的 Queue/Worker；具体用法见核心包 README。
 ```
 
-其中 `redisqueue` 指向 `github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/redis`，`redisManager` 是已构造的 `pkg/redis.Manager`。Connection 和 KeyPrefix 均必填；Connection 构造时去除首尾空白，KeyPrefix 不得为空或全为空白，无默认前缀。KeyPrefix 原样保留，不裁剪空白或尾部冒号，也没有原队列名的 64 字节限制。构造只向 Manager 解析连接，不发送 Redis 命令、不启动 goroutine、不返回 cleanup。Store 借用连接，应用停止 worker 后再执行 Manager cleanup；连接关闭后的操作返回 Redis 错误。配置在构造期固定，不支持热切换。
+其中 `redisqueue` 指向 `github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/redis`，`redisManager` 是已构造的 `pkg/redis.Manager`。Connection 和 KeyPrefix 均必填；Connection 构造时去除首尾空白，KeyPrefix 不得为空或全为空白，无默认前缀。KeyPrefix 原样保留，不裁剪空白或尾部冒号，也没有原队列名的 64 字节限制。构造向 Manager 解析连接并检查 Context 超时选项；未启用时返回错误且不修改借用连接，不发送 Redis 命令、不启动 goroutine、不返回 cleanup。Store 借用连接，应用停止 worker 后再执行 Manager cleanup；连接关闭后的操作返回 Redis 错误。配置在构造期固定，不支持热切换。
 
 ## 状态与并发边界
 
@@ -47,6 +56,11 @@ if err != nil {
 
 ```mermaid
 flowchart TD
+    N0([NewStore 构造入口]) --> N1[向 Manager 解析连接]
+    N1 --> N2{连接启用 ContextTimeoutEnabled?}
+    N1 -- 解析失败 --> N3([返回构造错误])
+    N2 -- 否 --> N3
+    N2 -- 是 --> N4([返回借用连接的 Store])
     A([并发调用入口]) --> A1[Lua原子进入: 校验 KeyPrefix 派生的五个键类型]
     A1 --> A2{类型正确或键不存在?}
     A2 -- 否 --> A3[返回类型错误 / 不修改状态 / 原子退出]
@@ -102,4 +116,4 @@ ready 候选不超过 1000 时读取这些候选载荷，按当前 `AvailableAt`
 与消费操作并发时，Redis 在单次 Lua 内返回一致快照；脚本执行期间没有 Go 锁或后台 goroutine。
 接入与生命周期见 [Queue 统计文档](../../../pkg/queue/README.md#持久化积压统计)。
 
-采样连接必须配置 `context_timeout_enabled: true`（go-redis `ContextTimeoutEnabled`）；否则 Stats 明确返回错误，避免 Context 截止时间被客户端忽略。采样不修改借用连接选项。
+全部队列操作的连接必须配置 `context_timeout_enabled: true`（go-redis `ContextTimeoutEnabled`）；`NewStore` 在构造期统一校验，避免消费、状态提交及采样的 Context 截止时间被客户端忽略。Store 不修改借用连接选项。Context 截止时间限制客户端等待，不能撤销 Redis 已执行的 Lua；业务仍需处理提交结果不确定及重试。

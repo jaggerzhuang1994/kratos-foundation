@@ -54,10 +54,6 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	endpoint, err := built.Server.http.Endpoint()
-	if err != nil {
-		t.Fatal(err)
-	}
 	// App.Run 拥有运行协程；显式停止后等待退出，再允许 Wire cleanup 释放数据库。
 	done := make(chan error, 1)
 	go func() { done <- built.App.Run() }()
@@ -89,8 +85,14 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	// 监听由 Foundation Runtime 准备，业务从 App 已解析的发现地址读取端点。
+	endpoints := built.App.Endpoint()
+	if len(endpoints) != 1 {
+		t.Fatalf("application endpoints = %v", endpoints)
+	}
+	endpoint := endpoints[0]
 	for _, path := range []string{"/healthz", "/readyz", "/metrics"} {
-		response, err := client.Get(endpoint.String() + path)
+		response, err := client.Get(endpoint + path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,7 +115,7 @@ func TestBusinessHTTPTransactionsAndCleanup(t *testing.T) {
 		{"invalid input", `{"id":`, http.StatusBadRequest},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			response, err := client.Post(endpoint.String()+"/orders", "application/json", strings.NewReader(tt.body))
+			response, err := client.Post(endpoint+"/orders", "application/json", strings.NewReader(tt.body))
 			if err != nil {
 				t.Fatal(err)
 			}

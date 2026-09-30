@@ -27,6 +27,9 @@ func TestGeneratedAssemblyAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
+	if built.Server.http == nil {
+		t.Fatal("business routes were not declared before server construction")
+	}
 	if built.App.Metadata()["business"] != "ready" {
 		t.Fatal("business contribution missing before Spec freeze")
 	}

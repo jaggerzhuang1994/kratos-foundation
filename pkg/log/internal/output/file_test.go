@@ -148,3 +148,34 @@ func TestNewFileRejectsDirectoryWithoutRenamingIt(t *testing.T) {
 		}
 	}
 }
+
+type failingFileCloser struct{ calls int }
+
+func (c *failingFileCloser) Close() error { c.calls++; return errors.New("close failed") }
+
+func TestFileCleanupReportsFailureOnceWithoutUsingClosedLogger(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stderr.log")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stderr
+	os.Stderr = file
+	defer func() {
+		os.Stderr = previous
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	closer := new(failingFileCloser)
+	cleanup := newFileLoggerCleanup(closer)
+	cleanup()
+	cleanup()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closer.calls != 1 || strings.Count(string(data), "event=log.file.cleanup.failed") != 1 || !strings.Contains(string(data), `error="close failed"`) || !strings.Contains(string(data), "ERROR module=log") {
+		t.Fatalf("cleanup=%d diagnostic=%s", closer.calls, data)
+	}
+}

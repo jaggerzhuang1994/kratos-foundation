@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	log2 "github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/gorilla/websocket"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -43,6 +44,7 @@ func newWebSocketServer(
 	srv := &websocketServer{
 		hub: hub,
 		log: log.WithModule("server/websocket").With(
+			"transport", "websocket",
 			"client", log2.Valuer(func(ctx context.Context) any {
 				request, ok := http.RequestFromServerContext(ctx)
 				if ok {
@@ -67,7 +69,7 @@ func (s *websocketServer) Handle(
 	optionalUpgrader ...Upgrader,
 ) {
 	if s.router == nil {
-		s.log.Warn("failed to handle websocket path: HTTP server is not initialized")
+		s.log.With("event", "server.websocket.endpoint.skipped", "path", path).Warn("skipped websocket endpoint because HTTP is disabled")
 		return
 	}
 
@@ -84,6 +86,9 @@ func (s *websocketServer) Handle(
 		http.SetOperation(ctx, path)
 		h := ctx.Middleware(func(ctx context.Context, req any) (any, error) {
 			clog := rlog.WithContext(ctx)
+			if info, ok := transport.FromServerContext(ctx); ok {
+				clog = clog.With("endpoint", info.Endpoint())
+			}
 			request, ok := req.(*http.Request)
 			if !ok || request == nil {
 				return nil, fmt.Errorf("websocket middleware request has type %T, want *http.Request", req)
@@ -99,14 +104,15 @@ func (s *websocketServer) Handle(
 				maxInFlightMessages,
 			)
 			if err != nil {
-				clog.With("error", err).Warn("websocket upgrade failed")
+				// 错误继续交给请求边界归类；此处只保留升级阶段诊断，避免重复告警。
+				clog.With("event", "server.websocket.upgrade.failed", "error", err).Debug("websocket upgrade failed")
 				return nil, err
 			}
 			if !s.hub.serve(client) {
 				if closeErr := client.Close(); closeErr != nil {
-					clog.With("error", closeErr).Warn("websocket connection close failed")
+					clog.With("event", "server.websocket.close.failed", "error", closeErr).Error("websocket connection close failed")
 				}
-				clog.Warn("websocket server is stopping")
+				clog.With("event", "server.websocket.connection.rejected", "reason", "server_stopping").Debug("rejected websocket connection during shutdown")
 			}
 			return nil, nil
 		})

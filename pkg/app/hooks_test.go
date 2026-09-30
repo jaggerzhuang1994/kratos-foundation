@@ -30,7 +30,7 @@ func TestAppHooksHooksOrderFailureAndCleanupAggregation(t *testing.T) {
 			func(context.Context) error { calls = append(calls, "after-two"); return errors.New("after-two") },
 		},
 	}
-	runner := newApp(snapshot, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
 	if err := runner.runBeforeStart(context.Background()); !errors.Is(err, fail) {
 		t.Fatalf("before start = %v", err)
 	}
@@ -62,7 +62,7 @@ func stringsContain(value, part string) bool {
 func TestAppHooksAfterStartStopsBeforeOrDuringHooks(t *testing.T) {
 	t.Run("already stopping", func(t *testing.T) {
 		calls := 0
-		runner := newApp(appSnapshot{
+		runner := newTestApp(t, appSnapshot{
 			afterStart: []HookFunc{func(context.Context) error { calls++; return nil }},
 		}, newStaticStopPolicy(time.Second))
 		runner.requestStop()
@@ -76,7 +76,7 @@ func TestAppHooksAfterStartStopsBeforeOrDuringHooks(t *testing.T) {
 
 	t.Run("stop requested by hook", func(t *testing.T) {
 		var runner *App
-		runner = newApp(appSnapshot{
+		runner = newTestApp(t, appSnapshot{
 			afterStart: []HookFunc{func(context.Context) error {
 				runner.requestStop()
 				return nil
@@ -89,7 +89,7 @@ func TestAppHooksAfterStartStopsBeforeOrDuringHooks(t *testing.T) {
 }
 
 func TestStartupCallbackErrorPreservesRegistrarTimeoutDuringStop(t *testing.T) {
-	runner := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	runner.requestStop()
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
@@ -102,7 +102,7 @@ func TestStartupCallbackErrorPreservesRegistrarTimeoutDuringStop(t *testing.T) {
 
 func TestAppHooksFinalErrorAndFallbackShutdownContext(t *testing.T) {
 	finalErr := errors.New("final cleanup failed")
-	runner := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	runner.setFinalError(func() error { return finalErr })
 	if err := runner.runAfterStop(context.Background()); !errors.Is(err, finalErr) {
 		t.Fatalf("runAfterStop final error = %v, want %v", err, finalErr)
@@ -115,7 +115,7 @@ func TestAppHooksFinalErrorAndFallbackShutdownContext(t *testing.T) {
 		"value",
 	))
 	cancel()
-	clean := newApp(appSnapshot{}, newStaticStopPolicy(time.Second)).shutdownContext(ctx)
+	clean := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second)).shutdownContext(ctx)
 	if clean.Err() != nil || clean.Value(contextKey("key")) != "value" {
 		t.Fatalf("shutdown fallback context = err %v, value %v", clean.Err(), clean.Value(contextKey("key")))
 	}
@@ -128,7 +128,7 @@ func TestAppHooksFreezesStopTimeoutOnFirstRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	runner := newApp(appSnapshot{}, policy)
+	runner := newTestApp(t, appSnapshot{}, policy)
 	runner.requestStop()
 	manager.publish(validAppConfig(2*time.Second), nil)
 	if got := policy.current(); got != 2*time.Second {
@@ -143,7 +143,7 @@ func TestStartupCallbackPreservesFailureJoinedWithCancellation(t *testing.T) {
 	failure := errors.New("register failed")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	runner := newApp(appSnapshot{}, newStaticStopPolicy(time.Second))
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
 	runner.requestStop()
 	cause := errors.Join(context.Canceled, failure)
 	if got := runner.startupCallbackError(ctx, cause); !errors.Is(got, failure) {

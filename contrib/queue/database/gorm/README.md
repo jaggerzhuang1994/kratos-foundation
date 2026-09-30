@@ -139,7 +139,7 @@ flowchart TD
     G --> H{更新一行?}
     H -- 否 --> E
     H -- 是 --> I[提交并释放锁 / 返回新 token 和次数]
-    I --> IS[Worker INFO task.execution.started]
+    I --> IS[Worker DEBUG queue.task.execution.started]
     IS --> J[Handler 在领取操作外执行]
     J --> K{Handler 结果}
     K -- 成功 --> KA{RetainCompleted?}
@@ -150,18 +150,18 @@ flowchart TD
     K -- 进程崩溃 --> KR[租约到期后可重新 Claim]
     KR --> B
     KB & KC & KD & KE --> KU[数据库单行短锁 语句提交后释放]
-    KU -- 确认成功 --> KL[Worker INFO task.execution.finished result=success duration]
-    KU -- 重试排期成功 --> KM[Worker WARN retry.scheduled]
-    KU -- 失败保存成功 --> KN[Worker ERROR task.failed]
-    KM --> KMF[Worker INFO task.execution.finished result=retry duration]
-    KN --> KNF[Worker INFO task.execution.finished result=failed duration]
+    KU -- 确认成功 --> KL[Worker DEBUG queue.task.execution.finished result=success duration]
+    KU -- 重试排期成功 --> KM[Worker WARN queue.retry.scheduled]
+    KU -- 失败保存成功 --> KN[Worker ERROR queue.task.failed]
+    KM --> KMF[Worker DEBUG queue.task.execution.finished result=retry duration]
+    KN --> KNF[Worker DEBUG queue.task.execution.finished result=failed duration]
     KL & KMF & KNF --> L([完成或等待重试])
-    KB & KC & KD & KE -- 旧 token --> M[Worker WARN lease.lost]
+    KB & KC & KD & KE -- 旧 token --> M[Worker WARN queue.lease.lost]
     M --> L
-    B & F & G -- 错误或超时 --> N0[Worker ERROR storage.failed]
+    B & F & G -- 错误或超时 --> N0[Worker ERROR queue.storage.failed]
     N0 --> O
-    KB & KC & KD & KE -- 错误或超时 --> N[Worker ERROR storage.failed]
-    N --> NF[Worker INFO task.execution.finished result=storage_error duration]
+    KB & KC & KD & KE -- 错误或超时 --> N[Worker ERROR queue.storage.failed]
+    N --> NF[Worker DEBUG queue.task.execution.finished result=storage_error duration]
     NF --> O([返回错误 / 未确认任务待租约恢复])
     F -- 隔离成功 --> N0
 ```

@@ -1,0 +1,1243 @@
+{
+  "editable": true,
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "uid": "ack-service-overview",
+  "title": "ACK · 服务运行总览",
+  "version": 1,
+  "tags": [
+    "Foundation",
+    "diagnostics"
+  ],
+  "links": [
+    {
+      "title": "服务总览",
+      "type": "link",
+      "url": "/d/ack-service-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "容器与节点",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "应用组件",
+      "type": "link",
+      "url": "/d/ack-application-components",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "共享资源与健康",
+      "type": "link",
+      "url": "/d/foundation-shared-resources",
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "01 · 服务影响 — 先看流量、错误、延迟与就绪",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "title": "请求速率",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "已进入Foundation方法指标层并完成的请求；当前上报不完整覆盖panic、前置拒绝和所有传输入口。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "5xx 比例",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((sum((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\",code=~\"5..\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))) or (0 * sum((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))))) / (sum((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "有流量无5xx时补0；无流量或未接入保持空值。不是全部传输层错误率。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "请求 P95",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) ((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "先合并所选桶再求分位数；无流量可能为NaN，不能解释为零延迟。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "已发现应用 Pod 就绪率",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (namespace,pod) (kube_pod_status_ready{namespace=~\"${namespace}\",pod=~\"${pod}\",condition=\"true\"}) and on (namespace,pod) (max by (namespace,pod) ((label_replace(up{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))))) / (count(max by (namespace,pod) ((label_replace(up{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "分母为存在抓取目标且可关联到Kubernetes的Pod，不是工作负载期望副本数；控制器期望副本见容器页。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "已关联抓取目标",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(min by (namespace,app,pod,container,instance,job,node,pod_ip) ((label_replace(up{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "去重后的应用抓取目标须具有所选Pod标签并匹配当前Kubernetes元数据。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "抓取失败目标",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(1 - (min by (namespace,app,pod,container,instance,job,node,pod_ip) ((label_replace(up{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "up=0表示采集失败；仅统计当前范围且拓扑关联成功的目标，缺失发现或标签错误请看下方接入诊断。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "title": "02 · RED 趋势 — 保留应用身份，按视图下钻",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 9,
+      "title": "请求速率趋势",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{namespace}} / {{app}} · {{${view:raw}}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "5xx 比例趋势",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 6,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\",code=~\"5..\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) or (0 * sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))) / (sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+          "legendFormat": "{{namespace}} / {{app}} · {{${view:raw}}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "请求尾延迟 P95 / P99",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))",
+          "legendFormat": "P95 / {{namespace}} / {{app}} · {{${view:raw}}}",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le,${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))",
+          "legendFormat": "P99 / {{namespace}} / {{app}} · {{${view:raw}}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "按应用与所选视图合并桶，避免跨应用同名方法混合；样本少时尾分位估计不稳定。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "03 · 异常端点 — 点击端点进入组件详情",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 13,
+      "title": "5xx 最多端点 Top 10",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (namespace,app,operation,kind) ((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\",code=~\"5..\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "显示当前5xx速率最高且大于0的端点；空表结合上方流量/接入判断，不自动等同零错误。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "端点"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "查看该应用和端点",
+                    "url": "/d/ack-application-components?${datasource:queryparam}&${app_pod_label:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-app=${__data.fields[\"应用\"]}&var-operation=${__value.raw}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "5xx速率",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "operation": 2,
+              "kind": 3,
+              "Value": 4
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "app": "应用",
+              "operation": "端点",
+              "kind": "协议",
+              "pod": "Pod",
+              "container": "容器",
+              "instance": "采集地址",
+              "job": "采集任务",
+              "Value": "5xx速率"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "最慢端点 Top 10（P95）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, (histogram_quantile(0.95, sum by (le,namespace,app,operation,kind) ((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))))) and on (namespace,app,operation,kind) (sum by (namespace,app,operation,kind) ((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) > 0))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "只保留当前窗口有请求的端点。跨实例先合并桶；这是分位估计，不是最大单次耗时。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "端点"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "查看该应用和端点",
+                    "url": "/d/ack-application-components?${datasource:queryparam}&${app_pod_label:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-app=${__data.fields[\"应用\"]}&var-operation=${__value.raw}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "P95",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "operation": 2,
+              "kind": 3,
+              "Value": 4
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "app": "应用",
+              "operation": "端点",
+              "kind": "协议",
+              "pod": "Pod",
+              "container": "容器",
+              "instance": "采集地址",
+              "job": "采集任务",
+              "Value": "P95"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "04 · 接入诊断 — 抓取响应与对象关联分别核对",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 16,
+      "title": "应用目标抓取状态（namespace / app / Pod 范围）",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (namespace,app,pod,container,instance,job) (label_replace(up{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\"))",
+          "legendFormat": "{{namespace}} / {{app}} / {{pod}} / {{instance}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "description": "原始目标状态不受节点筛选影响，用于发现Kubernetes关联之前的up=0。app_pod_label必须匹配真实target标签；up=1不代表readyz成功。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "抓取失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "抓取成功",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "无法关联 Kubernetes 的抓取目标",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 25,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min by (namespace,app,pod,container,instance,job) (label_replace(up{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) unless on (namespace,pod) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "不受节点筛选影响；缺失Pod元数据、namespace/Pod标签错误会列在这里。未发现的目标没有up序列，需由控制器期望副本与平台发现告警补足。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "抓取状态"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "失败",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "成功",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "pod": 2,
+              "container": 3,
+              "instance": 4,
+              "job": 5,
+              "Value": 6
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "app": "应用",
+              "operation": "端点",
+              "kind": "协议",
+              "pod": "Pod",
+              "container": "容器",
+              "instance": "采集地址",
+              "job": "采集任务",
+              "Value": "抓取状态"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "采集标签与方法指标范围",
+      "type": "text",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 4
+      },
+      "targets": [],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**筛选顺序：** 数据源 → 命名空间 / 应用 → Pod / 容器。先确认“应用 Pod 标签”匹配目标的 `pod_name` 或 `pod`。具体应用筛选需要稳定的 `app` 标签。\n\n**判读：** `up=1` 只代表抓取成功；Pod Ready、实际 `/readyz` 探测、方法请求结果是不同信号。无流量时错误率/分位数为空；未接入或身份错误保留空值。方法指标尚不完整覆盖 panic、前置 Deadline 拒绝、Client.Do、gRPC Stream；完整健康与共享积压请进入“共享资源与健康”。"
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
+        "name": "view",
+        "label": "视图",
+        "type": "custom",
+        "query": "Pod : view_pod,Node : view_node,Instance（Pod IP） : view_instance,Container : view_container",
+        "current": {
+          "text": "Pod",
+          "value": "view_pod"
+        },
+        "options": [
+          {
+            "text": "Pod",
+            "value": "view_pod",
+            "selected": true
+          },
+          {
+            "text": "Node",
+            "value": "view_node",
+            "selected": false
+          },
+          {
+            "text": "Instance（Pod IP）",
+            "value": "view_instance",
+            "selected": false
+          },
+          {
+            "text": "Container",
+            "value": "view_container",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "namespace",
+        "label": "命名空间",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(kube_pod_info, namespace)",
+        "query": {
+          "query": "label_values(kube_pod_info, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "app",
+        "label": "应用",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(up{namespace=~\"${namespace}\",app!=\"\"}, app)",
+          "refId": "app"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "description": "稳定的采集端 app 身份。All允许旧指标缺少app标签；选择具体应用要求目标附加该标签。"
+      },
+      {
+        "name": "node",
+        "label": "节点",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(kube_node_info, node)",
+        "query": {
+          "query": "label_values(kube_node_info, node)",
+          "refId": "node"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "pod",
+        "label": "Pod",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(kube_pod_info{namespace=~\"${namespace}\",node=~\"${node}\"}, pod)",
+        "query": {
+          "query": "label_values(kube_pod_info{namespace=~\"${namespace}\",node=~\"${node}\"}, pod)",
+          "refId": "pod"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "container",
+        "label": "容器",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\"}, container)",
+        "query": {
+          "query": "label_values(kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\"}, container)",
+          "refId": "container"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "app_pod_label",
+        "type": "custom",
+        "query": "pod_name,pod",
+        "current": {
+          "text": "pod_name",
+          "value": "pod_name"
+        },
+        "hide": 0,
+        "skipUrlSync": false,
+        "multi": false,
+        "includeAll": false,
+        "label": "应用 Pod 标签",
+        "description": "按目标标签选择 pod_name 或 pod；ACK 常见 pod_name，仓库 ServiceMonitor 示例使用 pod。"
+      },
+      {
+        "name": "operation",
+        "label": "应用接口",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}, operation)",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "query": {
+          "query": "label_values(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}, operation)",
+          "refId": "operation"
+        }
+      }
+    ]
+  }
+}

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	stdgrpc "google.golang.org/grpc"
 )
@@ -304,6 +305,8 @@ func TestFactoryConcurrentColdAcquireBuildsOnce(t *testing.T) {
 		<-unblock
 		return fakeHTTPResult(new(atomic.Int32)), nil
 	}})
+	logger, recorder := newRecordingLogger()
+	factory.logger = logger
 	const callers = 32
 	results := make(chan acquiredResult, callers)
 	waiting := make(chan struct{}, callers)
@@ -339,6 +342,10 @@ func TestFactoryConcurrentColdAcquireBuildsOnce(t *testing.T) {
 			t.Fatal("cold acquisitions returned different clients")
 		}
 		result.release()
+	}
+	recorder.requireRecord(t, "client created", map[string]any{"event": "client.created", "level": kratoslog.LevelInfo, "client": "orders", "revision": uint64(1), "protocol": "GRPC"})
+	if got := countLogRecords(recorder, "client created", nil); got != 1 {
+		t.Fatalf("shared client creation logs = %d, want 1", got)
 	}
 	if got := builds.Load(); got != 1 {
 		t.Fatalf("build count = %d, want 1", got)

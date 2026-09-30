@@ -37,7 +37,7 @@ func (s *fileSource) Load() ([]*kratosconfig.KeyValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.WithModule("config/file").With("path", s.path).Debug("loaded configuration file")
+	log.WithModule("config/file").With("event", "config.file.loaded", "path", s.path).Debug("loaded configuration file")
 	return values, nil
 }
 
@@ -99,6 +99,8 @@ func (w *fileWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 			}
 			if errors.Is(err, fsnotify.ErrEventOverflow) {
 				// 丢事件时重新取完整快照，避免等待一个永远不会补发的变更。
+				log.WithModule("config/file").WithContext(w.ctx).With("event", "config.file.events_lost",
+					"path", w.source.path, "error", err).Warn("config events lost; reloading snapshot")
 				return w.reload()
 			}
 			return nil, err
@@ -131,6 +133,10 @@ func (w *fileWatcher) reload() ([]*kratosconfig.KeyValue, error) {
 			var values []*kratosconfig.KeyValue
 			values, err = w.source.Load()
 			if err == nil {
+				if attempt > 0 {
+					log.WithModule("config/file").WithContext(w.ctx).With("event", "config.file.recovered",
+						"path", w.source.path, "attempts", attempt).Info("config file recovered")
+				}
 				return values, nil
 			}
 		}
@@ -138,6 +144,10 @@ func (w *fileWatcher) reload() ([]*kratosconfig.KeyValue, error) {
 			return nil, fmt.Errorf("reload file source %q: %w", w.source.path, err)
 		}
 		// 临时移走文件时保留旧快照，等待重建；Stop 能立即结束等待。
+		if attempt == 0 {
+			log.WithModule("config/file").WithContext(w.ctx).With("event", "config.file.waiting",
+				"path", w.source.path, "error", err).Warn("config file unavailable; waiting for recreation")
+		}
 		if err := backoff.Wait(w.ctx, attempt); err != nil {
 			return nil, err
 		}

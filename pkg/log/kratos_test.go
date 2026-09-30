@@ -282,3 +282,25 @@ func TestGlobalBridgeConcurrentSwitchAndConditionalRestore(t *testing.T) {
 		t.Fatal("SDK proxy was replaced")
 	}
 }
+
+func TestKratosConfigNormalCancellationUsesDebugEvent(t *testing.T) {
+	var level kratoslog.Level
+	var got map[string]any
+	t.Cleanup(SetLogger(loggerFunc(func(l kratoslog.Level, fields ...any) error {
+		level = l
+		got = map[string]any{}
+		for i := 0; i+1 < len(fields); i += 2 {
+			got[fields[i].(string)] = fields[i+1]
+		}
+		return nil
+	})))
+	kratoslog.Infof("watcher's ctx cancel : %v", context.Canceled)
+	if level != kratoslog.LevelDebug || got["event"] != "config.watcher.stopped" || got["module"] != "kratos" {
+		t.Fatalf("cancellation=%v %v", level, got)
+	}
+	// 不把非正常失败或任意 SDK 日志降级。
+	kratoslog.Info("watcher's ctx cancel : dependency failed")
+	if level != kratoslog.LevelInfo || got["event"] != nil {
+		t.Fatalf("unexpected rewrite=%v %v", level, got)
+	}
+}

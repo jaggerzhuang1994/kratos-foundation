@@ -48,7 +48,7 @@
 | [`kafka`](kafka/README.md) | Kafka 客户端、消息生产和消费 | M3 Factory + M4 组件 + M5 Runtime | `NewClientFactory` 创建客户端工厂；`NewProducer`、`NewConsumer` 显式构造，`ConsumerRuntime` 管理消费生命周期 |
 | [`queue`](queue/README.md) | 持久化任务、延迟和重试 | M2 契约 + M4 组件 + M5 Runtime | `Queue[T]` 提供 Post，`Worker[T]` 管理消费；`Observability` 直接复用应用观测依赖；Redis Store 或业务 Database Repo 显式注入，资源由组装层释放 |
 | [`job`](job/README.md) | 任务声明、热更新调度和本进程并发策略 | M5 Runtime | `job.Manager` 拥有任务、调度器和配置订阅的生命周期 |
-| [`server`](server/README.md) | HTTP/gRPC 服务装配 | M5 Runtime | `server.Runtime` 是聚合对象；组装层登记 `Servers()` 返回的 HTTP/gRPC 运行时，并非登记聚合对象本身 |
+| [`server`](server/README.md) | HTTP/gRPC 服务装配 | M5 Runtime | `server.Runtime` 是聚合对象；登记 `Servers()` 与 `ManagementServers()` 返回值；业务及管理 HTTP 监听归 Runtime 持有，启动前失败回滚 |
 
 `pkg/lock` 的使用边界见 [`lock/README.md`](lock/README.md)。
 
@@ -109,7 +109,7 @@ flowchart TD
 | kafka | 连接工厂、消息生产、消费运行时、offset提交和恢复 | telemetry |
 | job | Spec、配置热更新、调度、Manager 生命周期、本进程并发策略 | 无 |
 | server | HTTP/gRPC、WebSocket、配置与中间件策略、Runtime | validator / ratelimit 中间件 |
-| config | Manager 与公开配置契约 | decoder / snapshot / source / subscription |
+| config | Manager、snapshot、source、subscription 在同包分文件 | internal/decoder 负责目标解码与默认值契约 |
 | 工具包 | 按计算、转换或算法职责组织 | crypto 按独立算法提供公共子包 |
 
 ## 新增 watchdog 时从哪里开始
@@ -123,3 +123,5 @@ Job 仅提供本进程并发策略。跨进程租约若需自动续租，应作�
 业务 HTTP 默认开启，gRPC 按有效服务注册默认开启，显式配置开关优先；健康检查通过 `spec.Health().Checks(...)` 独立声明。管理端点可复用业务 HTTP 或独立监听，详见 [server](server/README.md)。
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](registry/README.md)。
+
+逐包职责、拆分结论与日志事件清单见[包职责与日志审查](../PACKAGE_REVIEW.md)。

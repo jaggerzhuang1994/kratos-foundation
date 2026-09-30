@@ -25,7 +25,7 @@ func TestSpecBuildersIgnoreNilDeclarations(t *testing.T) {
 		nil,
 		HandleHTTP(http.MethodGet, "/nil", nil),
 		HandleHTTPWriter(http.MethodGet, "/nil-writer", nil),
-	).Option(nil).WebSocket("/ws", testSocketHandler{})
+	).Option(nil).Listener(nil).WebSocket("/ws", testSocketHandler{})
 	spec.GRPC().Middleware(nil).Register(nil).Option(nil)
 	if err := spec.Validate(); err != nil {
 		t.Fatal(err)

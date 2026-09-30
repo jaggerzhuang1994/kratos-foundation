@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -97,7 +99,7 @@ func NewManager(sources Sources) (Manager, func(), error) {
 	}
 	return manager, func() {
 		if closeErr := manager.close(); closeErr != nil {
-			log.WithModule("config").With("error", closeErr).Error("failed to close the configuration manager")
+			log.WithModule("config").With("event", "config.cleanup.failed", "error", closeErr).Error("config cleanup failed")
 		}
 	}, nil
 }
@@ -150,8 +152,28 @@ func newManager(sources Sources) (*manager, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
+	kinds := make([]string, len(all))
+	for index, source := range all {
+		kinds[index] = sourceKind(source)
+	}
+	// 记录来源和加载完成状态，不扫描或输出配置值及进程环境变量。
+	log.WithModule("config").With("event", "config.loaded", "sources", kinds,
+		"source_count", len(all), "poll_interval", interval).Info("configuration loaded")
 	go m.run(ctx, interval)
 	return m, nil
+}
+
+// sourceKind 以实现所在包名概括来源（如 env、file、consul），不要求自定义 Source 实现诊断接口，
+// 也不暴露内部类型名；具体路径由各适配器的 selected 事件记录。
+func sourceKind(source kratosconfig.Source) string {
+	sourceType := reflect.TypeOf(source)
+	for sourceType.Kind() == reflect.Pointer {
+		sourceType = sourceType.Elem()
+	}
+	if sourceType.PkgPath() == "" {
+		return sourceType.String()
+	}
+	return path.Base(sourceType.PkgPath())
 }
 
 func (m *manager) Load(key string, target any, defaults ...any) error {

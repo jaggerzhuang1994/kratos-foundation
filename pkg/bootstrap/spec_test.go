@@ -31,7 +31,7 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	spec.Job().RegisterOnce("finish", job.TaskFunc(func(context.Context) error { return nil })).ExitWhenDone()
 	logger, tracing, metrics := newTestObservability(t)
 	prepareServer(t, spec)
-	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, metrics, tracing)
+	_, err := bootstrap.NewJobBootstrap(spec.application, spec.jobs, nil, logger, metrics, tracing, bootstrap.Bootstrap{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package database
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/base64"
 	"errors"
@@ -19,6 +20,94 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 )
+
+type aesNullableRecord struct {
+	ID      int
+	Secret  *AESDecryptString
+	Payload *AESDecryptBytes
+}
+
+func TestAESNullableFieldsEncryptStructAndMapWrites(t *testing.T) {
+	for _, withKey := range []bool{false, true} {
+		for _, shape := range []string{"struct", "map"} {
+			for _, null := range []bool{false, true} {
+				t.Run(fmt.Sprintf("key=%t/%s/null=%t", withKey, shape, null), func(t *testing.T) {
+					connection := &config_pb.DBConnection{Driver: proto.String("sqlite3"), Dsn: filepath.Join(t.TempDir(), "aes.db")}
+					if withKey {
+						connection.Aes = &config_pb.DatabaseAes{Key: proto.String("MDEyMzQ1Njc4OWFiY2RlZg==")}
+					}
+					mgr := newSQLiteManager(t, &config_pb.Database{Default: proto.String("primary"), Connections: map[string]*config_pb.DBConnection{"primary": connection}})
+					db := mgr.Connection(context.Background())
+					if err := db.AutoMigrate(&aesNullableRecord{}); err != nil {
+						t.Fatal(err)
+					}
+					secret, payload := AESDecryptString("plain secret"), AESDecryptBytes("plain bytes")
+					record := aesNullableRecord{ID: 1, Secret: &secret, Payload: &payload}
+					values := map[string]any{"ID": 1, "Secret": string(secret), "Payload": []byte(payload)}
+					if null {
+						record.Secret, record.Payload = nil, nil
+						values["Secret"], values["Payload"] = nil, (*AESDecryptBytes)(nil)
+					}
+					var input any = &record
+					if shape == "map" {
+						input = values
+					}
+					result := db.Model(&aesNullableRecord{}).Create(input)
+					if !withKey {
+						if !errors.Is(result.Error, ErrAESConfigMissing) {
+							t.Fatalf("Create without key = %v", result.Error)
+						}
+						var count int64
+						if err := db.Model(&aesNullableRecord{}).Count(&count).Error; err != nil || count != 0 {
+							t.Fatalf("rows after rejected write = %d, err = %v", count, err)
+						}
+						return
+					}
+					if result.Error != nil {
+						t.Fatal(result.Error)
+					}
+					pool, _ := mgr.connectionFactory.pool("primary")
+					var storedSecret sql.NullString
+					var storedPayload []byte
+					if err := pool.db.QueryRow("SELECT secret,payload FROM aes_nullable_records WHERE id = 1").Scan(&storedSecret, &storedPayload); err != nil {
+						t.Fatal(err)
+					}
+					if null {
+						if storedSecret.Valid || storedPayload != nil {
+							t.Fatalf("nil pointers stored non-NULL values: secret=%#v payload=%q", storedSecret, storedPayload)
+						}
+						// GORM 自动 serializer 会把 NULL 扫描为非 nil 零值指针，此处固定实际兼容边界。
+						loaded := aesNullableRecord{Secret: &secret, Payload: &payload}
+						if err := db.First(&loaded, 1).Error; err != nil || loaded.Secret == nil || *loaded.Secret != "" || loaded.Payload == nil || *loaded.Payload != nil {
+							t.Fatalf("NULL scan = %#v, err = %v", loaded, err)
+						}
+					} else {
+						cipher := mustAESFieldCipher(t)
+						plainSecret, err := cipher.algorithm.DecryptString(storedSecret.String, string(cipher.key))
+						if err != nil || plainSecret != string(secret) {
+							t.Fatalf("stored secret=%q decrypted=%q err=%v", storedSecret.String, plainSecret, err)
+						}
+						plainPayload, err := cipher.algorithm.Decrypt(storedPayload, cipher.key)
+						if err != nil || !bytes.Equal(plainPayload, payload) {
+							t.Fatalf("stored payload=%q decrypted=%q err=%v", storedPayload, plainPayload, err)
+						}
+					}
+					updates := map[string]any{"Secret": &secret, "Payload": &payload}
+					if err := db.Model(&aesNullableRecord{}).Where("id = 1").Updates(updates).Error; err != nil {
+						t.Fatal(err)
+					}
+					var loaded aesNullableRecord
+					if err := db.First(&loaded, 1).Error; err != nil || loaded.Secret == nil || *loaded.Secret != secret || loaded.Payload == nil || !bytes.Equal(*loaded.Payload, payload) {
+						t.Fatalf("nullable round trip = %#v, err = %v", loaded, err)
+					}
+					if *updates["Secret"].(*AESDecryptString) != secret || !bytes.Equal(*updates["Payload"].(*AESDecryptBytes), payload) {
+						t.Fatal("map write changed caller plaintext")
+					}
+				})
+			}
+		}
+	}
+}
 
 func TestAESFieldCipherValidatesAndRoundTripsValues(t *testing.T) {
 	key := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))

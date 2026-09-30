@@ -24,8 +24,8 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 				if cause := errors.Unwrap(err); cause != nil {
 					summary = cause
 				}
-				logger.WithContext(ctx).With(
-					"operation", requestOperation(ctx),
+				requestLogger(logger, ctx).With(
+					"event", "server.request.failed",
 					"code", foundationerrors.Code(err),
 					"reason", foundationerrors.Reason(err),
 					"error", summary,
@@ -47,8 +47,8 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 			defer func() {
 				if recovered := recover(); recovered != nil {
 					stack := string(debug.Stack())
-					logger.WithContext(ctx).With(
-						"operation", requestOperation(ctx),
+					requestLogger(logger, ctx).With(
+						"event", "server.request.panic.recovered",
 						"panic_type", fmt.Sprintf("%T", recovered),
 						"stack", log.DebugOnly(stack),
 					).Error("recovered from a panic while handling a request")
@@ -61,9 +61,11 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 	}
 }
 
-func requestOperation(ctx context.Context) string {
+// requestLogger 只使用传输契约中的协议、端点和操作名，不读取请求参数或正文。
+func requestLogger(logger log.Logger, ctx context.Context) log.Logger {
+	logger = logger.WithContext(ctx)
 	if info, ok := transport.FromServerContext(ctx); ok {
-		return info.Operation()
+		return logger.With("transport", info.Kind().String(), "endpoint", info.Endpoint(), "operation", info.Operation())
 	}
-	return ""
+	return logger
 }

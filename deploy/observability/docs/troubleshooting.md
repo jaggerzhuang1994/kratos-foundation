@@ -1,6 +1,6 @@
 # 应用与监控排障
 
-先记录数据源、namespace、node、pod、container、视图和发生时间；示例告警还需记录其 env、cluster、namespace、app、pod、node，按同一时间窗口比较 Dashboard 与日志。告警规则是 [alerts.yaml](../prometheus/alerts.yaml)，指标边界见 [面板说明](dashboard.md)。
+先记录数据源、namespace、app、node、pod、container、视图和发生时间；共享资源另记 env/cluster、逻辑队列或 Kafka 集群/消费组/Topic。按同一时间窗口比较 Dashboard 与日志。告警规则是 [alerts.yaml](../prometheus/alerts.yaml)，指标边界见 [面板说明](dashboard.md)。
 
 ## 本地启动失败
 
@@ -16,7 +16,7 @@ docker compose -f deploy/observability/compose.yaml logs --tail=100 app promethe
 ## 面板没有数据或变量为空
 
 1. 在 Prometheus Targets 检查目标是否存在、健康和最后错误，确认数据源指向正确环境。
-2. 查询 kube_pod_info、container_cpu_usage_seconds_total、node_uname_info，检查标准 namespace/pod/container 和节点名；应用指标另需 pod_name（或将隐藏 app_pod_label 改为 pod）。新面板不使用 target_info 发现对象。Job 任务名依赖默认 honor_labels=false 下的 exported_job。
+2. 查询 kube_pod_info、container_cpu_usage_seconds_total、node_uname_info，检查标准 namespace/pod/container 和节点名；应用指标另需真实 app 与 pod_name（使用 pod 时在“应用 Pod 标签”选择 pod）。面板不使用 target_info 发现对象。Job 任务名依赖默认 honor_labels=false 下的 exported_job。
 3. 清除旧的级联筛选。切换 env/app 后旧 pod/instance 可能已不属于当前集合；切回 All 或重新选择。
 4. 请求 `/hello` 后等待两次抓取；没有请求时，方法计数器可能尚未产生序列，不能据此判断采集失败。
 5. 检查实际 `/metrics` 的名称；查询必须是 server_requests_seconds_bucket，不能写成重复的 bucket_bucket。原生 HandleFunc 不自动进入方法中间件。
@@ -30,7 +30,7 @@ curl --fail --get http://127.0.0.1:19090/api/v1/query \
   --data-urlencode 'query=up'
 ```
 
-不要通过 `or vector(0)` 全面填零掩盖缺失数据。容器概览已包含 ACK 容器和节点资源；健康探测与 Kafka Lag 使用独立面板。节点图为空时检查 node_uname_info 的 node/nodename 是否匹配 kube_node_info.node；多集群同名对象须隔离数据源。
+不要通过 `or vector(0)` 全面填零掩盖缺失数据。服务总览的“抓取目标缺少 Pod 关联”表保留无法关联的目标，不受节点筛选；可用于区分标签/元数据缺失与真正无流量。容器与节点页包含 ACK 资源；健康探测、Queue 库存与 Kafka Lag 使用 [共享资源与健康](../grafana/dashboards/foundation-shared.json)。节点图为空时检查 node_uname_info 的 node/nodename 是否匹配 kube_node_info.node；多集群同名对象须隔离数据源。
 
 ## FoundationTargetDown
 
@@ -50,7 +50,7 @@ K8s 使用 `kubectl -n <namespace> get pods -o wide`、`describe pod <pod>` 和 
 
 先按 operation、Pod 拆分观察，并同时查看请求速率、进程 CPU/RSS、Goroutine 及所在机器。若同 Node 多个 App 同时变慢，检查机器资源竞争；若只有特定接口变慢，检查外部调用耗时、连接池等待和业务热点。
 
-P95 来自有限直方图桶，当前 1s 以上长尾分辨率不足；结合日志耗时和链路诊断，不声称图上 1s 表示所有请求都小于 1s。现有可观测数据不够时，再决定是否添加合适的业务耗时指标。
+P95/P99 来自有限直方图桶的插值；当前秒单位统一 View 的有限边界从0.0001s到86400s，最大桶内也不能还原每个请求耗时。结合日志与链路诊断，稀疏样本的分位数可能不稳定；必要时按业务 SLO 调整上报桶，而非只修改图表阈值。
 
 ## 配置热更新排查
 
@@ -125,9 +125,9 @@ flowchart TD
 
 ## 健康探测与配置状态
 
-独立健康面板应取自真实HTTP探测；默认应用面板不包含 Health 分区。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。
+共享资源与健康页展示真实 HTTP 探测，需另行接入 blackbox 并对齐标签；未接入时显示缺失。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。
 
-Config watcher为0时先核对应用是否正在停止或使用自定义配置Manager；不要机械重启业务。版本是进程内本地接受序号，不能据此判断多Pod配置内容一致；最近成功时间很旧但没有发布新配置并不异常。订阅积压增长、回调均值升高时关联订阅处理日志；接受快照不代表每个组件成功应用，必要时组件应另加自己的应用结果事件。
+当前没有可用的 Config watcher、版本或最近成功指标；配置状态按应用配置日志、发布记录及组件实际行为排查，不通过不存在的指标推断多 Pod 配置一致性。
 
 ## 积压与传输指标
 

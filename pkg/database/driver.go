@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -97,8 +96,7 @@ func RegisterDriver(name string, factory DriverFactory) error {
 	if err := databaseDrivers.register(name, factory); err != nil {
 		return err
 	}
-	// register 已释放注册表锁，日志输出不会阻塞锁内注册与查询。
-	log.WithModule("database").With("driver", normalizeDriverName(name)).Info("registered database driver")
+	// contrib init 也使用此入口；登记工厂不执行日志或其他 I/O。
 	return nil
 }
 

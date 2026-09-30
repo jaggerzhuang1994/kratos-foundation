@@ -83,7 +83,7 @@ func validAppConfig(stopTimeout time.Duration) *config_pb.App {
 
 func TestNewStopPolicyAppliesValidUpdatesRejectsInvalidSnapshotsAndCancels(t *testing.T) {
 	manager := &stopPolicyConfigManager{initial: validAppConfig(5 * time.Second)}
-	logger := kratoslog.NewStdLogger(io.Discard)
+	logger, events := captureAppEvents()
 	policy, cleanup, err := NewStopPolicy(
 		validAppConfig(5*time.Second),
 		manager,
@@ -119,6 +119,17 @@ func TestNewStopPolicyAppliesValidUpdatesRejectsInvalidSnapshotsAndCancels(t *te
 		t.Fatalf("errored update changed policy to %s", got)
 	}
 
+	counts := map[string]int{}
+	for len(events) > 0 {
+		event := <-events
+		counts[event["event"].(string)]++
+		if event["event"] == "app.stop_policy.rejected" && (event["level"] != kratoslog.LevelWarn || event["stop_timeout"] != time.Second || event["error"] == nil) {
+			t.Fatalf("rejection event = %v", event)
+		}
+	}
+	if counts["app.stop_policy.updated"] != 3 || counts["app.stop_policy.rejected"] != 1 {
+		t.Fatalf("policy events = %v", counts)
+	}
 	cleanup()
 	cleanup()
 	manager.publish(validAppConfig(13*time.Second), nil)

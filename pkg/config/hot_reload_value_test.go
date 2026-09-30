@@ -4,6 +4,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type hotReloadTestManager struct {
@@ -113,4 +116,29 @@ func TestHotReloadValueInitializationFailure(t *testing.T) {
 			t.Fatalf("unexpected result: hot=%v err=%v canceled=%v", hot, err, manager.canceled)
 		}
 	})
+}
+
+func TestHotReloadValueRootRejectionIsIdentifiable(t *testing.T) {
+	var event map[string]any
+	t.Cleanup(log.SetLogger(pollingLogFunc(func(level kratoslog.Level, fields ...any) error {
+		event = map[string]any{"level": level}
+		for i := 0; i+1 < len(fields); i += 2 {
+			event[fields[i].(string)] = fields[i+1]
+		}
+		return nil
+	})))
+	manager := new(hotReloadTestManager)
+	hot, cleanup, err := NewHotReloadValue[int](manager, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	cause := errors.New("decode failed")
+	manager.observer("", nil, cause)
+	if value, version := hot.GetCurrent(); *value != 1 || version != 0 {
+		t.Fatalf("value=%d version=%d", *value, version)
+	}
+	if event["level"] != kratoslog.LevelWarn || event["event"] != "config.value.rejected" || event["key"] != "<root>" || event["error"] != cause {
+		t.Fatalf("rejection=%v", event)
+	}
 }

@@ -91,12 +91,12 @@ func (logger *cronLogger) Info(msg string, keysAndValues ...any) {
 	if msg == "run" || msg == "schedule" || msg == "start" || msg == "stop" || msg == "wake" {
 		return
 	}
-	logger.With(replaceKeysAndValues(keysAndValues)...).Info(msg)
+	logger.With(replaceKeysAndValues(keysAndValues)...).With("event", "job.cron.event", "cron.event", msg).Info(msg)
 }
 
 // Error 把 cron 错误和调度字段写入统一任务日志。
 func (logger *cronLogger) Error(err error, msg string, keysAndValues ...any) {
-	logger.With(replaceKeysAndValues(keysAndValues)...).With("error", err).Error(msg)
+	logger.With(replaceKeysAndValues(keysAndValues)...).With("event", "job.cron.failed", "error", err).Error(msg)
 }
 
 // replaceKeysAndValues 把 cron 时间字段格式化为稳定文本，同时避免修改调用方切片。

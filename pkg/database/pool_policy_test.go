@@ -1,7 +1,9 @@
 package database
 
 import (
+	"errors"
 	"fmt"
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"testing"
 
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
@@ -128,6 +130,10 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			}
 			manager.observer("database", changed, nil)
 			assertLimits(10)
+			record := logger.records[len(logger.records)-1]
+			if record.level != kratoslog.LevelWarn || record.fields["event"] != "database.config.restart_required" {
+				t.Fatalf("topology rejection log=%+v", record)
+			}
 			// 新拓扑未生效，其后连续的池参数变化也不能应用到旧连接。
 			manager.observer("database", withLimits(changed, 30), nil)
 			assertLimits(10)
@@ -141,6 +147,16 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			assertLimits(60)
 			manager.observer("database", proto.CloneOf(initial), nil)
 			assertLimits(1)
+			failure := errors.New("delivery rejected")
+			manager.observer("database", nil, failure)
+			record = logger.records[len(logger.records)-1]
+			if record.level != kratoslog.LevelWarn || record.fields["event"] != "database.config.rejected" || record.fields["error"] != failure {
+				t.Fatalf("delivery rejection log=%+v", record)
+			}
+			assertLimits(1)
+			if record := logger.records[0]; record.level != kratoslog.LevelInfo || record.fields["event"] != "database.pool.updated" || record.fields["connections"] != 1 {
+				t.Fatalf("pool update log=%+v", record)
+			}
 			if len(logger.messages) != 4 {
 				t.Fatalf("restore to initial configuration must log a real update: %v", logger.messages)
 			}
@@ -148,13 +164,40 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 	}
 }
 
-// poolPolicyLogger 仅捕获更新提示，错误和警告沿用测试 Logger。
+// poolPolicyLogger 捕获日志级别和字段；派生对象将结果写回同一个测试记录器。
 type poolPolicyLogger struct {
 	log.Logger
 	messages []string
+	records  []poolPolicyRecord
+	fields   []any
+	parent   *poolPolicyLogger
+}
+type poolPolicyRecord struct {
+	level  kratoslog.Level
+	fields map[string]any
 }
 
-func (l *poolPolicyLogger) With(...any) log.Logger { return l }
-func (l *poolPolicyLogger) Info(values ...any) {
-	l.messages = append(l.messages, fmt.Sprint(values...))
+func (l *poolPolicyLogger) With(fields ...any) log.Logger {
+	parent := l
+	if l.parent != nil {
+		parent = l.parent
+	}
+	return &poolPolicyLogger{Logger: l.Logger, fields: append(append([]any(nil), l.fields...), fields...), parent: parent}
+}
+func (l *poolPolicyLogger) WithModule(module string) log.Logger { return l.With("module", module) }
+func (l *poolPolicyLogger) Info(values ...any)                  { l.record(kratoslog.LevelInfo, values...) }
+func (l *poolPolicyLogger) Warn(values ...any)                  { l.record(kratoslog.LevelWarn, values...) }
+func (l *poolPolicyLogger) record(level kratoslog.Level, values ...any) {
+	parent := l
+	if l.parent != nil {
+		parent = l.parent
+	}
+	if level == kratoslog.LevelInfo {
+		parent.messages = append(parent.messages, fmt.Sprint(values...))
+	}
+	fields := map[string]any{"msg": fmt.Sprint(values...)}
+	for i := 0; i+1 < len(l.fields); i += 2 {
+		fields[l.fields[i].(string)] = l.fields[i+1]
+	}
+	parent.records = append(parent.records, poolPolicyRecord{level: level, fields: fields})
 }

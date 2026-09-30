@@ -248,7 +248,7 @@ flowchart TD
     J --> K{仍持有租约且续租成功?}
     K -- 是 --> H
     K -- 否 --> L[标记失效 / 取消业务 context]
-    L --> M[WARN lease.lost]
+    L --> M[WARN queue.lease.lost]
     M --> N[续租循环退出]
     I -- 是 --> N
     L -. 业务必须响应取消 .-> G
@@ -319,7 +319,7 @@ flowchart TD
 
 以职责而非函数数量拆文件。构造与其小型辅助方法、类型与紧密关联的方法放在一起；配置、资源池、协议适配等独立职责仍可分开。150–300 行只是阅读提示，不是必须拆分的配额。
 
-单元测试默认与主要被测实现同名；同一行为的新边界/回归直接补入已有测试文件，避免不断增加 `extra`、`paths`、`additional` 文件。跨模块完整场景和性能测试允许独立文件。已有测试过长时按明确场景拆分，不强行一对一。
+每个实现文件最多对应一个同名测试文件；同一行为的新边界、回归、集成和性能测试归入已有入口，不增加 `extra`、`paths`、`integration` 等场景文件。跨组件场景按主要入口归属；实现确因职责拆分时，测试才随之拆分。
 
 例如客户端包：
 
@@ -328,12 +328,9 @@ factory.go                         factory_test.go
 cleanup.go                         cleanup_test.go
 pool.go                            pool_test.go
 reconnect.go                       reconnect_test.go
-                                   reconnect_http_integration_test.go
-                                   reconnect_grpc_integration_test.go
-                                   test_helpers_test.go
 ```
 
-内部与外部测试使用不同 package 时保持分开；共享 helper 留在测试文件，不转移到生产代码。文件整理保持实现逻辑、接口、同步策略和测试语义不变；涉及堆栈文件名等路径断言时，同步更新改名后的路径。
+同包与外部测试不构成多文件例外，整理时选择合适的测试包；共享 helper 留在主要服务的同名测试文件，不转移到生产代码或独立 helper 文件。文件整理保持实现逻辑、接口、同步策略和测试语义不变；涉及堆栈文件名等路径断言时，同步更新改名后的路径。
 
 ```mermaid
 flowchart TD
@@ -342,9 +339,9 @@ flowchart TD
     B -- 否 --> D[保留独立职责文件]
     C --> E[单测归入同名主测试文件]
     D --> E
-    E --> F{完整跨组件或过长场景?}
-    F -- 是 --> G[按具体场景独立命名]
-    F -- 否 --> H[保留主测试文件]
+    E --> F{实现需要按独立职责拆分?}
+    F -- 是 --> G[测试随真实职责拆分 保持同名]
+    F -- 否 --> H[场景与 helper 归入主要入口测试]
     G --> I[比较声明与测试并运行验证]
     H --> I
     I --> J{验证通过?}

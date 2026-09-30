@@ -3,10 +3,12 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,6 +18,7 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/gorilla/websocket"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 )
 
 func TestWebSocketPreservesMiddlewareContextUntilConnectionCloses(t *testing.T) {
@@ -120,6 +123,7 @@ func TestWebSocketPreservesMiddlewareContextUntilConnectionCloses(t *testing.T) 
 }
 
 func TestWebSocketRejectedHandshakePreservesMiddlewareContext(t *testing.T) {
+	logger, logPath := newBoundaryTestLogger(t)
 	handler := &contextWebSocketHandler{handshake: make(chan context.Context, 1), handshakeError: errors.New("handshake rejected")}
 	middlewareDone := make(chan struct{})
 	propagate := func(next middleware.Handler) middleware.Handler {
@@ -131,8 +135,8 @@ func TestWebSocketRejectedHandshakePreservesMiddlewareContext(t *testing.T) {
 		}
 	}
 	hub := newWebSocketHub()
-	server := kratoshttp.NewServer(kratoshttp.Middleware(propagate))
-	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, 0)
+	server := kratoshttp.NewServer(kratoshttp.Middleware(propagate, normalizeErrors(logger)))
+	newWebSocketServer(logger, server, hub).Handle("/ws", handler, 0, 0)
 	server.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws", nil))
 	<-middlewareDone
 	ctx := <-handler.handshake
@@ -142,6 +146,90 @@ func TestWebSocketRejectedHandshakePreservesMiddlewareContext(t *testing.T) {
 	}
 	if err := hub.stop(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+	line := logDelta(t, logPath, 0)
+	if strings.Count(line, "event=server.request.failed") != 1 || strings.Contains(line, "event=server.websocket.upgrade.failed") || strings.Contains(line, "WARN ") {
+		t.Fatalf("handshake failure did not use a single error boundary: %s", line)
+	}
+}
+
+// panicWebSocketHandler 通过实际回调分别覆盖读循环与异步消息恢复边界。
+type panicWebSocketHandler struct {
+	stage     string
+	connected chan struct{}
+	message   chan struct{}
+}
+
+func (h *panicWebSocketHandler) OnConnect(WebSocketConn) {
+	close(h.connected)
+	if h.stage == "resolve" {
+		panic("private websocket panic payload")
+	}
+}
+
+func (h *panicWebSocketHandler) OnMessage(WebSocketConn, []byte, MessageType) {
+	close(h.message)
+	panic("private websocket panic payload")
+}
+
+func TestWebSocketPanicDiagnosticsFollowConnectionDebug(t *testing.T) {
+	for _, stage := range []string{"resolve", "on_message"} {
+		for _, debug := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/debug=%v", stage, debug), func(t *testing.T) {
+				logger, logPath := newBoundaryTestLogger(t)
+				propagate := func(next middleware.Handler) middleware.Handler {
+					return func(ctx context.Context, req any) (any, error) {
+						if debug {
+							ctx = request.WithDebug(ctx)
+						}
+						return next(ctx, req)
+					}
+				}
+				hub := newWebSocketHub()
+				handler := &panicWebSocketHandler{stage: stage, connected: make(chan struct{}), message: make(chan struct{})}
+				server := kratoshttp.NewServer(kratoshttp.Middleware(propagate), kratoshttp.Endpoint(&url.URL{Scheme: "http", Host: "ws.example"}))
+				newWebSocketServer(logger, server, hub).Handle("/ws", handler, 0, 0)
+				host := httptest.NewServer(server)
+				t.Cleanup(host.Close)
+				peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(host.URL, "http")+"/ws", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = peer.Close() })
+				budget, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+				defer cancel()
+				select {
+				case <-handler.connected:
+				case <-budget.Done():
+					t.Fatal("OnConnect not called")
+				}
+				if stage == "on_message" {
+					if err := peer.WriteMessage(websocket.TextMessage, []byte("private websocket body")); err != nil {
+						t.Fatal(err)
+					}
+					select {
+					case <-handler.message:
+					case <-budget.Done():
+						t.Fatal("OnMessage not called")
+					}
+				}
+				if err := hub.stop(budget); err != nil {
+					t.Fatal(err)
+				}
+				line := logDelta(t, logPath, 0)
+				for _, field := range []string{"event=server.websocket.panic.recovered", "stage=" + stage, "panic_type=string", "transport=websocket", "path=/ws", "endpoint=http://ws.example"} {
+					if !strings.Contains(line, field) {
+						t.Fatalf("panic diagnostic missing %s: %s", field, line)
+					}
+				}
+				if strings.Count(line, "event=server.websocket.panic.recovered") != 1 || strings.Contains(line, "private websocket") {
+					t.Fatalf("panic diagnostics duplicated or disclosed a payload: %s", line)
+				}
+				if got := strings.Contains(line, "stack="); got != debug {
+					t.Fatalf("debug=%v stack present=%v: %s", debug, got, line)
+				}
+			})
+		}
 	}
 }
 

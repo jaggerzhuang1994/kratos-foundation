@@ -6,11 +6,11 @@
 
 - `app.go`：App 状态、依赖与构造函数。
 - `hooks.go`：App 的钩子执行和错误保存方法。
-- `runtime.go`：Server 适配、完成计数、退出等待、父 Context 监听及故障收敛，保留服务 Endpoint。
+- `runtime.go`：Server 适配、完成计数、退出等待、父 Context 监听、启动前回滚及故障收敛，监督服务 Endpoint。
 - `spec.go`、`config.go`、`stop_policy.go`：应用描述、配置和停机策略。
 - `registrar.go`：注册中心协议适配，停止协调只依赖所属 App。
 
-`Runtime` 仅保留为现有 `Start/Stop` 登记接口，避免改变组件调用契约；它不再对应一套独立管理对象。
+`Runtime` 保留现有 `Start/Stop` 登记接口；有启动前资源的运行时可选实现 `AbortStartup(context.Context) error`，用于幂等释放尚未启动的资源，不需要增加 App 对具体领域包的依赖。
 
 ## 构造边界
 
@@ -23,21 +23,22 @@ flowchart TD
     A([NewApp 接收依赖]) --> B[冻结 Spec 与构造上下文]
     B --> C{依赖与上下文有效?}
     C -- 否 --> D([返回错误，由组装层 cleanup])
-    C -- 是 --> E[构造 App 向 Kratos 传入带 module=kratos 的 Logger]
-    E --> F([返回应用，调用方负责 Run])
+    C -- 是 --> E[构造 App 绑定应用 Logger 保留 Kratos 稳定代理]
+    E --> EL[INFO app.assembled 启动摘要]
+    EL --> F([返回应用，调用方负责 Run])
 ```
 
 ## 贡献和所有权
 
-- `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并通过 `log.RegisterFields` 加入进程共享的 service ID、name、version 字段。
+- `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并通过 `log.RegisterFields` 加入进程共享的 service ID、name、version 与 env 字段。
 - `bootstrap.NewTracingBootstrap` 通过 `log.RegisterFields` 加入进程共享的 `trace.id` 和 `span.id` 动态字段。
 - `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
 - `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
 - 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewKratosApp`）的构造参数注入；传入 nil 或调用 Spec.DisableServiceRegistration 表示禁用服务注册，组装层由 `app.NewRegistrar` 从具名 Registry Factory 解析实例；`app.registry` 省略或为空时使用 default，必须配置 `registry.instances.default`，缺失即报错。空名称不表示禁用，驱动禁用时返回 nil。
 
-`Spec.RegisterLogger` 为 Kratos App 派生带 `module=kratos` 的 Logger，
-原 Logger 不被修改，派生视图共用原输出且不增加 cleanup。StopPolicy 自身日志归属 `app`。
+`Spec.RegisterLogger` 保存借用的原 Logger，`NewApp` 单次派生带 `module=app` 的生命周期视图；
+原 Logger 不被修改，派生视图共用原输出且不增加 cleanup。App 生命周期和 StopPolicy 日志归属 `app`，保留本应用登记的 Logger 和身份字段。
 `NewApp` 禁用 `kratos.New` 的全局 Logger 安装副作用，不再临时设置或恢复全局绑定。经 Foundation `log.SetLogger` / Bootstrap 安装后，Kratos 全局日志适配器仍然保留，HTTP/gRPC 启停日志归属 `kratos`；入口与覆盖规则见 [日志文档](../log/README.md#字段过滤与去重)。
 
 构造函数拥有资源创建，Wire 接收并逆序调用其 cleanup。Bootstrap 本身通常没有 cleanup；例外是 `bootstrap.NewLogBootstrap` 的全局 Logger 恢复函数。Runtime 的 `Start`/`Stop`、Hook、Registrar 补偿和停机预算由 App 直接管理。
@@ -52,7 +53,7 @@ flowchart TD
 
 一次性 Job 可在构造应用前调用 `spec.DisableServiceRegistration()`（`app.Spec` 和 `bootstrap.Spec` 均提供）。
 默认不关闭；显式关闭优先于注入的非 nil Registrar，App 不再调用 Register/Deregister，
-并记录 `INFO event=app.registration.disabled`，日志自带 `caller`。重复声明安全，冻结后调用会 panic(app.ErrSpecFrozen)，不支持热更新。
+并记录 `DEBUG event=app.registration.disabled`，日志自带 `caller`。重复声明安全，冻结后调用会 panic(app.ErrSpecFrozen)，不支持热更新。
 该开关与 `ExitWhenDone` 独立，不改变 HTTP/gRPC、健康监听或客户端发现。
 
 开关仅作用于 App 使用 Registrar 的阶段，不跳过 Wire 中 Registrar provider 与 Registry Factory 的构造或配置校验；
@@ -64,7 +65,7 @@ flowchart TD
  B --> C{配置 身份 Logger 校验通过?}
  C -- 否 --> D([返回错误])
  C -- 是 --> E{已声明 DisableServiceRegistration?}
- E -- 是 --> F[INFO NewApp app.registration.disabled]
+ E -- 是 --> F[DEBUG app.registration.disabled]
  E -- 否 --> G{Registrar 非 nil?}
  G -- 是 --> H[安装注册与注销适配器]
  G -- 否 --> I[不安装适配器]
@@ -76,7 +77,7 @@ flowchart TD
 
 ## 运行时故障与停止结果
 
-`application.Run()` 保留运行时的真实故障，包括与 `context.Canceled` 合并的错误。只有错误树中的全部原因都是取消时才沿用正常停止语义。App 在 `failureMu` 临界区保存首个真实故障；运行时 `Stop` 的失败也在完成跟踪之前记录，最终 `AfterStop` 汇总根因、停止钩子和注销错误。`Stop` 和停止钩子仍只执行一次，错误由调用方处理，底层不重复记录日志。
+`application.Run()` 保留运行时的真实故障，包括与 `context.Canceled` 合并的错误。只有错误树中的全部原因都是取消时才沿用正常停止语义。App 在 `failureMu` 临界区保存首个真实故障；运行时 `Stop` 的失败也在完成跟踪之前记录，最终 `AfterStop` 汇总根因、停止钩子和注销错误。`Stop` 和停止钩子仍只执行一次，Run/Stop 的错误仍由调用方处理；App 在最终汇总边界记录一次 app.stopped，包装层不另记相同错误。
 
 ```mermaid
 flowchart TD
@@ -97,7 +98,89 @@ flowchart TD
     O --> J
     K -- 是 --> L[AfterStop 一次性执行清理钩子]
     L --> M[获取 failureMu 读取根因后释放 合并清理与注销错误]
-    M --> N([Run 返回结果 由调用方处理错误])
+    M --> ML[app.stopped 成功 INFO 失败 ERROR]
+    ML --> N([Run 返回结果 由调用方处理错误])
+```
+
+### 停机排空与取消边界
+
+停机入口包括 `App.Stop()`、父 Context 取消、默认 `SIGINT/SIGQUIT/SIGHUP/SIGTERM`、Runtime 真实失败、启动钩子或注册失败，以及 Once 全部成功后由 Bootstrap 发出的 `ErrStopRequested`。`SIGKILL`、进程崩溃和机器故障不会执行这些清理步骤。
+
+`App.Stop()` 发起停机，执行停止前钩子和注销后返回；它不等待所有 Runtime 停止。调用方应等待 `Run()` 返回，再逆序执行 Wire cleanup。首次请求立即撤销 Ready，随后各 Runtime 的 Stop 并发执行，不能依靠登记顺序让 Worker 等待 HTTP 在途请求全部完成。若请求还会投递或直接使用同一后台组件，业务应在停止前钩子中协调其依赖顺序。
+
+| 组件 | 在途工作的处理 | 超时与失败边界 |
+| --- | --- | --- |
+| HTTP 与管理 HTTP | `server.stop_delay` 后关闭监听和空闲连接，`Shutdown` 等待活跃请求返回；App 不提前取消请求的基础 Context | 预算耗尽调用 `Close`，连接被关闭；忽略 Context 的 Handler 仍可能运行 |
+| gRPC | 同样等待 stop_delay，然后 `GracefulStop` 停止接收新 RPC 并等待在途调用 | 预算耗尽调用底层 `Stop`，取消 RPC；不保证业务计算成功完成 |
+| WebSocket | HTTP Shutdown 之前拒绝新连接，取消现有连接 Context、关闭 socket，等待读循环、在途回调及 OnClose | 超时直接关闭 socket 并返回错误；不能强制结束不响应取消的业务回调 |
+| Queue Worker | 停止领取并取消 Handler Context，等待领取循环与 Handler 返回 | 不保证处理成功；停止中未确认任务靠租约恢复，业务可能重投，必须幂等 |
+| Kafka ConsumerRuntime | 取消消费 Context，等待消费循环退出；内置消费者在关闭 SDK 前退出消费组 | 停止时取消的处理不提交位点、不发送死信；后续可能重投；自定义 Consumer 须遵守相同退出契约 |
+| Job Once/Cron/Daemon | Stop 或父 Context 取消会触发任务的 `ctx.Done()`，停止调度并等待已启动任务退出 | 任务须响应取消；Once 取消后的真实失败仍通过 ErrorHandler 上报，Job 没有持久化恢复保证 |
+
+`app.stop_timeout` 默认 30s，在首次停止时冻结；每个 Runtime.Stop 从调用时起分别获得该预算。`server.stop_delay` 默认 0s，会占用服务器的这份预算；WebSocket 与 HTTP 也共享同一个服务器预算。BeforeStop、Registrar 注销、AfterStop 和 Wire cleanup 有各自的执行边界，不受这一个数值统一限制。当前固定版本 Kratos 在 HTTP/gRPC 强制关闭成功后也可能返回 nil；`Run()` 返回 nil 不能证明请求已全部完成，应结合 force stop 的 WARN 日志判断。尤其是自定义 Runtime/Handler 忽略 Context 时，Stop 可超时返回，但 Start 仍可能阻塞，`Run()` 也可能持续等待；Go 不会强杀这些 goroutine。部署的进程终止宽限期须覆盖注销、流量传播、任务退出和资源释放。
+
+```mermaid
+flowchart TD
+    A([信号 / Stop / 父取消 / 完成 / 运行期故障]) --> B[Once 冻结预算并撤销 Ready]
+    B --> B1[关闭共享停止信号 解除 WaitReady 并返回取消]
+    B1 --> C[锁外执行 BeforeStop 与 Registrar 注销]
+    C -- 成功或已汇总错误 --> D[发出停止信号 App.Stop 返回]
+    D --> E[并发入口: 各 Runtime.Stop 获得独立预算]
+    E --> F[服务器等待 stop_delay]
+    F --> G[WebSocket 取消关闭 / HTTP Shutdown / gRPC GracefulStop]
+    G --> G1[INFO: HTTP 或 gRPC server stopping]
+    G1 --> H{在途请求在预算内退出?}
+    H -- 否 --> I[WARN: force stop / 关闭连接]
+    H -- 是 --> J[服务器 Stop 完成]
+    I --> J
+    E --> K[Worker 消费者 Job 取消 ctx 并停止接收或调度]
+    K --> L{业务执行响应取消?}
+    L -- 是 --> M[等待执行退出与错误处理完成]
+    L -- 否且预算耗尽 --> N[Stop 返回超时 Start 可能继续阻塞]
+    M --> O{全部 Start 和 Stop 已返回?}
+    J --> O
+    N --> P([Run 可能持续等待 不可释放仍在使用的资源])
+    O -- 否 --> Q[继续等待其他 Runtime]
+    Q --> O
+    O -- 是 --> R[Once 执行 AfterStop 并汇总失败]
+    R --> S[Run 返回 调用方逆序 Wire cleanup]
+    S --> T([结束])
+```
+
+数据库、Redis、Kafka 客户端、配置监听、Tracing/Metrics 和日志输出的释放由各自 provider 的 cleanup 负责；Runtime.Stop 不代替这些 cleanup。详细契约见 [Server](../server/README.md)、[Queue](../queue/README.md)、[Kafka](../kafka/README.md) 和 [Job](../job/README.md)。
+
+### 启动前资源回滚
+
+Kratos 在 `BeforeStart` 之前解析 Runtime 的 Endpoint；此时可能已经打开监听，但尚未调用 `Start`。`NewApp` 的端点包装会在解析失败时进入统一停止，`BeforeStart` 的失败、已取消的父 Context 和启动前停止请求也使用相同路径。先广播 stopping 并执行一次 `BeforeStop`，再按冻结时的 Runtime 登记顺序逆序调用可选的 `AbortStartup`，全部回滚后才执行一次 `AfterStop`。遍历完整的原始 Runtime 列表，包括当前解析失败的端点和还未查询的端点；未实现该可选方法的普通 Runtime 不会被调用 `Stop`。
+
+回滚 Context 保留父上下文值和 Kratos AppInfo，脱离原取消状态，并为整轮逆序回滚设置首次停止时冻结的 `app.stop_timeout` 预算。一个回滚失败或预算到期后，仍调用其余回滚方法并汇总错误；实现须响应取消，App 不能强制终止永久阻塞的回调。原始启动错误、停止钩子错误和回滚错误通过 `errors.Join` 保留，启动前父 Context 已取消仍返回 `context.Canceled`。本路径返回错误；回滚结果使用 app.startup.aborted / app.startup.abort.failed，最终启动故障由 app.stopped 汇总。
+
+这一保证适用于通过 Foundation 监听控制器持有、并由 `NewApp` 监督的 HTTP 业务及管理 Runtime。`bootstrap.NewKratosApp` 返回的底层 `*kratos.App` 同样经过这些包装，无需更换 `Run` 入口。单独构造的原生 Kratos Server、自定义 Runtime 和 gRPC 未纳入 HTTP 监听接管；只有它们自行实现 `AbortStartup` 时，App 才能回滚其启动前资源。正常启动之后继续由 `Runtime.Stop` 管理停止，Wire cleanup 仍由调用方在 `Run` 返回后逆序执行。
+
+```mermaid
+flowchart TD
+    A([SDK Run 解析受监督的 Endpoint]) --> B{端点解析成功?}
+    B -- 否 --> F[Once 冻结预算 广播 stopping]
+    B -- 是 --> C[执行 BeforeStart 并检查父 Context 与停止状态]
+    C --> D{允许启动?}
+    D -- 是 --> E([进入原有并发 Start 与 Stop 生命周期])
+    D -- 否 --> F
+    F --> G[锁外执行 BeforeStop 与既有服务注销处理]
+    G --> H[保留上下文值并设置整轮回滚预算]
+    H --> I[从原始 Runtime 列表逆序取下一项]
+    I --> J{实现 AbortStartup?}
+    J -- 否 --> M{还有未回滚项?}
+    J -- 是 --> K[锁外调用 AbortStartup 回收未启动资源]
+    K -- 失败或超时 --> L[汇总回滚错误 继续处理]
+    K -- 成功 --> M
+    L --> M
+    M -- 是 --> I
+    M -- 否 --> R{回滚汇总成功?}
+    R -- 是 --> RL[INFO app.startup.aborted]
+    R -- 否 --> RE[ERROR app.startup.abort.failed]
+    RL & RE --> N[Once 执行 AfterStop 并记录 app.stopped]
+    N --> O[合并启动 停止钩子 与回滚错误]
+    O --> P([Run 返回 调用方执行 Wire cleanup])
 ```
 
 ### Context 登记与应用
@@ -141,7 +224,7 @@ flowchart TD
 
 `app.NewStopPolicy(config, manager, logger)` 不依赖 Server 或 RuntimeBootstrap。建议 `app.stop_timeout` 大于 `server.stop_delay` 并预留资源清理时间，但不做跨组件硬校验；预算不足时可能在服务器等待或清理完成前耗尽。
 
-每次读取只在版本变化时校验，并用 CAS 保存读取时校验通过的预算；非法版本保留此前已校验的值，同一版本不重复记录错误。连续更新可能只读取最新版本。订阅解码失败由 HotReloadValue 记录 WARN 并保留原配置，合法更新和校验失败分别记录 `StopPolicy.current` INFO / ERROR。首次请求停机时冻结所读预算，后续更新不影响本次停机。Wire cleanup 幂等取消订阅。
+每次读取只在版本变化时校验，并用 CAS 保存读取时校验通过的预算；非法版本保留此前已校验的值，同一版本不重复记录错误。连续更新可能只读取最新版本。订阅解码失败由 HotReloadValue 记录 WARN 并保留原配置，预算变化和校验失败分别记录 INFO `app.stop_policy.updated` / WARN `app.stop_policy.rejected`，包含 version 和有效 stop_timeout。首次请求停机时冻结所读预算，后续更新不影响本次停机。Wire cleanup 幂等取消订阅。
 
 ```mermaid
 flowchart TD
@@ -150,14 +233,14 @@ flowchart TD
     C -- 否 --> D([取消已创建订阅，返回错误])
     C -- 是 --> E[保存初始预算与版本]
     U[配置更新] --> V{解码成功?}
-    V -- 否 --> W[WARN: config subscribe error，保留配置]
+    V -- 否 --> W[WARN config.value.rejected 保留配置]
     V -- 是 --> X[原子发布配置快照]
     R([并发读取 current]) --> S{发现新版本?}
     S -- 否 --> T([返回缓存预算])
     S -- 是 --> F[校验并准备预算，非法则沿用旧值]
     F --> G{CAS 发布已处理版本成功?}
     G -- 否 --> R
-    G -- 是 --> H[非法版本 ERROR；预算变化 INFO：StopPolicy.current]
+    G -- 是 --> H[非法版本 WARN app.stop_policy.rejected；预算变化 INFO app.stop_policy.updated]
     H --> T
     T --> I[首次停机请求冻结预算]
     I --> J([按冻结预算停机])
@@ -213,7 +296,7 @@ flowchart TD
 成功且未请求停机时为 true；收到停机请求立即为 false。ServerBootstrap 将它绑定到 `/readyz`，
 不会等 stop_delay 或资源 cleanup 才撤销就绪。状态通过原子变量读取，不在探针路径获取生命周期锁。
 
-`Spec.WaitReady(ctx)` 等待同一个单次 Ready 信号，供必须晚于启动后钩子的内部 Runtime 使用；Kratos 进入 AfterStart 且这些 hook 成功后解除等待。Kratos 会并发调用各 Runtime 的 `Start`，其正常实现通常阻塞到停止，因此 Ready 不代表每个 `Start` 已经返回成功，也不能提前确认任意自定义 Runtime 的异步初始化；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，其他依赖应通过 Before/AfterStart hook 或 readiness check 表达。若应用先停止，调用方传入的 Context 会取消等待并返回其错误。该信号不是健康检查订阅，也不会在后续 Ready=false 时重新阻塞；业务请求通常应读取 `Ready()`。通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 使用该信号，确保任务不会早于应用 Ready 执行。
+`Spec.WaitReady(ctx)` 等待同一个单次 Ready 信号，供必须晚于启动后钩子的内部 Runtime 使用；Kratos 进入 AfterStart 且这些 hook 成功后解除等待。Kratos 会并发调用各 Runtime 的 `Start`，其正常实现通常阻塞到停止，因此 Ready 不代表每个 `Start` 已经返回成功，也不能提前确认任意自定义 Runtime 的异步初始化；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，其他依赖应通过 Before/AfterStart hook 或 readiness check 表达。等待期间若调用方 Context 取消，返回该 Context 的错误；若应用请求停机，共享停止信号解除等待并返回 `context.Canceled`，不依赖 Runtime 的启动 Context 是否可取消。就绪和停机同时发生时优先识别停机；已经停机的应用即使曾经 Ready，新的 WaitReady 也返回取消。Ready 信号不是健康检查订阅，不会因后续依赖检查失败重新阻塞；业务请求通常应读取 `Ready()`。通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 使用该信号，确保任务不会早于应用 Ready 执行。
 
 ```mermaid
 flowchart TD
@@ -225,9 +308,11 @@ flowchart TD
     F -- 否 --> G[Ready=true]
     G --> K[关闭 Ready 信号 唤醒 Job 等待者]
     F -- 是 --> H[原子 stopping=true Ready=false]
-    K --> H
+    K -- 随后收到停机请求 --> H
     D --> H
-    H --> I[现有停止钩子 停机延迟 与运行时清理]
+    H --> H1[现有 stopOnce 关闭共享停止信号]
+    H1 --> H2[解除 WaitReady 等待 返回 context.Canceled]
+    H2 --> I[现有停止钩子 停机延迟 与运行时清理]
     I --> J([结束])
 ```
 
@@ -241,3 +326,28 @@ Context，使用支持取消的数据库/网络 API，为连接和读写配置�
 ## 驱动组装入口
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。
+
+## 应用日志
+
+`NewApp` 完成、`Run` 解析 Endpoint 和执行 BeforeStart 之前记录 INFO `app.assembled`。字段为 service.id/name/version、env、hostname、pid、executable、go_version、runtimes、service_registration，`msg=application assembled`；生命周期事件（assembled/ready/stopping/stopped/startup.aborted）均带固定 msg，便于在混合日志中直接阅读；env 优先使用最终 App metadata，否则读取 env.AppEnv，hostname 缺失时不推测。executable 只保留 argv[0] 的 basename，不展开 argv、任意 metadata 或配置内容。日志使用本应用登记的 Logger；输出级别和过滤仍由日志策略决定，不保证被过滤的字段可见。
+
+启动后钩子全部成功才记录 INFO `app.ready`；首次请求停止记录 INFO `app.stopping` 和冻结 stop_timeout；全部运行时与停止钩子汇总后记录 `app.stopped`：成功或纯取消为 INFO，真实失败为 ERROR，字段 result/error。事件自身表达操作，不额外拼写重复正文。构造依赖校验失败尚未形成 App 时返回给组装入口处理，不伪造 assembled/ready。应用级终态摘要可与特定 Worker 或任务错误并存，但 Runtime 包装层不重复记录原错误。
+
+```mermaid
+flowchart TD
+ A([NewApp 完成]) --> L[INFO app.assembled]
+ L --> E[Run 解析 Endpoint 并执行 BeforeStart]
+ E -- 启动前失败 --> S[既有 Once 请求停止 INFO app.stopping]
+ E -- 成功 --> C[并发启动 Runtime 完成 AfterStart]
+ C -- 全部成功 --> R[INFO app.ready]
+ C -- 真实失败 --> S
+ R -- 停止请求 --> S
+ S --> D{Runtime 已进入 Start?}
+ D -- 否 --> RB[逆序 AbortStartup 结果 INFO aborted 或 ERROR abort.failed]
+ D -- 是 --> T[等待既有 Runtime Start/Stop 收敛]
+ RB & T --> H[执行停止钩子和注销结果汇总]
+ H --> O{存在真实失败?}
+ O -- 是 --> F[ERROR app.stopped result=failed]
+ O -- 否 --> I[INFO app.stopped result=success 或 canceled]
+ F & I --> Z([返回结果 调用方逆序 cleanup])
+```

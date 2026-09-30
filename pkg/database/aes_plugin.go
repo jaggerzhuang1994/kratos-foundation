@@ -173,12 +173,14 @@ func encryptAESMap(db *gorm.DB, values map[string]any) map[string]any {
 		if value == nil {
 			continue
 		}
-		switch field.FieldType {
+		switch field.IndirectFieldType {
 		case reflect.TypeFor[AESDecryptString]():
 			if plain, ok := value.(string); ok {
 				value = AESDecryptString(plain)
 			}
-			if _, ok := value.(AESDecryptString); !ok {
+			switch value.(type) {
+			case AESDecryptString, *AESDecryptString:
+			default:
 				db.AddError(fmt.Errorf("encrypt database field %s: unexpected value type %T", field.Name, value))
 				continue
 			}
@@ -186,7 +188,9 @@ func encryptAESMap(db *gorm.DB, values map[string]any) map[string]any {
 			if plain, ok := value.([]byte); ok {
 				value = AESDecryptBytes(plain)
 			}
-			if _, ok := value.(AESDecryptBytes); !ok {
+			switch value.(type) {
+			case AESDecryptBytes, *AESDecryptBytes:
+			default:
 				db.AddError(fmt.Errorf("encrypt database field %s: unexpected value type %T", field.Name, value))
 				continue
 			}
@@ -203,6 +207,10 @@ func encryptAESMap(db *gorm.DB, values map[string]any) map[string]any {
 }
 
 func isAESFieldType(fieldType reflect.Type) bool {
+	// GORM 支持指针字段表示 NULL，不能因可空包装而跳过整个加密边界。
+	for fieldType != nil && fieldType.Kind() == reflect.Pointer {
+		fieldType = fieldType.Elem()
+	}
 	return fieldType == reflect.TypeFor[AESDecryptString]() ||
 		fieldType == reflect.TypeFor[AESDecryptBytes]()
 }

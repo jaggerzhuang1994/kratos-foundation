@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	internaltelemetry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue/internal/telemetry"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
@@ -154,8 +153,6 @@ type dispatcher struct {
 	name string
 	// store 借用显式注入的队列后端，连接由原拥有者释放。
 	store Store
-	// log 为队列模块日志入口。
-	log log.Logger
 	// telemetry 记录投递追踪和指标。
 	telemetry *internaltelemetry.Telemetry
 }
@@ -173,7 +170,7 @@ func newDispatcher(name string, store Store, observability Observability) (*disp
 	if err != nil {
 		return nil, fmt.Errorf("create queue dispatcher telemetry: %w", err)
 	}
-	return &dispatcher{name: name, store: store, log: observability.Logger.WithModule("queue"), telemetry: telemetry}, nil
+	return &dispatcher{name: name, store: store, telemetry: telemetry}, nil
 }
 
 // dispatch 投递即时或延迟任务，返回实际 ID，不修改输入。
@@ -192,9 +189,9 @@ func (d *dispatcher) dispatch(ctx context.Context, task *Task) (string, error) {
 	err = d.store.Enqueue(spanCtx, prepared)
 	result := "success"
 	if err != nil {
+		// 错误同步返回给投递方决定重试或响应，这里只标记 span 与指标，避免同一失败重复记录日志。
 		result = "error"
 		span.SetStatus(codes.Error, "enqueue failed")
-		d.log.WithContext(spanCtx).Errorw("event", "enqueue.failed", "queue", d.name, "task.id", prepared.ID)
 	}
 	d.telemetry.RecordProducer(spanCtx, d.name, "dispatch", result, 1, time.Since(started))
 	if err != nil {

@@ -82,7 +82,7 @@ func (m *Manager) logRegistrations(ctx context.Context) {
 			"schedule", registration.schedule,
 			"registration.caller", registration.caller,
 			"enabled", registration.enabled,
-		).Info("job.registered")
+		).Info("job registered")
 	}
 }
 
@@ -171,7 +171,8 @@ func (m *Manager) startOnceJobs(ctx context.Context) <-chan error {
 
 	var done chan error
 	if m.exitWhenDone {
-		done = make(chan error, 1)
+		// 无缓冲交接确定错误出口，避免 Start 因取消退出后把结果留在无人读取的缓冲区。
+		done = make(chan error)
 	}
 	var wait sync.WaitGroup
 	var mu sync.Mutex
@@ -198,8 +199,13 @@ func (m *Manager) startOnceJobs(ctx context.Context) <-chan error {
 		wait.Wait()
 		err := errors.Join(errs...)
 		if m.exitWhenDone {
-			done <- err
-			return
+			select {
+			case done <- err:
+				// Start 已接收结果，由返回值处理，不能再通过 ErrorHandler 重复上报。
+				return
+			case <-ctx.Done():
+				// Start 可能已及时返回取消；沿用汇总协程承接剩余真实错误，Stop 仍等待它结束。
+			}
 		}
 		if err != nil {
 			m.options.ErrorHandler(ctx, "once", err)

@@ -65,7 +65,7 @@ flowchart TD
     D --> E[外部 SQLite 事务读更新提交 递归汇总慢SQL]
     E --> F[外部 Redis 缓存 miss 回源后三次 hit]
     F --> G[外部 Redis 获取租约 同键竞争 TTL 续租]
-    G --> H[释放租约 INFO dataService.exerciseLock refreshed]
+    G --> H[释放租约 DEBUG demo.lease.refreshed]
     H --> I[OSS 模拟服务 CRUD 完整读和 Close 删除]
     I --> J[外部 Kafka和Redis Queue 投递]
     J --> K[Foundation Client 调 Hello Catalog Inventory 三个HTTP接口]
@@ -128,3 +128,21 @@ flowchart TD
 本次逐项结果见 [本地实测记录](verification.md)。
 
 示例已导入 Consul 注册驱动并配置 `registry.instances.default`。`app.registry` 默认选择此实例；本地未设置 `CONSUL_HTTP_ADDR` 时驱动自动禁用，也可显式设置 `DISABLE_CONSUL=true` 跳过注册。生产环境按 Consul 驱动文档配置环境变量。
+
+## 启动和业务日志
+
+命令在 flag 解析成功后、Wire initialize 之前记录 INFO `command.starting`：command/version/env/config_path。随后来源选择、config.loaded 和 app.assembled 分别记录实际配置来源、加载结果及应用身份；早期日志使用 fallback，Logger 安装后的事件进入应用输出，不回放早期事件。维护任务、租约刷新及逐条邮件/报表成功为 DEBUG；demo.completed、demo.messages.dispatched 为 INFO 阶段汇总，后者表示投递完成，不表示异步消费完成。demo.inventory.failed 与 demo.component.failed 是隐藏内部错误前的 ERROR 诊断，带 Context 与定位字段；直接返回给中间件的出站故障不在服务再次重复记录。
+
+```mermaid
+flowchart TD
+ A([命令开始]) --> F{flag 有效?}
+ F -- 否 --> X([返回参数错误])
+ F -- 是 --> L[INFO command.starting]
+ L --> W[Wire 构造来源 配置 资源及应用]
+ W -- 失败 --> X
+ W -- 成功 --> AL[INFO app.assembled]
+ AL --> R[Run 并执行演示请求与后台任务]
+ R --> E[DEBUG 执行详情 INFO 阶段汇总 ERROR 处理边界失败]
+ E --> S[统一停机 等待 Run 返回]
+ S --> C([逆序 cleanup])
+```

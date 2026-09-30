@@ -185,7 +185,7 @@ func TestConsumerRecoveryBackoffGrowsAndResetsAfterCommit(t *testing.T) {
 	}
 	var attempts []string
 	for _, line := range strings.Split(string(data), "\n") {
-		if strings.Contains(line, "reconnecting the Kafka consumer after a connection failure") {
+		if strings.Contains(line, "event=kafka.consumer.reconnecting") {
 			attempts = append(attempts, line)
 		}
 	}
@@ -193,7 +193,7 @@ func TestConsumerRecoveryBackoffGrowsAndResetsAfterCommit(t *testing.T) {
 		t.Fatalf("recovery logs = %v", attempts)
 	}
 	for index, expected := range []string{"attempt=1", "attempt=2", "attempt=1"} {
-		if !strings.Contains(attempts[index], expected) || !strings.Contains(attempts[index], "request.id=consumer-1") {
+		if !strings.Contains(attempts[index], expected) || !strings.Contains(attempts[index], "request.id=consumer-1") || !strings.HasPrefix(attempts[index], "WARN ") {
 			t.Fatalf("log %d = %s, want %s and consumer context", index, attempts[index], expected)
 		}
 	}
@@ -381,7 +381,7 @@ func TestConsumerCancellationKeepsSDKAliveUntilLeaveGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, event := range []string{"kafka consumer is ready", "failed to leave the Kafka consumer group"} {
+	for _, event := range []string{"event=kafka.consumer.session_prepared", "event=kafka.consumer.leave_failed"} {
 		var matched string
 		for _, line := range strings.Split(string(written), "\n") {
 			if strings.Contains(line, event) {
@@ -391,6 +391,9 @@ func TestConsumerCancellationKeepsSDKAliveUntilLeaveGroup(t *testing.T) {
 		}
 		if !strings.Contains(matched, "request.id=shutdown-1") {
 			t.Fatalf("%q log lost worker context: %s", event, matched)
+		}
+		if event == "event=kafka.consumer.leave_failed" && !strings.HasPrefix(matched, "WARN ") {
+			t.Fatalf("leave failure must remain Warn: %s", matched)
 		}
 	}
 }

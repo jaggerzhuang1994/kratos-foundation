@@ -129,7 +129,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	serverBootstrap, cleanup8, err := bootstrap.NewServerBootstrap(spec, serverSpec, manager, logger, provider, tracingProvider)
+	serverBootstrap, cleanup8, err := bootstrap.NewServerBootstrap(spec, serverSpec, manager, logger, provider, tracingProvider, bootstrapBootstrap)
 	if err != nil {
 		cleanup7()
 		cleanup6()
@@ -140,7 +140,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, jobSpec, manager, logger, provider, tracingProvider)
+	jobBootstrap, err := bootstrap.NewJobBootstrap(spec, jobSpec, manager, logger, provider, tracingProvider, bootstrapBootstrap)
 	if err != nil {
 		cleanup8()
 		cleanup7()

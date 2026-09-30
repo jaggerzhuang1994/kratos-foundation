@@ -11,6 +11,7 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -44,7 +45,7 @@ func (l *boundaryLogger) WithContext(ctx context.Context) log.Logger {
 	return l
 }
 func (l *boundaryLogger) With(fields ...any) log.Logger {
-	l.fields = append([]any(nil), fields...)
+	l.fields = append(l.fields, fields...)
 	return l
 }
 func (l *boundaryLogger) Error(message ...any) {
@@ -66,7 +67,7 @@ func TestNormalizeErrorsRecordsOnlyServerFailure(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			logger := &boundaryLogger{}
-			ctx := context.Background()
+			ctx := transport.NewServerContext(context.Background(), boundaryTransport{})
 			result, err := normalizeErrors(logger)(func(context.Context, any) (any, error) { return "reply", tc.err })(ctx, "secret-request")
 			if result != "reply" || foundationerrors.Code(err) != tc.code || len(logger.entries) != tc.logs {
 				t.Fatalf("reply=%v err=%v logs=%v", result, err, logger.entries)
@@ -77,6 +78,11 @@ func TestNormalizeErrorsRecordsOnlyServerFailure(t *testing.T) {
 				}
 				if strings.Contains(logger.entries[0], "secret-request") {
 					t.Fatal("request leaked")
+				}
+				for _, field := range []string{"eventserver.request.failed", "transportgrpc", "endpointgrpc://localhost:9000", "operation/test/Call"} {
+					if !strings.Contains(logger.entries[0], field) {
+						t.Fatalf("request diagnostic missing %s: %s", field, logger.entries[0])
+					}
 				}
 			}
 		})
@@ -96,10 +102,16 @@ func TestRecoveryDoesNotExposeRequestOrPanicPayload(t *testing.T) {
 	if foundationerrors.FromError(foundationerrors.FromError(err).GRPCStatus().Err()).ErrStack() == "" {
 		t.Fatal("panic stack lost in gRPC response")
 	}
-	if !strings.Contains(logger.entries[0], "panic_type") {
-		t.Fatal("panic type missing")
+	if !strings.Contains(logger.entries[0], "panic_type") || !strings.Contains(logger.entries[0], "eventserver.request.panic.recovered") {
+		t.Fatal("panic type or event missing")
 	}
 }
+
+type boundaryTransport struct{ transport.Transporter }
+
+func (boundaryTransport) Kind() transport.Kind { return transport.KindGRPC }
+func (boundaryTransport) Endpoint() string     { return "grpc://localhost:9000" }
+func (boundaryTransport) Operation() string    { return "/test/Call" }
 
 func TestRequestFailureDiagnosticsFollowRequestDebug(t *testing.T) {
 	logger, path := newBoundaryTestLogger(t)
@@ -154,16 +166,20 @@ func TestRequestPanicStackFollowsRequestDebug(t *testing.T) {
 	}
 }
 
-func newBoundaryTestLogger(t *testing.T) (log.Logger, string) {
+func newBoundaryTestLogger(t *testing.T, levels ...kratoslog.Level) (log.Logger, string) {
 	t.Helper()
+	level := kratoslog.LevelInfo
+	if len(levels) > 0 {
+		level = levels[0]
+	}
 	path := filepath.Join(t.TempDir(), "server.log")
 	logger, cleanup, err := testlog.New(testlog.Config{
-		Level:       kratoslog.LevelInfo,
+		Level:       level,
 		FilterEmpty: true,
 		TimeFormat:  time.RFC3339,
-		Std:         testlog.OutputConfig{Disable: true, Level: kratoslog.LevelInfo},
+		Std:         testlog.OutputConfig{Disable: true, Level: level},
 		File: testlog.FileConfig{
-			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelInfo},
+			OutputConfig: testlog.OutputConfig{Level: level},
 			Path:         path,
 			Rotating:     testlog.RotatingConfig{Disable: true},
 		},

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
 var errAppStopping = errors.New("application is stopping")
@@ -15,10 +17,18 @@ func (a *App) setFinalError(fn func() error) {
 
 // requestStop 只在首次停止请求时冻结超时，避免热更新改变正在进行的停机预算。
 func (a *App) requestStop() {
+	first := false
 	a.stopOnce.Do(func() {
 		a.stopTime = a.stopPolicy.current()
 		a.stopping.Store(true)
+		// 先发布停机状态，再广播解除 Ready 等待；停止前钩子无需等候尚未启动的 Job。
+		close(a.stoppingSignal)
+		first = true
 	})
+	if first {
+		// 日志在应用状态的 Once 边界之外执行，缩小状态同步的临界区。
+		a.logEvent(a.parent, kratoslog.LevelInfo, "app.stopping", "application stopping", "stop_timeout", a.stopTime)
+	}
 }
 
 // isStopping 报告应用是否已经进入停止阶段。
@@ -89,6 +99,7 @@ func (a *App) runAfterStart(ctx context.Context) error {
 	// 原子状态先发布，再关闭 channel；等待者解除阻塞后即可观察完整 ready 状态。
 	if a.ready.CompareAndSwap(false, true) {
 		close(a.readySignal)
+		a.logEvent(ctx, kratoslog.LevelInfo, "app.ready", "application ready")
 	}
 	return nil
 }
@@ -107,6 +118,7 @@ func (a *App) runBeforeStop(ctx context.Context) error {
 
 // runAfterStop 确保停止前后钩子各执行一次，并汇总全部清理错误。
 func (a *App) runAfterStop(ctx context.Context) error {
+	finished := false
 	a.afterStopOnce.Do(func() {
 		beforeStopErr := a.runBeforeStop(ctx)
 		hookCtx := a.shutdownContext(ctx)
@@ -119,7 +131,21 @@ func (a *App) runAfterStop(ctx context.Context) error {
 		if a.finalError != nil {
 			a.afterStopErr = errors.Join(a.afterStopErr, a.finalError())
 		}
+		finished = true
 	})
+	if finished {
+		level, result := kratoslog.LevelInfo, "success"
+		fields := []any{}
+		if err := a.afterStopErr; err != nil {
+			if isCancellationOnly(err) {
+				result = "canceled"
+			} else {
+				level, result = kratoslog.LevelError, "failed"
+				fields = append(fields, "error", err)
+			}
+		}
+		a.logEvent(a.shutdownContext(ctx), level, "app.stopped", "application stopped", append([]any{"result", result}, fields...)...)
+	}
 	return a.afterStopErr
 }
 

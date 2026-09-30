@@ -5,6 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 var version = "dev"
@@ -22,6 +25,9 @@ func run(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	// 组装前仅记录入口与环境摘要，不输出 argv 或配置内容。
+	log.WithModule("cmdapp").With("event", "command.starting", "command", flags.Name(),
+		"version", version, "env", env.AppEnv(), "config_path", *path).Info("starting application")
 	application, cleanup, err := initialize(configPath(*path), version)
 	if err != nil {
 		return fmt.Errorf("initialize application: %w", err)

@@ -20,16 +20,19 @@ import (
 )
 
 type assembly struct {
-	App      *kratos.App
-	Spec     *app.Spec
-	Info     appinfo.AppInfo
-	Manager  config.Manager
-	Logger   log.Logger
-	Metrics  metrics.Provider
-	Tracing  tracing.Provider
-	Tracer   tracing.Tracing
-	Database database.Manager
-	Server   *businessServer
+	// 首先请求阶段结果，防止 Wire 输出字段顺序偶然掩盖 Boot 前置依赖。
+	JobStage    bootstrap.JobBootstrap
+	ServerStage bootstrap.ServerBootstrap
+	App         *kratos.App
+	Spec        *app.Spec
+	Info        appinfo.AppInfo
+	Manager     config.Manager
+	Logger      log.Logger
+	Metrics     metrics.Provider
+	Tracing     tracing.Provider
+	Tracer      tracing.Tracing
+	Database    database.Manager
+	Server      *businessServer
 }
 
 // 业务阶段显式依赖基础设施完成标记，阶段内部不规定额外顺序。

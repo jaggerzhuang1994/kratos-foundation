@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
@@ -29,6 +28,7 @@ func NewServerBootstrap(
 	logger log.Logger,
 	meter metrics.Provider,
 	tracer tracing.Provider,
+	_ Bootstrap,
 ) (ServerBootstrap, func(), error) {
 	runtime, cleanup, err := server.NewRuntime(manager, logger, meter, tracer, servers)
 	if err != nil {
@@ -58,7 +58,7 @@ func NewServerBootstrap(
 	return ServerBootstrap{}, cleanup, nil
 }
 
-// NewJobBootstrap 在 Server 完成后构造并登记选中的任务，不启动任务。
+// NewJobBootstrap 在业务 Boot 完成后构造并登记选中的任务，不依赖 Server 或启动任务。
 // 无任务时不登记 Runtime；由 Wire 保证构造顺序与单次调用，失败后应丢弃 Spec。
 func NewJobBootstrap(
 	application *app.Spec,
@@ -67,6 +67,7 @@ func NewJobBootstrap(
 	logger log.Logger,
 	meter metrics.Provider,
 	tracer tracing.Provider,
+	_ Bootstrap,
 ) (JobBootstrap, error) {
 	manager, err := job.NewManager(logger, jobs, tracer, meter, configuration)
 	if err != nil {
@@ -93,7 +94,7 @@ func (r *jobRuntime) Start(ctx context.Context) error {
 	}
 	err := r.Manager.Start(ctx)
 	// Manager 的完成信号为独立哨兵；包含该哨兵的任务错误仍应原样传播。
-	if errors.Is(err, job.ErrCompleted) {
+	if err == job.ErrCompleted {
 		return app.ErrStopRequested
 	}
 	return err

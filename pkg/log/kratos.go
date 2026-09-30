@@ -24,10 +24,18 @@ func (kratosProxy) Log(level kratoslog.Level, keyvals ...any) error {
 		if key != "msg" || !ok {
 			continue
 		}
+		// 正常 watcher 取消逐来源发生，归为调试事件，避免退出时 INFO 刷屏。
+		if message == "watcher's ctx cancel : context canceled" {
+			keyvals = slices.Clone(keyvals)
+			keyvals[i+1] = "config watcher stopped"
+			keyvals = append(keyvals, "event", "config.watcher.stopped")
+			level = kratoslog.LevelDebug
+		}
 		for _, prefix := range []string{"Failed to config decode error:", "Failed to config merge error:", "failed to merge config source:", "failed to merge next config:"} {
 			if strings.HasPrefix(message, prefix) {
 				keyvals = slices.Clone(keyvals)
 				keyvals[i+1] = "Failed to load configuration; raw configuration error omitted"
+				keyvals = append(keyvals, "event", "config.source.rejected")
 				break
 			}
 		}

@@ -15,11 +15,11 @@ flowchart TD
  C -- 否 --> D[等待首次调用结束，读取已发布结果]
  C -- 是 --> E[读取 env 固定启用决策及连接配置]
  E --> F{已禁用?}
- F -- 是 --> G[WARN consul client is disabled；缓存 disabled=true]
- F -- 否 --> H[INFO 初始化；构造客户端并探测 leader，限时10秒]
+ F -- 是 --> G[INFO consul.client.disabled；缓存 disabled=true]
+ F -- 否 --> H[INFO consul.client.probing；构造客户端并探测 leader，限时10秒]
  H --> I{成功?}
  I -- 否 --> J[缓存初始化错误，不再创建客户端]
- I -- 是 --> K[缓存客户端，所有权归进程]
+ I -- 是 --> K[INFO consul.client.ready；缓存客户端，所有权归进程]
  G --> L[Once 完成并发布结果]
  J --> L
  K --> L
@@ -34,3 +34,5 @@ flowchart TD
 ```
 
 同步范围仅包括首次初始化及结果发布。并发首次调用最多等待一次 10 秒探测；没有驱动级锁，也没有失败重试循环。测试使用本机 HTTP 服务验证并发单例、环境冻结、失败缓存、域名与 env token 传递。
+
+初始化日志均为 INFO：预期禁用使用 `consul.client.disabled`，探测前使用 `consul.client.probing`（`timeout=10s`），探测成功使用 `consul.client.ready`。初始化失败只返回并缓存错误，由启动边界决定日志；不额外输出 ERROR。日志不记录 env 原地址、令牌或 TLS 配置，避免带 URL 用户信息的地址泄露凭据。初始化是进程后台生命周期，没有业务请求 trace。

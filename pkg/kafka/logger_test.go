@@ -27,6 +27,7 @@ func TestKafkaLoggerLevelsAndForwarding(t *testing.T) {
 	}
 	logs := string(written)
 	for _, fragment := range []string{
+		"event=kafka.sdk",
 		"DEBUG ", "INFO ", "WARN ", "ERROR ",
 		"msg=debug event", "msg=info event", "msg=warn event", "msg=error event",
 		fmt.Sprintf("caller=kafka/logger_test.go:%d", line+1),

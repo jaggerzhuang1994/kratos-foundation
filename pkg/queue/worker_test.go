@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -25,6 +26,12 @@ func TestWorkerLifecycle(t *testing.T) {
 		}
 		if err = <-done; err != nil {
 			t.Fatal(err)
+		}
+		logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+		for _, event := range []string{"queue.worker.started", "queue.worker.stopped"} {
+			if strings.Count(logs, "INFO event"+event) != 1 || !strings.Contains(logs, "queuemailworkerworker") {
+				t.Fatalf("incomplete worker lifecycle log: %s", logs)
+			}
 		}
 		if err = w.Start(context.Background()); err == nil {
 			t.Fatal("restarted worker")

@@ -12,7 +12,7 @@ info := appinfo.New(version)
 
 主机名与可执行文件名在包初始化时采集：主机名读取失败使用 `unknown-host`；可执行文件路径读取失败时使用 `os.Args[0]` 的 basename，无参数时使用 `unknown-executable`。后续环境变化不会改变已有 AppInfo；应用应构造一次并共享同一实例。
 
-组装时，`bootstrap.NewAppInfoBootstrap(appSpec, info)` 会同步向 `app.Spec` 登记唯一 AppInfo，并通过包级 `log.RegisterFields` 添加 `service.id`、`service.name` 与 `service.version` 字段。该函数只返回完成标记，`appSpec` 由组装层提供：
+组装时，`bootstrap.NewAppInfoBootstrap(appSpec, info)` 会同步向 `app.Spec` 登记唯一 AppInfo，并通过包级 `log.RegisterFields` 添加 `service.id`、`service.name`、`service.version` 与 `env` 字段。该函数只返回完成标记，`appSpec` 由组装层提供：
 
 ```go
 contribution := bootstrap.NewAppInfoBootstrap(appSpec, info)
@@ -34,3 +34,5 @@ flowchart TD
 ```
 
 登记本身不记录业务日志；后续 Logger 写入才求值并输出这些字段。全局设置由日志包的 CAS 发布机制管理，详见 [日志共享设置](../log/README.md#组件日志字段)。
+
+身份构造与登记不各自输出一行日志。应用在 `app.NewApp` 完成后、`Run` 之前通过 `app.assembled` 一次性输出身份与执行摘要，见[应用日志](../app/README.md#应用日志)。

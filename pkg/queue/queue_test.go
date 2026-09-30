@@ -167,14 +167,15 @@ func (l *testLog) WithModule(module string) log.Logger {
 
 func (l *testLog) With(...any) log.Logger                 { return l }
 func (l *testLog) WithContext(context.Context) log.Logger { return l }
-func (l *testLog) Debugw(args ...any) {
+func (l *testLog) record(level string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.events = append(l.events, fmt.Sprint(args...))
+	l.events = append(l.events, level+" "+fmt.Sprint(args...))
 }
-func (l *testLog) Infow(args ...any)  { l.Debugw(args...) }
-func (l *testLog) Warnw(args ...any)  { l.Debugw(args...) }
-func (l *testLog) Errorw(args ...any) { l.Debugw(args...) }
+func (l *testLog) Debugw(args ...any) { l.record("DEBUG", args...) }
+func (l *testLog) Infow(args ...any)  { l.record("INFO", args...) }
+func (l *testLog) Warnw(args ...any)  { l.record("WARN", args...) }
+func (l *testLog) Errorw(args ...any) { l.record("ERROR", args...) }
 
 type tracingProvider struct{ tp trace.TracerProvider }
 

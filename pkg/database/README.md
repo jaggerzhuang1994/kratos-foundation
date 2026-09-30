@@ -15,7 +15,7 @@ import (
 )
 ```
 
-空导入触发的 `init()` 向 `pkg/database` 注册无状态工厂并记录注册日志，不会打开连接或访问数据库。连接由 `database.NewManager` 根据配置创建和管理。
+空导入触发的 `init()` 向 `pkg/database` 注册无状态工厂，不执行日志 I/O，不会打开连接或访问数据库。连接由 `database.NewManager` 根据配置创建和管理。
 
 配置中的 canonical 驱动名是 `mysql` 和 `sqlite3`；省略 `driver` 时使用 `mysql`：
 
@@ -95,12 +95,14 @@ flowchart TD
 
 Model 使用 `AESDecryptString` / `AESDecryptBytes` 声明加密字段。普通结构体写入由 serializer 加密；`Model(...).Create` 或 `Updates` 使用 map 时，插件按 Model 字段信息包装原生 serializer，在 SQL 绑定时加密，包括 `[]map[string]any` 及指针包装。插件复制 map 与批量切片，不向调用方原值写回密文或自增 ID。批量副本使用 GORM RETURNING 支持的切片指针形态，兼容自增主键及显式 Returning。Updates 保留 Model 的主键反射和明文回写，Returning 按 AES 字段类型解密。读取使用当前连接的 key 解密；缺少 key 的 AES 字段写入返回 `ErrAESConfigMissing`，不会把该批数据写入数据库。
 
+Model 也可使用 `*AESDecryptString` / `*AESDecryptBytes`：非 nil 指针的结构体和 map 写入同样加密，nil 指针写为 SQL `NULL`。map 可提供对应 AES 值或指针，普通 `string` / `[]byte` 会按 Model 字段转换；未类型化的 nil 同样写为 `NULL`。这些 NULL 写入仍须配置 key，不能借 nil 绕过密钥检查。此支持保留 GORM 自动 serializer 的扫描行为：数据库 `NULL` 读入指针字段后得到**非 nil 零值指针**（字符串为 `""`、字节值为 nil），不会还原 nil 指针；因此不能据此区分 NULL 与空字段。非 NULL 密文正常解密为明文指针，需要严格保留读取 NULL 的业务应另行选择有明确 NULL 契约的存储映射。
+
 读取时，数据库值为 `NULL`、空字符串或长度为 0 的字节切片（含 `[]byte(nil)`）会跳过密钥读取和解密，并将 `AESDecryptString` 清为 `""`、`AESDecryptBytes` 清为 `nil`。非空值仍须使用当前连接的 key 解密；空值写入仍走原有加密流程。
 
 ```mermaid
 flowchart TD
     A([Scan 开始]) --> B{数据库值为 NULL?}
-    B -- 是 --> C[清空接收字段]
+    B -- 是 --> C[清空接收字段 GORM 指针字段返回非 nil 零值指针]
     B -- 否 --> D{值为 string 或字节切片?}
     D -- 否 --> E([返回类型错误])
     D -- 是 --> F{长度为 0?}
@@ -121,19 +123,26 @@ flowchart TD
     A([GORM Create 或 Update]) --> B[注入当前根实例的固定 AES 状态]
     B --> C{目标是 map 或批量 map?}
     C -- 是 --> D[解除指针包装，复制每条 map]
-    D --> E{Model 字段是 AES 类型?}
+    D --> E{Model 字段是 AES 类型或其指针?}
     E -- 否 --> H[保留普通字段]
     E -- 是 --> F{key 与字段值类型有效?}
     F -- 否 --> G[设置语句错误，禁止当前写入]
     F -- 是 --> I[以原生 serializer 包装复制后的字段]
-    C -- 否 --> J[由 GORM 字段 serializer 加密]
-    J -- key或加密失败 --> G
-    J -- 成功 --> K[外部数据库执行 SQL]
+    C -- 否 --> J[由 GORM 字段 serializer 校验 key 和值类型]
+    J -- 失败 --> G
+    J -- 成功 --> V{字段值为 nil 指针?}
+    V -- 是 --> W[绑定 SQL NULL]
+    V -- 否 --> X[AES 加密并绑定密文]
+    X -- 加密失败 --> G
+    X -- 成功 --> K[外部数据库执行 SQL]
+    W --> K
     I --> S{Create 或 Update?}
     S -- Create --> T[只同步副本的结果接收目标，支持自增主键 Returning]
     S -- Update --> U[保留 Model 反射，用于主键条件与明文回写]
-    T --> K
-    U --> K
+    T --> Y{复制后的字段为 nil 或 nil 指针?}
+    U --> Y
+    Y -- 是 --> W
+    Y -- 否 --> X
     H --> K
     K -- 失败或超时 --> L([向调用层返回错误])
     G --> L
@@ -146,7 +155,7 @@ flowchart TD
 
 新增 PostgreSQL 等实现时，应在独立公共 `contrib/database/<driver>` 包中调用 `database.MustRegisterDriver`，业务只需选择性空导入该包。
 
-驱动注册成功时使用全局日志记录 `module=database` 和规范化的 `driver` 名称，消息为 `registered database driver`。MySQL、SQLite 的空导入注册均适用；不记录 DSN 或密钥，注册失败只返回错误。
+驱动注册入口只校验并登记无状态工厂，不读取配置、创建资源或执行日志等 I/O，以保持 contrib `init` 无副作用。驱动启用信息在 Manager 构造成功后通过 `database.manager.ready` 的 `drivers` 字段记录；注册失败只返回错误。
 
 ```mermaid
 flowchart TD
@@ -157,8 +166,7 @@ flowchart TD
     D -- 是 --> F[释放锁并返回错误]
     F --> E
     D -- 否 --> G[登记工厂并释放锁]
-    G --> H[全局 INFO registered database driver]
-    H --> I([注册成功])
+    G --> I([注册成功 不执行 I/O])
 ```
 
 ## 连接池热更新
@@ -174,16 +182,16 @@ Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_con
 ```mermaid
 flowchart TD
     A([database 订阅收到新配置]) --> B{解码与配置校验通过?}
-    B -- 否 --> C[ERROR rejected database configuration update]
+    B -- 否 --> C[WARN database.config.rejected 保留现有池参数]
     B -- 是 --> D{排除池参数后与启动配置相同?}
-    D -- 否 --> E[WARN skipped database hot update]
+    D -- 否 --> E[WARN database.config.restart_required 保留现有池参数]
     D -- 是 --> D1{与最近已应用配置相同?}
     D1 -- 是 --> I
     D1 -- 否 --> F[查询原连接池：短暂持有 factory 锁后释放]
     F --> G[补齐默认值；先更新总上限，再更新空闲上限与过期时间]
     G --> G1[保存最近已应用快照 同一订阅回调串行执行]
     G1 --> H{有连接完成更新?}
-    H -- 是 --> J[INFO updated database connection pool settings]
+    H -- 是 --> J[INFO database.pool.updated]
     C --> I([结束])
     E --> I
     H -- 否 --> I
@@ -245,11 +253,13 @@ flowchart TD
     D --> E
     B -- 失败 --> F[回收已创建资源并返回错误]
     D -- 失败 --> F
-    E --> G[Wire cleanup 停配置订阅]
+    E --> E1[INFO database.manager.ready 连接数量]
+    E1 --> G[Wire cleanup 停配置订阅]
     G --> H[停采集并注销指标]
     H --> I[逆序关闭连接池]
-    I -- 关闭失败 --> J[ERROR failed to close a database connection]
-    I -- 成功 --> K([结束])
+    I -- 关闭失败 --> J[ERROR database.cleanup.failed]
+    I -- 成功 --> I1[INFO database.manager.closed]
+    I1 --> K([结束])
     J --> K
     F --> K
 ```
@@ -274,7 +284,7 @@ flowchart LR
 
 ## SQL 日志来源
 
-`database/gorm` 使用 GORM 的结构化 slog 接口，不再把来源、耗时、影响行数和 SQL 拼接成一段 `msg`。查询日志固定包含 `event=gorm.query`、`duration` 和 `sql`；GORM 能确定影响行数时增加 `rows`，失败时增加 `err`，慢查询增加 `slow_threshold`。普通的 GORM Info/Warn/Error 事件仍使用 `msg`。
+`database/gorm` 使用 GORM 的结构化 slog 接口，不再把来源、耗时、影响行数和 SQL 拼接成一段 `msg`。查询日志固定包含 `event=database.gorm.query`、`duration` 和 `sql`；GORM 能确定影响行数时增加 `rows`，失败时增加 `err`，慢查询增加 `slow_threshold`。普通的 GORM Info/Warn/Error 事件仍使用 `msg`。
 
 结构化 `caller` 使用 GORM 提供的查询来源，格式为 `目录/文件:行号`，不依赖固定跳栈层数；GORM 无法提供有效来源时沿用日志包默认 caller。请求 Context 会继续传给 Foundation logger：存在有效 SpanContext 时，SQL 日志自动附带 `trace.id` 和 `span.id`；没有活动 Span 时不会生成虚假的关联 ID，默认 `LOG_FILTER_EMPTY=true` 会省略对应空字段，显式关闭空值过滤时则可能保留空字段。HTTP、WebSocket、Job 和队列任务执行应把派生 Context 传入数据库操作；队列领取前的空轮询、启动与清理等后台生命周期操作通常没有活动 Span，因此不含有效关联 ID 属于预期行为。
 
@@ -306,3 +316,5 @@ flowchart TD
 ```
 
 数据库管理日志使用 `database`，SQL 日志使用 `database/gorm`；通过 `log.modules` 集中配置级别、禁用和追加过滤，`database.log` 已移除。可用 `database*` 匹配两者。GORM 自身的 SQL 生成开关、慢查询阈值等仍由 gorm.logger 决定，Foundation 模块策略不能恢复 GORM 未生成的日志。详见 [log](../log/README.md#模块策略)。
+
+Manager 生命周期事件使用 `database.manager.ready`、`database.manager.closed`（INFO），启动就绪含 `connections` 和实际使用的 `drivers` 名称集合；这里只表示 Manager 资源组装成功，是否执行启动 Ping 仍由 GORM 配置决定，不承诺外部数据库始终可用。无返回值 cleanup 的关闭错误聚合后只记录 `database.cleanup.failed`（ERROR、`error`）；构造失败同步回滚并返回错误，由启动边界处理。热更新校验拒绝记录 `database.config.rejected`（WARN、`error`），拓扑或插件变化记录 `database.config.restart_required`（WARN），二者保留现有资源。合法池参数变化记录 `database.pool.updated`（INFO、`connections`）。这些低频事件不包含 DSN、AES 密钥或配置全文；SQL 请求日志仍按上述 GORM 策略处理。

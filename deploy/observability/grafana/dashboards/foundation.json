@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "ack-container-overview",
-  "title": "ACK · 容器概览",
+  "title": "ACK · 容器与节点",
   "tags": [
     "ACK",
     "Kubernetes",
@@ -9,7 +9,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-1h",
@@ -81,6 +81,54 @@
           "text": "All",
           "value": "$__all"
         }
+      },
+      {
+        "name": "app",
+        "label": "应用",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(up{namespace=~\"${namespace}\",app!=\"\"}, app)",
+          "refId": "app"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "description": "稳定的采集端 app 身份。All允许旧指标缺少app标签；选择具体应用要求目标附加该标签。"
+      },
+      {
+        "name": "deployment",
+        "label": "Deployment（命名空间）",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(kube_deployment_spec_replicas{namespace=~\"${namespace}\"}, deployment)",
+        "query": {
+          "query": "label_values(kube_deployment_spec_replicas{namespace=~\"${namespace}\"}, deployment)",
+          "refId": "deployment"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "description": "仅过滤 Deployment 副本表；与 app 标签无对应关系。"
       },
       {
         "name": "node",
@@ -159,10 +207,12 @@
           "text": "pod_name",
           "value": "pod_name"
         },
-        "hide": 2,
-        "skipUrlSync": true,
+        "hide": 0,
+        "skipUrlSync": false,
         "multi": false,
-        "includeAll": false
+        "includeAll": false,
+        "label": "应用 Pod 标签",
+        "description": "按目标标签选择 pod_name 或 pod；ACK 常见 pod_name，仓库 ServiceMonitor 示例使用 pod。"
       },
       {
         "name": "operation",
@@ -183,7 +233,7 @@
           "value": "$__all"
         },
         "query": {
-          "query": "label_values(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}, operation)",
+          "query": "label_values(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}, operation)",
           "refId": "operation"
         }
       }
@@ -191,7 +241,14 @@
   },
   "links": [
     {
-      "title": "容器概览",
+      "title": "服务总览",
+      "type": "link",
+      "url": "/d/ack-service-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "容器与节点",
       "type": "link",
       "url": "/d/ack-container-overview",
       "includeVars": true,
@@ -203,1749 +260,26 @@
       "url": "/d/ack-application-components",
       "includeVars": true,
       "keepTime": true
+    },
+    {
+      "title": "共享资源与健康",
+      "type": "link",
+      "url": "/d/foundation-shared-resources",
+      "includeVars": true,
+      "keepTime": true
     }
   ],
   "panels": [
     {
-      "id": 1,
-      "title": "01 · 容器概览 — 存活与异常",
-      "description": "对象状态来自 kube-state-metrics。Running 不等于 Ready；无数据不是零。",
-      "type": "row",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 2,
-      "title": "Ready 节点",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "仅受节点筛选影响，集群整机对象。",
-      "gridPos": {
-        "x": 0,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(max by (node) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status=\"true\"}))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 3,
-      "title": "Running Pod",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "受命名空间、节点、Pod筛选影响；不受容器筛选影响。",
-      "gridPos": {
-        "x": 4,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum((max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Running\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 4,
-      "title": "Ready Pod",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "当前可服务的 Pod 数；不是副本期望值。",
-      "gridPos": {
-        "x": 8,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum((max by (namespace,pod) (kube_pod_status_ready{namespace=~\"${namespace}\",pod=~\"${pod}\",condition=\"true\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 5,
-      "title": "运行中容器",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "普通容器，不包含 init container；Running 不等于应用健康。",
-      "gridPos": {
-        "x": 12,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum((max by (namespace,pod,container) (kube_pod_container_status_running{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 6,
-      "title": "等待中容器",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "等待原因见异常列表；零值仅来自真实状态序列。",
-      "gridPos": {
-        "x": 16,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum((max by (namespace,pod,container) (kube_pod_container_status_waiting{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 7,
-      "title": "窗口重启次数",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "时间窗口 increase 估算，可能有小数；不等于容器存活数。",
-      "gridPos": {
-        "x": 20,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum((max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__range]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 8,
-      "title": "02 · 工作负载资源 — 随视图切换",
-      "description": "Pod / Container / Node / Instance（Pod IP）决定聚合口径。Node 视图这里是所选容器之和，不是整机资源。",
-      "type": "row",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 5,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 9,
-      "title": "CPU 使用量",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "cAdvisor 普通容器 CPU，排除空容器和 POD sandbox；Pod 视图包含所选容器。",
-      "gridPos": {
-        "x": 0,
-        "y": 6,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "cores",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 10,
-      "title": "内存工作集",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Working Set，不是进程 RSS；Pod 视图为所选容器工作集之和。",
-      "gridPos": {
-        "x": 12,
-        "y": 6,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 11,
-      "title": "CPU / 容器 Limit",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "只统计有正 Limit 且有使用量的容器；不包含无 Limit 容器，不是整个 Pod 的资源上限。",
-      "gridPos": {
-        "x": 0,
-        "y": 14,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) and on (namespace,pod,container) ((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"cpu\",unit=\"core\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0)), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"cpu\",unit=\"core\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0) and on (namespace,pod,container) ((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 12,
-      "title": "内存 / 容器 Limit",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "只统计有正 Limit 且有使用量的容器；不包含无 Limit 容器，不是整个 Pod 的资源上限。",
-      "gridPos": {
-        "x": 12,
-        "y": 14,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) and on (namespace,pod,container) ((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"memory\",unit=\"byte\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0)), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"memory\",unit=\"byte\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0) and on (namespace,pod,container) ((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 13,
-      "title": "CPU 限流周期比例",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "可选 cAdvisor 指标；按周期统计，不是被限流的 CPU 时间比例。",
-      "gridPos": {
-        "x": 0,
-        "y": 22,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_cfs_throttled_periods_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_cfs_periods_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 14,
-      "title": "内存 RSS",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "容器 cgroup RSS；与 Working Set 含义不同。可选指标未采集时留空。",
-      "gridPos": {
-        "x": 12,
-        "y": 22,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (container_memory_rss{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 15,
-      "title": "容器运行数量趋势",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "按所选视图汇总真实 Running 状态；不使用 up 推导容器存活。",
-      "gridPos": {
-        "x": 0,
-        "y": 30,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (kube_pod_container_status_running{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 16,
-      "title": "重启次数（所选时间窗口）",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "increase 按整个面板时间窗口估算；可能有小数。",
-      "gridPos": {
-        "x": 12,
-        "y": 30,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__range]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 17,
-      "title": "03 · 节点资源 — 整机口径",
-      "description": "本区只受节点筛选影响，忽略命名空间、Pod、容器和视图。包含系统进程、所有工作负载及其他主机开销。",
-      "type": "row",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 38,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 18,
-      "title": "节点 CPU 使用率",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "1 - idle，各逻辑 CPU 求平均；不是 Pod CPU。node_uname_info 的 node 或 nodename 须对应 Kubernetes 节点名。",
-      "gridPos": {
-        "x": 0,
-        "y": 39,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) ((1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 19,
-      "title": "节点内存使用率",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "1 - MemAvailable / MemTotal；只受节点筛选影响。",
-      "gridPos": {
-        "x": 12,
-        "y": 39,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) ((1 - max by (instance) (node_memory_MemAvailable_bytes) / max by (instance) (node_memory_MemTotal_bytes)) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 20,
-      "title": "节点 Load 15m / CPU 核数",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "归一化 load，可能超过 1；不是 CPU 利用率。",
-      "gridPos": {
-        "x": 0,
-        "y": 47,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) ((max by (instance) (node_load15) / count by (instance) (node_cpu_seconds_total{mode=\"idle\"})) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 21,
-      "title": "节点最满文件系统",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "各节点已采集文件系统的最高使用率；不是所有磁盘加总。",
-      "gridPos": {
-        "x": 12,
-        "y": 47,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) ((max by (instance) (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"} / (node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"} > 0))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 22,
-      "title": "节点网络",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "主机设备总量；bond/bridge 或设备映射可能重复计算，需按实际设备拓扑调整过滤。",
-      "gridPos": {
-        "x": 0,
-        "y": 55,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) ((sum by (instance) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}} · 接收/读取",
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "B",
-          "expr": "max by (node) ((sum by (instance) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}} · 发送/写入",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "Bps",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 23,
-      "title": "节点磁盘吞吐",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "主机设备总量；bond/bridge 或设备映射可能重复计算，需按实际设备拓扑调整过滤。",
-      "gridPos": {
-        "x": 12,
-        "y": 55,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) ((sum by (instance) (rate(node_disk_read_bytes_total{device!~\"loop.*|ram.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}} · 接收/读取",
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "B",
-          "expr": "max by (node) ((sum by (instance) (rate(node_disk_written_bytes_total{device!~\"loop.*|ram.*\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
-          "legendFormat": "{{node}} · 发送/写入",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "Bps",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 24,
-      "title": "节点压力与 Ready 异常",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "1 表示压力或非 Ready；Ready unknown 也作为异常。只受节点筛选影响。",
-      "gridPos": {
-        "x": 0,
-        "y": 63,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node,condition) (kube_node_status_condition{node=~\"${node}\",condition=~\"MemoryPressure|DiskPressure|PIDPressure\",status=\"true\"}) or max by (node,condition) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status!=\"true\"})",
-          "legendFormat": "{{node}} / {{condition}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 25,
-      "title": "节点可分配 CPU",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Kubernetes allocatable 容量，不是实时空闲 CPU。",
-      "gridPos": {
-        "x": 12,
-        "y": 63,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (node) (kube_node_status_allocatable{node=~\"${node}\",resource=\"cpu\",unit=\"core\"})",
-          "legendFormat": "{{node}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "cores",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 26,
-      "title": "04 · 对象清单与异常定位",
-      "description": "清单保留 namespace/pod/container/node/pod_ip，方便对照 ACK 控制台。",
-      "type": "row",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 71,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 27,
-      "title": "Pod 清单",
-      "type": "table",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "包含当前选中的 Pod；无 IP 或未调度时字段可能为空。",
-      "gridPos": {
-        "x": 0,
-        "y": 72,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})",
-          "legendFormat": "{{${view:raw}}}",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      }
-    },
-    {
-      "id": 28,
-      "title": "容器清单",
-      "type": "table",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "普通容器及镜像，按 Pod 元数据关联节点和 IP。",
-      "gridPos": {
-        "x": 12,
-        "y": 72,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(max by (namespace,pod,container,image) (kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      }
-    },
-    {
-      "id": 29,
-      "title": "Pod 阶段",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Pod 状态独立于容器筛选，Container 视图下仍是 Pod 状态。",
-      "gridPos": {
-        "x": 0,
-        "y": 80,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw},phase) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,phase) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}} / {{phase}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 30,
-      "title": "当前等待原因",
-      "type": "table",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "仅列当前等待原因，如 CrashLoopBackOff、ImagePullBackOff；无异常时列表为空。",
-      "gridPos": {
-        "x": 12,
-        "y": 80,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(max by (namespace,pod,container,reason) (kube_pod_container_status_waiting_reason{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) == 1",
-          "legendFormat": "{{${view:raw}}}",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      }
-    },
-    {
-      "id": 31,
-      "title": "05 · 应用黄金指标 — Foundation",
-      "description": "本区是应用埋点，不是 cAdvisor 指标。需 namespace、container 和 pod_name（或将隐藏 app_pod_label 改为 pod）。应用指标通过 namespace/pod 关联节点。",
-      "type": "row",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "x": 0,
-        "y": 88,
-        "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "id": 32,
-      "title": "请求速率",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
-      "gridPos": {
-        "x": 0,
-        "y": 89,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 33,
-      "title": "服务端 5xx 比例",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
-      "gridPos": {
-        "x": 12,
-        "y": 89,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\",code=~\"5..\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) or on (${view:raw}) (0 * sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 34,
-      "title": "请求 P95",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
-      "gridPos": {
-        "x": 0,
-        "y": 97,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le,${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 35,
-      "title": "应用进程 CPU（核）",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
-      "gridPos": {
-        "x": 12,
-        "y": 97,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(process_cpu_seconds_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "cores",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 36,
-      "title": "应用进程 RSS",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
-      "gridPos": {
-        "x": 0,
-        "y": 105,
-        "w": 24,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(process_resident_memory_bytes{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",container=~\"${container}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
-          "legendFormat": "{{${view:raw}}}",
-          "range": true,
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "noValue": "无数据",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
       "id": 37,
-      "title": "06 · 采集可用性 — 区分未接入与真实为零",
+      "title": "01 · 全数据源样本检查 — 不能代表每个采集目标健康",
       "description": "检查整个数据源是否存在各类核心指标，不代表 exporter 当前健康或全部目标齐全。缺失为 0，不给业务指标补零。",
       "type": "row",
       "collapsed": false,
       "panels": [],
       "gridPos": {
         "x": 0,
-        "y": 113,
+        "y": 0,
         "w": 24,
         "h": 1
       }
@@ -1958,10 +292,10 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "description": "在所选 Prometheus 数据源全范围检查该指标族是否有近期样本，不受命名空间、应用、节点、Pod 或容器筛选影响。1=存在样本，0=未检测到；不能据此判断每个目标健康，应用采集健康见服务总览。",
       "gridPos": {
         "x": 0,
-        "y": 114,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -2020,10 +354,10 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "description": "在所选 Prometheus 数据源全范围检查该指标族是否有近期样本，不受命名空间、应用、节点、Pod 或容器筛选影响。1=存在样本，0=未检测到；不能据此判断每个目标健康，应用采集健康见服务总览。",
       "gridPos": {
         "x": 4,
-        "y": 114,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -2082,10 +416,10 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "description": "在所选 Prometheus 数据源全范围检查该指标族是否有近期样本，不受命名空间、应用、节点、Pod 或容器筛选影响。1=存在样本，0=未检测到；不能据此判断每个目标健康，应用采集健康见服务总览。",
       "gridPos": {
         "x": 8,
-        "y": 114,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -2144,10 +478,10 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "description": "在所选 Prometheus 数据源全范围检查该指标族是否有近期样本，不受命名空间、应用、节点、Pod 或容器筛选影响。1=存在样本，0=未检测到；不能据此判断每个目标健康，应用采集健康见服务总览。",
       "gridPos": {
         "x": 12,
-        "y": 114,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -2206,10 +540,10 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "description": "在所选 Prometheus 数据源全范围检查该指标族是否有近期样本，不受命名空间、应用、节点、Pod 或容器筛选影响。1=存在样本，0=未检测到；不能据此判断每个目标健康，应用采集健康见服务总览。",
       "gridPos": {
         "x": 16,
-        "y": 114,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -2268,10 +602,10 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "1=数据源内存在近期样本；0=不存在。具体缺失目标需到 Prometheus Targets 或 ACK 采集配置排查。",
+      "description": "在所选 Prometheus 数据源全范围检查该指标族是否有近期样本，不受命名空间、应用、节点、Pod 或容器筛选影响。1=存在样本，0=未检测到；不能据此判断每个目标健康，应用采集健康见服务总览。",
       "gridPos": {
         "x": 20,
-        "y": 114,
+        "y": 1,
         "w": 4,
         "h": 4
       },
@@ -2321,7 +655,2333 @@
         "graphMode": "none",
         "textMode": "auto"
       }
+    },
+    {
+      "id": 1,
+      "title": "02 · 存活与异常 — 对象状态、重启与副本缺口",
+      "description": "对象状态来自 kube-state-metrics。Running 不等于 Ready；无数据不是零。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "title": "Ready 节点",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "仅受节点筛选影响，集群整机对象。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (node) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status=\"true\"}))",
+          "legendFormat": "Ready",
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count(max by (node) (kube_node_info{node=~\"${node}\"}))",
+          "legendFormat": "总数",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Running Pod",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "受命名空间、节点、Pod筛选影响；不受容器筛选影响。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "gridPos": {
+        "x": 4,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Running\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "Running",
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count(max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "legendFormat": "总数",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Ready Pod",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "当前可服务的 Pod 数；不是副本期望值。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "gridPos": {
+        "x": 8,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod) (kube_pod_status_ready{namespace=~\"${namespace}\",pod=~\"${pod}\",condition=\"true\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "Ready",
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count(max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "legendFormat": "总数",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 5,
+      "title": "运行中容器",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "普通容器，不包含 init container；Running 不等于应用健康。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod,container) (kube_pod_container_status_running{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "Running",
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count((max by (namespace,pod,container) (kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "总数",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 6,
+      "title": "等待中容器",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "等待原因见异常列表；零值仅来自真实状态序列。",
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod,container) (kube_pod_container_status_waiting{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "窗口重启次数",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "在所选窗口结束点计算 increase 估算，可能有小数；只统计仍能关联当前 Pod 身份的容器，不是完整历史重启事件清单，也不等于容器存活数。",
+      "gridPos": {
+        "x": 20,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__range]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 45,
+      "title": "未 Ready Pod（排除 Succeeded）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "仅列 Ready=false 的 Pod，排除已成功完成的 Pod；Failed/Pending 等保留以便排障。空表须结合样本可用性判断。受命名空间、节点、Pod 筛选影响，独立于应用与容器筛选。 包含 Pending、Running、Failed、Unknown；Failed 是已终止对象，不代表仍在执行。",
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((max by (namespace,pod) (kube_pod_status_ready{namespace=~\"${namespace}\",pod=~\"${pod}\",condition=\"true\"}) == 0) unless on (namespace,pod) (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Succeeded\"}) == 1)) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": true
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "pod": "Pod",
+              "node": "节点",
+              "container": "容器",
+              "reason": "原因",
+              "status": "状态",
+              "pod_ip": "Pod IP",
+              "Value": "状态值"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "title": "当前等待原因",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "仅列当前等待原因，如 CrashLoopBackOff、ImagePullBackOff；无异常时列表为空。",
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(max by (namespace,pod,container,reason) (kube_pod_container_status_waiting_reason{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) == 1",
+          "legendFormat": "{{${view:raw}}}",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "pod": "Pod",
+              "node": "节点",
+              "container": "容器",
+              "reason": "等待原因",
+              "pod_ip": "Pod IP"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "title": "未 Ready 节点",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "仅列 Ready=false/unknown 的节点，保留状态便于区分；空表可能为无异常或指标缺失，结合首区样本检查。只受节点筛选影响。",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node,status) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status!=\"true\"}) == 1",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": true
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "pod": "Pod",
+              "node": "节点",
+              "container": "容器",
+              "reason": "原因",
+              "status": "状态",
+              "pod_ip": "Pod IP",
+              "Value": "状态值"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "title": "最近一次终止为 OOMKilled",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "可选 kube-state-metrics 指标；仅列最近一次容器终止原因仍为 OOMKilled 的对象，不能解释为所选窗口内 OOM 次数或当前 OOM。空表可能为无记录或指标未启用。",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(max by (namespace,pod,container,reason) (kube_pod_container_status_last_terminated_reason{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",reason=\"OOMKilled\"}) == 1) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": true
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "pod": "Pod",
+              "node": "节点",
+              "container": "容器",
+              "reason": "原因",
+              "status": "状态",
+              "pod_ip": "Pod IP",
+              "Value": "状态值"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "title": "节点压力与 Ready 异常",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1 表示压力或非 Ready；Ready unknown 也作为异常。只受节点筛选影响。 时间线 0=正常、1=异常；无样本断开，不延续旧状态。",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node,condition) (kube_node_status_condition{node=~\"${node}\",condition=~\"MemoryPressure|DiskPressure|PIDPressure\",status=\"true\"}) or max by (node,condition) (kube_node_status_condition{node=~\"${node}\",condition=\"Ready\",status!=\"true\"})",
+          "legendFormat": "{{node}} / {{condition}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "正常",
+                  "color": "green"
+                },
+                "1": {
+                  "text": "异常",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.85,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 29,
+      "title": "Pod 阶段时间线",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "每行一个 namespace/Pod，展示当前有效 phase；状态不随视图或容器筛选聚合，避免多个 Pod 的阶段数被误解为单一状态。无样本断开，不延续旧状态。",
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((1 * (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Pending\"}) == 1)) or (2 * (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Running\"}) == 1)) or (3 * (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Succeeded\"}) == 1)) or (4 * (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Failed\"}) == 1)) or (5 * (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=\"Unknown\"}) == 1))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "legendFormat": "{{namespace}} / {{pod}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无样本",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "待调度/启动",
+                  "color": "orange"
+                },
+                "2": {
+                  "text": "运行",
+                  "color": "green"
+                },
+                "3": {
+                  "text": "已完成",
+                  "color": "blue"
+                },
+                "4": {
+                  "text": "失败",
+                  "color": "red"
+                },
+                "5": {
+                  "text": "未知",
+                  "color": "purple"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.85,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "重启次数（所选时间窗口）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "仅在所选时间窗口结束点计算 increase[$__range]，按视图排序展示窗口总量；可能有小数。已消失且无当前 Pod 身份样本的容器无法关联，不作为完整历史事件清单。",
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__range]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "legendFormat": "{{${view:raw}}}",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "窗口重启次数",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "view_pod": "Pod",
+              "view_container": "容器",
+              "view_node": "节点",
+              "view_instance": "Pod IP 视图",
+              "Value": "窗口重启次数"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "title": "Deployment 期望与可用副本（命名空间）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "可选 kube-state-metrics Deployment 指标；仅受命名空间与 Deployment 筛选影响，不受节点、Pod、容器或应用筛选影响。可用副本不等于 Pod Ready；缺口=max(期望-可用,0)，缺失指标保留空值。",
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (namespace,deployment) (kube_deployment_spec_replicas{namespace=~\"${namespace}\",deployment=~\"${deployment}\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "max by (namespace,deployment) (kube_deployment_status_replicas_available{namespace=~\"${namespace}\",deployment=~\"${deployment}\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "clamp_min((max by (namespace,deployment) (kube_deployment_spec_replicas{namespace=~\"${namespace}\",deployment=~\"${deployment}\"})) - (max by (namespace,deployment) (kube_deployment_status_replicas_available{namespace=~\"${namespace}\",deployment=~\"${deployment}\"})), 0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "副本缺口"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "命名空间"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Deployment"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "期望副本"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "可用副本"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "副本缺口"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "副本缺口",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "namespace": "命名空间",
+              "deployment": "Deployment",
+              "Value #A": "期望副本",
+              "Value #B": "可用副本",
+              "Value #C": "副本缺口"
+            },
+            "indexByName": {
+              "namespace": 0,
+              "deployment": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "03 · 工作负载资源 — 展开按视图下钻",
+      "description": "Pod / Container / Node / Instance（Pod IP）决定聚合口径。Node 视图这里是所选容器之和，不是整机资源。",
+      "type": "row",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 9,
+          "title": "CPU 使用量",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "cAdvisor 普通容器 CPU，排除空容器和 POD sandbox；Pod 视图包含所选容器。",
+          "gridPos": {
+            "x": 0,
+            "y": 43,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "cores",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 10,
+          "title": "内存工作集",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "Working Set，不是进程 RSS；Pod 视图为所选容器工作集之和。",
+          "gridPos": {
+            "x": 12,
+            "y": 43,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 11,
+          "title": "CPU / 容器 Limit",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "只统计有正 Limit 且有使用量的容器；不包含无 Limit 容器，不是整个 Pod 的资源上限。",
+          "gridPos": {
+            "x": 0,
+            "y": 51,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) and on (namespace,pod,container) ((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"cpu\",unit=\"core\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0)), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"cpu\",unit=\"core\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0) and on (namespace,pod,container) ((max by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "max": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 12,
+          "title": "内存 / 容器 Limit",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "只统计有正 Limit 且有使用量的容器；不包含无 Limit 容器，不是整个 Pod 的资源上限。",
+          "gridPos": {
+            "x": 12,
+            "y": 51,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) and on (namespace,pod,container) ((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"memory\",unit=\"byte\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0)), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join((((max by (namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\",resource=\"memory\",unit=\"byte\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})) > 0) and on (namespace,pod,container) ((max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "max": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 13,
+          "title": "CPU 限流周期比例",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "可选 cAdvisor 指标；按周期统计，不是被限流的 CPU 时间比例。",
+          "gridPos": {
+            "x": 0,
+            "y": 59,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_cfs_throttled_periods_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) / (sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (rate(container_cpu_cfs_periods_total{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "max": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 14,
+          "title": "内存 RSS",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "容器 cgroup RSS；与 Working Set 含义不同。可选指标未采集时留空。",
+          "gridPos": {
+            "x": 12,
+            "y": 59,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (container_memory_rss{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 15,
+          "title": "容器运行数量趋势",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "按所选视图汇总真实 Running 状态；不使用 up 推导容器存活。",
+          "gridPos": {
+            "x": 0,
+            "y": 67,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw}) (label_join(label_replace(label_replace(label_join(label_join(((max by (namespace,pod,container) (kube_pod_container_status_running{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 17,
+      "title": "04 · 节点资源 — 整机口径与文件系统定位",
+      "description": "本区只受节点筛选影响，忽略命名空间、Pod、容器和视图。包含系统进程、所有工作负载及其他主机开销。",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 18,
+      "title": "节点 CPU 使用率",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1 - idle，各逻辑 CPU 求平均；不是 Pod CPU。node_uname_info 的 node 或 nodename 须对应 Kubernetes 节点名。",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) ((1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "节点内存使用率",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "1 - MemAvailable / MemTotal；只受节点筛选影响。",
+      "gridPos": {
+        "x": 12,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) ((1 - max by (instance) (node_memory_MemAvailable_bytes) / max by (instance) (node_memory_MemTotal_bytes)) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "节点 Load 15m / CPU 核数",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Load 15m 除以去重后的逻辑 CPU 核数，1 表示负载等于核数；不是 CPU 使用率。只受节点筛选影响。",
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) ((max by (instance) (node_load15) / count by (instance) (max by (instance,cpu) (node_cpu_seconds_total{mode=\"idle\"}))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "节点最满文件系统",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "各节点已采集且容量大于零的文件系统最高使用率；同 instance/device/mountpoint/fstype 去重。下方 Top 10 表保留挂载点和可用空间用于定位。只受节点筛选影响。",
+      "gridPos": {
+        "x": 12,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) (((1 - (max by (instance,device,mountpoint,fstype) (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) / ((max by (instance,device,mountpoint,fstype) (node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) > 0))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\"))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"}))",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 47,
+      "title": "文件系统使用率 Top 10",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "按当前使用率排序，仅列筛选节点内 Top 10 物理文件系统，保留节点、设备、挂载点、类型与可用空间。排除临时/容器挂载；容量为零或缺失时不伪造使用率。只受节点筛选影响。",
+      "gridPos": {
+        "x": 0,
+        "y": 60,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, ((1 - (max by (instance,device,mountpoint,fstype) (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) / ((max by (instance,device,mountpoint,fstype) (node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) > 0))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\"))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"}))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "((max by (instance,device,mountpoint,fstype) (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\"))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})) and on (instance,device,mountpoint,fstype,node) (topk(10, ((1 - (max by (instance,device,mountpoint,fstype) (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) / ((max by (instance,device,mountpoint,fstype) (node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/kubelet/pods/.*\"})) > 0))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\"))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "使用率"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "可用空间"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "使用率",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "node": "节点",
+              "device": "设备",
+              "mountpoint": "挂载点",
+              "fstype": "文件系统类型",
+              "Value #A": "使用率",
+              "Value #B": "可用空间"
+            },
+            "indexByName": {
+              "node": 0,
+              "mountpoint": 1,
+              "device": 2,
+              "fstype": 3,
+              "instance": 4,
+              "Value #A": 5,
+              "Value #B": 6
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "节点网络",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "主机设备总量；bond/bridge 或设备映射可能重复计算，需按实际设备拓扑调整过滤。 同 instance/device 先对采集副本去重再按节点求和。",
+      "gridPos": {
+        "x": 0,
+        "y": 68,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) ((sum by (instance) (max by (instance,device) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval])))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 接收/读取",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "max by (node) ((sum by (instance) (max by (instance,device) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval])))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 发送/写入",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "节点磁盘吞吐",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "主机设备总量；bond/bridge 或设备映射可能重复计算，需按实际设备拓扑调整过滤。 同 instance/device 先对采集副本去重再按节点求和。",
+      "gridPos": {
+        "x": 12,
+        "y": 68,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) ((sum by (instance) (max by (instance,device) (rate(node_disk_read_bytes_total{device!~\"loop.*|ram.*\"}[$__rate_interval])))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 接收/读取",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "max by (node) ((sum by (instance) (max by (instance,device) (rate(node_disk_written_bytes_total{device!~\"loop.*|ram.*\"}[$__rate_interval])))) * on (instance) group_left(node) (max by (instance,node) (node_uname_info{node!=\"\"} or label_replace(node_uname_info{node=\"\"}, \"node\", \"$1\", \"nodename\", \"(.+)\")))) and on (node) max by (node) (kube_node_info{node=~\"${node}\"})",
+          "legendFormat": "{{node}} · 发送/写入",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "title": "节点可分配 CPU",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Kubernetes allocatable 容量，不是实时空闲 CPU。",
+      "gridPos": {
+        "x": 0,
+        "y": 76,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (node) (kube_node_status_allocatable{node=~\"${node}\",resource=\"cpu\",unit=\"core\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "noValue": "无数据",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "title": "05 · 对象清单 — 展开定位身份与镜像",
+      "description": "清单保留 namespace/pod/container/node/pod_ip，方便对照 ACK 控制台。",
+      "type": "row",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 27,
+          "title": "Pod 清单",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "包含当前选中的 Pod；无 IP 或未调度时字段可能为空。",
+          "gridPos": {
+            "x": 0,
+            "y": 83,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})",
+              "legendFormat": "{{${view:raw}}}",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          }
+        },
+        {
+          "id": 28,
+          "title": "容器清单",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "普通容器及镜像，按 Pod 元数据关联节点和 IP。",
+          "gridPos": {
+            "x": 12,
+            "y": 83,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max by (namespace,pod,container,image) (kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+              "legendFormat": "{{${view:raw}}}",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 82,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 31,
+      "title": "06 · 应用指标简表 — 完整入口见服务总览",
+      "description": "本区是应用埋点，不是 cAdvisor 指标。需 namespace、container 和 pod_name（或在“应用 Pod 标签”选择 pod）。应用指标通过 namespace/pod 关联节点。",
+      "type": "row",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 32,
+          "title": "请求速率",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
+          "gridPos": {
+            "x": 0,
+            "y": 84,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{app}} / {{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 33,
+          "title": "服务端 5xx 比例",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
+          "gridPos": {
+            "x": 12,
+            "y": 84,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\",code=~\"5..\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) or on (${view:raw},namespace,app) (0 * sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))) / (sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+              "legendFormat": "{{app}} / {{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "max": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 34,
+          "title": "请求 P95",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
+          "gridPos": {
+            "x": 0,
+            "y": 92,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (le,${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",operation=~\"${operation}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))",
+              "legendFormat": "{{app}} / {{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 35,
+          "title": "应用进程 CPU（核）",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
+          "gridPos": {
+            "x": 12,
+            "y": 92,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(process_cpu_seconds_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{app}} / {{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "cores",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 36,
+          "title": "应用进程 RSS",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "应用进程或请求指标；按视图汇总，进程 CPU/RSS 不等于 Pod/容器整体使用量。",
+          "gridPos": {
+            "x": 0,
+            "y": 100,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (${view:raw},namespace,app) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(process_resident_memory_bytes{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{app}} / {{${view:raw}}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "无数据",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 83,
+        "w": 24,
+        "h": 1
+      }
     }
   ],
-  "description": "ACK 全视图：对象存活、容器资源、节点资源与应用指标。一个数据源对应一个集群；Instance 视图为 Pod IP。节点资源仅受节点筛选影响。"
+  "description": "ACK 资源与异常排障：先检查全数据源样本，再查看对象异常和副本缺口；工作负载按视图下钻，节点保持整机口径。应用筛选仅影响底部应用埋点，Deployment 独立按命名空间筛选。"
 }

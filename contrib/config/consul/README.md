@@ -2,7 +2,7 @@
 
 配置源诊断使用全局日志，声明 `module=config/consul`；配置路径使用结构化字段。
 
-每次 `Load` 成功读取时以 INFO 为每个匹配键记录一次 `loaded configuration file`；Manager 构造时会调用一次 `Load`。日志中的 `path` 是匹配后的完整 KV 键，不是输入 glob 或相对 Key。`Watch` 每次返回完整快照，同一键可能反复出现，因此不重复记录逐文件成功日志，即使开启 DEBUG 也是如此。Manager 对已订阅配置的首次回放和实际变化分别记录 INFO `config.watch`、`config.change`；后者只在订阅值变化时输出，并不代表每个来源文件都变了。不记录配置内容；失败或无匹配时不输出成功日志。
+每次 `Load` 成功读取时以 DEBUG 为每个匹配键记录一次 `event=config.consul.loaded`；Manager 构造时会调用一次 `Load`。日志中的 `path` 是匹配后的完整 KV 键，不是输入 glob 或相对 Key。`Watch` 每次返回完整快照，同一键可能反复出现，因此不重复记录逐文件成功日志，即使开启 DEBUG 也是如此。Manager 对已订阅配置的首次回放和实际变化分别记录 DEBUG `config.watch`、INFO `config.change`；后者只在订阅值变化时输出，并不代表每个来源文件都变了。不记录配置内容；失败或无匹配时不输出成功日志。
 
 `contrib/config/consul` 把有序 Consul KV 路径转换成 Kratos 配置源。后面的路径优先级更高，路径不能为空、包含首尾空白或重复。
 
@@ -32,7 +32,7 @@ flowchart TD
  Z -- 是 --> C
  Z -- 否 --> G{路径合法且无重复?}
  G -- 否 --> H([返回路径错误；保留共享客户端])
- G -- 是 --> I[INFO preparing Consul configuration sources]
+ G -- 是 --> I[INFO config.consul.selected]
  I --> J[按顺序创建 Source，Manager 执行 Load/Watch]
  J --> K{初始快照有效?}
  K -- 否 --> L[停止已创建的 watcher 并返回错误]
@@ -46,7 +46,7 @@ flowchart TD
 
 KV 监听由本包通过 Consul blocking query 实现。每次通知包含完整前缀，包括仅删除键或前缀变空。官方 Config 直接合并通知结果，不再重复 Load；空结果或字段删除不会撤销旧缓存，也不会恢复低优先级值。
 
-网络错误、HTTP 429 和 5xx 使用可取消退避恢复：100ms 基数逐次翻倍、5s 封顶，并加入 80%–100% 抖动。恢复时清除旧查询索引并拉取完整状态；Consul 索引回退也会重新建立查询基线。认证和授权等永久 HTTP 错误直接返回，交由官方 watcher 循环记录及重试，不再提供 Manager 终止状态。
+网络错误、HTTP 429 和 5xx 使用可取消退避恢复：100ms 基数逐次翻倍、5s 封顶，并加入 80%–100% 抖动。首次暂时故障记录 WARN config.consul.retrying，恢复成功记录 INFO config.consul.recovered，均含 operation/load 或 watch、path，恢复事件含 attempts；不逐次记录退避尝试。恢复时清除旧查询索引并拉取完整状态；Consul 索引回退记录 WARN config.consul.index.reset（previous_index/index）并重新建立查询基线。认证和授权等永久 HTTP 错误直接返回，交由官方 watcher 循环记录及重试，不再提供 Manager 终止状态。
 
 `Load` 的请求与有限重试共用 10 秒预算；监听长轮询等待最多 30 秒，单次 HTTP 请求另有 10 秒余量。Watcher 不创建后台发送协程，`Stop` 可以取消在途监听请求和退避，且不同 Watcher 独立。Manager 清理过程中已经开始的普通 `Load` 最迟在自己的预算结束时返回。
 
@@ -106,7 +106,7 @@ flowchart TD
     E --> D2{匹配失败或目录标记?}
     D2 -- 是 --> S[跳过该键]
     D2 -- 否 --> Q{查询阶段?}
-    Q -- Load --> LI[INFO loaded configuration file 完整 KV 键]
+    Q -- Load --> LI[DEBUG config.consul.loaded 完整 KV 键]
     Q -- Watch --> WI[不重复记录逐文件成功日志]
     LI & WI --> F[复制值并按扩展名标记格式]
     S --> G
@@ -118,3 +118,21 @@ flowchart TD
 ## 驱动组装入口
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../../../pkg/registry/README.md)。
+
+```mermaid
+flowchart TD
+ A([Load 或顺序 Next]) --> Q[带既有 Context 预算查询 Consul KV]
+ Q -- 成功 --> R{曾进入重试?}
+ R -- 是 --> RI[INFO config.consul.recovered]
+ R -- 否 --> IX{监听索引回退?}
+ RI --> IX
+ IX -- 是 --> IW[WARN config.consul.index.reset 重置索引]
+ IX -- 否 --> S([返回完整快照])
+ IW --> S
+ Q -- 失败 --> E{暂时错误?}
+ E -- 否 --> F([返回错误 由官方 Config 处理边界记录])
+ E -- 是 --> W[首次 WARN config.consul.retrying 清除监听索引]
+ W --> B[可取消退避 不逐次记录]
+ B -- 预算到期或 Stop 取消 --> F
+ B -- 继续 --> Q
+```

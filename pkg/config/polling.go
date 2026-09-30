@@ -97,8 +97,8 @@ func (m *manager) run(ctx context.Context, interval time.Duration) {
 func (m *manager) poll() {
 	var next map[string]any
 	if err := m.backend.Scan(&next); err != nil {
-		log.WithModule("config").With("error", err).
-			Error("failed to scan configuration; retaining the previous snapshot")
+		log.WithModule("config").With("event", "config.snapshot.rejected", "error", err).
+			Warn("config snapshot rejected; keeping previous")
 		return
 	}
 	// 只在锁内发布快照并复制订阅表；扫描、比较、解码及业务回调均不持锁。
@@ -135,14 +135,14 @@ func (m *manager) poll() {
 				logger = logger.With("found", false)
 			}
 			if initial {
-				logger.Info("config.watch")
+				logger.With("event", "config.watch").Debug("config subscription replayed")
 			} else {
 				paths, truncated := changedPaths(sub.key, previous, existed, value, exists)
 				logger = logger.With("changed_paths", paths)
 				if truncated {
 					logger = logger.With("paths_truncated", true)
 				}
-				logger.Info("config.change")
+				logger.With("event", "config.change").Info("config changed")
 			}
 			sub.notify(value, exists)
 		}
@@ -152,9 +152,13 @@ func (m *manager) poll() {
 func (s *subscription) notify(value any, found bool) {
 	// 单个业务回调 panic 不应终止整个 Manager 的轮询，也不重试本次通知。
 	defer func() {
-		if recover() != nil {
-			log.WithModule("config").With("key", s.key, "subscription", s.caller).
-				Error("configuration observer panicked; continuing polling")
+		if recovered := recover(); recovered != nil {
+			key := s.key
+			if key == "" {
+				key = "<root>"
+			}
+			log.WithModule("config").With("event", "config.observer.panicked", "key", key,
+				"subscription", s.caller, "panic_type", fmt.Sprintf("%T", recovered)).Error("config observer panicked")
 		}
 	}()
 	target := s.decoder.NewTarget()

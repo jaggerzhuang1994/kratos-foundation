@@ -88,7 +88,7 @@ func (s *sharedState) updateCustom(field string, update func(*customState) error
 			next.filterKeys = slices.Clone(old.filterKeys)
 		}
 		if err := update(next); err != nil {
-			WithModule("log").With("state", field, "error", err).Warn("rejected invalid logging settings; retaining the previous settings")
+			WithModule("log").With("event", "log.settings.rejected", "state", field, "error", err).Warn("log settings rejected; keeping previous")
 			return
 		}
 		if s.custom.CompareAndSwap(old, next) {

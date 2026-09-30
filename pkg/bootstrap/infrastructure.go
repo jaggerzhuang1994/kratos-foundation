@@ -22,6 +22,7 @@ func NewAppInfoBootstrap(spec *app.Spec, info appinfo.AppInfo) AppInfoBootstrap 
 		log.ServiceIDKey, info.ID(),
 		log.ServiceNameKey, info.Name(),
 		log.ServiceVersionKey, info.Version(),
+		"env", info.Metadata()["env"],
 	)
 	return AppInfoBootstrap{}
 }
@@ -49,7 +50,7 @@ func NewLogBootstrap(spec *app.Spec, manager config.Manager, logger log.Logger) 
 			err = log.ApplyRuntimeConfig(value.(*log.RuntimeConfig))
 		}
 		if err != nil {
-			logger.With("error", err).Error("failed to apply log configuration")
+			logger.WithModule("log").With("event", "log.policy.rejected", "error", err).Warn("log policy rejected; keeping previous")
 		}
 	}, new(log.RuntimeConfig))
 	if err != nil {

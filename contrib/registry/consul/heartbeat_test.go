@@ -14,13 +14,16 @@ import (
 	"testing"
 	"time"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/hashicorp/consul/api"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func TestMissingHeartbeatReRegistersSnapshotBeforeContinuing(t *testing.T) {
+	recorder := captureConsulEvents(t)
 	var registrations, updates atomic.Int32
 	restored := make(chan api.AgentServiceRegistration, 1)
 	healthy := make(chan struct{}, 1)
@@ -45,6 +48,7 @@ func TestMissingHeartbeatReRegistersSnapshotBeforeContinuing(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}, 0)
+	reg.(*registrar).logger = foundationlog.WithModule("consul")
 	service := &registry.ServiceInstance{ID: "node", Name: "app", Version: "v1"}
 	if err := reg.Register(context.Background(), service); err != nil {
 		t.Fatal(err)
@@ -64,12 +68,15 @@ func TestMissingHeartbeatReRegistersSnapshotBeforeContinuing(t *testing.T) {
 	default:
 		t.Fatal("no registration after missing check")
 	}
+	recorder.requireEvent(t, "registry.consul.registration.restored", kratoslog.LevelInfo, "service.id", "node")
+	recorder.requireEvent(t, "registry.consul.heartbeat.recovered", kratoslog.LevelInfo, "service.id", "node")
 	if registrations.Load() != 2 {
 		t.Fatalf("registrations=%d", registrations.Load())
 	}
 }
 
 func TestHeartbeatPermissionFailureStopsWithoutDeregister(t *testing.T) {
+	recorder := captureConsulEvents(t)
 	var updates, deregisters atomic.Int32
 	reg := newTestRegistrar(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/check/update/") {
@@ -82,6 +89,7 @@ func TestHeartbeatPermissionFailureStopsWithoutDeregister(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}, 0)
+	reg.(*registrar).logger = foundationlog.WithModule("consul")
 	service := &registry.ServiceInstance{ID: "node", Name: "app"}
 	if err := reg.Register(context.Background(), service); err != nil {
 		t.Fatal(err)
@@ -92,6 +100,7 @@ func TestHeartbeatPermissionFailureStopsWithoutDeregister(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("permanent error kept retrying")
 	}
+	recorder.requireEvent(t, "registry.consul.heartbeat.stopped", kratoslog.LevelError, "service.id", "node")
 	if updates.Load() != 1 || deregisters.Load() != 0 {
 		t.Fatalf("updates=%d deregisters=%d", updates.Load(), deregisters.Load())
 	}
@@ -159,6 +168,7 @@ func newTestRegistrar(t *testing.T, handler http.HandlerFunc, timeout time.Durat
 }
 
 func TestHeartbeatRequestTimeoutRecovers(t *testing.T) {
+	recorder := captureConsulEvents(t)
 	var updates, deregisters atomic.Int32
 	recovered := make(chan struct{}, 1)
 	reg := newTestRegistrar(t, func(w http.ResponseWriter, r *http.Request) {
@@ -176,6 +186,7 @@ func TestHeartbeatRequestTimeoutRecovers(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}, 40*time.Millisecond)
+	reg.(*registrar).logger = foundationlog.WithModule("consul")
 	service := &registry.ServiceInstance{ID: "node", Name: "app"}
 	if err := reg.Register(context.Background(), service); err != nil {
 		t.Fatal(err)
@@ -186,6 +197,8 @@ func TestHeartbeatRequestTimeoutRecovers(t *testing.T) {
 	case <-time.After(2500 * time.Millisecond):
 		t.Fatalf("heartbeat stopped after request timeout: updates=%d deregisters=%d", updates.Load(), deregisters.Load())
 	}
+	recorder.requireEvent(t, "registry.consul.heartbeat.retry", kratoslog.LevelWarn, "service.id", "node")
+	recorder.requireEvent(t, "registry.consul.heartbeat.recovered", kratoslog.LevelInfo, "service.id", "node")
 	if deregisters.Load() != 0 {
 		t.Fatal("request timeout must not deregister a live service")
 	}
@@ -224,5 +237,59 @@ func TestDeregisterCancelsInitialHeartbeat(t *testing.T) {
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("Deregister blocked on initial heartbeat without lifecycle context")
+	}
+}
+
+// consulEventRecorder 用有界 channel 捕获异步生命周期事件，不用轮询时间推断日志完成。
+type consulRecordedEvent struct {
+	level  kratoslog.Level
+	fields map[string]any
+}
+type consulEventRecorder chan consulRecordedEvent
+
+func captureConsulEvents(t *testing.T) consulEventRecorder {
+	t.Helper()
+	recorder := make(consulEventRecorder, 64)
+	restore := foundationlog.SetLogger(recorder)
+	t.Cleanup(restore)
+	return recorder
+}
+func (r consulEventRecorder) Log(level kratoslog.Level, keyvals ...any) error {
+	fields := make(map[string]any, len(keyvals)/2)
+	for i := 0; i+1 < len(keyvals); i += 2 {
+		fields[keyvals[i].(string)] = keyvals[i+1]
+	}
+	event, _ := fields["event"].(string)
+	// 全局桥接也接收配置 SDK 的逐字段日志，只捕获本回归关注的后台事件。
+	if strings.HasPrefix(event, "registry.consul.heartbeat.") || strings.HasPrefix(event, "registry.consul.registration.") || strings.HasPrefix(event, "registry.consul.discovery.") || strings.HasPrefix(event, "registry.consul.cleanup.") {
+		r <- consulRecordedEvent{level: level, fields: fields}
+	}
+	return nil
+}
+func (r consulEventRecorder) requireEvent(t *testing.T, event string, level kratoslog.Level, key string, value any, expected ...any) {
+	t.Helper()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case record := <-r:
+			if record.fields["event"] != event {
+				continue
+			}
+			if record.level != level || record.fields[key] != value || record.fields["msg"] == nil {
+				t.Fatalf("event %s: %+v", event, record)
+			}
+			for i := 0; i+1 < len(expected); i += 2 {
+				if record.fields[expected[i].(string)] != expected[i+1] {
+					t.Fatalf("event %s missing context fields: %+v", event, record)
+				}
+			}
+			if level >= kratoslog.LevelWarn && record.fields["error"] == nil {
+				t.Fatalf("failure event missing error: %+v", record)
+			}
+			return
+		case <-timer.C:
+			t.Fatalf("missing event %s", event)
+		}
 	}
 }

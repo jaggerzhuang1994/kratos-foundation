@@ -16,8 +16,9 @@ func (f *factory) updateConfigActive(next *config_pb.Client) error {
 
 func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 	var (
-		cancels []context.CancelFunc
-		retired []retiredClient
+		cancels        []context.CancelFunc
+		retired        []retiredClient
+		changedClients int
 	)
 	nextSpecs := make(map[string]clientSpec, len(next.GetClients()))
 	for name, option := range next.GetClients() {
@@ -61,6 +62,7 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 			continue
 		}
 
+		changedClients++
 		if slot == nil {
 			slot = &clientSlot{
 				name: name,
@@ -91,7 +93,10 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 	f.mu.Unlock()
 
 	if timeoutChanged {
-		f.logger.Warn("client cleanup timeout changed; restart the application to apply it")
+		f.logger.With("event", "client.config.restart_required", "setting", "cleanup_timeout").Warn("client cleanup timeout change requires restart")
+	}
+	if changedClients > 0 {
+		f.logger.With("event", "client.config.applied", "clients", changedClients).Info("client configuration applied")
 	}
 	for _, cancel := range cancels {
 		cancel()

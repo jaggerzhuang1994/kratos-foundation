@@ -68,15 +68,6 @@ func deadlineFields() []any {
 			}
 			return time.Until(effective).String()
 		})),
-		//"deadline.fallback_ms", deadlineDuration(func(info deadline.Info) time.Duration {
-		//	return info.FallbackTimeout
-		//}),
-		//"deadline.max_ms", deadlineDuration(func(info deadline.Info) time.Duration {
-		//	return info.MaxTimeout
-		//}),
-		//"deadline.min_budget_ms", deadlineDuration(func(info deadline.Info) time.Duration {
-		//	return info.MinBudget
-		//}),
 	}
 }
 
@@ -99,7 +90,8 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 				kind = info.Kind().String()
 			}
 			logger.WithContext(ctx).With(
-				"component", component, // server/client
+				// 事件名带 server/client 前缀，与各领域事件一样可按前缀归类。
+				"event", component+".request.completed",
 				"kind", kind, // grpc/http
 				"operation", operation, // endpoint
 				"code", foundationerrors.Code(foundationerrors.Normalize(err)),

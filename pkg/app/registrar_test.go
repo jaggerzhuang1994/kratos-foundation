@@ -67,7 +67,7 @@ func newRegistrarTestHarness(
 	snapshot appSnapshot,
 ) (*supervisedRegistrar, *App) {
 	t.Helper()
-	lifecycle := newApp(snapshot, newStaticStopPolicy(time.Second))
+	lifecycle := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
 	lifecycle.initServers(0)
 	lifecycle.stop = func() error { return nil }
 	return newSupervisedRegistrar(

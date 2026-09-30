@@ -50,7 +50,7 @@ ACK 容器概览已展示 cAdvisor CPU/内存、容器重启与节点资源，�
 
 ## 4. 导入 Dashboard 和告警
 
-可以直接在 Grafana 导入 [容器概览](../observability/grafana/dashboards/foundation.json) 和 [组件明细](../observability/grafana/dashboards/foundation-components.json)，选择已有 Prometheus 数据源。也可以使用 sidecar；生成的 ConfigMap 同时包含这两份面板：
+可以直接在 Grafana 导入 [服务总览](../observability/grafana/dashboards/foundation-service.json)、[容器与节点](../observability/grafana/dashboards/foundation.json)、[组件明细](../observability/grafana/dashboards/foundation-components.json) 和 [共享资源与健康](../observability/grafana/dashboards/foundation-shared.json)，选择已有 Prometheus 数据源。也可以使用 sidecar；生成的 ConfigMap 同时包含这四份面板：
 
 ```sh
 # 将 namespace/release 改成现有监控栈的真实值；仅生成本地文件。
@@ -104,4 +104,4 @@ flowchart TD
 
 新增 [blackbox 部署](blackbox.yaml) 与 [health-values.yaml](health-values.yaml)，实际逐Pod探测readyz/healthz；将additionalScrapeConfigs合并而非覆盖现有列表。可选 [Kafka exporter](kafka-exporter.yaml) 提供消费组lag，先修改broker、版本、认证及监控release。完整前提、标签和边界见 [外部采集指南](../observability/docs/external-metrics.md)。这些资源不会随渲染脚本自动部署。
 
-应用 ServiceMonitor 的 target 标签仅为示例扩展身份。默认面板从 kube_pod_info 发现对象，不使用 target。此示例 ServiceMonitor 的 pod 标签可供应用指标使用，但需把隐藏 app_pod_label 设为 pod，并在应用采集端提供真实 container；新面板还需要现有 ACK 的基础采集组件。
+应用 ServiceMonitor 的 target 标签仅为示例扩展身份。ACK 对象筛选从 kube_pod_info 发现，不使用 target。此示例 ServiceMonitor 的 pod 标签可供应用指标使用，在面板可见的“应用 Pod 标签”选择 pod，并在应用采集端提供真实 app/container；前三页还需要现有 ACK 的基础采集组件。共享页按独立 env/cluster 与资源身份筛选，外部 exporter 的接入条件见 [监控入口](../observability/README.md)。

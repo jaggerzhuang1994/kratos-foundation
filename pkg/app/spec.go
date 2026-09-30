@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // Spec 收集 Bootstrap 阶段的应用声明；构造应用后冻结，公开登记调用会 panic(ErrSpecFrozen)。
@@ -19,6 +18,8 @@ type Spec struct {
 	application atomic.Pointer[App]
 	// readySignal 在 Kratos 进入 AfterStart 且启动后钩子成功后关闭，供 Job 等后台运行时等待。
 	readySignal chan struct{}
+	// stoppingSignal 在 App 首次请求停止时关闭，使 Ready 前的等待也能结束。
+	stoppingSignal chan struct{}
 	// mu 保护组装声明及冻结状态。
 	mu sync.Mutex
 	// frozen 记录声明是否已冻结。
@@ -31,7 +32,7 @@ type Spec struct {
 
 	// appInfo 保存应用身份引用。
 	appInfo AppInfo
-	// logger 保存供 Kratos 使用的日志视图。
+	// logger 借用应用原始输出，由 NewApp 派生生命周期日志视图。
 	logger kratoslog.Logger
 	// metadata 保存应用元数据快照，同名键以后登记值为准。
 	metadata map[string]string
@@ -58,10 +59,12 @@ type appSnapshot struct {
 	context context.Context
 	// readySignal 与 Spec 共享，只由 App 在首次成功 ready 时关闭。
 	readySignal chan struct{}
+	// stoppingSignal 与 Spec 共享，只由 App 的 stopOnce 关闭。
+	stoppingSignal chan struct{}
 
 	// appInfo 保存应用身份引用。
 	appInfo AppInfo
-	// logger 保存供 Kratos 使用的日志视图。
+	// logger 借用应用原始输出，由 NewApp 派生生命周期日志视图。
 	logger kratoslog.Logger
 	// metadata 保存应用元数据快照，同名键以后登记值为准。
 	metadata map[string]string
@@ -87,8 +90,9 @@ type appSnapshot struct {
 // NewSpec 创建可登记的应用组装状态。
 func NewSpec() *Spec {
 	return &Spec{
-		metadata:    make(map[string]string),
-		readySignal: make(chan struct{}),
+		metadata:       make(map[string]string),
+		readySignal:    make(chan struct{}),
+		stoppingSignal: make(chan struct{}),
 	}
 }
 
@@ -111,8 +115,8 @@ func (s *Spec) RegisterAppInfo(info AppInfo) {
 	s.appInfo = info
 }
 
-// RegisterLogger 登记仅供 Kratos App 使用的带 module=kratos 的派生 Logger；重复登记会 panic。
-// 派生视图借用原输出，不修改输入 Logger 或全局绑定。
+// RegisterLogger 登记应用借用的原 Logger；重复登记会 panic。
+// NewApp 派生 module=app 的生命周期视图，不修改输入 Logger 或全局绑定。
 func (s *Spec) RegisterLogger(logger kratoslog.Logger) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -122,13 +126,6 @@ func (s *Spec) RegisterLogger(logger kratoslog.Logger) {
 	}
 	s.logger = logger
 	// nil 仍表示未登记，由 NewApp 保持原有缺失依赖错误。
-	if logger != nil {
-		if base, ok := logger.(foundationlog.Logger); ok {
-			s.logger = base.WithModule("kratos")
-		} else {
-			s.logger = kratoslog.With(logger, "module", "kratos")
-		}
-	}
 }
 
 // AddContext 按登记顺序追加上下文装饰函数；重复登记的函数会重复执行。
@@ -215,6 +212,7 @@ func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
 	snapshot := appSnapshot{
 		serviceRegistrationDisabled: s.serviceRegistrationDisabled,
 		readySignal:                 s.readySignal,
+		stoppingSignal:              s.stoppingSignal,
 		appInfo:                     s.appInfo,
 		logger:                      s.logger,
 		metadata:                    maps.Clone(s.metadata),
@@ -260,14 +258,29 @@ func (s *Spec) Ready() bool {
 	return application != nil && application.ready.Load() && !application.isStopping()
 }
 
-// WaitReady 等待 Kratos 进入 AfterStart 且启动后钩子成功；就绪前停机时由调用方 Context 解除等待。
+// WaitReady 等待 Kratos 进入 AfterStart 且启动后钩子成功；应用已请求停止时返回 context.Canceled。
+// 调用方 Context 取消也会解除等待；Ready 已发布后仍优先拒绝已经开始的应用停机。
 func (s *Spec) WaitReady(ctx context.Context) error {
 	if ctx == nil {
 		return fmt.Errorf("ready context is nil")
 	}
+	// Ready 和停止可能都已发布，先检查停止，不能依赖 select 随机选择就绪分支。
+	select {
+	case <-s.stoppingSignal:
+		return context.Canceled
+	default:
+	}
 	select {
 	case <-s.readySignal:
-		return nil
+		// 等待期间也可能请求停机；Ready 出口再次检查同一个共享停止信号。
+		select {
+		case <-s.stoppingSignal:
+			return context.Canceled
+		default:
+			return nil
+		}
+	case <-s.stoppingSignal:
+		return context.Canceled
 	case <-ctx.Done():
 		return ctx.Err()
 	}

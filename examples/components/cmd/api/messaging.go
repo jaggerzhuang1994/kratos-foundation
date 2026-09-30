@@ -126,7 +126,7 @@ func newMessaging(manager foundationredis.Manager, factory *kafka.ClientFactory,
 		}
 		releases = append(releases, func() {
 			if releaseErr := unregister(); releaseErr != nil {
-				logger.With("queue", name, "error", releaseErr).Error("failed to unregister queue statistics")
+				logger.WithModule("messaging").With("event", "demo.queue_stats.cleanup.failed", "queue", name, "error", releaseErr).Error("failed to unregister queue statistics")
 			}
 		})
 		workerName, handler := consumerName, m.handleTask
@@ -200,7 +200,7 @@ func (m *messaging) Run(ctx context.Context, runID string) error {
 			return fmt.Errorf("dispatch %s task: %w", business.name, err)
 		}
 	}
-	m.logger.WithContext(ctx).Infow("event", "messages.dispatched", "run_id", runID)
+	m.logger.WithContext(ctx).Infow("event", "demo.messages.dispatched", "run_id", runID, "msg", "demo messages dispatched")
 	return nil
 }
 
@@ -244,7 +244,7 @@ func (m *messaging) handleEmail(ctx context.Context, task *queue.Task) error {
 		return queue.Permanent(errors.New("unsupported email template"))
 	}
 	body := fmt.Sprintf("Welcome! Your request %s is ready.", task.ID)
-	m.logger.WithContext(ctx).Infow("event", "email.rendered", "task_id", task.ID, "bytes", len(body))
+	m.logger.WithContext(ctx).Debugw("event", "demo.email.rendered", "task_id", task.ID, "bytes", len(body), "msg", "email rendered")
 	return nil
 }
 
@@ -257,7 +257,7 @@ func (m *messaging) handleReport(ctx context.Context, task *queue.Task) error {
 	for _, amount := range []int{120, 80, 200} {
 		total += amount
 	}
-	m.logger.WithContext(ctx).Infow("event", "report.summarized", "task_id", task.ID, "total", total)
+	m.logger.WithContext(ctx).Debugw("event", "demo.report.summarized", "task_id", task.ID, "total", total, "msg", "report summarized")
 	return nil
 }
 

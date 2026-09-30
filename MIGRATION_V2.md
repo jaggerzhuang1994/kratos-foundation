@@ -160,7 +160,7 @@ make verify-release  # 顺序执行 verify、lint、test-business，失败立即
 
 | 自动验收项 | 成功条件 | 测试位置 |
 |---|---|---|
-| Wire 构造与冻结 | 基础设施/业务贡献完成后才冻结 Spec | `pkg/bootstrap/wire_integration_test.go` |
+| Wire 构造与冻结 | 基础设施/业务贡献完成后才冻结 Spec | `pkg/bootstrap/wire_test.go` |
 | HTTP 订单提交 | 返回 201，默认库只有成功订单 | fixture `TestBusinessHTTPTransactionsAndCleanup` |
 | SQL 已写入后业务拒绝 | 返回 422，被拒绝订单未持久化 | 同上 rollback 子用例 |
 | 显式连接选择 | audit 订单只出现在 audit 数据库 | 同上 named connection 子用例 |
@@ -172,6 +172,8 @@ make verify-release  # 顺序执行 verify、lint、test-business，失败立即
 
 HTTP fixture 是最小订单场景，不代替真实业务服务的权限、限流、幂等及数据迁移验收。
 生成客户端契约测试替代了协议网络边界，不代表真实 gRPC 服务互通；项目的重连测试另由 `make verify` 执行。
+
+HTTP 监听由 Foundation Runtime 持有。将原生 `HTTP().Option(http.Address/Network(...))` 迁移为 `server.http.addr/network` 配置，将 `Option(http.Listener(listener))` 迁移为 `HTTP().Listener(listener)`；原生监听选项会被最终设置覆盖，TLS、编码器和其他协议选项继续有效。路由回调不得直接启停原生 Server 或提前查询其 Endpoint；从应用就绪后的 `App.Endpoint()` 获取发现地址。准备阶段失败的逆序回滚与自定义监听所有权见 [Server 监听契约](pkg/server/README.md#http-监听所有权与启动回滚)。
 
 ```mermaid
 flowchart TD
@@ -465,7 +467,7 @@ flowchart LR
 
 ## 日志消息与自定义 msgKey
 
-全局及实例消息方法统一应用当前 `msgKey`。调用方改用 `log.WithModule("config/file").With("files", matches).Info("matched local configuration files")`，其中 `matches` 为已匹配的文件列表，避免通过 `Infow("msg", ...)` 写死消息字段。原始 `Log/*w` 仍保留调用者给定的键值。
+全局及实例消息方法统一应用当前 `msgKey`。调用方改用 `log.WithModule("config/file").With("event", "config.file.selected", "files", matches).Info("configuration files selected")`，其中 `matches` 为已匹配的文件列表，避免通过 `Infow("msg", ...)` 写死消息字段。原始 `Log/*w` 仍保留调用者给定的键值。
 
 模块视图借用获取时的全局输出，持续应用共享设置，但不跟随之后的 SetLogger；在使用处获取。`Context` 返回的 Kratos Helper 捕获构造时消息字段名，长期保存时优先使用模块 Logger 的 WithContext 视图。消息文案改为具体描述，函数、错误和业务上下文保留为独立字段；原先按管道分隔消息字符串检索的规则需同步调整。流程及完整契约见 [消息输出规则](pkg/log/README.md#字段过滤与去重)。
 
@@ -503,7 +505,7 @@ flowchart LR
 
 `NewServerBootstrap` 改为接收共享 app.Spec/server.Spec、配置及观测依赖和 Bootstrap 标记，在业务 Boot 后构造并登记服务器，返回独立 cleanup。NewRuntimeBootstrap 注入 ServerBootstrap 保证顺序；旧的直接传入 app.Spec 和 Runtime 的登记签名不保留。
 
-`NewJobBootstrap` 现在接收共享 app.Spec/job.Spec、协调器、日志/观测依赖及 ServerBootstrap 标记，在 Server 完成后构造并登记 Job Manager。`NewRuntimeBootstrap(serverBootstrap, jobBootstrap)` 汇合两个组件标记并标记组装完成，仅返回 `RuntimeBootstrap`，不登记或重放自定义 Runtime；业务调用 RegisterRuntime 时已直接登记到共享 app.Spec。
+`NewJobBootstrap` 现在接收共享 app.Spec/job.Spec、config.Manager、日志/观测依赖及 Bootstrap 标记，在业务 Boot 完成后构造并登记 Job Manager。Server 和 Job 分别依赖业务 Bootstrap 标记，二者没有相互依赖；手工调用的最后参数传入业务 Boot 返回的标记，Wire injector 需重新生成。`NewRuntimeBootstrap(serverBootstrap, jobBootstrap)` 汇合两个组件标记并标记组装完成，仅返回 `RuntimeBootstrap`，不登记或重放自定义 Runtime；业务调用 RegisterRuntime 时已直接登记到共享 app.Spec。
 
 `app.registry` 省略或为空时使用 `default`；`client.clients.<name>.discovery` 省略或为空时继承 `client.discovery`，根级也省略或为空时使用 `default`。须配置所选 registry 实例及驱动；显式名称仍可选择其他实例。删除以空 app.registry 禁用注册的用法，改由驱动禁用状态控制。直连客户端不要求发现实例。
 

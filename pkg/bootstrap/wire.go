@@ -49,7 +49,7 @@ var BaseProviderSet = wire.NewSet(
 	wire.Bind(new(client.DiscoveryResolver), new(*registry.Factory)),
 	client.NewFactory,
 
-	// 完成标记形成基础设施 → 服务器 → 任务 → 应用的构造依赖链。
+	// 服务器与任务分别依赖业务声明完成，随后汇合成应用构造屏障。
 	NewAppInfoBootstrap,
 	NewLogBootstrap,
 	NewTracingBootstrap,

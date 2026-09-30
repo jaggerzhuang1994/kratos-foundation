@@ -3,11 +3,14 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
@@ -220,7 +223,7 @@ type orderedTestRuntime struct {
 	id int
 }
 
-func TestRegisteredAppLoggerAddsKratosModuleWithoutChangingInput(t *testing.T) {
+func TestRegisteredAppLoggerKeepsBorrowedInput(t *testing.T) {
 	var output bytes.Buffer
 	logger := kratoslog.NewStdLogger(&output)
 	spec := NewSpec()
@@ -230,18 +233,14 @@ func TestRegisteredAppLoggerAddsKratosModuleWithoutChangingInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := snapshot.logger.Log(kratoslog.LevelInfo, "msg", "framework event"); err != nil {
+	if snapshot.logger != logger {
+		t.Fatal("spec replaced borrowed logger")
+	}
+	if err := snapshot.logger.Log(kratoslog.LevelInfo, "msg", "business event"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "module=kratos") {
-		t.Fatalf("app logger lacks module: %s", output.String())
-	}
-	output.Reset()
-	if err := logger.Log(kratoslog.LevelInfo, "msg", "business event"); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(output.String(), "module=kratos") {
-		t.Fatalf("input logger changed: %s", output.String())
+	if strings.Contains(output.String(), "module=") {
+		t.Fatalf("registration added a module: %s", output.String())
 	}
 }
 
@@ -254,4 +253,144 @@ func assertSpecPanic(t *testing.T, expected any, call func()) {
 	}()
 	call()
 	t.Fatal("expected panic")
+}
+
+func TestReadinessRequiresAllHooksAndRejectsStop(t *testing.T) {
+	spec := NewSpec()
+	if spec.Ready() {
+		t.Fatal("unconstructed app is ready")
+	}
+	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
+	spec.application.Store(runner)
+	runner.afterStart = []HookFunc{func(context.Context) error {
+		if spec.Ready() {
+			t.Error("ready while startup hook is running")
+		}
+		return nil
+	}}
+	if err := runner.runAfterStart(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !spec.Ready() {
+		t.Fatal("completed startup not ready")
+	}
+	runner.requestStop()
+	if spec.Ready() {
+		t.Fatal("stop request still ready")
+	}
+	// 停机后即使已经进入的启动钩子返回，也不能恢复 readiness。
+	if err := runner.runAfterStart(context.Background()); !errors.Is(err, errAppStopping) {
+		t.Fatalf("late startup=%v", err)
+	}
+	if spec.Ready() {
+		t.Fatal("late startup restored readiness")
+	}
+}
+
+func TestFailedStartupNeverBecomesReady(t *testing.T) {
+	spec := NewSpec()
+	cause := errors.New("initialization failed")
+	runner := newTestApp(t, appSnapshot{afterStart: []HookFunc{func(context.Context) error { return cause }}}, newStaticStopPolicy(time.Second))
+	spec.application.Store(runner)
+	if err := runner.runAfterStart(context.Background()); !errors.Is(err, cause) {
+		t.Fatalf("startup=%v", err)
+	}
+	if spec.Ready() {
+		t.Fatal("failed startup ready")
+	}
+}
+
+func TestWaitReadyBlocksUntilAfterStartCompletes(t *testing.T) {
+	spec := NewSpec()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	runner := newTestApp(t, appSnapshot{
+		readySignal: spec.readySignal,
+		afterStart: []HookFunc{func(context.Context) error {
+			close(entered)
+			<-release
+			return nil
+		}},
+	}, newStaticStopPolicy(time.Second))
+	spec.application.Store(runner)
+
+	waited := make(chan error, 1)
+	go func() { waited <- spec.WaitReady(context.Background()) }()
+	started := make(chan error, 1)
+	go func() { started <- runner.runAfterStart(context.Background()) }()
+	<-entered
+	select {
+	case err := <-waited:
+		t.Fatalf("WaitReady returned before hooks completed: %v", err)
+	default:
+	}
+	close(release)
+	if err := <-started; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-waited; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWaitReadyStopsOnContextCancellation(t *testing.T) {
+	spec := NewSpec()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := spec.WaitReady(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WaitReady = %v, want context canceled", err)
+	}
+}
+
+func TestWaitReadyRejectsAppStopBeforeAndAfterReady(t *testing.T) {
+	for _, ready := range []bool{false, true} {
+		name := "before ready"
+		if ready {
+			name = "after ready"
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				spec := NewSpec()
+				snapshot, err := spec.freeze(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				runner := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
+				if ready {
+					if err := runner.runAfterStart(context.Background()); err != nil {
+						t.Fatal(err)
+					}
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				waited := make(chan error, 3)
+				if !ready {
+					for range cap(waited) {
+						go func() { waited <- spec.WaitReady(ctx) }()
+					}
+					synctest.Wait()
+				}
+				runner.requestStop()
+				runner.requestStop()
+				if ready {
+					go func() { waited <- spec.WaitReady(ctx) }()
+				}
+				synctest.Wait()
+				count := cap(waited)
+				if ready {
+					count = 1
+				}
+				for range count {
+					select {
+					case err := <-waited:
+						if !errors.Is(err, context.Canceled) {
+							t.Fatalf("WaitReady after Stop = %v, want canceled", err)
+						}
+					default:
+						t.Fatal("App stop did not release Ready waiter")
+					}
+				}
+			})
+		})
+	}
 }

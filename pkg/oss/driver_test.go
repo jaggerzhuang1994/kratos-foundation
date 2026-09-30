@@ -3,7 +3,6 @@ package oss
 import (
 	"bytes"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 
@@ -81,13 +80,8 @@ func TestPublicDriverRegistryFunctions(t *testing.T) {
 		t.Fatal(err)
 	}
 	MustRegisterDriver("alpha", stubOSSDriver)
-	for _, want := range []string{"INFO", "module=oss", "driver=zeta", "driver=alpha"} {
-		if !strings.Contains(buffer.String(), want) {
-			t.Fatalf("missing %q in %s", want, buffer.String())
-		}
-	}
-	if got := strings.Count(buffer.String(), "registered OSS driver"); got != 2 {
-		t.Fatalf("successful registration log count = %d, want 2", got)
+	if buffer.Len() != 0 {
+		t.Fatalf("registration performed log I/O: %s", buffer.String())
 	}
 	if got := RegisteredDrivers(); !slices.Equal(got, []string{"alpha", "zeta"}) {
 		t.Fatalf("RegisteredDrivers() = %v", got)
@@ -97,7 +91,7 @@ func TestPublicDriverRegistryFunctions(t *testing.T) {
 			t.Fatal("MustRegisterDriver did not panic for a duplicate")
 		}
 		if buffer.Len() != 0 {
-			t.Fatalf("failed registration logged success: %s", buffer.String())
+			t.Fatalf("registration performed log I/O: %s", buffer.String())
 		}
 	}()
 	buffer.Reset()
