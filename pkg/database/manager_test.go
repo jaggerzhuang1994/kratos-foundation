@@ -166,6 +166,7 @@ func TestNewManagerAssemblesSQLiteConnectionsPluginsAndCleanup(t *testing.T) {
 				Dsn:    "file:manager-analytics?mode=memory&cache=shared",
 			},
 		},
+		Tracing: &config_pb.GormTracing{Disable: proto.Bool(false)},
 		Metrics: &config_pb.GormMetrics{Disable: &metricsDisabled},
 	}
 	configManager := &trackingDatabaseConfig{

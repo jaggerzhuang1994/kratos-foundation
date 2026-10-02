@@ -32,6 +32,11 @@ func subscribeConnectionPools(
 	factory *connectionFactory,
 	drivers map[string]DriverFactory,
 ) (func(), error) {
+	// 固定构造期的全局默认值，保证省略局部开关时的回放与启动快照一致。
+	template, err := loadDefaultConfig(configManager)
+	if err != nil {
+		return nil, err
+	}
 	// 连接身份始终对应启动时的资源。比较时忽略池参数，且不让任何后续
 	// 快照推进基线，避免被拒绝的拓扑变更在下一次更新时绕过检查。
 	startupConfig := proto.CloneOf(initial)
@@ -71,7 +76,7 @@ func subscribeConnectionPools(
 				)
 			}
 		},
-		defaultConfig(),
+		template,
 	)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"github.com/go-kratos/kratos/v2/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -21,18 +22,18 @@ func (r testResolver) Discovery(name string) (registry.Discovery, error) {
 func TestNamedDiscoveryValidation(t *testing.T) {
 	b := newTestRealBuilder(t, nil)
 	b.discoveries = testResolver{}
-	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {Discovery: "missing"}}}); err == nil {
+	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {Discovery: "missing"}}}, observability.Defaults{}); err == nil {
 		t.Fatal("missing discovery accepted")
 	}
-	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {}}}); err == nil {
+	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {}}}, observability.Defaults{}); err == nil {
 		t.Fatal("missing default discovery accepted")
 	}
 	// 直连目标不依赖服务发现，即使声明了无关发现名称也不创建监听。
-	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {Target: "localhost:9000", Discovery: "missing"}}}); err != nil {
+	if err := b.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{"orders": {Target: "localhost:9000", Discovery: "missing"}}}, observability.Defaults{}); err != nil {
 		t.Fatal(err)
 	}
-	a := newClientSpec("orders", &config_pb.ClientOption{Discovery: "a"}, nil)
-	other := newClientSpec("orders", &config_pb.ClientOption{Discovery: "b"}, nil)
+	a := newClientSpec("orders", &config_pb.ClientOption{Discovery: "a"}, nil, observability.Defaults{})
+	other := newClientSpec("orders", &config_pb.ClientOption{Discovery: "b"}, nil, observability.Defaults{})
 	if a.equal(other) {
 		t.Fatal("discovery changes must replace cached connections")
 	}
@@ -43,7 +44,7 @@ func TestNamedDiscoveryValidation(t *testing.T) {
 		name string
 		want registry.Discovery
 	}{{"", first}, {"default", first}, {"a", first}, {"b", second}} {
-		got, err := b.resolveDiscovery(newClientSpec("orders", &config_pb.ClientOption{Discovery: item.name}, nil))
+		got, err := b.resolveDiscovery(newClientSpec("orders", &config_pb.ClientOption{Discovery: item.name}, nil, observability.Defaults{}))
 		if err != nil || got != item.want {
 			t.Fatalf("selection %s: %v", item.name, err)
 		}

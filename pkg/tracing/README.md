@@ -66,6 +66,30 @@ tracing:
 
 默认导出地址为上述 localhost 地址，导出超时为 10s，不压缩；默认启用导出重试，初始间隔 5s、最大间隔 30s、最大累计重试时间 1m。默认根 trace 采样策略为 `RATIO`、比例 0.05。`RATIO`（比例范围 `[0,1]`）、`ALWAYS`、`NEVER` 都优先继承有效父 Span 的采样决定，只对根 trace 使用所选策略；`ALWAYS` 不会覆盖上游未采样决定。`disable` 和 exporter 配置修改需重启，启动时禁用的 Provider 不订阅更新。
 
+## 局部追踪默认值
+
+`server.tracing.disable`、`database.tracing.disable`、`redis.tracing.disable` 和 `client.clients.*.tracing.disable` 未配置时继承启动时全局 `tracing.disable` 的有效值；局部追踪段省略或为空消息也适用。显式 `true`、`false` 覆盖这个默认值。全局值省略时，local 环境默认 true、其他环境默认 false。
+
+这些默认值是组件构造时持有的独立快照，不订阅全局开关。Server 和 Client 支持热更新局部追踪配置；有效配置快照移除局部覆盖时恢复启动时的全局值。默认配置源合并会保留省略字段，仅删除源字段不保证移除有效值。Client 未声明的动态客户端同样继承启动默认值。Database 与 Redis 的追踪开关仍需重启。各组件的具体更新和资源边界见 [Server](../server/README.md)、[Client](../client/README.md)、[Database](../database/README.md) 与 [Redis](../redis/README.md)。
+
+局部 `false` 只覆盖配置默认值，不能让已被全局禁用的 Provider 恢复记录、采样或导出；要建立导出管道，必须设置全局 `tracing.disable: false` 后重启。Server/Client 在关闭时仍保留请求关联上下文，Database/Redis 则不安装追踪插件或 hook。
+
+```mermaid
+flowchart TD
+ A([构造组件或追踪策略订阅]) --> B[读取 tracing.disable；缺失时按启动环境取值]
+ B --> C{读取成功?}
+ C -- 否 --> X([返回构造错误])
+ C -- 是 --> D[保存独立的启动默认值]
+ D --> E{局部 disable 显式配置?}
+ E -- 是 --> F[使用局部 true 或 false]
+ E -- 否 --> G[继承启动默认值]
+ F --> H[构造局部配置快照；Provider 全局禁用门槛仍生效]
+ G --> H
+ H --> I{Server 或 Client 局部配置更新?}
+ I -- 是 --> E
+ I -- 否 --> Z([使用当前配置；全局开关与存储追踪变更需重启])
+```
+
 ## 组件 Tracer
 
 框架或可复用组件不应使用默认业务 scope。组件应通过 `Provider.Tracer` 使用稳定的完整包路径：

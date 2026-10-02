@@ -7,7 +7,7 @@ import (
 )
 
 func (f *factory) updateConfigActive(next *config_pb.Client) error {
-	if err := f.builder.validateConfig(next); err != nil {
+	if err := f.builder.validateConfig(next, f.observabilityDefaults); err != nil {
 		return err
 	}
 	next = proto.CloneOf(next)
@@ -22,7 +22,7 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 	)
 	nextSpecs := make(map[string]clientSpec, len(next.GetClients()))
 	for name, option := range next.GetClients() {
-		nextSpecs[name] = newClientSpec(name, option, next)
+		nextSpecs[name] = newClientSpec(name, option, next, f.observabilityDefaults)
 	}
 
 	f.mu.Lock()
@@ -50,13 +50,13 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 		_, currentPresent := currentClients[name]
 		_, nextPresent := nextClients[name]
 		slot := f.slots[name]
-		currentSpec := newClientSpec(name, nil, current)
+		currentSpec := newClientSpec(name, nil, current, f.observabilityDefaults)
 		if slot != nil {
 			currentSpec = slot.current.spec
 		}
 		nextSpec, configured := nextSpecs[name]
 		if !configured {
-			nextSpec = newClientSpec(name, nil, next)
+			nextSpec = newClientSpec(name, nil, next, f.observabilityDefaults)
 		}
 		if currentSpec.equal(nextSpec) {
 			continue

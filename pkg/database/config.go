@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
@@ -34,14 +35,30 @@ func loadConfig(
 	manager config.Manager,
 	drivers map[string]DriverFactory,
 ) (*config_pb.Database, error) {
+	template, err := loadDefaultConfig(manager)
+	if err != nil {
+		return nil, err
+	}
 	effective := new(config_pb.Database)
-	if err := manager.Load("database", effective, defaultConfig()); err != nil {
+	if err := manager.Load("database", effective, template); err != nil {
 		return nil, err
 	}
 	if err := validateDatabaseConfig(effective, drivers); err != nil {
 		return nil, err
 	}
 	return effective, nil
+}
+
+// loadDefaultConfig 为启动与池参数订阅构造同样的默认模板，订阅后不再读取全局开关。
+func loadDefaultConfig(reader config.Reader) (*config_pb.Database, error) {
+	defaults, err := observability.Load(reader)
+	if err != nil {
+		return nil, err
+	}
+	// 只为独立模板补齐开关；局部显式 true/false 仍由配置合并覆盖。
+	template := defaultConfig()
+	template.Tracing = &config_pb.GormTracing{Disable: proto.Bool(defaults.TracingDisabled)}
+	return template, nil
 }
 
 // validateDatabaseConfig 拒绝 GORM 会静默忽略或曲解的配置值。

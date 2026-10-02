@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
@@ -38,7 +39,7 @@ func TestHTTPClientReconnectsWithoutReplayingRequest(t *testing.T) {
 	protocol := config_pb.Protocol_HTTP
 	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol, Target: server.URL,
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestHTTPDoesNotReplayAfterServerReceivesRequest(t *testing.T) {
 	protocol := config_pb.Protocol_HTTP
 	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol, Target: server.URL,
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}

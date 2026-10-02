@@ -2,6 +2,24 @@
 
 本文件记录面向调用方的版本变化。版本是否已经发布以 Git tag 和对应提交为准；“计划中”内容不能作为已发布能力依赖。
 
+## v2.4.1
+
+### Added
+
+- Registry 新增内置 `driver: "null"`，返回 `Resource{Disabled: true}`，不提供注册或发现能力；`app.registry` 可选择该具名实例关闭本应用注册。无需额外空导入，其他实例及配置源仍按原有规则工作。配置与流程见 [Registry 配置关闭注册](pkg/registry/README.md#通过配置关闭服务注册)。
+
+### Changed
+
+- `server.tracing.disable`、`database.tracing.disable`、`redis.tracing.disable` 和 `client.clients.*.tracing.disable` 省略或局部追踪段为空消息时，继承组件启动时全局 `tracing.disable` 的有效值；局部显式 `true` / `false` 优先。全局字段省略时，local 环境默认 `true`，其他受支持环境默认 `false`。
+- Server 与 Client 的局部追踪开关支持热更新，有效配置快照移除局部覆盖时恢复启动默认值；全局开关以及 Database、Redis 的局部开关仍需重启。注入的 `tracing.Provider.Disabled()` 仍是硬门槛，局部显式 `false` 不能恢复已禁用 Provider 的记录、采样或导出能力。具体边界与流程见 [Tracing 默认值](pkg/tracing/README.md#局部追踪默认值)。
+- 观测配置仅调整 tracing 默认值继承，metrics 的配置默认值、开关和端点行为保持不变。
+
+### Migration
+
+- **local 环境的追踪缺省行为改变**：全局与局部开关均省略时，Database 不再安装 tracing 插件，Redis 不再安装 tracing hook。需要保留追踪记录与导出时，显式设置全局 `tracing.disable: false`，并确认组件未显式禁用。组件边界见 [Database](pkg/database/README.md#tracing-默认值) 与 [Redis](pkg/redis/README.md)。
+- 默认配置源合并会保留省略字段，仅删除源文件中的局部覆盖不保证从有效快照中移除该值；热更新回退规则见 [Server](pkg/server/README.md) 与 [Client](pkg/client/README.md)。
+- 使用禁用注册实例时，YAML 的驱动名必须写为 `"null"`；需要服务发现的客户端应选择提供 Discovery 的其他实例。
+
 ## v2.4.0
 
 本版本包含不兼容变更，升级前逐项确认下面的“升级风险”。

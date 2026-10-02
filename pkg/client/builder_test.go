@@ -15,6 +15,7 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	kratosmetadata "github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
@@ -85,7 +86,7 @@ func TestBuilderValidateConfigRejectsUnknownProtocol(t *testing.T) {
 	protocol := config_pb.Protocol(99)
 	err := builder.validateConfig(&config_pb.Client{Clients: map[string]*config_pb.ClientOption{
 		"orders": {Protocol: &protocol},
-	}})
+	}}, observability.Defaults{})
 	if !errors.Is(err, ErrInvalidProtocol) {
 		t.Fatalf("error = %v, want %v", err, ErrInvalidProtocol)
 	}
@@ -96,7 +97,7 @@ func TestBuilderBuildsDirectGRPCClient(t *testing.T) {
 	builder := newTestRealBuilder(t, nil)
 	result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Target: "passthrough:///orders",
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +174,7 @@ func TestBuilderGRPCUnavailableIncludesClientName(t *testing.T) {
 
 	result, err := newTestRealBuilder(t, nil).build(t.Context(), newClientSpec("orders", &config_pb.ClientOption{
 		Target: "passthrough:///" + listener.Addr().String(),
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +213,7 @@ func TestBuilderBuildsDirectHTTPClients(t *testing.T) {
 			result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 				Protocol: &protocol,
 				Target:   tt.target,
-			}, nil))
+			}, nil, observability.Defaults{}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -227,7 +228,7 @@ func TestBuilderBuildsDirectHTTPClients(t *testing.T) {
 func TestBuilderDefaultTargetRequiresDiscovery(t *testing.T) {
 	t.Parallel()
 	builder := newTestRealBuilder(t, nil)
-	_, err := builder.build(context.Background(), newClientSpec("orders", nil, nil))
+	_, err := builder.build(context.Background(), newClientSpec("orders", nil, nil, observability.Defaults{}))
 	if !errors.Is(err, ErrDiscoveryNotInitialized) {
 		t.Fatalf("error = %v, want %v", err, ErrDiscoveryNotInitialized)
 	}
@@ -253,7 +254,7 @@ func TestBuilderUsesConstructionEnvironmentSnapshot(t *testing.T) {
 	defer cancel()
 	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol, Target: "discovery:///orders",
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +293,7 @@ func TestBuilderHTTPPropagatesRequestDebug(t *testing.T) {
 		result, err := builder.build(t.Context(), newClientSpec("debug", &config_pb.ClientOption{
 			Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL,
 			RequestDebug: &config_pb.Middleware_RequestDebug{Propagate: proto.Bool(propagate)},
-		}, nil))
+		}, nil, observability.Defaults{}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -342,7 +343,7 @@ func TestBuilderHTTPContextAndErrorRemainCompatibleWithV1Server(t *testing.T) {
 	result, err := newTestRealBuilder(t, nil).build(t.Context(), newClientSpec("legacy", &config_pb.ClientOption{
 		Protocol: config_pb.Protocol_HTTP.Enum(),
 		Target:   server.URL,
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +409,7 @@ func TestBuilderGRPCContextAndErrorRemainCompatibleWithV1Server(t *testing.T) {
 
 	result, err := newTestRealBuilder(t, nil).build(t.Context(), newClientSpec("legacy", &config_pb.ClientOption{
 		Target: "passthrough:///" + listener.Addr().String(),
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}

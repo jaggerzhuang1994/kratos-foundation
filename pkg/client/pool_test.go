@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -220,7 +221,7 @@ func TestFactoryCompletedBuildRechecksState(t *testing.T) {
 		factory.mu.Lock()
 		factory.slots["orders"].current = &clientVersion{
 			revision: 2,
-			spec:     newClientSpec("orders", configWithTarget("orders", "http://new-orders.test").GetClients()["orders"], nil),
+			spec:     newClientSpec("orders", configWithTarget("orders", "http://new-orders.test").GetClients()["orders"], nil, observability.Defaults{}),
 			client: clientResult{
 				httpClient: replacementClient,
 			},

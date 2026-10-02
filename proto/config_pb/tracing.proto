@@ -9,7 +9,8 @@ import "google/protobuf/duration.proto";
 // exporter 持有网络连接与批处理器，两者都需要重建 Provider。
 message Tracing {
 
-  // 禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。[需重启]
+  // 禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。
+  // 同时作为 server、database、redis 和具名客户端局部 tracing.disable 的省略默认值。[需重启]
   optional bool disable = 1;
   // 导出配置。[需重启]
   optional Exporter exporter = 2;

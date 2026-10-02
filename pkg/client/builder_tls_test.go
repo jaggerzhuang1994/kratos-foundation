@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"github.com/go-kratos/kratos/v2/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -50,7 +51,7 @@ func TestBuilderHTTPSDiscoveryUsesTLS(t *testing.T) {
 	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   "discovery:///orders",
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +110,7 @@ func TestBuilderCloseClosesPrivateHTTPSTransportIdleConnections(t *testing.T) {
 	result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   server.URL,
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func TestBuilderHTTPSUsesCustomDefaultRoundTripper(t *testing.T) {
 	result, err := builder.build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   "https://orders.example",
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}

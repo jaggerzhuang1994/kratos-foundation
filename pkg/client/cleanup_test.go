@@ -10,6 +10,7 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -162,12 +163,12 @@ func TestFactoryCleanupWaitsForEnteredConfigUpdate(t *testing.T) {
 	var block atomic.Bool
 	realBuilder := newTestRealBuilder(t, nil)
 	builder := &fakeBuilder{
-		validateFn: func(config *config_pb.Client) error {
+		validateFn: func(config *config_pb.Client, defaults observability.Defaults) error {
 			if block.Load() {
 				close(started)
 				<-unblock
 			}
-			return realBuilder.validateConfig(config)
+			return realBuilder.validateConfig(config, defaults)
 		},
 		buildFn: func(context.Context, clientSpec) (clientResult, error) {
 			return clientResult{}, errors.New("unexpected build")

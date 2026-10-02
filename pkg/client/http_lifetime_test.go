@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +65,7 @@ func TestClosingBuiltHTTPClientCancelsResponseBody(t *testing.T) {
 	t.Cleanup(server.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", configWithTarget("orders", server.URL).Clients["orders"], nil))
+	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", configWithTarget("orders", server.URL).Clients["orders"], nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -191,6 +191,8 @@ flowchart TD
 
 `registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`。业务 Boot 可调用 `spec.DisableServiceRegistration()` 独立关闭服务注册与注销（默认不关闭），也可由业务 provider 返回 nil Registrar 禁用；开关不跳过 provider 构造和配置校验，不影响服务器或服务发现，详见 [App 开关说明](../app/README.md#独立关闭服务注册)；默认 BaseProviderSet 使用 app.NewRegistrar。
 
+使用默认 BaseProviderSet 时，可通过 `app.registry` 选择内置 `driver: "null"` 实例关闭 App 注册，客户端继续选择其他发现实例；配置及重启边界见 [Registry 配置关闭注册](../registry/README.md#通过配置关闭服务注册)。
+
 Job 不再有 Coordinator provider，NewJobBootstrap 直接接收应用 config.Manager。表达式、并发策略、runImmediately、maxPendingRuns 按配置 > 注册 > Task 默认值解析，热更新边界见 [Job 文档](../job/README.md)。
 
 ```mermaid
@@ -229,27 +231,29 @@ func wireApp(info appinfo.AppInfo, spec *bootstrap.Spec) (*kratos.App, func(), e
 }
 ```
 
-业务通过普通导入调用配置源添加函数，通过空导入选择注册驱动。源链及优先级在 Configuration 中显式声明，不再按环境自动选择本地/远程，也不自动拼接远程目录。main 检查构造错误，成功后 `defer cleanup()`，再调用 `application.Run()` 并处理错误。完整示例与生命周期见[具名驱动文档](../registry/README.md)。
+业务通过普通导入调用配置源添加函数，通过空导入选择 Consul 等可选注册驱动；内置 `null` 无需额外导入。源链及优先级在 Configuration 中显式声明，不再按环境自动选择本地/远程，也不自动拼接远程目录。main 检查构造错误，成功后 `defer cleanup()`，再调用 `application.Run()` 并处理错误。完整示例与生命周期见[具名驱动文档](../registry/README.md)。
 
 ```mermaid
 flowchart TD
- A([业务导入注册驱动]) --> B[init 登记无状态工厂]
+ A([加载内置 null 与可选 contrib 驱动]) --> B[准备无状态工厂；contrib init 仅登记]
  B --> C[Wire 执行 Configuration，env 在源链首位]
  C --> D{Load/Watch 成功?}
  D -- 否 --> X[回滚 watcher 和源依赖，返回错误]
  D -- 是 --> E[Manager 提供完整配置]
- E --> F[构造 Registry Factory 具名实例]
- F --> G{驱动构造和实例解析成功?}
+ E --> F[构造全部具名实例；null 保存 Disabled]
+ F --> G{驱动构造成功?}
  G -- 否 --> X
  G -- 是 --> H[app.NewRegistrar 按 app.registry 解析；Client 按 discovery 解析]
- H --> I[Spec 登记贡献并启动 App]
+ H --> H1{实例存在且满足使用方需求?}
+ H1 -- 否 --> X
+ H1 -- 是 --> I[Spec 登记贡献并启动 App；nil Registrar 跳过注册]
  I --> J[停止 App 和客户端监听]
  J --> K[释放实例、Manager、配置源依赖]
  K --> L([结束])
  X --> L
 ```
 
-默认资源 provider 只在 Wire 依赖图需要时构造。具体数据库、OSS、配置源和注册驱动由业务显式导入。`NewKratosApp` 继续接收 Registrar 接口，App 不访问驱动工厂。
+默认资源 provider 只在 Wire 依赖图需要时构造。具体数据库、OSS、配置源和 Consul 等可选注册驱动由业务显式导入；内置 `null` 始终可选。`NewKratosApp` 继续接收 Registrar 接口，App 不访问驱动工厂。
 
 根 `make test-business` 在临时模块生成并运行 Wire，验证完整驱动依赖图、失败回滚及 cleanup。已删除旧基础/Consul 组合集合和环境路径组装入口，不提供兼容别名。
 

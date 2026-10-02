@@ -6,6 +6,7 @@ import (
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	metadatamiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metadata"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server/internal/middleware/ratelimit"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -49,13 +50,28 @@ var defaultConfig = &config_pb.Server{
 
 // loadConfig 合并默认值并校验服务端配置，确保构造阶段得到完整快照。
 func loadConfig(manager foundationconfig.Manager) (componentConfig, error) {
+	defaults, err := loadDefaultConfig(manager)
+	if err != nil {
+		return nil, err
+	}
 	next := new(config_pb.Server)
-	if err := manager.Load("server", next, defaultConfig); err != nil {
+	if err := manager.Load("server", next, defaults); err != nil {
 		return nil, err
 	}
 	if err := validateConfig(next); err != nil {
 		return nil, err
 	}
+	return next, nil
+}
+
+// loadDefaultConfig 为当前构造复制默认模板，局部 tracing 字段省略时继承全局值。
+func loadDefaultConfig(reader foundationconfig.Reader) (componentConfig, error) {
+	defaults, err := observability.Load(reader)
+	if err != nil {
+		return nil, err
+	}
+	next := proto.CloneOf(defaultConfig)
+	next.Tracing = &config_pb.Middleware_Tracing{Disable: proto.Bool(defaults.TracingDisabled)}
 	return next, nil
 }
 

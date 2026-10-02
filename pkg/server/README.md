@@ -12,7 +12,7 @@ HTTPBuilder/GRPCBuilder 不提供 Enable/Disable；端口开关和管理端点�
 
 ```mermaid
 flowchart TD
-    A([开始 NewRuntime]) --> B[校验 Spec 并读取 server 配置快照]
+    A([开始 NewRuntime]) --> B[校验 Spec 读取启动 tracing.disable 并合并 server 配置快照]
     B --> C{校验及中间件构造成功?}
     C -- 否 --> X([返回错误 已分配资源执行 cleanup])
     C -- 是 --> D{http.disable 为 true?}
@@ -124,7 +124,9 @@ flowchart TD
 
 协议契约、Spec、配置加载、动态中间件、协议实例、WebSocket hub 和停机生命周期直接定义在 `pkg/server`，并按职责拆分在对应源码文件中。server 专属的 validator 与 ratelimit 位于 `pkg/server/internal/middleware`；只有 client/server 共同使用的 deadline、requestdebug、logging、metadata、metrics、tracing 和 HTTP transport 辅助能力保留在仓库根 `internal`。
 
-`server.tracing.disable: true` 或全局 `tracing.disable: true` 会停止服务端 Span 的记录、采样和导出，但常驻 tracing 中间件仍使用非采样 Provider 创建或延续请求 SpanContext。因此访问日志和业务日志仍能读取 `trace.id`、`span.id`，下游客户端也可继续传播同一条 TraceID；此模式不会创建 exporter。运行期重新启用 server tracing 时恢复使用构造期注入的真实 Provider；若全局 Provider 在构造期已禁用，则仍只能保留关联 ID，需重启才能恢复记录和导出。
+`server.tracing.disable` 省略或 `server.tracing` 为空消息时，继承构造时读取的全局 `tracing.disable`；局部显式 `false` 或 `true` 覆盖该默认值。全局字段省略时，local 环境默认 `true`，其他环境默认 `false`。全局开关需要重启生效，局部开关支持热更新；有效配置快照移除局部覆盖时恢复启动时的全局值，不重新读取运行期的全局配置。默认配置源合并会保留省略字段，仅删除源字段不保证移除有效值。默认模板是独立副本，不修改共享的 server 默认配置。
+
+`server.tracing.disable: true` 或构造期全局 tracing Provider 被禁用时，会停止服务端 Span 的记录、采样和导出；常驻 tracing 中间件仍使用非采样 Provider 创建或延续请求 SpanContext。因此访问日志和业务日志仍能读取 `trace.id`、`span.id`，下游客户端也可继续传播同一条 TraceID。局部关闭只隔离已注入的真实 Provider，不销毁它；全局 Provider 禁用时不创建 exporter。运行期重新启用 server tracing 时恢复使用构造期注入的真实 Provider；若全局 Provider 在构造期已禁用，局部显式 `false` 仍只能保留关联 ID，需重启并启用全局 Provider 才能恢复记录和导出。
 
 `NewRuntime` 在业务 HTTP、WebSocket、gRPC 和监控处理器组装完成后、服务启动前，按 HTTP 路径/方法及 gRPC 完整方法名的稳定顺序逐条记录 `DEBUG event=server.endpoint.registered`。HTTP 字段为 `transport=http, method, path, service, listener`；metrics/health 的 `service` 分别为对应能力，`listener` 为 `business` 或独立管理地址。gRPC 还包含实际服务名，`path` 采用 `/<service>/<method>`。业务路由来自底层 Server 的最终注册表，业务 HTTP/gRPC 的 `listener=business`，监控处理器由 Foundation 在挂载成功后补入；禁用的协议或监控能力不输出对应端点。默认 Info 级别仅保留 `event=server.assembled` 组装摘要和 SDK 启停日志；摘要字段为 `http`、`grpc`（配置地址，禁用为 `disabled`）、`management`（独立管理监听地址列表）和 `stop_delay`，`:0` 等动态端口以 SDK 的 listening 日志为准；需要核对逐路由详情时启用 Debug。
 
@@ -134,10 +136,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([构造或串行中间件订阅回调]) --> B{完整配置校验通过?}
+    A([构造或串行中间件订阅回调]) --> A1{首次构造?}
+    A1 -- 是 --> A2[读取全局 tracing.disable 固定订阅默认模板并合并局部配置]
+    A1 -- 否 --> A3[使用启动模板补齐局部缺失字段 不读取运行期全局值]
+    A2 -- 读取失败 --> C
+    A2 -- 成功 --> B{完整配置校验通过?}
+    A3 --> B
     B -- 否 --> C[构造返回错误 或 WARN server.middleware.update.rejected]
     C --> D([保留旧策略 结束])
-    B -- 是 --> E[构造变化项 包括外部 Aegis BBR]
+    B -- 是 --> R{热更新且策略内容未变?}
+    R -- 是 --> D
+    R -- 否 --> E[构造变化项 包括外部 Aegis BBR]
     E --> F{构造成功?}
     F -- 否 --> C
     F -- 是 --> G[首次创建 或逐项原子发布策略]

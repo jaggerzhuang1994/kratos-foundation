@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
@@ -32,8 +33,15 @@ func defaultConfig() componentConfig {
 
 // loadConfig 合并默认值并在创建任何 client 前完成配置校验。
 func loadConfig(manager config.Manager) (componentConfig, error) {
+	defaults, err := observability.Load(manager)
+	if err != nil {
+		return nil, err
+	}
+	// 保留 Redis 其余 tracing 默认值，局部显式开关优先于全局默认值。
+	template := defaultConfig()
+	template.Tracing.Disable = proto.Bool(defaults.TracingDisabled)
 	effective := new(config_pb.Redis)
-	if err := manager.Load("redis", effective, defaultConfig()); err != nil {
+	if err := manager.Load("redis", effective, template); err != nil {
 		return nil, err
 	}
 	if err := validateConfig(effective); err != nil {

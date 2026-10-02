@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -28,7 +29,7 @@ func TestGRPCClientSurvivesServerRestart(t *testing.T) {
 	first := start(listener)
 	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("health", &config_pb.ClientOption{
 		Target: "passthrough:///" + address,
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -129,7 +129,8 @@ type Tracing struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// 禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。[需重启]
+	// 禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。
+	// 同时作为 server、database、redis 和具名客户端局部 tracing.disable 的省略默认值。[需重启]
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// 导出配置。[需重启]
 	Exporter *Exporter `protobuf:"bytes,2,opt,name=exporter,proto3,oneof" json:"exporter,omitempty"`

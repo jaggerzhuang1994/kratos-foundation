@@ -2,7 +2,7 @@
 
 `kratos-foundation` 是基于 [go-kratos](https://github.com/go-kratos/kratos) 的 Go 应用基础库，统一组装日志、配置、服务端、客户端、数据库、缓存、队列、任务与可观测性能力。
 
-当前开发线面向下一版本 `v2.1.0`，尚未发布；已发布版本仍以 Git tag 为准。业务应固定到经过验证的 tag 或已推送 commit，并按 [v2 迁移清单](MIGRATION_V2.md) 核对兼容性；不要根据分支名、本地工作树或本文的规划描述推断发布状态。计划变更见 [CHANGELOG](CHANGELOG.md)。
+发布版本以 Git tag 及其对应提交为准。业务应固定到经过验证的 tag 或已推送 commit，并按 [v2 迁移清单](MIGRATION_V2.md) 核对兼容性；不要根据分支名、本地工作树或本文的规划描述推断发布状态。版本变更见 [CHANGELOG](CHANGELOG.md)。
 
 项目希望收敛到的能力边界、当前完成度和后续优先级见[项目目标形态与演进路线](PROJECT_VISION.md)。
 
@@ -31,12 +31,14 @@ Foundation 应用组件使用同一 Kubernetes 对象范围下钻；健康探测
 
 示例值不等于默认值：例如 `server.stop_delay: 3s`、客户端超时和 Redis 连接池大小都是显式设置。注释中的 `[默认: ...]` 说明省略字段后的行为；显式 `0`、`false` 或 `0s` 是否等同省略由具体字段决定。Duration 使用 protobuf 秒字符串，如 `10s`、`0.2s`、`0s`，不能使用 `10m` 或裸数字。Redis 的负时长哨兵 `-1ns`、`-2ns` 分别写为 `-0.000000001s`、`-0.000000002s`，不是 `-1s`、`-2s`。
 
+`server.tracing.disable`、`database.tracing.disable`、`redis.tracing.disable` 和 `client.clients.*.tracing.disable` 省略时继承启动时全局 `tracing.disable` 的有效值，局部显式布尔值优先。全局值省略时 local 为 true、其他环境为 false；全局开关需重启，局部热更新仍使用启动默认值，具体范围与 Provider 导出边界见 [Tracing 默认值](pkg/tracing/README.md#局部追踪默认值)。
+
 | YAML 顶层配置 | 用途 | 支持热更新的范围 |
 | --- | --- | --- |
 | `log` | 根过滤及标准/文件输出策略 | level、filter_keys、modules、std、file 全部字段；禁用和格式固定于 env |
 | `app` | 注册端点、metadata、注册与停机期限 | 仅 `stop_timeout`；停机开始后预算固定 |
 | `tracing` | OTLP 导出器与采样器 | 仅 `sampler`；构造时已禁用的 Provider 不能靠热更新启用 |
-| `server` | HTTP/gRPC、中间件、健康与指标端点 | 仅 `middleware`；地址、端点和停机延迟需重启 |
+| `server` | HTTP/gRPC、中间件、健康与指标端点 | 仅请求中间件策略；地址、端点和停机延迟需重启 |
 | `registry` | 具名注册与发现实例；驱动选项含健康检查、心跳、标签及发现超时 | 无；实例集合与选项需重启 |
 | `database` | 具名连接、GORM、连接池及观测 | 仅各连接的 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime`、`conn_max_idle_time` |
 | `redis` | 具名连接、追踪与指标 | 无 |
@@ -142,7 +144,7 @@ flowchart LR
 
 ## Database 与 OSS 驱动注册
 
-Database、OSS 和 Registry 满足“一个 Manager 管理多份具名资源，并按配置选择不同驱动”的条件，因此使用 `init + frozen registry`。业务/Wire 通过空导入明确决定哪些驱动进入最终二进制；驱动的 `init` 只注册 factory，不读取配置或创建外部资源。
+Database、OSS 和 Registry 满足“一个 Manager 管理多份具名资源，并按配置选择不同驱动”的条件，因此使用 `init + frozen registry`。业务/Wire 通过空导入明确决定哪些可选驱动进入最终二进制；驱动的 `init` 只注册 factory，不读取配置或创建外部资源。Registry 内置 `null` 无需额外导入，可通过配置关闭本应用注册并保留其他实例的发现能力，见 [Registry 配置关闭注册](pkg/registry/README.md#通过配置关闭服务注册)。
 
 Database 可同时编译 MySQL 与 SQLite3，具体连接由 `database.connections[*].driver` 选择：
 
@@ -243,7 +245,7 @@ v1/v2 混合调用继续兼容 HTTP JSON、gRPC `ErrorInfo`、`x-md-*` metadata 
 
 ## 驱动组装入口
 
-应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](pkg/registry/README.md)。
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口，内置 `null` 支持[通过配置关闭服务注册](pkg/registry/README.md#通过配置关闭服务注册)。详见[驱动组装与迁移](pkg/registry/README.md)。
 
 ## 包职责与日志
 

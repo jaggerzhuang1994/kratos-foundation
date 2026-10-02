@@ -48,7 +48,15 @@ type driverRegistry struct {
 	frozen bool
 }
 
-var drivers = driverRegistry{factories: make(map[string]DriverFactory)}
+// null 是内置空驱动，无需业务导入适配器即可显式禁用具名实例。
+var drivers = driverRegistry{factories: map[string]DriverFactory{
+	"null": newNullDriver,
+}}
+
+// newNullDriver 不创建资源；沿用 Disabled 契约关闭该实例的注册与发现。
+func newNullDriver(DriverConfig, log.Logger) (Resource, func(), error) {
+	return Resource{Disabled: true}, nil, nil
+}
 
 // RegisterDriver 注册无状态工厂。仅在 init 阶段调用，首次构造后拒绝注册。
 func RegisterDriver(name string, factory DriverFactory) error {

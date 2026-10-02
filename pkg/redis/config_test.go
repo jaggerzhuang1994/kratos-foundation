@@ -14,11 +14,16 @@ import (
 )
 
 type loadErrorConfigManager struct {
+	foundationconfig.Manager
+	key string
 	err error
 }
 
-func (m loadErrorConfigManager) Load(string, any, ...any) error {
-	return m.err
+func (m loadErrorConfigManager) Load(key string, target any, defaults ...any) error {
+	if key == m.key {
+		return m.err
+	}
+	return m.Manager.Load(key, target, defaults...)
 }
 
 func (loadErrorConfigManager) Subscribe(
@@ -40,7 +45,7 @@ func TestDefaultConfigReturnsIndependentDocumentedDefaults(t *testing.T) {
 		!first.GetTracing().GetDialFilter() {
 		t.Fatalf("tracing defaults = %#v", first.GetTracing())
 	}
-	if first.GetMetrics() != nil || first.GetConnections() != nil {
+	if first.GetTracing().Disable != nil || first.GetMetrics() != nil || first.GetConnections() != nil {
 		t.Fatalf("unexpected optional defaults = %#v", first)
 	}
 
@@ -55,32 +60,68 @@ func TestDefaultConfigReturnsIndependentDocumentedDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadConfigMergesDefaultsAndValidatesSnapshot(t *testing.T) {
-	configManager := testconfig.New(t, "redis", &config_pb.Redis{
-		Connections: map[string]*config_pb.RedisOption{
-			"default": {Addr: proto.String("127.0.0.1:6379")},
-		},
-	})
-
-	loaded, err := loadConfig(configManager)
-	if err != nil {
-		t.Fatal(err)
+func TestLoadConfigInheritsTracingDefaultsAndPreservesOverrides(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      string
+		global   *config_pb.Tracing
+		local    *config_pb.RedisTracing
+		disabled bool
+	}{
+		{name: "local environment default", env: "local", disabled: true},
+		{name: "production environment default", env: "prod"},
+		{name: "global disabled", env: "prod", global: &config_pb.Tracing{Disable: proto.Bool(true)}, disabled: true},
+		{name: "global enabled", env: "local", global: &config_pb.Tracing{Disable: proto.Bool(false)}},
+		{name: "local disabled override", env: "prod", global: &config_pb.Tracing{Disable: proto.Bool(false)}, local: &config_pb.RedisTracing{Disable: proto.Bool(true)}, disabled: true},
+		{name: "local enabled override", env: "prod", global: &config_pb.Tracing{Disable: proto.Bool(true)}, local: &config_pb.RedisTracing{Disable: proto.Bool(false)}},
+		{name: "empty local message", env: "prod", global: &config_pb.Tracing{Disable: proto.Bool(true)}, local: &config_pb.RedisTracing{}, disabled: true},
+		{name: "local fields without disable", env: "prod", global: &config_pb.Tracing{Disable: proto.Bool(true)}, local: &config_pb.RedisTracing{DbStatement: proto.Bool(false)}, disabled: true},
 	}
-	if loaded.GetDefault() != "default" ||
-		loaded.GetConnections()["default"].GetAddr() != "127.0.0.1:6379" {
-		t.Fatalf("loaded Redis config = %#v", loaded)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("APP_ENV", tt.env)
+			component := validRedisConfig()
+			component.Default = nil
+			component.Tracing = tt.local
+			component.Metrics = nil
+			sections := map[string]proto.Message{"redis": component}
+			if tt.global != nil {
+				sections["tracing"] = tt.global
+			}
+			loaded, err := loadConfig(testconfig.NewMany(t, sections))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if loaded.GetTracing().Disable == nil || loaded.GetTracing().GetDisable() != tt.disabled {
+				t.Fatalf("tracing disable = %v, want %t", loaded.GetTracing(), tt.disabled)
+			}
+			statement := true
+			if tt.local != nil && tt.local.DbStatement != nil {
+				statement = tt.local.GetDbStatement()
+			}
+			if loaded.GetTracing().GetDbStatement() != statement ||
+				!loaded.GetTracing().GetCallerEnabled() ||
+				!loaded.GetTracing().GetDialFilter() {
+				t.Fatalf("merged tracing fields = %v", loaded.GetTracing())
+			}
+			if loaded.GetDefault() != "default" || loaded.GetConnections()["default"].GetAddr() != "127.0.0.1:6379" || loaded.GetMetrics() != nil {
+				t.Fatalf("loaded Redis config = %v", loaded)
+			}
+		})
 	}
-	if !loaded.GetTracing().GetDbStatement() ||
-		!loaded.GetTracing().GetCallerEnabled() ||
-		!loaded.GetTracing().GetDialFilter() {
-		t.Fatalf("merged tracing defaults = %#v", loaded.GetTracing())
+	if template := defaultConfig(); template.GetTracing().Disable != nil {
+		t.Fatalf("environment-independent template was changed: %v", template)
 	}
 }
 
 func TestLoadConfigPreservesLoadErrorAndWrapsValidationError(t *testing.T) {
 	cause := errors.New("source unavailable")
-	if _, err := loadConfig(loadErrorConfigManager{err: cause}); !errors.Is(err, cause) {
-		t.Fatalf("loadConfig error = %v, want source cause", err)
+	for _, key := range []string{"tracing.disable", "redis"} {
+		t.Run(key, func(t *testing.T) {
+			if _, err := loadConfig(loadErrorConfigManager{Manager: testconfig.Empty(t), key: key, err: cause}); !errors.Is(err, cause) {
+				t.Fatalf("loadConfig error = %v, want source cause", err)
+			}
+		})
 	}
 
 	_, err := loadConfig(testconfig.Empty(t))

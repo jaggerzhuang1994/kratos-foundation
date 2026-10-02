@@ -138,7 +138,7 @@ message RedisOption {
 }
 
 message RedisTracing {
-  // 是否禁用
+  // 是否禁用；省略时继承构造期 tracing.disable，显式 true/false 优先。[需重启]
   optional bool disable = 1;
   // DBStatement tells the tracing hook to log raw redis commands.
   optional bool db_statement = 2;

@@ -42,7 +42,7 @@ type Server struct {
 	// 旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。
 	// 元数据透传。[热更新]
 	Metadata *Middleware_Metadata `protobuf:"bytes,5,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
-	// Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]
+	// Span 记录与导出开关；disable 省略时继承启动 tracing.disable，关闭仍保留关联。[热更新]
 	Tracing *Middleware_Tracing `protobuf:"bytes,6,opt,name=tracing,proto3,oneof" json:"tracing,omitempty"`
 	// 请求指标开关。[热更新]
 	Metrics *Middleware_Metrics `protobuf:"bytes,7,opt,name=metrics,proto3,oneof" json:"metrics,omitempty"`

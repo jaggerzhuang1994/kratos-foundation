@@ -236,7 +236,7 @@ func TestNewPreservesConfigLoadFailureWithoutReturningResources(t *testing.T) {
 
 	manager, cleanup, err := NewManager(
 		logger,
-		loadErrorConfigManager{err: cause},
+		loadErrorConfigManager{Manager: testconfig.Empty(t), key: "redis", err: cause},
 		tracingProvider,
 		metricsProvider,
 	)

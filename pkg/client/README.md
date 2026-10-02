@@ -79,9 +79,14 @@ flowchart TD
 
 `client.discovery` 为每个客户端提供默认发现实例，省略或空值默认 `default`；单个客户端的非空 discovery 优先，空值继承。直连目标不解析发现实例。根级四个字段支持热更新，新快照移除覆盖值后恢复继承（配置源默认 merge 会保留省略字段，仅删除源文件字段不保证移除有效值）；仅有效配置变化的客户端重建，已有租约继续持有旧版本。合并在独立副本上进行，不修改配置源快照。非法根时长（即使 clients 为空）或非法合并策略会拒绝整批配置；未配置名称的发现实例在实际获取时解析。
 
+`client.clients.<name>.tracing.disable` 省略时继承 Factory 构造时读取的全局 `tracing.disable`；局部 tracing 整段省略、空对象或仅缺少 disable 都采用该默认值，显式 `true` / `false` 覆盖。全局字段也省略时，local 环境默认 `true`，其他环境默认 `false`。未声明或从有效客户端快照中删除的名称也继承该启动默认值。Factory 不订阅全局开关，其变化需重启；局部开关支持热更新，删除有效局部覆盖后恢复启动默认值，仅有效策略变化时替换连接版本，已有租约继续持有旧版本。配置源默认 merge 的省略字段保留规则仍适用。
+
 ```mermaid
 flowchart TD
-    A([加载或更新 client 配置]) --> B[单个 client 字段优先 缺失字段继承根配置]
+    A([首次构造 Factory]) --> A1[加载 client 与全局 tracing.disable；全局缺省按环境决定并保存只读快照]
+    A1 -- 加载失败 --> E
+    A1 -- 成功 --> B[单个 client 字段优先；缺失字段继承根配置 tracing 开关继承启动快照]
+    A2([局部 client 热更新]) --> B
     B --> C[根字段缺失采用 10s / 0s / 0s / default]
     C --> D{根策略和合并策略有效?}
     D -- 否 --> E([构造返回错误；更新记录 WARN client.config.rejected 并保留旧配置])
@@ -145,7 +150,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A([开始]) --> B[NewFactory 使用注入依赖读取 AppInfo 快照]
+    A([开始]) --> B[NewFactory 读取全局 tracing 默认值与 AppInfo 快照]
     B --> C{配置加载及订阅成功?}
     C -- 否 --> E([返回构造错误])
     C -- 是 --> F[Factory 就绪]
@@ -170,7 +175,7 @@ flowchart TD
     T1 --> J
     AJ --> U[release 状态锁内减少引用并分离待关连接 释放锁]
     AK --> U
-    F --> V[配置订阅回调 校验新配置]
+    F --> V[client 订阅回调 沿用全局 tracing 启动快照合并并校验]
     V --> W{有效?}
     W -- 否 --> X[WARN client.config.rejected 保留旧配置]
     W -- 是 --> Y[状态锁内更新版本并标记旧版退休 释放锁]
@@ -217,14 +222,14 @@ flowchart TD
 
 生命周期日志在状态锁外输出。共享构建及资源释放属于后台资源生命周期，没有 Acquire 调用的请求 trace；实际 HTTP/gRPC 请求继续由访问日志和 tracing 中间件绑定请求 Context。构造、拨号和业务调用的同步错误仍返回调用边界，不额外记录失败日志。
 
-单个客户端设置 `middleware.tracing.disable: true` 或全局 `tracing.disable: true` 时，不记录、采样或导出客户端 Span，但仍创建或延续非采样 SpanContext，并向下游传播 TraceID/SpanID。这使同一请求中的业务日志继续包含 `trace.id`、`span.id`；不会创建 exporter。全局 Provider 在构造期禁用后，修改客户端中间件开关只能改变配置快照，不能恢复记录与导出，恢复真实 tracing 需要重启。
+单个客户端的有效 `client.clients.<name>.tracing.disable` 为 true，或注入的 Tracing Provider 已禁用时，不记录、采样或导出客户端 Span，但仍创建或延续非采样 SpanContext，并向下游传播 TraceID/SpanID。这使同一请求中的业务日志继续包含 `trace.id`、`span.id`。局部开关只选择中间件行为，不创建或销毁 exporter；Provider 在构造期禁用后，局部显式 `false` 也不能恢复记录与导出，恢复真实 tracing 需要重启。
 
 ```mermaid
 flowchart TD
-    A([NewFactory]) --> B[加载 client 配置 派生模块 Logger]
+    A([NewFactory]) --> B[加载 client 与全局 tracing 默认值 派生模块 Logger]
     B --> C{加载失败?}
     C -- 是 --> D([返回错误])
-    C -- 否 --> E[用同一 Logger 构造 builder 和 factory]
+    C -- 否 --> E[用同一 Logger 构造 builder 和 factory 保存全局 tracing 启动快照]
     E --> F{配置校验和订阅成功?}
     F -- 否 --> D
     F -- 是 --> G([返回 Factory 与 cleanup])

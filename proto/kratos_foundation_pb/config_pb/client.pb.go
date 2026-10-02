@@ -184,7 +184,7 @@ type ClientOption struct {
 	Discovery string `protobuf:"bytes,4,opt,name=discovery,proto3" json:"discovery,omitempty"`
 	// 元数据透传配置。
 	Metadata *Middleware_Metadata `protobuf:"bytes,5,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
-	// Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。
+	// Span 记录与导出开关；disable 省略时继承工厂启动 tracing.disable，关闭仍保留关联。
 	Tracing        *Middleware_Tracing        `protobuf:"bytes,6,opt,name=tracing,proto3,oneof" json:"tracing,omitempty"`
 	Metrics        *Middleware_Metrics        `protobuf:"bytes,7,opt,name=metrics,proto3,oneof" json:"metrics,omitempty"`
 	Logging        *Middleware_Logging        `protobuf:"bytes,8,opt,name=logging,proto3,oneof" json:"logging,omitempty"`

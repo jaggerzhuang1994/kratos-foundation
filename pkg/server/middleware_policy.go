@@ -74,6 +74,10 @@ func newMiddlewarePolicies(
 	metricsProvider metrics.Provider,
 	tracingProvider tracing.Provider,
 ) (*middlewarePolicies, func(), error) {
+	defaults, err := loadDefaultConfig(configManager)
+	if err != nil {
+		return nil, nil, err
+	}
 	deadlineStore, err := deadline.NewStore(config.GetDeadline())
 	if err != nil {
 		return nil, nil, err
@@ -102,6 +106,7 @@ func newMiddlewarePolicies(
 
 	// 策略字段直接属于 server，因此订阅完整快照；回调只比较策略字段，监听地址等
 	// 需重启配置发生变化时不会重建中间件或重置 BBR 统计窗口。
+	// tracing 默认值固定为订阅构造时的全局快照；局部覆盖删除后恢复它，不读取运行期全局值。
 	cancel, err := configManager.Subscribe(
 		"server",
 		new(config_pb.Server),
@@ -137,7 +142,7 @@ func newMiddlewarePolicies(
 			}
 			logger.With("event", "server.middleware.updated", "config_key", "server").Info("server middleware config updated")
 		},
-		defaultConfig,
+		defaults,
 	)
 	if err != nil {
 		return nil, nil, err

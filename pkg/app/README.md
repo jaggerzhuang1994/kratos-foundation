@@ -59,6 +59,8 @@ flowchart TD
 开关仅作用于 App 使用 Registrar 的阶段，不跳过 Wire 中 Registrar provider 与 Registry Factory 的构造或配置校验；
 默认 provider 仍要求有效的具名实例。共享注册中心资源仍由原 provider 的 cleanup 释放。
 
+需要由配置关闭时，将 `app.registry` 指向内置 `driver: "null"` 的实例，默认 provider 会返回 nil Registrar；可让客户端继续选择其他实例的发现能力。该选择需重启，完整示例及实例边界见 [Registry 配置关闭注册](../registry/README.md#通过配置关闭服务注册)。
+
 ```mermaid
 flowchart TD
  A([构造 NewApp]) --> B[沿用 Spec 锁冻结声明并复制开关 然后释放锁]

@@ -6,6 +6,7 @@ import (
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	metadatamiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metadata"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client/internal/middleware/circuitbreaker"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
@@ -37,7 +38,7 @@ type clientMiddlewareConfig struct {
 	requestDebug   *config_pb.Middleware_RequestDebug
 }
 
-func newClientSpec(name string, option *config_pb.ClientOption, defaults *config_pb.Client) clientSpec {
+func newClientSpec(name string, option *config_pb.ClientOption, defaults *config_pb.Client, observabilityDefaults observability.Defaults) clientSpec {
 	target := option.GetTarget()
 	if target == "" {
 		target = fmt.Sprintf("discovery:///%s", name)
@@ -59,6 +60,13 @@ func newClientSpec(name string, option *config_pb.ClientOption, defaults *config
 		circuitBreaker: proto.CloneOf(option.GetCircuitBreaker()),
 		deadline:       proto.CloneOf(option.GetDeadline()),
 		requestDebug:   proto.CloneOf(option.GetRequestDebug()),
+	}
+	// 缺省 tracing 开关先继承启动快照，再规范化；显式 false 可覆盖全局 true。
+	if middleware.tracing == nil {
+		middleware.tracing = new(config_pb.Middleware_Tracing)
+	}
+	if middleware.tracing.Disable == nil {
+		middleware.tracing.Disable = proto.Bool(observabilityDefaults.TracingDisabled)
 	}
 	// 在独立副本上逐字段继承，必须先于零值规范化，保证显式 0s 可以覆盖根配置。
 	if middleware.deadline == nil {
@@ -178,7 +186,7 @@ func (s clientSpec) useDiscovery() bool {
 	return strings.HasPrefix(s.target, "discovery://")
 }
 
-func (b *builder) validateConfig(config *config_pb.Client) error {
+func (b *builder) validateConfig(config *config_pb.Client, defaults observability.Defaults) error {
 	if _, err := clientCleanupTimeout(config); err != nil {
 		return err
 	}
@@ -186,12 +194,12 @@ func (b *builder) validateConfig(config *config_pb.Client) error {
 		return fmt.Errorf("validate client config: %w", err)
 	}
 	// 即使没有具名客户端，也校验按名称动态获取时会使用的根策略。
-	rootSpec := newClientSpec("", nil, config)
+	rootSpec := newClientSpec("", nil, config, defaults)
 	if _, err := deadline.NewStore(rootSpec.middleware.GetDeadline()); err != nil {
 		return fmt.Errorf("client default deadline: %w", err)
 	}
 	for name, option := range config.GetClients() {
-		spec := newClientSpec(name, option, config)
+		spec := newClientSpec(name, option, config, defaults)
 		if spec.useDiscovery() && (b.discoveries != nil || option.GetDiscovery() != "" || config.GetDiscovery() != "") {
 			if _, err := b.resolveDiscovery(spec); err != nil {
 				return err

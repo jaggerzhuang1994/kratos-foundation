@@ -318,4 +318,20 @@ func TestNewRegistrarSelection(t *testing.T) {
 	if _, err := NewRegistrar(&config_pb.App{Registry: "missing"}, factory); err == nil {
 		t.Fatal("unknown registry accepted")
 	}
+	t.Run("null default", func(t *testing.T) {
+		manager := testconfig.New(t, "registry", &config_pb.Registry{
+			Instances: map[string]*config_pb.RegistryInstance{
+				"default": {Driver: "null"},
+			},
+		})
+		factory, cleanup, err := foundationregistry.NewFactory(manager, log.WithModule("test"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		registrar, err := NewRegistrar(&config_pb.App{}, factory)
+		if err != nil || registrar != nil {
+			t.Fatalf("null default registrar = %v, %v; want nil, nil", registrar, err)
+		}
+	})
 }

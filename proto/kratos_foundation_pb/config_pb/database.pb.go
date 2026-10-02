@@ -667,7 +667,7 @@ type GormTracing struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// 禁用 gorm.tracing 插件
+	// 禁用 gorm.tracing 插件；省略时继承构造期 tracing.disable，显式 true/false 优先。[需重启]
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// 排除 db.statement SQL 的变量部分
 	ExcludeQueryVars *bool `protobuf:"varint,2,opt,name=exclude_query_vars,json=excludeQueryVars,proto3,oneof" json:"exclude_query_vars,omitempty"`

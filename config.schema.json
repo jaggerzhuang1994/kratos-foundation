@@ -264,7 +264,7 @@
     },
     ".kratos_foundation_pb.ClientOption.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
-      "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。"
+      "description": "Span 记录与导出开关；disable 省略时继承工厂启动 tracing.disable，关闭仍保留关联。"
     },
     ".kratos_foundation_pb.Config": {
       "properties": {
@@ -844,7 +844,7 @@
     },
     ".kratos_foundation_pb.GormTracing.disable": {
       "type": "boolean",
-      "description": "禁用 gorm.tracing 插件"
+      "description": "禁用 gorm.tracing 插件；省略时继承构造期 tracing.disable，显式 true/false 优先。[需重启]"
     },
     ".kratos_foundation_pb.GormTracing.exclude_metrics": {
       "type": "boolean",
@@ -1802,7 +1802,7 @@
     },
     ".kratos_foundation_pb.Middleware.Tracing.disable": {
       "type": "boolean",
-      "description": "禁用 Span 记录、采样和导出；仍生成或传播日志关联所需的 TraceID/SpanID。"
+      "description": "禁用 Span 记录、采样和导出；仍生成或传播日志关联所需的 TraceID/SpanID。\n 省略时继承构造期 tracing.disable 的有效值，局部显式 true/false 优先。\n 全局禁用的 Provider 不创建导出管道，局部 false 不能恢复导出。"
     },
     ".kratos_foundation_pb.Middleware.Validator": {
       "properties": {
@@ -2193,7 +2193,7 @@
     },
     ".kratos_foundation_pb.RedisTracing.disable": {
       "type": "boolean",
-      "description": "是否禁用"
+      "description": "是否禁用；省略时继承构造期 tracing.disable，显式 true/false 优先。[需重启]"
     },
     ".kratos_foundation_pb.Registry": {
       "properties": {
@@ -2339,7 +2339,7 @@
     },
     ".kratos_foundation_pb.Server.tracing": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Tracing",
-      "description": "Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]"
+      "description": "Span 记录与导出开关；disable 省略时继承启动 tracing.disable，关闭仍保留关联。[热更新]"
     },
     ".kratos_foundation_pb.Server.validator": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Validator",
@@ -2362,7 +2362,7 @@
     },
     ".kratos_foundation_pb.Tracing.disable": {
       "type": "boolean",
-      "description": "禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。[需重启]"
+      "description": "禁用 Span 记录、采样和导出，但保留请求 TraceID/SpanID 的生成与传播；local 环境默认为禁用。\n 同时作为 server、database、redis 和具名客户端局部 tracing.disable 的省略默认值。[需重启]"
     },
     ".kratos_foundation_pb.Tracing.exporter": {
       "$ref": "#/definitions/.kratos_foundation_pb.Exporter",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/go-kratos/kratos/v2/registry"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
@@ -54,7 +55,7 @@ func (w *emptyWatcher) Stop() error {
 func TestBuilderAcceptsInjectedDiscovery(t *testing.T) {
 	t.Parallel()
 	builder := newTestRealBuilder(t, emptyDiscovery{})
-	result, err := builder.build(context.Background(), newClientSpec("orders", nil, nil))
+	result, err := builder.build(context.Background(), newClientSpec("orders", nil, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestBuilderHTTPDiscoveryDoesNotWaitForInitialNodes(t *testing.T) {
 	result, err := builder.build(ctx, newClientSpec("orders", &config_pb.ClientOption{
 		Protocol: &protocol,
 		Target:   "discovery:///orders",
-	}, nil))
+	}, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatalf("build waited for an initial discovery node: %v", err)
 	}

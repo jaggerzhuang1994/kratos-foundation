@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-kratos/kratos/v2/selector"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 )
@@ -55,7 +56,7 @@ func TestFactorySnapshotsAppInfoForDiscoveryRouting(t *testing.T) {
 	t.Cleanup(cleanup)
 	info.metadata[appinfo.MetadataEnvironment] = "prod"
 	info.metadata[appinfo.MetadataHostname] = "changed-host"
-	filters, err := clientFactory.(*factory).builder.(*builder).getNodeFilters(newClientSpec("orders", nil, nil))
+	filters, err := clientFactory.(*factory).builder.(*builder).getNodeFilters(newClientSpec("orders", nil, nil, observability.Defaults{}))
 	if err != nil {
 		t.Fatal(err)
 	}

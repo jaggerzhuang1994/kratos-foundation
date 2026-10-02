@@ -8,6 +8,7 @@ import (
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	textconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
@@ -132,9 +133,11 @@ func TestNewFactoryObserverRejectsInvalidUpdates(t *testing.T) {
 }
 
 type capturedObserverManager struct {
-	initial      *config_pb.Client
-	subscribeErr error
-	cancelSignal chan struct{}
+	initial         *config_pb.Client
+	tracingDisabled *bool
+	tracingErr      error
+	subscribeErr    error
+	cancelSignal    chan struct{}
 
 	mu         sync.Mutex
 	observer   config.Observer
@@ -143,7 +146,17 @@ type capturedObserverManager struct {
 	canceled   atomic.Int32
 }
 
-func (m *capturedObserverManager) Load(_ string, target any, _ ...any) error {
+func (m *capturedObserverManager) Load(key string, target any, defaults ...any) error {
+	if key == "tracing.disable" {
+		if m.tracingErr != nil {
+			return m.tracingErr
+		}
+		*target.(*bool) = *defaults[0].(*bool)
+		if m.tracingDisabled != nil {
+			*target.(*bool) = *m.tracingDisabled
+		}
+		return nil
+	}
 	destination, ok := target.(*config_pb.Client)
 	if !ok {
 		return fmt.Errorf("load target has type %T", target)
@@ -215,6 +228,16 @@ func TestNewFactoryObserverRejectsWrongTypeAndIgnoresClosedFactory(t *testing.T)
 }
 
 func TestNewFactoryConstructionFailuresDoNotLeaveSubscription(t *testing.T) {
+	t.Run("global tracing load error does not subscribe", func(t *testing.T) {
+		loadErr := errors.New("tracing config unavailable")
+		manager := &capturedObserverManager{initial: new(config_pb.Client), tracingErr: loadErr}
+		if _, _, err := newFactory(manager, newFakeBuilder(t), newTestLogger(discardLogger{})); !errors.Is(err, loadErr) {
+			t.Fatalf("newFactory error = %v, want %v", err, loadErr)
+		}
+		if manager.subscribed.Load() != 0 {
+			t.Fatal("failed global configuration load left a subscription")
+		}
+	})
 
 	t.Run("subscribe error cancels returned subscription", func(t *testing.T) {
 		subscribeErr := errors.New("subscribe failed")
@@ -233,6 +256,26 @@ func TestNewFactoryConstructionFailuresDoNotLeaveSubscription(t *testing.T) {
 			t.Fatalf("subscription cancellation count = %d, want 1", got)
 		}
 	})
+}
+
+func TestLoadFactoryConfigReadsGlobalTracingDefault(t *testing.T) {
+	t.Parallel()
+	for _, disabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(disabled), func(t *testing.T) {
+			t.Parallel()
+			manager := &capturedObserverManager{
+				initial:         configWithTarget("orders", "http://orders.test"),
+				tracingDisabled: proto.Bool(disabled),
+			}
+			initial, defaults, _, err := loadFactoryConfig(manager, newTestLogger(discardLogger{}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if initial.GetClients()["orders"].GetTarget() != "http://orders.test" || defaults.TracingDisabled != disabled {
+				t.Fatalf("client config or global tracing default lost: defaults=%+v", defaults)
+			}
+		})
+	}
 }
 
 func TestFactoryModuleLoggingAppliesToRequests(t *testing.T) {
@@ -420,13 +463,13 @@ func TestIntegrationConfiguredHTTPFactory(t *testing.T) {
 }
 
 type fakeBuilder struct {
-	validateFn func(*config_pb.Client) error
+	validateFn func(*config_pb.Client, observability.Defaults) error
 	buildFn    func(context.Context, clientSpec) (clientResult, error)
 }
 
-func (b *fakeBuilder) validateConfig(config *config_pb.Client) error {
+func (b *fakeBuilder) validateConfig(config *config_pb.Client, defaults observability.Defaults) error {
 	if b.validateFn != nil {
-		return b.validateFn(config)
+		return b.validateFn(config, defaults)
 	}
 	return config.ValidateAll()
 }
@@ -606,7 +649,7 @@ func newFactoryState(
 	if fake, ok := builder.(*fakeBuilder); ok && fake.validateFn == nil {
 		fake.validateFn = newTestRealBuilder(t, nil).validateConfig
 	}
-	if err := builder.validateConfig(initial); err != nil {
+	if err := builder.validateConfig(initial, observability.Defaults{}); err != nil {
 		t.Fatal(err)
 	}
 	f := &factory{
@@ -622,7 +665,7 @@ func newFactoryState(
 			name: name,
 			current: &clientVersion{
 				revision: 1,
-				spec:     newClientSpec(name, option, initial),
+				spec:     newClientSpec(name, option, initial, observability.Defaults{}),
 			},
 		}
 	}
@@ -827,11 +870,11 @@ func waitForFactoryClosed(t testing.TB, f *factory) {
 
 // newFactory 为资源池测试注入构造替身，沿用生产配置加载与组装入口。
 func newFactory(manager config.Manager, builder clientBuilder, logger foundationlog.Logger) (Factory, func(), error) {
-	initial, logger, err := loadFactoryConfig(manager, logger)
+	initial, defaults, logger, err := loadFactoryConfig(manager, logger)
 	if err != nil {
 		return nil, nil, err
 	}
-	return newConfiguredFactory(manager, builder, logger, initial)
+	return newConfiguredFactory(manager, builder, logger, initial, defaults)
 }
 
 func (l *testLogger) WithLevel(kratoslog.Level) foundationlog.Logger { return l }

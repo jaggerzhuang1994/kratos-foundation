@@ -35,7 +35,7 @@ message ClientOption {
   string discovery = 4;
   // 元数据透传配置。
   optional Middleware.Metadata metadata = 5;
-  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。
+  // Span 记录与导出开关；disable 省略时继承工厂启动 tracing.disable，关闭仍保留关联。
   optional Middleware.Tracing tracing = 6;
   optional Middleware.Metrics metrics = 7;
   optional Middleware.Logging logging = 8;

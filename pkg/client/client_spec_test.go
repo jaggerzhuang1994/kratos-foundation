@@ -1,10 +1,12 @@
 package client
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -12,7 +14,7 @@ import (
 
 func TestNewClientSpecUsesDiscoveryDefault(t *testing.T) {
 	t.Parallel()
-	spec := newClientSpec("orders", nil, nil)
+	spec := newClientSpec("orders", nil, nil, observability.Defaults{})
 	if spec.protocol != config_pb.Protocol_GRPC || spec.target != "discovery:///orders" {
 		t.Fatalf("default spec = %s %q", spec.protocol, spec.target)
 	}
@@ -20,8 +22,46 @@ func TestNewClientSpecUsesDiscoveryDefault(t *testing.T) {
 
 func TestEffectiveDefaultMatchesEmptyOption(t *testing.T) {
 	t.Parallel()
-	if !newClientSpec("orders", nil, nil).equal(newClientSpec("orders", new(config_pb.ClientOption), nil)) {
+	if !newClientSpec("orders", nil, nil, observability.Defaults{}).equal(newClientSpec("orders", new(config_pb.ClientOption), nil, observability.Defaults{})) {
 		t.Fatal("absent and empty options differ")
+	}
+}
+
+func TestClientSpecInheritsStartupTracingDefaults(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		option *config_pb.ClientOption
+	}{
+		{name: "unconfigured name"},
+		{name: "omitted tracing", option: new(config_pb.ClientOption)},
+		{name: "empty tracing", option: &config_pb.ClientOption{Tracing: new(config_pb.Middleware_Tracing)}},
+		{name: "explicit enabled", option: &config_pb.ClientOption{Tracing: &config_pb.Middleware_Tracing{Disable: proto.Bool(false)}}},
+		{name: "explicit disabled", option: &config_pb.ClientOption{Tracing: &config_pb.Middleware_Tracing{Disable: proto.Bool(true)}}},
+	}
+	for _, disabled := range []bool{false, true} {
+		for _, item := range cases {
+			t.Run(fmt.Sprintf("global disabled %t/%s", disabled, item.name), func(t *testing.T) {
+				t.Parallel()
+				before := proto.CloneOf(item.option)
+				defaults := observability.Defaults{TracingDisabled: disabled}
+				spec := newClientSpec("orders", item.option, nil, defaults)
+				want := disabled
+				if local := item.option.GetTracing(); local != nil && local.Disable != nil {
+					want = local.GetDisable()
+				}
+				if got := spec.middleware.GetTracing().GetDisable(); got != want {
+					t.Fatalf("effective tracing disable = %t, want %t", got, want)
+				}
+				inherited := newClientSpec("orders", nil, nil, defaults)
+				if spec.equal(inherited) != (want == disabled) {
+					t.Fatal("canonicalization lost the effective tracing override")
+				}
+				if !proto.Equal(item.option, before) {
+					t.Fatal("tracing inheritance changed the input configuration")
+				}
+			})
+		}
 	}
 }
 
@@ -77,8 +117,8 @@ func TestClientSpecCanonicalizesMiddlewareDefaults(t *testing.T) {
 	for _, tt := range equivalent {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			left := newClientSpec("orders", tt.left, nil)
-			right := newClientSpec("orders", tt.right, nil)
+			left := newClientSpec("orders", tt.left, nil, observability.Defaults{})
+			right := newClientSpec("orders", tt.right, nil, observability.Defaults{})
 			if !left.equal(right) {
 				t.Fatal("default-equivalent middleware produced different client specs")
 			}
@@ -116,8 +156,8 @@ func TestClientSpecCanonicalizesMiddlewareDefaults(t *testing.T) {
 	for _, tt := range different {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			left := newClientSpec("orders", tt.left, nil)
-			right := newClientSpec("orders", tt.right, nil)
+			left := newClientSpec("orders", tt.left, nil, observability.Defaults{})
+			right := newClientSpec("orders", tt.right, nil, observability.Defaults{})
 			if left.equal(right) {
 				t.Fatal("effective middleware change produced equal client specs")
 			}
@@ -149,11 +189,11 @@ func TestClientRejectsInvalidSREConfiguration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := configWithTarget("orders", "127.0.0.1:1")
 			config.Clients["orders"].CircuitBreaker = &config_pb.Middleware_CircuitBreaker{Enable: proto.Bool(true), Sre: tt.breaker}
-			if err := builder.validateConfig(config); err == nil {
+			if err := builder.validateConfig(config, observability.Defaults{}); err == nil {
 				t.Fatal("enabled invalid SRE configuration was accepted")
 			}
 			config.Clients["orders"].CircuitBreaker.Enable = proto.Bool(false)
-			if err := builder.validateConfig(config); err != nil {
+			if err := builder.validateConfig(config, observability.Defaults{}); err != nil {
 				t.Fatalf("disabled SRE configuration must be ignored: %v", err)
 			}
 		})
@@ -174,7 +214,7 @@ func TestClientSpecInheritsRootDefaults(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			beforeRoot, beforeOption := proto.CloneOf(root), proto.CloneOf(tt.option)
-			spec := newClientSpec("orders", tt.option, root)
+			spec := newClientSpec("orders", tt.option, root, observability.Defaults{})
 			if spec.discovery != tt.discovery || !proto.Equal(spec.middleware.deadline, tt.want) {
 				t.Fatalf("effective spec = %s %v", spec.discovery, spec.middleware.deadline)
 			}
@@ -204,7 +244,7 @@ func TestClientRejectsInvalidRootDefaults(t *testing.T) {
 		{"missing discovery", &config_pb.Client{Discovery: proto.String("missing"), Clients: map[string]*config_pb.ClientOption{"orders": nil}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := b.validateConfig(tt.config); err == nil {
+			if err := b.validateConfig(tt.config, observability.Defaults{}); err == nil {
 				t.Fatal("invalid defaults accepted")
 			}
 		})

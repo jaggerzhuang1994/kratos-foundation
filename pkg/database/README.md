@@ -173,7 +173,7 @@ flowchart TD
 
 连接建立时已应用初始池参数；订阅在下一轮成功扫描异步回放当前值，未变化的回放或通知不记录更新日志。只有实际配置变化才应用并记录 `updated database connection pool settings`，恢复到初始值也属于实际更新。
 
-Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime` 和 `conn_max_idle_time`。DSN、驱动、连接集合和其他非池参数决定启动时创建的资源，变更后需要重启。
+Manager 订阅 `database` 配置，仅热更新 `max_idle_conns`、`max_open_conns`、`conn_max_lifetime` 和 `conn_max_idle_time`。DSN、驱动、连接集合和其他非池参数决定启动时创建的资源，变更后需要重启。订阅使用构造期读取的全局 tracing 默认值，不在运行期重读 `tracing.disable`；若订阅收到的有效配置不再包含局部 `database.tracing.disable`，按这份默认值合并。合并后的有效开关若与启动快照不同，整次更新仍会被跳过并要求重启。
 
 每次更新都与启动配置比较，比较时忽略上述四个池参数。包含非池参数变化的整次更新会被跳过，并保持现有池参数；被跳过的配置不会成为后续比较基线。恢复启动时的连接身份与集合后，合法的池参数更新可以立即生效。
 
@@ -199,6 +199,12 @@ flowchart TD
 ```
 
 同一订阅内的回调顺序执行；查询连接池沿用 factory 的现有互斥锁，setter 调用在锁外执行。Wire cleanup 仍负责取消订阅并释放资源。
+
+## Tracing 默认值
+
+`database.tracing.disable` 省略时继承全局 `tracing.disable`，整个 `database.tracing` 段省略或设为 `{}` 也会继承。全局开关省略时使用环境默认值：`local` 为 `true`，其他受支持环境为 `false`。局部显式 `true` 或 `false` 优先于全局默认值；其他 GORM tracing 字段保持原有默认值和局部配置行为。
+
+继承仅决定是否安装组件 tracing 插件。注入的 `tracing.Provider.Disabled()` 仍是安装前提：Provider 已禁用时，局部 `disable: false` 不会恢复 Span 记录或导出。追踪插件的启用状态以 Manager 启动快照为准，开关变更需要重启；采样策略的热更新继续由 Tracing Provider 处理。初始配置读取、合并或校验失败会在打开连接前返回错误；后续池参数订阅构造失败会回收已创建的资源，再由启动边界处理错误。
 
 ## 指标与生命周期
 
@@ -246,14 +252,24 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([构造 Manager]) --> B[按名称排序创建独立连接与 tracing 插件]
-    B --> C{database.metrics.disable?}
+    A([构造 Manager]) --> A1[读取全局 tracing.disable 缺失使用环境默认]
+    A1 -- 读取失败 --> A3([返回配置错误])
+    A1 --> A2[合并局部配置并校验]
+    A2 -- 合并或校验失败 --> A3
+    A2 -- 成功 --> B[按名称排序创建独立连接]
+    B --> B1{组件 tracing 已启用且 Provider 未禁用?}
+    B1 -- 是 --> B2[安装 tracing 插件]
+    B1 -- 否 --> C{database.metrics.disable?}
+    B2 -- 成功 --> C
     C -- 否 --> D[向注入的 Provider 注册指标并安装 SQL 回调]
     C -- 是 --> E[连接就绪]
     D --> E
     B -- 失败 --> F[回收已创建资源并返回错误]
+    B2 -- 失败 --> F
     D -- 失败 --> F
-    E --> E1[INFO database.manager.ready 连接数量]
+    E --> E0[构造池参数订阅模板 固定全局 tracing 默认]
+    E0 -- 读取或订阅失败 --> F
+    E0 -- 成功 --> E1[INFO database.manager.ready 连接数量]
     E1 --> G[Wire cleanup 停配置订阅]
     G --> H[停采集并注销指标]
     H --> I[逆序关闭连接池]

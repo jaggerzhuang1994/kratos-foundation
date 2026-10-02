@@ -41,7 +41,7 @@
 | [`gormscope`](gormscope/README.md) | GORM 查询辅助 | M1 工具 | 依赖 GORM，但不拥有数据库连接或事务 |
 | [`lock`](lock/lock.go) | 分布式锁/租约公共抽象 | M2 契约 | 定义 `Locker`、`Lease` 和稳定错误，提供可选 `WithMetrics` 包装；底层实现由 contrib 提供 |
 | [`redis`](redis/README.md) | Redis 连接资源 | M3 Manager | Manager 拥有共享 client，调用方借用；Subscribe 的操作生命周期另行释放 |
-| [`registry`](registry/README.md) | 具名注册与发现实例 | M3 Factory + M2 驱动契约 | 驱动提供 Registrar 与 Discovery；Factory 拥有实例，使用者借用 |
+| [`registry`](registry/README.md) | 具名注册与发现实例 | M3 Factory + M2 驱动契约 | 驱动提供注册或发现能力；内置 `null` 禁用实例；Factory 拥有资源，使用者借用 |
 | [`database`](database/README.md) | 数据库连接与事务能力 | M3 Manager + M2 驱动契约 | Manager 管理具名连接；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`oss`](oss/README.md) | 对象存储资源与操作契约 | M3 Manager + M2 契约 | Manager 延迟创建并缓存 bucket；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`client`](client/README.md) | HTTP/gRPC 客户端工厂与共享租用 | M3 Factory + M4 调用租约 | Factory cleanup 管理整体资源；每次 `AcquireClient` 还要调用自己的 release |
@@ -122,6 +122,6 @@ Job 仅提供本进程并发策略。跨进程租约若需自动续租，应作�
 
 业务 HTTP 默认开启，gRPC 按有效服务注册默认开启，显式配置开关优先；健康检查通过 `spec.Health().Checks(...)` 独立声明。管理端点可复用业务 HTTP 或独立监听，详见 [server](server/README.md)。
 
-应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](registry/README.md)。
+应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口，内置 `null` 支持[通过配置关闭服务注册](registry/README.md#通过配置关闭服务注册)。详见[驱动组装与迁移](registry/README.md)。
 
 逐包职责、拆分结论与日志事件清单见[包职责与日志审查](../PACKAGE_REVIEW.md)。

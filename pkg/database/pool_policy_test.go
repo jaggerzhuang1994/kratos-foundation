@@ -3,9 +3,10 @@ package database
 import (
 	"errors"
 	"fmt"
-	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"testing"
 
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -37,6 +38,7 @@ func TestPoolPolicyClearsOnlyPoolFieldsAndDetectsChanges(t *testing.T) {
 type poolPolicyConfig struct {
 	foundationconfig.Manager
 	initial  *config_pb.Database
+	template *config_pb.Database
 	observer foundationconfig.Observer
 }
 
@@ -44,11 +46,18 @@ func (m *poolPolicyConfig) Subscribe(
 	key string,
 	_ any,
 	observer foundationconfig.Observer,
-	_ ...any,
+	defaults ...any,
 ) (func(), error) {
 	m.observer = observer
-	observer(key, proto.CloneOf(m.initial), nil)
+	m.template = proto.CloneOf(defaults[0].(*config_pb.Database))
+	m.deliver(key, m.initial)
 	return func() { m.observer = nil }, nil
+}
+
+func (m *poolPolicyConfig) deliver(key string, value *config_pb.Database) {
+	effective := proto.CloneOf(m.template)
+	proto.Merge(effective, value)
+	m.observer(key, effective, nil)
 }
 
 func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
@@ -75,6 +84,11 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			}
 			driver := &recordingSQLiteDriver{}
 			drivers := map[string]DriverFactory{"sqlite3": driver.open}
+			configManager := testconfig.New(t, "database", initial)
+			initial, err := loadConfig(configManager, drivers)
+			if err != nil {
+				t.Fatal(err)
+			}
 			factory := newConnectionFactory(drivers)
 			t.Cleanup(func() {
 				if err := factory.close(); err != nil {
@@ -86,7 +100,7 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			manager := &poolPolicyConfig{initial: initial}
+			manager := &poolPolicyConfig{Manager: configManager, initial: initial}
 			logger := &poolPolicyLogger{Logger: newManagerTestLogger(t)}
 			cancel, err := subscribeConnectionPools(manager, logger, initial, factory, drivers)
 			if err != nil {
@@ -159,6 +173,76 @@ func TestPoolUpdatesStayBoundToStartupTopology(t *testing.T) {
 			}
 			if len(logger.messages) != 4 {
 				t.Fatalf("restore to initial configuration must log a real update: %v", logger.messages)
+			}
+		})
+	}
+}
+
+func TestPoolUpdatesRetainStartupTracingDefault(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		local        *config_pb.GormTracing
+		needsRestart bool
+	}{
+		{name: "inherited disabled"},
+		{name: "empty tracing message", local: &config_pb.GormTracing{}},
+		{name: "removed enabled override", local: &config_pb.GormTracing{Disable: proto.Bool(false)}, needsRestart: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("APP_ENV", "prod")
+			raw := &config_pb.Database{
+				Connections: map[string]*config_pb.DBConnection{
+					"default": {Driver: proto.String("sqlite3"), Dsn: ":memory:", MaxOpenConns: proto.Int32(1)},
+				},
+				Tracing: tt.local,
+			}
+			configManager := testconfig.NewMany(t, map[string]proto.Message{
+				"database": raw,
+				"tracing":  &config_pb.Tracing{Disable: proto.Bool(true)},
+			})
+			driver := &recordingSQLiteDriver{}
+			drivers := map[string]DriverFactory{"sqlite3": driver.open}
+			initial, err := loadConfig(configManager, drivers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			factory := newConnectionFactory(drivers)
+			t.Cleanup(func() {
+				if err := factory.close(); err != nil {
+					t.Error(err)
+				}
+			})
+			if _, err := factory.make("default", initial.Connections["default"]); err != nil {
+				t.Fatal(err)
+			}
+			manager := &poolPolicyConfig{Manager: configManager, initial: raw}
+			logger := &poolPolicyLogger{Logger: newManagerTestLogger(t)}
+			cancel, err := subscribeConnectionPools(manager, logger, initial, factory, drivers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cancel)
+			if len(logger.records) != 0 {
+				t.Fatalf("startup replay changed tracing defaults: %v", logger.records)
+			}
+
+			// 运行期全局开关变化不重建订阅模板；删除局部覆盖仍与启动全局值比较。
+			manager.Manager = testconfig.New(t, "tracing", &config_pb.Tracing{Disable: proto.Bool(false)})
+			next := proto.CloneOf(raw)
+			next.Tracing = nil
+			next.Connections["default"].MaxOpenConns = proto.Int32(10)
+			manager.deliver("database", next)
+			wantLimit := 10
+			wantEvent := "database.pool.updated"
+			if tt.needsRestart {
+				wantLimit = 1
+				wantEvent = "database.config.restart_required"
+			}
+			if got := factory.pools()[0].db.Stats().MaxOpenConnections; got != wantLimit {
+				t.Fatalf("pool max open = %d, want %d", got, wantLimit)
+			}
+			if len(logger.records) != 1 || logger.records[0].fields["event"] != wantEvent {
+				t.Fatalf("pool update logs = %v, want %s", logger.records, wantEvent)
 			}
 		})
 	}

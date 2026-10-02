@@ -16,6 +16,7 @@
 # =============================================================================
 app:
   # 注册实例；省略或为空时默认 default，必须配置对应实例。
+  # 若需关闭本应用注册，将下值改为 disabled，并启用 registry.instances.disabled 的注释示例。[需重启]
   registry: default
   # 注册中心超时时间 [默认: 10s]
   registrar_timeout: 10s
@@ -72,7 +73,7 @@ server:
     #   x-md-service-version: v1.0.0
   # 链路追踪中间件
   tracing:
-    # 是否禁用 [默认: false]
+    # 是否禁用 [默认: 启动时 tracing.disable 的有效值；此处显式启用]
     disable: false
   # 监控中间件
   metrics:
@@ -164,6 +165,7 @@ server:
 # =============================================================================
 tracing:
   # 是否禁用 [默认: local 环境为 true，其他环境为 false；此处显式启用]
+  # 同时作为 server/database/redis/具名客户端局部 tracing.disable 的省略默认值。[需重启]
   disable: false
   # 导出器配置
   exporter:
@@ -220,11 +222,15 @@ log:
     #   compress: true
 
 # =============================================================================
-# 具名注册与发现驱动（需重启；业务需空导入 contrib/registry/consul）
+# 具名注册与发现驱动（需重启；Consul 需空导入 contrib/registry/consul，内置 null 无需导入）
 # 所有 Consul 实例共享由 CONSUL_* env 构造的进程客户端，不接受 options.connection。
 # =============================================================================
 registry:
   instances:
+    # 可选禁用实例：配合 app.registry: disabled；客户端可继续选择 default 的 Consul 发现。
+    # null 必须加引号；此实例不提供注册或发现，不影响配置源，其他实例仍会构造。
+    # disabled:
+    #   driver: "null"
     default:
       driver: consul
       options:
@@ -322,7 +328,7 @@ database:
 
   # 链路追踪配置
   tracing:
-    # 是否禁用 [默认: false]
+    # 是否禁用 [默认: 启动时 tracing.disable 的有效值；此处显式启用]
     disable: false
     # 是否排除 SQL 变量部分 [默认: false]
     exclude_query_vars: false
@@ -423,7 +429,7 @@ redis:
 
   # 链路追踪配置
   tracing:
-    # 是否禁用 [默认: false]
+    # 是否禁用 [默认: 启动时 tracing.disable 的有效值；此处显式启用]
     disable: false
     # 是否记录原始 Redis 命令 [默认: true]
     db_statement: true
@@ -556,6 +562,7 @@ client:
           - x-md-global-
       # 链路追踪
       tracing:
+        # 默认继承工厂启动时 tracing.disable 的有效值；显式 false 覆盖局部默认，不能恢复全局禁用的导出管道。
         disable: false
       # 监控
       metrics:

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -30,7 +31,7 @@ type Factory interface {
 }
 
 type clientBuilder interface {
-	validateConfig(*config_pb.Client) error
+	validateConfig(*config_pb.Client, observability.Defaults) error
 	build(context.Context, clientSpec) (clientResult, error)
 }
 
@@ -87,6 +88,8 @@ type factory struct {
 	mu sync.Mutex
 	// config 最近接受的独立配置副本；cleanupTimeout 仍使用构造时值。
 	config *config_pb.Client
+	// observabilityDefaults 是构造时固定的全局观测默认值；局部更新不重新读取全局配置。
+	observabilityDefaults observability.Defaults
 	// slots 按连接名称保存当前版本与构建状态。
 	slots map[string]*clientSlot
 	// closed 是否已进入关闭阶段，阻止新租约和活动。
@@ -113,21 +116,26 @@ func NewFactory(
 	metricsProvider metrics.Provider,
 	discoveries DiscoveryResolver,
 ) (Factory, func(), error) {
-	initial, moduleLogger, err := loadFactoryConfig(manager, logger)
+	initial, defaults, moduleLogger, err := loadFactoryConfig(manager, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 	b := newBuilder(moduleLogger, info, tracingProvider, metricsProvider, discoveries)
-	return newConfiguredFactory(manager, b, moduleLogger, initial)
+	return newConfiguredFactory(manager, b, moduleLogger, initial, defaults)
 }
 
-func loadFactoryConfig(manager config.Manager, logger foundationlog.Logger) (*config_pb.Client, foundationlog.Logger, error) {
+func loadFactoryConfig(manager config.Manager, logger foundationlog.Logger) (*config_pb.Client, observability.Defaults, foundationlog.Logger, error) {
 	initial := new(config_pb.Client)
 	if err := manager.Load("client", initial, new(config_pb.Client)); err != nil {
-		return nil, nil, fmt.Errorf("load client config: %w", err)
+		return nil, observability.Defaults{}, nil, fmt.Errorf("load client config: %w", err)
+	}
+	// 全局默认值只读取一次；具名配置和动态回退共享同一份启动快照。
+	defaults, err := observability.Load(manager)
+	if err != nil {
+		return nil, observability.Defaults{}, nil, fmt.Errorf("load client observability defaults: %w", err)
 	}
 	logger = logger.WithModule("client")
-	return initial, logger, nil
+	return initial, defaults, logger, nil
 }
 
 func newConfiguredFactory(
@@ -135,8 +143,9 @@ func newConfiguredFactory(
 	builder clientBuilder,
 	logger foundationlog.Logger,
 	initial *config_pb.Client,
+	defaults observability.Defaults,
 ) (Factory, func(), error) {
-	if err := builder.validateConfig(initial); err != nil {
+	if err := builder.validateConfig(initial, defaults); err != nil {
 		return nil, nil, err
 	}
 	timeout, err := clientCleanupTimeout(initial)
@@ -145,19 +154,20 @@ func newConfiguredFactory(
 	}
 
 	f := &factory{
-		logger:         logger,
-		builder:        builder,
-		config:         proto.CloneOf(initial),
-		slots:          make(map[string]*clientSlot, len(initial.GetClients())),
-		leases:         make(map[*clientVersion]string),
-		cleanupTimeout: timeout,
+		logger:                logger,
+		builder:               builder,
+		config:                proto.CloneOf(initial),
+		observabilityDefaults: defaults,
+		slots:                 make(map[string]*clientSlot, len(initial.GetClients())),
+		leases:                make(map[*clientVersion]string),
+		cleanupTimeout:        timeout,
 	}
 	for name, option := range initial.GetClients() {
 		f.slots[name] = &clientSlot{
 			name: name,
 			current: &clientVersion{
 				revision: 1,
-				spec:     newClientSpec(name, option, initial),
+				spec:     newClientSpec(name, option, initial, defaults),
 			},
 		}
 	}

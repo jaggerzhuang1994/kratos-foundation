@@ -38,20 +38,32 @@ if err != nil {
 
 连接参数与遥测配置在 `NewManager` 构造时固定为启动快照，不订阅热更新；修改地址、凭据或连接集合后需要重启应用。之后首次解析的具名连接也使用这份旧快照。默认 client 在构造时创建，其他具名 client 按需创建；创建 client 不等于服务端连接验证成功。
 
+`redis.tracing.disable` 省略时继承全局 `tracing.disable`，整个 `redis.tracing` 段省略或设为 `{}` 也会继承。全局开关省略时使用环境默认值：`local` 为 `true`，其他受支持环境为 `false`。局部显式 `true` 或 `false` 优先于全局默认值；`db_statement`、`caller_enabled` 和 `dial_filter` 仍默认 `true`，局部显式值继续覆盖这些默认值。
+
+继承仅决定是否安装 Redis tracing hook。注入的 `tracing.Provider.Disabled()` 仍是安装前提：Provider 已禁用时，局部 `disable: false` 不会恢复 Span 记录或导出。全局与组件开关只在 Manager 构造期读取，变更后需要重启；之后延迟创建的 client 也使用启动快照。采样策略的热更新继续由 Tracing Provider 处理。配置读取、合并或校验失败会在创建任何 client 前返回错误，由启动边界处理。
+
 配置解析位于同包 `config.go`，连接延迟创建、遥测安装、缓存和幂等关闭状态由 `manager.go` 的非导出实现持有。业务只能借用 `Default` 或 `Connection` 返回的 client，不应单独关闭；统一由 cleanup 释放。
 
 cleanup 在现有 Manager 互斥锁内标记关闭并接管 client 与指标回收信号，在锁外通知 redisotel 注销回调、关闭全部连接池。每个 client 有独立回收信号；指标安装中途失败也发送此信号并关闭未发布 client，避免遗留捕获旧池的观察回调。redisotel 的注销由 SDK goroutine 异步完成，cleanup 返回只保证已发送回收信号、连接池已关闭，不保证该时刻所有池指标样本已消失；回调完成回收后不会把旧池容量累加到后续实例。组装层仍按逆序释放 Manager 和 Metrics Provider，业务应在 cleanup 前停止使用借用的 client。
 
 ```mermaid
 flowchart TD
-    A0([构造 Manager 初始化默认 client]) --> A
+    A0([构造 Manager]) --> A2[读取全局 tracing.disable 缺失使用环境默认]
+    A2 -- 读取失败 --> A4([返回配置错误])
+    A2 --> A3[合并局部配置并校验 固定独立启动快照]
+    A3 -- 失败 --> A4
+    A3 -- 成功 --> A5[初始化默认 client]
+    A5 --> A
     A([Connection 并发入口]) --> B[获取 Manager 互斥锁 检查关闭与缓存]
     B -- 已关闭 --> C[释放锁 返回 ErrManagerClosed]
     B -- 缓存命中 --> D[释放锁 返回借用 client]
-    B -- 新连接 --> E[创建 client 并安装追踪]
-    E -- 失败 --> S[关闭未发布 client]
+    B -- 新连接 --> E[创建 client]
+    E --> E1{组件 tracing 已启用且 Provider 未禁用?}
+    E1 -- 是 --> E2[安装 tracing hook]
+    E2 -- 失败 --> S[关闭未发布 client]
     S --> H
-    E -- 成功或已禁用 --> T{启用指标?}
+    E2 -- 成功 --> T{启用指标?}
+    E1 -- 否 --> T
     T -- 否 --> I
     T -- 是 --> U[创建独立回收信号 安装池回调和命令 hook]
     U --> F{指标安装成功?}

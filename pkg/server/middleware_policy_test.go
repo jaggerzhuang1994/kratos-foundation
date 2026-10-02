@@ -10,6 +10,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,7 +43,7 @@ func TestMiddlewareUpdateRejectsBBRWithoutChangingOtherPolicies(t *testing.T) {
 	logger := newRuntimeTestLogger(t)
 	metrics := testMetricsProvider{registry: prometheus.NewRegistry()}
 	tracing := runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()}
-	manager := &serverManagerStub{}
+	manager := newMiddlewarePolicyManager(t)
 	initial := &config_pb.Server{}
 	policies, cleanup, err := newMiddlewarePolicies(manager, logger, initial, metrics, tracing)
 	if err != nil {
@@ -81,7 +82,7 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager := &serverManagerStub{}
+	manager := newMiddlewarePolicyManager(t)
 	policies, cancel, err := newMiddlewarePolicies(
 		manager,
 		logger,
@@ -133,7 +134,7 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 
 func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
 	logger := newEndpointLog()
-	manager := &serverManagerStub{}
+	manager := newMiddlewarePolicyManager(t)
 	initial := proto.CloneOf(defaultConfig)
 	policies, cleanup, err := newMiddlewarePolicies(manager, logger, initial,
 		testMetricsProvider{registry: prometheus.NewRegistry()}, runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()})
@@ -182,7 +183,7 @@ func (d debugPolicyTransport) RequestHeader() transport.Header { return d }
 func (d debugPolicyTransport) Values(string) []string          { return []string{"1"} }
 
 func TestRequestDebugPolicyHotUpdate(t *testing.T) {
-	manager := &serverManagerStub{}
+	manager := newMiddlewarePolicyManager(t)
 	policies, cleanup, err := newMiddlewarePolicies(manager, newRuntimeTestLogger(t), &config_pb.Server{},
 		testMetricsProvider{registry: prometheus.NewRegistry()}, runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()})
 	if err != nil {
@@ -213,4 +214,59 @@ func TestRequestDebugPolicyHotUpdate(t *testing.T) {
 	if err != nil || got != true {
 		t.Fatalf("local debug lost: %v %v", got, err)
 	}
+}
+
+func TestMiddlewareTracingOverrideRemovalRestoresStartupDefault(t *testing.T) {
+	for _, globalDisabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "global enabled", true: "global disabled"}[globalDisabled], func(t *testing.T) {
+			manager := newMiddlewarePolicyManager(t)
+			manager.reader = testconfig.NewMany(t, map[string]proto.Message{
+				"tracing": &config_pb.Tracing{Disable: proto.Bool(globalDisabled)},
+				"server":  &config_pb.Server{Tracing: &config_pb.Middleware_Tracing{Disable: proto.Bool(!globalDisabled)}},
+			})
+			initial, err := loadConfig(manager)
+			if err != nil {
+				t.Fatal(err)
+			}
+			policies, cleanup, err := newMiddlewarePolicies(manager, newRuntimeTestLogger(t), initial,
+				testMetricsProvider{registry: prometheus.NewRegistry()}, runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanup)
+			// 删除局部覆盖时只使用订阅登记的默认模板；运行期不再读取全局配置。
+			manager.reader = &serverManagerStub{}
+			for _, tracing := range []*config_pb.Middleware_Tracing{nil, {}} {
+				next := new(config_pb.Server)
+				if err := testconfig.New(t, "server", &config_pb.Server{Tracing: tracing}).Load("server", next, manager.defaults); err != nil {
+					t.Fatal(err)
+				}
+				manager.observer("server", next, nil)
+				if got := policies.current.GetTracing().GetDisable(); got != globalDisabled {
+					t.Fatalf("removed override tracing.disable = %v, want startup global %v", got, globalDisabled)
+				}
+			}
+		})
+	}
+}
+
+// middlewarePolicyManager 复用已有订阅替身，并通过真实配置 Reader 读取启动默认值。
+type middlewarePolicyManager struct {
+	serverManagerStub
+	reader   foundationconfig.Reader
+	defaults *config_pb.Server
+}
+
+func newMiddlewarePolicyManager(t *testing.T) *middlewarePolicyManager {
+	t.Helper()
+	return &middlewarePolicyManager{reader: testconfig.Empty(t)}
+}
+
+func (m *middlewarePolicyManager) Load(key string, target any, defaultValue ...any) error {
+	return m.reader.Load(key, target, defaultValue...)
+}
+
+func (m *middlewarePolicyManager) Subscribe(key string, prototype any, observer foundationconfig.Observer, defaultValue ...any) (func(), error) {
+	m.defaults = proto.CloneOf(defaultValue[0].(*config_pb.Server))
+	return m.serverManagerStub.Subscribe(key, prototype, observer, defaultValue...)
 }

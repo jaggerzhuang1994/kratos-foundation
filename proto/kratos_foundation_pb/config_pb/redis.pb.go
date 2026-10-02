@@ -474,7 +474,7 @@ type RedisTracing struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// 是否禁用
+	// 是否禁用；省略时继承构造期 tracing.disable，显式 true/false 优先。[需重启]
 	Disable *bool `protobuf:"varint,1,opt,name=disable,proto3,oneof" json:"disable,omitempty"`
 	// DBStatement tells the tracing hook to log raw redis commands.
 	DbStatement *bool `protobuf:"varint,2,opt,name=db_statement,json=dbStatement,proto3,oneof" json:"db_statement,omitempty"`

@@ -141,7 +141,7 @@ message GormLogger {
 }
 
 message GormTracing {
-  // 禁用 gorm.tracing 插件
+  // 禁用 gorm.tracing 插件；省略时继承构造期 tracing.disable，显式 true/false 优先。[需重启]
   optional bool disable = 1;
   // 排除 db.statement SQL 的变量部分
   optional bool exclude_query_vars = 2;

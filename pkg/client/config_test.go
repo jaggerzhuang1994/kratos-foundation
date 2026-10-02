@@ -427,3 +427,64 @@ func TestFactoryRootDefaultsUpdate(t *testing.T) {
 		t.Fatal("removed root timeout did not restore built-in default")
 	}
 }
+
+func TestFactoryLocalTracingUpdateRestoresStartupDefault(t *testing.T) {
+	for _, mode := range []string{"remove tracing", "remove disable", "remove client"} {
+		t.Run(mode, func(t *testing.T) {
+			initial := configWithTarget("orders", "http://orders.test")
+			initial.Clients["orders"].Tracing = &config_pb.Middleware_Tracing{Disable: proto.Bool(false)}
+			manager := &capturedObserverManager{initial: initial, tracingDisabled: proto.Bool(true)}
+			seen := make(chan clientSpec, 4)
+			builder := newFakeBuilder(t)
+			builder.buildFn = func(_ context.Context, spec clientSpec) (clientResult, error) {
+				seen <- spec
+				return fakeResultForSpec(spec, new(atomic.Int32)), nil
+			}
+			clientFactory, cleanup, err := newFactory(manager, builder, newTestLogger(discardLogger{}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanup)
+			f := clientFactory.(*factory)
+			acquire := func(name string) {
+				t.Helper()
+				_, _, release, err := f.AcquireClient(t.Context(), name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				release()
+			}
+			acquire("orders")
+			if spec := receiveWithin(t, seen, "initial overridden tracing spec"); spec.middleware.GetTracing().GetDisable() {
+				t.Fatal("explicit false did not override the disabled global default")
+			}
+			acquire("cached-dynamic")
+			if spec := receiveWithin(t, seen, "initial dynamic tracing spec"); !spec.middleware.GetTracing().GetDisable() {
+				t.Fatal("dynamic name did not inherit the global tracing default")
+			}
+			cached := currentSnapshot(f, "cached-dynamic")
+
+			// 模拟全局值随后改变；局部配置回放仍须使用构造时的默认值。
+			manager.tracingDisabled = proto.Bool(false)
+			next := proto.CloneOf(initial)
+			switch mode {
+			case "remove tracing":
+				next.Clients["orders"].Tracing = nil
+			case "remove disable":
+				next.Clients["orders"].Tracing.Disable = nil
+			case "remove client":
+				delete(next.Clients, "orders")
+			}
+			manager.notify(next, nil)
+			if currentSnapshot(f, "cached-dynamic") != cached {
+				t.Fatal("unchanged dynamic client was rebuilt")
+			}
+			for _, name := range []string{"orders", "new-dynamic"} {
+				acquire(name)
+				if spec := receiveWithin(t, seen, "updated inherited tracing spec"); !spec.middleware.GetTracing().GetDisable() {
+					t.Fatalf("%s did not restore the startup tracing default", name)
+				}
+			}
+		})
+	}
+}

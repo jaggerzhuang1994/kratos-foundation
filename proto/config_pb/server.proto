@@ -24,7 +24,7 @@ message Server {
   // 旧 Timeout 与 Deadline 语义不同，不复用其 wire 编号。
   // 元数据透传。[热更新]
   optional Middleware.Metadata metadata = 5;
-  // Span 记录与导出开关；关闭仍保留 TraceID/SpanID 关联。[热更新]
+  // Span 记录与导出开关；disable 省略时继承启动 tracing.disable，关闭仍保留关联。[热更新]
   optional Middleware.Tracing tracing = 6;
   // 请求指标开关。[热更新]
   optional Middleware.Metrics metrics = 7;

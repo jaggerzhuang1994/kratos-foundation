@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
@@ -65,12 +66,14 @@ func TestNewRuntimeRejectsInvalidBBRBeforeConstruction(t *testing.T) {
 }
 
 func TestLoadConfigReturnsIndependentDefaultSnapshots(t *testing.T) {
+	t.Setenv("APP_ENV", env.Local)
 	manager := testconfig.Empty(t)
 	first, err := loadConfig(manager)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first.GetHttp().Addr = strp("127.0.0.1:1")
+	first.GetTracing().Disable = proto.Bool(false)
 
 	second, err := loadConfig(manager)
 	if err != nil {
@@ -78,6 +81,55 @@ func TestLoadConfigReturnsIndependentDefaultSnapshots(t *testing.T) {
 	}
 	if got, want := second.GetHttp().GetAddr(), "0.0.0.0:8000"; got != want {
 		t.Fatalf("second default HTTP address = %q, want %q", got, want)
+	}
+	if !second.GetTracing().GetDisable() || defaultConfig.Tracing != nil {
+		t.Fatal("tracing default snapshot mutated the shared template")
+	}
+}
+
+func TestLoadConfigTracingDefaultsAndOverrides(t *testing.T) {
+	for _, global := range []struct {
+		name     string
+		env      string
+		config   *config_pb.Tracing
+		disabled bool
+	}{
+		{name: "local missing", env: env.Local, disabled: true},
+		{name: "production missing", env: env.Prod},
+		{name: "local empty", env: env.Local, config: &config_pb.Tracing{}, disabled: true},
+		{name: "global enabled", env: env.Local, config: &config_pb.Tracing{Disable: proto.Bool(false)}},
+		{name: "global disabled", env: env.Prod, config: &config_pb.Tracing{Disable: proto.Bool(true)}, disabled: true},
+	} {
+		t.Run(global.name, func(t *testing.T) {
+			t.Setenv("APP_ENV", global.env)
+			for _, local := range []struct {
+				name   string
+				config *config_pb.Middleware_Tracing
+			}{
+				{name: "missing"},
+				{name: "empty", config: &config_pb.Middleware_Tracing{}},
+				{name: "enabled", config: &config_pb.Middleware_Tracing{Disable: proto.Bool(false)}},
+				{name: "disabled", config: &config_pb.Middleware_Tracing{Disable: proto.Bool(true)}},
+			} {
+				t.Run(local.name, func(t *testing.T) {
+					values := map[string]proto.Message{"server": &config_pb.Server{Tracing: local.config}}
+					if global.config != nil {
+						values["tracing"] = global.config
+					}
+					config, err := loadConfig(testconfig.NewMany(t, values))
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := global.disabled
+					if local.config != nil && local.config.Disable != nil {
+						want = *local.config.Disable
+					}
+					if config.GetTracing().Disable == nil || config.GetTracing().GetDisable() != want {
+						t.Fatalf("tracing.disable = %v, want %v", config.GetTracing(), want)
+					}
+				})
+			}
+		})
 	}
 }
 

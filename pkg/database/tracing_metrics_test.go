@@ -43,6 +43,7 @@ func TestManagerTracingKeepsMetricsWithExplicitProvider(t *testing.T) {
 				Connections: map[string]*config_pb.DBConnection{
 					"primary": {Driver: proto.String("sqlite3"), Dsn: ":memory:"},
 				},
+				Tracing: &config_pb.GormTracing{Disable: proto.Bool(false)},
 				Metrics: &config_pb.GormMetrics{Disable: proto.Bool(disabled)},
 			}
 			metrics := newManagerMetricsProvider()
