@@ -304,7 +304,9 @@ flowchart LR
 
 结构化 `caller` 使用 GORM 提供的查询来源，格式为 `目录/文件:行号`，不依赖固定跳栈层数；GORM 无法提供有效来源时沿用日志包默认 caller。请求 Context 会继续传给 Foundation logger：存在有效 SpanContext 时，SQL 日志自动附带 `trace.id` 和 `span.id`；没有活动 Span 时不会生成虚假的关联 ID，默认 `LOG_FILTER_EMPTY=true` 会省略对应空字段，显式关闭空值过滤时则可能保留空字段。HTTP、WebSocket、Job 和队列任务执行应把派生 Context 传入数据库操作；队列领取前的空轮询、启动与清理等后台生命周期操作通常没有活动 Span，因此不含有效关联 ID 属于预期行为。
 
-GORM 的查询日志级别没有 Debug 档：`info` 会记录普通 SQL，`warn` 仅记录慢查询和错误，`error` 仅记录错误。开发环境或短时排障可使用 `info`；生产环境通常使用 `warn`，只有明确不需要慢查询观测时才使用 `error`。不要为了获得 trace ID 长期开启全量 SQL Info，常规请求关联优先依赖 Trace 与指标。忽略 RecordNotFound 和参数过滤仍由 `gorm.logger` 控制；`colorful` 仅为兼容保留，结构化日志不输出 ANSI 颜色。
+GORM 上游的日志配置没有 Debug 档：`silent` 不生成 SQL 日志；当前 slog logger 在其他级别均优先记录未忽略的错误（ERROR），没有此类错误时，`slow_threshold` 非零且耗时严格超过阈值则记录慢 SQL（WARN）；只有 `info` 还会生成普通 SQL（INFO）。因此 `error` 级别也可能记录慢 SQL。开发环境或短时排障可使用 `info`；不要为了获得 trace ID 长期开启全量 SQL Info，常规请求关联优先依赖 Trace 与指标。忽略 RecordNotFound 和参数过滤仍由 `gorm.logger` 控制；`colorful` 仅为兼容保留，结构化日志不输出 ANSI 颜色。
+
+[GORM 队列仓储](../../contrib/queue/database/gorm/README.md#sql-日志) 使用 Foundation logger 时，会在复制的独立会话中将普通 SQL 从 INFO 转为 DEBUG，覆盖投递、消费、统计、运维和简单模式迁移。慢查询仍为 WARN，失败仍为 ERROR，`event=database.gorm.query`、caller、Context 和参数过滤保持原有行为；共享连接上的其他业务 SQL 级别不变。自定义 GORM logger 未提供可选的 `WithDebugQueries() gormlogger.Interface` 方法时，Repo 沿用其自身策略。查看普通队列 SQL 仍需 GORM `gorm.logger.level: info` 开启生成，且 Foundation 模块策略及对应输出端允许 DEBUG；派生会话不会恢复 GORM 已关闭的日志。
 
 `parameterized_queries: true` 会保留 SQL 占位符而不记录参数值，生产环境建议开启。设为 `false` 时，GORM 可能把实际参数写入 `sql` 字段，应确保其中不包含令牌、密码和个人信息。
 
@@ -320,12 +322,15 @@ flowchart TD
     F --> H[GORM 计算来源并生成 slog 记录]
     G --> H
     H --> I[展平 duration/rows/sql/err 并附加 event]
-    I --> K[规范化 caller 并绑定请求 Context]
+    I --> Q{队列派生 logger 且普通 INFO SQL?}
+    Q -- 是 --> R[将输出级别转为 DEBUG]
+    Q -- 否 --> K[规范化 caller 并绑定请求 Context]
+    R --> K
     J --> K
     K --> N{Context 含有效 SpanContext?}
     N -- 是 --> O[附加 trace.id 与 span.id]
     N -- 否 --> P[不生成关联 ID 由 filter_empty 决定是否保留空字段]
-    P --> L{Foundation 模块策略允许输出?}
+    P --> L{Foundation 模块及输出端允许输出?}
     O --> L
     L -- 否 --> C
     L -- 是 --> M([输出结构化日志])

@@ -16,9 +16,11 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNewManagerConstructsWithObservabilityDependencies(t *testing.T) {
@@ -237,8 +239,21 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	written, err := os.ReadFile(observability.logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if logs := string(written); !strings.Contains(logs, "module=job") || !strings.Contains(logs, "job=invoice") ||
+		strings.Count(logs, "event=job.registered") != 1 || !strings.Contains(logs, "kind=once") ||
+		!strings.Contains(logs, "schedule=once") || !strings.Contains(logs, "registration.caller=") ||
+		strings.Contains(logs, "event=job.execution.") {
+		t.Fatalf("one-shot logs before Start = %s", logs)
+	}
+	if gotJobName != "" {
+		t.Fatalf("task ran during construction with job = %q", gotJobName)
+	}
 	if err := manager.Start(context.Background()); err != ErrCompleted {
-		t.Fatalf("Start error = %v, want ErrStopRequested", err)
+		t.Fatalf("Start error = %v, want ErrCompleted", err)
 	}
 	if gotJobName != "invoice" {
 		t.Fatalf("task context job = %q", gotJobName)
@@ -251,15 +266,91 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 	}); sample.counter != 1 {
 		t.Fatalf("one-shot counter = %v, want 1", sample.counter)
 	}
+	written, err = os.ReadFile(observability.logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if logs := string(written); strings.Count(logs, "event=job.registered") != 1 ||
+		!strings.Contains(logs, "event=job.execution.finished") {
+		t.Fatalf("one-shot logs = %s", logs)
+	}
+}
+
+func TestNewManagerLogsRegistrationsAfterSuccessfulConstruction(t *testing.T) {
+	observability := newRuntimeObservability(t)
+	task := TaskFunc(func(context.Context) error { return nil })
+	spec := NewSpec()
+	spec.RegisterCron("refresh", "@daily", defaultsTask{})
+	spec.RegisterOnce("invoice", task)
+	spec.RegisterDaemon("worker", task)
+	configuration := testconfig.New(t, "job", &config_pb.Job{Cron: map[string]*config_pb.CronJob{
+		"refresh": {Schedule: proto.String("@weekly"), Disabled: proto.Bool(true)},
+	}})
+	if _, err := NewManager(observability.logger, spec, observability.tracingProvider, observability.metricsProvider, configuration); err != nil {
+		t.Fatal(err)
+	}
 	written, err := os.ReadFile(observability.logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if logs := string(written); !strings.Contains(logs, "module=job") || !strings.Contains(logs, "job=invoice") ||
-		!strings.Contains(logs, "event=job.registered") || !strings.Contains(logs, "kind=once") ||
-		!strings.Contains(logs, "schedule=once") || !strings.Contains(logs, "registration.caller=") ||
-		!strings.Contains(logs, "event=job.execution.finished") {
-		t.Fatalf("one-shot logs = %s", logs)
+	var registrations []string
+	for _, line := range strings.Split(string(written), "\n") {
+		if strings.Contains(line, "event=job.registered") {
+			registrations = append(registrations, line)
+		}
+	}
+	wantFields := [][]string{
+		{"job=refresh", "kind=cron", "schedule=@weekly", "enabled=false", "registration.caller="},
+		{"job=invoice", "kind=once", "schedule=once", "enabled=true", "registration.caller="},
+		{"job=worker", "kind=daemon", "schedule=daemon", "enabled=true", "registration.caller="},
+	}
+	if len(registrations) != len(wantFields) {
+		t.Fatalf("registration logs = %#v, want %d entries", registrations, len(wantFields))
+	}
+	for index, fields := range wantFields {
+		for _, field := range fields {
+			if !strings.Contains(registrations[index], field) {
+				t.Errorf("registration log %d = %s, missing %q", index, registrations[index], field)
+			}
+		}
+	}
+}
+
+func TestNewManagerDoesNotLogRegistrationsWhenConstructionFails(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		configuration *config_pb.Job
+	}{
+		{name: "later cron configuration", configuration: &config_pb.Job{Cron: map[string]*config_pb.CronJob{
+			"later": {MaxPendingRuns: proto.Int32(-2)},
+		}}},
+		{name: "later cron expression", configuration: &config_pb.Job{Cron: map[string]*config_pb.CronJob{
+			"later": {Schedule: proto.String("invalid")},
+		}}},
+		{name: "unknown configured job", configuration: &config_pb.Job{Cron: map[string]*config_pb.CronJob{
+			"missing": {},
+		}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observability := newRuntimeObservability(t)
+			task := TaskFunc(func(context.Context) error { return nil })
+			spec := NewSpec()
+			spec.RegisterCron("refresh", "@daily", task)
+			spec.RegisterOnce("invoice", task)
+			spec.RegisterDaemon("worker", task)
+			spec.RegisterCron("later", "@hourly", task)
+			manager, err := NewManager(observability.logger, spec, observability.tracingProvider, observability.metricsProvider, testconfig.New(t, "job", tc.configuration))
+			if manager != nil || err == nil {
+				t.Fatalf("NewManager = (%v, %v), want construction failure", manager, err)
+			}
+			written, err := os.ReadFile(observability.logPath)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if logs := string(written); strings.Contains(logs, "event=job.registered") {
+				t.Fatalf("failed construction logged successful registrations: %s", logs)
+			}
+		})
 	}
 }
 

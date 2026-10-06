@@ -83,8 +83,40 @@ func mergeGORMConfig(base, override *config_pb.Gorm) *config_pb.Gorm {
 type gormLogHandler struct {
 	logger        log.Logger
 	slowThreshold time.Duration
+	debugQueries  bool
 	fields        []any
 	groups        []string
+}
+
+type gormLogger struct {
+	gormlogger.Interface
+	filter  gorm.ParamsFilter
+	handler *gormLogHandler
+	config  gormlogger.Config
+}
+
+func newGORMLoggerWithHandler(handler *gormLogHandler, config gormlogger.Config) *gormLogger {
+	logger := gormlogger.NewSlogLogger(slog.New(handler), config)
+	return &gormLogger{Interface: logger, filter: logger.(gorm.ParamsFilter), handler: handler, config: config}
+}
+
+// ParamsFilter 沿用上游参数过滤，派生会话保留原有参数配置。
+func (logger *gormLogger) ParamsFilter(ctx context.Context, sql string, params ...any) (string, []any) {
+	return logger.filter.ParamsFilter(ctx, sql, params...)
+}
+
+// LogMode 调整独立会话的 GORM 日志生成级别，保留普通 SQL 的输出策略。
+func (logger *gormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
+	config := logger.config
+	config.LogLevel = level
+	return newGORMLoggerWithHandler(logger.handler, config)
+}
+
+// WithDebugQueries 返回普通 SQL 使用 DEBUG 的独立日志会话，保留慢查询和错误级别。
+func (logger *gormLogger) WithDebugQueries() gormlogger.Interface {
+	handler := *logger.handler
+	handler.debugQueries = true
+	return newGORMLoggerWithHandler(&handler, logger.config)
 }
 
 func newGORMLogger(base log.Logger, config *config_pb.GormLogger) gormlogger.Interface {
@@ -109,7 +141,7 @@ func newGORMLogger(base log.Logger, config *config_pb.GormLogger) gormlogger.Int
 		slowThreshold: configValue.SlowThreshold,
 	}
 	// 复用 GORM 对日志级别、慢查询和参数过滤的判定，只在输出边界转换为 Foundation 结构化字段。
-	return gormlogger.NewSlogLogger(slog.New(handler), configValue)
+	return newGORMLoggerWithHandler(handler, configValue)
 }
 
 func (handler *gormLogHandler) Enabled(context.Context, slog.Level) bool {
@@ -136,7 +168,12 @@ func (handler *gormLogHandler) Handle(ctx context.Context, record slog.Record) e
 		if record.Level == slog.LevelWarn && handler.slowThreshold > 0 {
 			fields = append(fields, "slow_threshold", handler.slowThreshold)
 		}
-		return logger.Log(gormLogLevel(record.Level), fields...)
+		level := gormLogLevel(record.Level)
+		// 队列轮询只降低普通 SQL，慢查询和失败仍保留诊断级别。
+		if handler.debugQueries && record.Level == slog.LevelInfo {
+			level = kratoslog.LevelDebug
+		}
+		return logger.Log(level, fields...)
 	}
 
 	message := formatGORMLogMessage(record.Message, attributes)

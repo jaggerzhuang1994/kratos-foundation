@@ -5,14 +5,81 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 type cronFailure struct {
+	ctx     context.Context
 	ctxName string
 	name    string
 	err     error
+}
+
+type blockingStartupSchedule struct {
+	entered chan struct{}
+	release <-chan struct{}
+	once    sync.Once
+}
+
+func (s *blockingStartupSchedule) Next(time.Time) time.Time {
+	// 暂停首条规则的计算，使后一条规则尚未提交时的启动日志可确定地被检测。
+	s.once.Do(func() {
+		close(s.entered)
+		<-s.release
+	})
+	return time.Time{}
+}
+
+func TestCronSchedulerLogsStartedAfterInitialRulesAreSubmitted(t *testing.T) {
+	logger, logPath := testFileFoundationLogger(t)
+	cronLog := newCronLog(logger, managerOptions{LoggingEnabled: true})
+	parser := newScheduleParser(cronLog)
+	scheduler := newCron(cronLog, managerOptions{}, parser, newCronLogger(cronLog))
+	release := make(chan struct{})
+	plan := &blockingStartupSchedule{entered: make(chan struct{}), release: release}
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		scheduler.stop()
+	})
+	for _, name := range []string{"first", "second"} {
+		scheduler.schedule(context.Background(), name, TaskFunc(func(context.Context) error {
+			t.Error("zero-next schedule executed a task")
+			return nil
+		}), plan)
+	}
+	scheduler.start()
+	waitFor(t, plan.entered)
+	written, err := os.ReadFile(logPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(written), "event=job.cron.started") {
+		t.Fatal("scheduler logged started before all initial rules were submitted")
+	}
+	close(release)
+	waitUntil(t, func() bool {
+		written, err := os.ReadFile(logPath)
+		return err == nil && strings.Contains(string(written), "event=job.cron.started")
+	})
+	updated := &blockingStartupSchedule{entered: make(chan struct{}), release: release}
+	scheduler.reschedule("first", updated)
+	waitFor(t, updated.entered)
+	scheduler.stop()
+	written, err = os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(string(written), "event=job.cron.started"); count != 1 {
+		t.Fatalf("scheduler startup logs = %d, want 1", count)
+	}
 }
 
 func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T) {
@@ -26,7 +93,8 @@ func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T
 		managerOptions{
 			Location: time.UTC,
 			ErrorHandler: func(ctx context.Context, name string, err error) {
-				failures <- cronFailure{ctxName: JobNameFromContext(ctx), name: name, err: err}
+				logger.WithContext(ctx).Info("cron error callback")
+				failures <- cronFailure{ctx: ctx, ctxName: JobNameFromContext(ctx), name: name, err: err}
 			},
 		},
 		parser,
@@ -36,10 +104,15 @@ func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	parent, cancel := context.WithCancel(foundationlog.WithKv(context.Background(), "run.id", "scheduled"))
+	defer cancel()
 	scheduler.schedule(
-		context.Background(),
+		parent,
 		"refresh",
-		TaskFunc(func(context.Context) error { return wantErr }),
+		TaskFunc(func(ctx context.Context) error {
+			logger.WithContext(ctx).Info("cron task invoked")
+			return wantErr
+		}),
 		schedule,
 	)
 	scheduler.start()
@@ -49,14 +122,32 @@ func TestCronSchedulerRunsImmediateJobAndUsesConfiguredErrorHandler(t *testing.T
 	if failure.name != "refresh" || failure.ctxName != "refresh" || !errors.Is(failure.err, wantErr) {
 		t.Fatalf("cron failure = %#v", failure)
 	}
+	cancel()
+	if !errors.Is(failure.ctx.Err(), context.Canceled) {
+		t.Fatalf("cron context lost parent cancellation: %v", failure.ctx.Err())
+	}
+	logger.WithContext(parent).Info("cron parent context")
 	written, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	logs := string(written)
-	for _, message := range []string{"event=job.cron.started", "event=job.cron.stopping", "event=job.cron.stopped"} {
+	for _, message := range []string{
+		"event=job.cron.started", "event=job.cron.stopping", "event=job.cron.stopped",
+		"msg=cron task invoked", "msg=cron error callback", "msg=cron parent context",
+	} {
 		if !strings.Contains(logs, message) {
 			t.Errorf("cron lifecycle log lacks %q: %s", message, logs)
+		}
+	}
+	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, "msg=cron task invoked") || strings.Contains(line, "msg=cron error callback") {
+			if !strings.Contains(line, "job=refresh") || !strings.Contains(line, "run.id=scheduled") {
+				t.Errorf("cron context log lacks job or parent fields: %s", line)
+			}
+		}
+		if strings.Contains(line, "msg=cron parent context") && (strings.Contains(line, "job=") || !strings.Contains(line, "run.id=scheduled")) {
+			t.Errorf("cron changed parent context fields: %s", line)
 		}
 	}
 }

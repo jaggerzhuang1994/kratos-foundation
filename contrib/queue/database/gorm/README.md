@@ -2,6 +2,12 @@
 
 本包是可选的 `database.Repo` 实现，支持 SQLite 与 MySQL；不导入数据库驱动，不注册连接、不自动迁移表、不拥有连接生命周期。其他方言在构造期拒绝。业务使用 `pkg/database.Manager` 或实现 `ConnectionProvider`，按 Context 返回 GORM 会话。
 
+## SQL 日志
+
+借用连接使用 Foundation GORM logger 时，Repo 在独立会话中将普通 SQL 日志从 INFO 转为 DEBUG，避免空轮询刷屏；投递、消费、统计、运维及简单模式迁移均适用。慢查询保留 WARN，失败保留 ERROR，查询来源、Context、参数过滤及 `event=database.gorm.query` 保持原有行为；共享业务连接的日志级别不变。自定义 logger 未提供可选的 `WithDebugQueries() gormlogger.Interface` 方法时，沿用其自身日志策略。
+
+普通 SQL 仍须由 GORM `gorm.logger.level: info` 生成，Foundation 模块策略和对应输出端也须允许 DEBUG 才能看到；`warn` 或 `silent` 不会因队列派生会话而开启普通 SQL。参数过滤、日志字段与对应流程图见 [Database SQL 日志](../../../../pkg/database/README.md#sql-日志来源)。
+
 ## 简单模式
 
 仅保存队列任务时，应用入口调用 `NewSimpleRepo(ctx, provider, SimpleConfig{Table: "email_tasks"})`，再调用 `databasequeue.NewStore(repo)`。业务无需定义 Model、Factory 或 Repo；`provider` 与扩展模式相同，已初始化且支持 Context 中的事务。构造只校验表名和方言，不建表，不启动后台任务。

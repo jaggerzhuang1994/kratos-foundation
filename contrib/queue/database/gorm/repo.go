@@ -15,6 +15,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // ConnectionProvider 每次按 Context 解析连接；可直接使用 pkg/database.Manager。
@@ -131,6 +132,10 @@ func (r *Repo[T]) db(ctx context.Context) *gorm.DB {
 	// Session 复制 Config，转换重复键错误且不修改业务连接；跳过业务钩子，防止改写租约。
 	db := r.provider.Connection(ctx).Session(&gorm.Session{NewDB: true, SkipHooks: true})
 	db.Config.TranslateError = true
+	// 借用独立日志会话，避免高频 SQL 刷屏且不改变共享连接的业务日志策略。
+	if logger, ok := db.Logger.(interface{ WithDebugQueries() gormlogger.Interface }); ok {
+		db.Logger = logger.WithDebugQueries()
+	}
 	return db.WithContext(ctx).Model(r.entity()).Table(r.table)
 }
 

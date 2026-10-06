@@ -71,9 +71,14 @@ flowchart TD
  A([构造 Manager]) --> B[读取 Task 和注册基线 合并 job.cron]
  B --> C{整批校验通过?}
  C -- 否 --> X([返回错误])
- C -- 是 --> D[Start 重读配置 建立订阅]
+ C -- 是 --> C1[按声明顺序 INFO job.registered]
+ C1 --> D[Start 重读配置 建立订阅]
  D -- 失败 --> X
  D -- 成功 --> E[启动调度控制循环和任务]
+ E --> E1{含 Cron?}
+ E1 -- 是 --> E2[启动并向底层调度器提交首批规则 INFO job.cron.started]
+ E1 -- 否 --> E3[继续执行和调度]
+ E2 --> E3
  U([Config 异步回调]) --> V[锁外解析整批快照]
  V -- 无效 --> W[WARN job.config.rejected 保留旧规则]
  V -- 有效 --> L[获取 Manager 状态锁]
@@ -85,10 +90,10 @@ flowchart TD
  I --> J{控制循环锁外检查 disabled}
  J -- 是 --> J1[移除 robfig 条目 保留任务和上下文]
  J -- 否 --> J2[替换后续调度 不补触发 immediate]
- J1 --> E
- J2 --> E
- W --> E
- E --> K([Stop 或父 Context 取消])
+ J1 --> E3
+ J2 --> E3
+ W --> E3
+ E3 --> K([Stop 或父 Context 取消])
  K --> M[状态锁内标记停止 取出取消函数 释放锁]
  M --> N[锁外取消订阅和任务 通知调度控制循环退出]
  N --> O[等待执行和等待中的任务退出]
@@ -136,7 +141,9 @@ flowchart TD
 
 通过 `bootstrap.NewJobBootstrap` 登记的 Job Runtime 会先等待 `app.Spec` 发出 Ready 信号，即 Kratos 已进入 AfterStart 且 Foundation 的 AfterStart hook 全部完成后，才调用 `Manager.Start`。该信号不等待阻塞型 Runtime.Start 返回；内置业务 HTTP/gRPC 会在端点解析阶段提前建立监听，自定义 Runtime 若有必须先于 Job 完成的初始化，应放入启动 hook 或 readiness check。等待期间收到 App 的停止请求或调用方 Context 取消时，不启动任务并返回取消错误；因此 Ready 前显式停止或启动后钩子失败也能解除等待。App 的共享停止信号由现有 stopOnce 关闭，Ready 已发布后仍优先拒绝已开始的停机。直接使用 `Manager` 不带这个应用级门闩，调用方自行决定何时调用 Start。
 
-Manager 真正启动前按注册顺序逐条记录 `INFO event=job.registered`，包含任务名、kind、最终生效的 schedule、`registration.caller` 与 enabled；Once/Daemon 的 schedule 分别为 `once`/`daemon`。这些日志完成后才启动 Cron、Once 和 Daemon。Cron 生命周期分别记录 `INFO event=job.cron.started|job.cron.stopping|job.cron.stopped`，调度计算使用 `DEBUG event=job.scheduled`。Cron 调度器内部的 `wake`、`run`、`schedule`、`start`、`stop` 事件不再重复输出。
+`NewManager` 在全部任务和配置名称校验成功后，按声明顺序逐条记录 `INFO event=job.registered`，包含任务名、kind、schedule、`registration.caller` 与 enabled；Once/Daemon 的 schedule 分别为 `once`/`daemon`。这些字段是构造时解析的快照，禁用任务也会记录。`Spec.RegisterCron/RegisterOnce/RegisterDaemon` 只收集声明，不在调用当下打印；构造失败不输出成功登记日志，Start 不重复输出。构造后、Start 前的配置变化仍可能改变实际启动规则；Start 重读配置或建立订阅失败直接返回错误。有效规则变化记录 `job.config.applied`，运行期订阅回调收到无效更新时记录 `job.config.rejected` 并保留旧规则。
+
+Cron 调度器启动并将首批规则提交到底层调度器后，记录 `INFO event=job.cron.started`（`cron scheduler started`），禁用任务不安装调度条目。该事件不保证所有首次触发时间已经计算完成，不表示任务已经执行或成功，也不覆盖 Once/Daemon 的业务初始化；不额外提供 `job.ready` 事件。停止阶段分别记录 `INFO event=job.cron.stopping` 和 `INFO event=job.cron.stopped`，调度计算使用 `DEBUG event=job.scheduled`。Cron 调度器内部的 `wake`、`run`、`schedule`、`start`、`stop` 事件不再重复输出。
 
 一次性任务可在业务 Boot 中独立关闭服务注册；前置条件是已由 Wire 注入共享的 `*bootstrap.Spec`。
 任务完成退出与注册开关互不隐含，注册中心 provider 仍会构造并校验配置，见 [App 开关说明](../app/README.md#独立关闭服务注册)。
@@ -158,10 +165,10 @@ Stop 等待任务和结果聚合协程，包括上述 ErrorHandler，等待受 S
 flowchart TD
     A([声明 ExitWhenDone]) --> B{至少一个任务且全部为 Once?}
     B -- 否 --> C([NewManager 返回校验错误])
-    B -- 是 --> BA[Bootstrap Runtime 等待应用 Ready]
+    B -- 是 --> BB[NewManager 成功 按声明顺序 INFO job.registered]
+    BB --> BA[Bootstrap Runtime 等待应用 Ready]
     BA -- App stopOnce 广播停止或调用方 Context 取消 --> BW([不启动 Manager 或任务；返回取消错误])
-    BA -- Ready --> BB[逐条 INFO job.registered]
-    BB --> D[Manager Start 并发执行 Once]
+    BA -- Ready --> D[Manager Start 并发执行 Once]
     D -- 全部完成 --> Q{同步交接是否成功?}
     Q -- Start 接收 --> E{存在任务失败?}
     E -- 是 --> F([Start 返回聚合错误，应用按失败处理])
@@ -197,6 +204,7 @@ flowchart TD
 `bootstrap.NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing, boot)` 只构造和登记有任务的 Runtime，空 Spec 不登记。Job 不依赖 app/bootstrap，不管理全局容器，也没有 Coordinator、锁租约或 Redis 适配。`manager.go` 管构造，`manager_lifecycle.go` 管启停，`config.go` 管优先级，`config_reload.go` 管订阅与更新，`concurrent_policy.go` 管持续存在的本进程执行状态。
 
 任务和中间件通过 `job.JobNameFromContext(ctx)` 读取注册名；非任务 Context 返回空字符串。
+Cron 注册执行上下文时，还通过 `log.WithKv` 追加 `job=注册名`，保留父 Context 的日志字段与取消信号。Task、业务中间件及最终 ErrorHandler 使用 `logger.WithContext(ctx)` 时会自动携带该字段；父 Context 不会被修改，后续调度变更继续复用此任务上下文。
 
 共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
 
@@ -230,7 +238,9 @@ Cron 的进入顺序为：recovery → 并发控制 → tracing → metrics → 
 
 ```mermaid
 flowchart LR
- A([任务触发]) --> R[最外层 recovery]
+ C([Cron 注册]) --> K[派生执行 Context 追加日志 KV job=注册名]
+ K --> A([任务触发])
+ A --> R[最外层 recovery]
  R --> G[并发控制 仅 Cron]
  G -- 跳过或取消 --> R
  G -- 获得执行名额 --> T[tracing 初始化失败标记]

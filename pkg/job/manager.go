@@ -34,9 +34,6 @@ type Manager struct {
 	onceJobs []*managedJob
 	// daemonJobs 随运行上下文取消而退出的常驻任务集合。
 	daemonJobs []*managedJob
-	// registrations 保存启动前逐条输出的最终任务定义。
-	registrations []jobRegistration
-
 	// mu 保护启停状态与周期配置更新。
 	mu sync.Mutex
 	// cancel 停止时取消所有任务的运行上下文。
@@ -75,6 +72,7 @@ type jobRegistration struct {
 
 // NewManager 把任务定义解析为一个运行时，调度器和观测中间件不会作为独立生命周期暴露。
 // configManager 为 nil 时只使用注册和 Task 声明；否则读取 job.cron，并在 Start/Stop 管理订阅。
+// 构造成功后记录任务登记摘要，不启动任务；Start 不会重复记录该摘要。
 func NewManager(
 	logger foundationlog.Logger,
 	spec *Spec,
@@ -159,6 +157,7 @@ func newManager(
 
 	baseMiddlewares := append(middlewareChain(nil), middlewares...)
 	baseMiddlewares = append(baseMiddlewares, spec.middlewares...)
+	registrations := make([]jobRegistration, 0, len(spec.definitions))
 	for _, definition := range spec.definitions {
 		switch definition.kind {
 		case kindCron:
@@ -181,25 +180,39 @@ func newManager(
 				managedJob:   newManagedJob(definition.name, definition.job, jobMiddlewares),
 				scheduleSpec: schedule, base: base, resolved: resolved, gate: gate,
 			})
-			manager.registrations = append(manager.registrations, jobRegistration{name: definition.name, kind: "cron", schedule: resolved.schedule, caller: definition.caller, enabled: !resolved.disabled})
+			registrations = append(registrations, jobRegistration{name: definition.name, kind: "cron", schedule: resolved.schedule, caller: definition.caller, enabled: !resolved.disabled})
 		case kindOnce:
 			manager.onceJobs = append(
 				manager.onceJobs,
 				newManagedJob(definition.name, definition.job, baseMiddlewares),
 			)
-			manager.registrations = append(manager.registrations, jobRegistration{name: definition.name, kind: "once", schedule: "once", caller: definition.caller, enabled: true})
+			registrations = append(registrations, jobRegistration{name: definition.name, kind: "once", schedule: "once", caller: definition.caller, enabled: true})
 		case kindDaemon:
 			manager.daemonJobs = append(
 				manager.daemonJobs,
 				newManagedJob(definition.name, definition.job, baseMiddlewares),
 			)
-			manager.registrations = append(manager.registrations, jobRegistration{name: definition.name, kind: "daemon", schedule: "daemon", caller: definition.caller, enabled: true})
+			registrations = append(registrations, jobRegistration{name: definition.name, kind: "daemon", schedule: "daemon", caller: definition.caller, enabled: true})
 		}
 	}
 	if err := manager.validateConfigNames(configuration); err != nil {
 		return nil, err
 	}
+	// 全部任务编译成功后才记录登记摘要，避免失败构造留下部分成功登记日志。
+	logRegistrations(log, registrations)
 	return manager, nil
+}
+
+func logRegistrations(log moduleLog, registrations []jobRegistration) {
+	for _, registration := range registrations {
+		log.WithContext(withJobName(context.Background(), registration.name)).With(
+			"event", "job.registered",
+			"kind", registration.kind,
+			"schedule", registration.schedule,
+			"registration.caller", registration.caller,
+			"enabled", registration.enabled,
+		).Info("job registered")
+	}
 }
 
 // HasJobs 表示 Spec 中是否存在需要运行的任务。

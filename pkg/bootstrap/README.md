@@ -167,12 +167,20 @@ flowchart TD
 
 `JobBootstrap` 的适配只转换 Manager 返回的独立 `job.ErrCompleted`，任务失败保持原样。Job 包不依赖 App 的错误契约。Queue 的 `Worker[T]` 隐式满足 `app.Runtime`；应用入口通过 `q.Worker` 绑定业务方法，再调用 `spec.RegisterRuntime(worker)`。`Queue[T]` 只负责投递。
 
+`NewJobBootstrap` 构造 Manager 时，全部任务和配置校验成功后就输出 `INFO job.registered`，随后才登记 Runtime；业务 Spec 的登记调用只收集声明。Job Runtime 等待应用 Ready 后调用 Manager.Start，构造日志不会在此重复输出。含 Cron 的 Manager 在调度器启动并将首批规则提交到底层调度器后输出 `INFO job.cron.started`；该事件不保证所有首次触发时间已经计算完成，不代表任务执行成功或 Once/Daemon 业务初始化完成，详见 [Job 日志与生命周期](../job/README.md#配置热更新与生命周期)。
+
 ```mermaid
 flowchart TD
-    A([App 并发启动 Job Runtime]) --> B[等待 app.Spec Ready 信号]
+    A0([NewJobBootstrap 构造 Job Manager]) --> A1{全部任务和配置校验成功?}
+    A1 -- 否 --> X([返回构造错误])
+    A1 -- 是 --> A2[按声明顺序 INFO job.registered]
+    A2 --> A3{有任务?}
+    A3 -- 否 --> X1([不登记 Job Runtime])
+    A3 -- 是 --> A4[登记 Job Runtime]
+    A4 --> A([App 并发启动 Job Runtime])
+    A --> B[等待 app.Spec Ready 信号]
     B -- App请求停止或调用方Context取消 --> H([不启动任务并退出])
-    B -- Kratos 进入 AfterStart 且 hook 成功 --> B1[逐条 INFO job.registered]
-    B1 --> B2[适配器调用 Manager.Start]
+    B -- Kratos 进入 AfterStart 且 hook 成功 --> B2[适配器调用 Manager.Start]
     B2 --> C{返回结果}
     C -- job.ErrCompleted --> D[转换为 app.ErrStopRequested]
     D --> E[App 正常停止]
@@ -200,9 +208,14 @@ flowchart TD
  A([Wire 组装]) --> B[注入 config.Manager 与共享 job.Spec]
  B --> C[NewJobBootstrap 构造 Job Manager]
  C -- 配置或声明无效 --> X([返回错误])
- C -- 成功且有任务 --> D[登记 Runtime 等待 App Start]
+ C -- 成功且有任务 --> C1[按声明顺序 INFO job.registered]
+ C1 --> D[登记 Runtime 等待 App Start 和 Ready]
  C -- 无任务 --> E([不登记 Runtime])
- D --> F[Start 订阅配置并调度]
+ D -- App 请求停止或调用方 Context 取消 --> Y([不启动任务并退出])
+ D -- Ready --> F[Start 重读配置并订阅 启动任务]
+ F -- 配置加载或校验失败 --> X
+ F -- 含 Cron --> F1[启动并向底层调度器提交首批规则 INFO job.cron.started]
+ F1 --> G
  F --> G[Stop 取消订阅与任务并等待收敛]
  G --> H([结束后清理配置资源])
 ```

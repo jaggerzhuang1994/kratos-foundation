@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/robfig/cron/v3"
 )
 
@@ -85,9 +86,11 @@ type cronRegistration struct {
 
 // schedule 只发布声明并唤醒控制循环，不在 Manager 的状态锁内等待 cron 通道。
 func (c *cron_) schedule(ctx context.Context, name string, job Task, schedule scheduleSpec) {
+	// 任务及其错误回调共享带任务名的日志上下文，保留父上下文的字段与取消信号。
+	ctx = log.WithKv(withJobName(ctx, name), "job", name)
 	c.mu.Lock()
 	if !c.stopped {
-		c.desired[name] = &cronRegistration{job: &cronJob{ctx: withJobName(ctx, name), name: name, job: job, errorHandler: c.errorHandler}, schedule: schedule}
+		c.desired[name] = &cronRegistration{job: &cronJob{ctx: ctx, name: name, job: job, errorHandler: c.errorHandler}, schedule: schedule}
 	}
 	c.mu.Unlock()
 	c.notify()
@@ -122,10 +125,10 @@ func (c *cron_) start() {
 
 func (c *cron_) run() {
 	defer close(c.done)
-	c.log.With("event", "job.cron.started").Info("cron scheduler started")
 	c.cron.Start()
 	applied := make(map[string]*cronRegistration)
 	ids := make(map[string]cron.EntryID)
+	startupLogged := false
 	for {
 		select {
 		case <-c.stopCh:
@@ -154,6 +157,11 @@ func (c *cron_) run() {
 					ids[name] = c.cron.Schedule(entry.schedule, entry.job)
 				}
 				applied[name] = entry
+			}
+			if !startupLogged {
+				// 首批规则已提交到底层调度器；日志表示调度启动，不代表任务执行成功。
+				c.log.With("event", "job.cron.started").Info("cron scheduler started")
+				startupLogged = true
 			}
 		}
 	}
