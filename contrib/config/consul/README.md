@@ -2,7 +2,7 @@
 
 配置源诊断使用全局日志，声明 `module=config/consul`；配置路径使用结构化字段。
 
-每次 `Load` 成功读取时以 DEBUG 为每个匹配键记录一次 `event=config.consul.loaded`；Manager 构造时会调用一次 `Load`。日志中的 `path` 是匹配后的完整 KV 键，不是输入 glob 或相对 Key。`Watch` 每次返回完整快照，同一键可能反复出现，因此不重复记录逐文件成功日志，即使开启 DEBUG 也是如此。Manager 对已订阅配置的首次回放和实际变化分别记录 DEBUG `config.watch`、INFO `config.change`；后者只在订阅值变化时输出，并不代表每个来源文件都变了。不记录配置内容；失败或无匹配时不输出成功日志。
+每次 `Load` 成功读取时以 DEBUG 为每个匹配键记录一次 `event=config.consul.loaded`；Manager 构造时会调用一次 `Load`。日志中的 `path` 是匹配后的完整 KV 键，不是输入 glob 或相对 Key。`Watch` 每次返回完整快照，同一键可能反复出现，因此不重复记录逐文件成功日志，即使开启 DEBUG 也是如此。Manager 在整份配置实际变化时记录一条 INFO `config.snapshot.changed`（列出点分变化路径），并对订阅的首次回放和后续通知分别记录 DEBUG `config.subscription.replayed`、`config.subscription.notified`；变化路径不代表每个来源文件都变了。不记录配置内容；失败或无匹配时不输出成功日志。
 
 `contrib/config/consul` 把有序 Consul KV 路径转换成 Kratos 配置源。后面的路径优先级更高，路径不能为空、包含首尾空白或重复。
 

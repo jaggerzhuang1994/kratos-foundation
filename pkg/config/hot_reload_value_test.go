@@ -63,57 +63,46 @@ func TestHotReloadValuePublishesUpdateOnce(t *testing.T) {
 	}
 }
 
-func TestHotReloadValueInitializationHandoff(t *testing.T) {
-	for _, notify := range []bool{false, true} {
-		name := "snapshot changes before initial load"
-		if notify {
-			name = "callback publishes during initial load"
+// 先加载初值再登记订阅；Manager 回放的当前值以通知形式覆盖初值并推进版本。
+func TestHotReloadValueInitialLoadThenReplay(t *testing.T) {
+	manager := new(hotReloadTestManager)
+	manager.load = func(target any) error {
+		if manager.observer != nil {
+			t.Fatal("subscription registered before initial load")
 		}
-		t.Run(name, func(t *testing.T) {
-			manager := new(hotReloadTestManager)
-			manager.load = func(target any) error {
-				if manager.observer == nil {
-					t.Fatal("initial load ran before subscription")
-				}
-				*target.(*int) = 2
-				if notify {
-					// 模拟 Load 已复制旧快照后发生通知；初始化不能覆盖已发布的新值。
-					next := 3
-					manager.observer("value", &next, nil)
-				}
-				return nil
-			}
-			hot, cancel, err := NewHotReloadValue[int](manager, "value")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer cancel()
-			want, wantVersion := 2, uint64(0)
-			if notify {
-				want, wantVersion = 3, 1
-			}
-			value, version := hot.GetCurrent()
-			if *value != want || version != wantVersion {
-				t.Fatalf("snapshot = (%d, %d), want (%d, %d)", *value, version, want, wantVersion)
-			}
-		})
+		*target.(*int) = 2
+		return nil
+	}
+	hot, cancel, err := NewHotReloadValue[int](manager, "value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancel()
+	if value, version := hot.GetCurrent(); *value != 2 || version != 0 {
+		t.Fatalf("initial snapshot = (%d, %d), want (2, 0)", *value, version)
+	}
+	// 模拟 Load 与登记之间发生的更新：回放携带最新值。
+	next := 3
+	manager.observer("value", &next, nil)
+	if value, version := hot.GetCurrent(); *value != 3 || version != 1 {
+		t.Fatalf("replayed snapshot = (%d, %d), want (3, 1)", *value, version)
 	}
 }
 
 func TestHotReloadValueInitializationFailure(t *testing.T) {
 	failure := errors.New("initialization failed")
-	t.Run("subscribe failure skips load", func(t *testing.T) {
-		manager := &hotReloadTestManager{subscribeErr: failure, load: func(any) error { t.Fatal("load ran after failed subscription"); return nil }}
+	t.Run("load failure skips subscription", func(t *testing.T) {
+		manager := &hotReloadTestManager{load: func(any) error { return failure }}
+		hot, cancel, err := NewHotReloadValue[int](manager, "value")
+		if !errors.Is(err, failure) || hot != nil || cancel != nil || manager.observer != nil {
+			t.Fatalf("unexpected result: hot=%v err=%v subscribed=%v", hot, err, manager.observer != nil)
+		}
+	})
+	t.Run("subscribe failure", func(t *testing.T) {
+		manager := &hotReloadTestManager{subscribeErr: failure}
 		hot, cancel, err := NewHotReloadValue[int](manager, "value")
 		if !errors.Is(err, failure) || hot != nil || cancel != nil {
 			t.Fatalf("unexpected result: %v, %v", hot, err)
-		}
-	})
-	t.Run("load failure cancels subscription", func(t *testing.T) {
-		manager := &hotReloadTestManager{load: func(any) error { return failure }}
-		hot, cancel, err := NewHotReloadValue[int](manager, "value")
-		if !errors.Is(err, failure) || hot != nil || cancel != nil || !manager.canceled {
-			t.Fatalf("unexpected result: hot=%v err=%v canceled=%v", hot, err, manager.canceled)
 		}
 	})
 }

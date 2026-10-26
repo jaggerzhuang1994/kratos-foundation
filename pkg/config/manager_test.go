@@ -292,7 +292,7 @@ func TestManagerLogsSourcesAfterLoadWithoutValues(t *testing.T) {
 				t.Fatalf("loaded events = %d", len(events))
 			}
 			event := <-events
-			if event["level"] != kratoslog.LevelInfo || event["source_count"] != 2 || event["poll_interval"] != time.Second {
+			if event["level"] != kratoslog.LevelInfo || event["poll_interval"] != time.Second {
 				t.Fatalf("load event = %v", event)
 			}
 			kinds, ok := event["sources"].([]string)

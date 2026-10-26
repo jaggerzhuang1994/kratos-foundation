@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config/internal/decoder"
@@ -52,15 +53,7 @@ func (m *manager) Subscribe(key string, prototype any, observer Observer, defaul
 		return nil, err
 	}
 	// 在登记处捕获调用点，避免异步通知时只能看到轮询栈；热更新值使用其业务调用点。
-	caller := "<unknown>"
-	if _, file, line, ok := runtime.Caller(1); ok {
-		if _, source, _, sourceOK := runtime.Caller(0); sourceOK && file == filepath.Join(filepath.Dir(source), "hot_reload_value.go") {
-			if _, outer, outerLine, outerOK := runtime.Caller(2); outerOK {
-				file, line = outer, outerLine
-			}
-		}
-		caller = fmt.Sprintf("%s/%s:%d", filepath.Base(filepath.Dir(file)), filepath.Base(file), line)
-	}
+	caller := subscriptionCaller()
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
@@ -107,44 +100,79 @@ func (m *manager) poll() {
 		m.mu.Unlock()
 		return
 	}
+	previous := m.snapshot
 	m.snapshot = next
 	subs := slices.Clone(m.subs)
 	m.mu.Unlock()
+	logger := log.WithModule("config")
+	// 每轮只为整份配置的实际变化记录一条 INFO，逐订阅通知降为 DEBUG，避免同一变更重复刷屏。
+	if paths, truncated := changedPaths("", previous, true, next, true); len(paths) > 0 {
+		changed := logger.With("event", "config.snapshot.changed", "changed", paths)
+		if truncated {
+			changed = changed.With("changed_truncated", true)
+		}
+		changed.Info("configuration changed")
+	}
 	for _, sub := range subs {
-		previous, existed := lookup(sub.previous, sub.key)
+		before, existed := lookup(sub.previous, sub.key)
 		value, exists := lookup(next, sub.key)
 		sub.previous = next
 		// 首次通知读取本轮快照，关闭业务初次 Load 与登记之间的更新窗口。
 		initial := sub.pendingInitial
 		sub.pendingInitial = false
-		if !initial && existed == exists && reflect.DeepEqual(previous, value) {
+		if !initial && existed == exists && reflect.DeepEqual(before, value) {
 			continue
 		}
 		m.mu.Lock()
 		active := !m.closed && !sub.canceled
 		m.mu.Unlock()
-		if active {
-			// 只记录通知元数据，避免配置值中的凭据泄漏；此时尚未执行业务回调。
-			key := sub.key
-			if key == "" {
-				key = "<root>" // 整份配置订阅使用非空标识，避免被日志空值过滤器移除。
-			}
-			// 首次回放与真实变更分开命名；正常路径省略默认标志和实现类型。
-			logger := log.WithModule("config").With("key", key, "subscription", sub.caller)
-			if !exists {
-				logger = logger.With("found", false)
-			}
-			if initial {
-				logger.With("event", "config.watch").Debug("config subscription replayed")
-			} else {
-				paths, truncated := changedPaths(sub.key, previous, existed, value, exists)
-				logger = logger.With("changed_paths", paths)
-				if truncated {
-					logger = logger.With("paths_truncated", true)
-				}
-				logger.With("event", "config.change").Info("config changed")
-			}
-			sub.notify(value, exists)
+		if !active {
+			continue
+		}
+		// 只记录通知元数据，避免配置值中的凭据泄漏；此时尚未执行业务回调。
+		notified := logger.With("key", displayKey(sub.key), "subscription", sub.caller)
+		if !exists {
+			notified = notified.With("found", false)
+		}
+		if initial {
+			notified.With("event", "config.subscription.replayed").Debug("config subscription replayed")
+		} else {
+			notified.With("event", "config.subscription.notified").Debug("config subscription notified")
+		}
+		sub.notify(value, exists)
+	}
+}
+
+// displayKey 为整份配置订阅使用非空标识，避免被日志空值过滤器移除。
+func displayKey(key string) string {
+	if key == "" {
+		return "<root>"
+	}
+	return key
+}
+
+// subscriptionForwarders 是登记订阅时需要跳过的本包转发函数，其后的第一帧即业务登记点。
+var subscriptionForwarders = []string{
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config.(*manager).Subscribe",
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config.NewHotReloadValue[",
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config.subscriptionCaller",
+}
+
+// subscriptionCaller 返回登记订阅的业务调用点，格式为“目录/文件.go:行号”。
+func subscriptionCaller() string {
+	var pcs [8]uintptr
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(1, pcs[:])])
+	for {
+		frame, more := frames.Next()
+		forwarder := frame.Function == "runtime.Callers"
+		for _, prefix := range subscriptionForwarders {
+			forwarder = forwarder || strings.HasPrefix(frame.Function, prefix)
+		}
+		if !forwarder && frame.File != "" {
+			return fmt.Sprintf("%s/%s:%d", filepath.Base(filepath.Dir(frame.File)), filepath.Base(frame.File), frame.Line)
+		}
+		if !more {
+			return "<unknown>"
 		}
 	}
 }
@@ -153,11 +181,7 @@ func (s *subscription) notify(value any, found bool) {
 	// 单个业务回调 panic 不应终止整个 Manager 的轮询，也不重试本次通知。
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			key := s.key
-			if key == "" {
-				key = "<root>"
-			}
-			log.WithModule("config").With("event", "config.observer.panicked", "key", key,
+			log.WithModule("config").With("event", "config.observer.panicked", "key", displayKey(s.key),
 				"subscription", s.caller, "panic_type", fmt.Sprintf("%T", recovered)).Error("config observer panicked")
 		}
 	}()

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 
 	"github.com/go-kratos/kratos/v2/middleware"
@@ -125,8 +124,9 @@ func newMiddlewarePolicies(
 			if updateErr == nil && middlewareConfigEqual(policies.current, next) {
 				return
 			}
+			var changed []string
 			if updateErr == nil {
-				updateErr = policies.update(
+				changed, updateErr = policies.update(
 					logger,
 					next,
 					metricsProvider,
@@ -140,7 +140,7 @@ func newMiddlewarePolicies(
 				)
 				return
 			}
-			logger.With("event", "server.middleware.updated", "config_key", "server").Info("server middleware config updated")
+			logger.With("event", "server.middleware.updated", "config_key", "server", "changed", changed).Info("server middleware config updated")
 		},
 		defaults,
 	)
@@ -148,8 +148,8 @@ func newMiddlewarePolicies(
 		return nil, nil, err
 	}
 
-	var once sync.Once
-	return policies, func() { once.Do(cancel) }, nil
+	// Manager 的取消函数本身幂等。
+	return policies, cancel, nil
 }
 
 // update 只重建配置确实发生变化的中间件。
@@ -159,13 +159,13 @@ func newMiddlewarePolicies(
 // 全部旧值；成功路径逐项替换，并发请求可能短暂看到新旧混合的组合，但各中间件彼此
 // 独立，混合不影响任何一项自身的正确性。
 //
-// 只有订阅回调会调用它，因此 p.current 无需额外加锁。
+// 只有订阅回调会调用它，因此 p.current 无需额外加锁。返回发生替换的策略名，供更新日志定位。
 func (p *middlewarePolicies) update(
 	logger log.Logger,
 	config *config_pb.Server,
 	metricsProvider metrics.Provider,
 	tracingProvider tracing.Provider,
-) error {
+) ([]string, error) {
 	previous := p.current
 	// 先构造所有变化项，包含 Aegis 限流器；任何构造失败都不能留下部分新状态。
 	var built dynamicMiddlewares
@@ -179,7 +179,7 @@ func (p *middlewarePolicies) update(
 	if metricsChanged {
 		metricsMiddleware, err := servermetrics.Server(metricsProvider, config.GetMetrics())
 		if err != nil {
-			return fmt.Errorf("create server metrics middleware: %w", err)
+			return nil, fmt.Errorf("create server metrics middleware: %w", err)
 		}
 		built.metrics = metricsMiddleware
 	}
@@ -201,9 +201,10 @@ func (p *middlewarePolicies) update(
 	if rateLimitChanged {
 		built.rateLimit = ratelimit.Server(config.GetRateLimit())
 	}
-	if !proto.Equal(previous.GetDeadline(), config.GetDeadline()) {
+	deadlineChanged := !proto.Equal(previous.GetDeadline(), config.GetDeadline())
+	if deadlineChanged {
 		if err := p.deadline.Update(config.GetDeadline()); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if debugChanged {
@@ -228,7 +229,19 @@ func (p *middlewarePolicies) update(
 		p.rateLimit.Set(built.rateLimit)
 	}
 	p.current = proto.CloneOf(config)
-	return nil
+	var changed []string
+	for _, item := range []struct {
+		name    string
+		changed bool
+	}{
+		{"deadline", deadlineChanged}, {"request_debug", debugChanged}, {"metadata", metadataChanged}, {"tracing", tracingChanged},
+		{"metrics", metricsChanged}, {"logging", loggingChanged}, {"validator", validatorChanged}, {"ratelimit", rateLimitChanged},
+	} {
+		if item.changed {
+			changed = append(changed, item.name)
+		}
+	}
+	return changed, nil
 }
 
 // buildDynamicMiddlewares 按最新配置构造中间件实现。Provider 被禁用时对应实现为

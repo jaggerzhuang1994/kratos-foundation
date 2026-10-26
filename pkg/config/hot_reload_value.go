@@ -16,58 +16,42 @@ type hotReloadValueWrapper[T any] struct {
 // HotReloadValue 提供可热更新的配置读取，返回共享只读快照。
 // 业务解码错误保留旧值；不报告来源健康状态。提供默认值时可从缺失 key 开始监听，后续新增配置会更新容器。
 type HotReloadValue[T any] struct {
-	// value 原子发布最近一次成功解码的配置与版本对，须经构造函数初始化。
+	// value 原子发布最近一次成功解码的配置与版本对，由构造函数初始化。
 	value atomic.Pointer[hotReloadValueWrapper[T]]
 }
 
-// NewHotReloadValue 先订阅再加载 key，最多接收一个与 T 对应的默认值。
+// NewHotReloadValue 先加载 key 作为初值再订阅，最多接收一个与 T 对应的默认值。
+// Manager 在登记后的下一轮扫描回放当前值，覆盖加载与登记之间可能发生的更新。
 // 返回的 cleanup 取消订阅；已开始的回调仍可能结束，容器继续保留最近快照。
 // 初次加载或订阅失败时返回错误，后续错误记录 WARN 并保留旧值。
 func NewHotReloadValue[T any](config Manager, key string, optionalDefault ...*T) (*HotReloadValue[T], func(), error) {
-	init := new(T)
 	defaultValue := make([]any, 0, len(optionalDefault))
 	for _, v := range optionalDefault {
 		defaultValue = append(defaultValue, v)
 	}
-
+	initial := new(T)
+	if err := config.Load(key, initial, defaultValue...); err != nil {
+		return nil, nil, err
+	}
 	hotReloadValue := &HotReloadValue[T]{}
-	// 先登记订阅关闭初始化窗口；占位快照仅在构造期间使用，不对调用方暴露。
-	initial := &hotReloadValueWrapper[T]{val: new(T)}
-	hotReloadValue.value.Store(initial)
+	hotReloadValue.value.Store(&hotReloadValueWrapper[T]{val: initial})
 
 	cancel, err := config.Subscribe(key, new(T), func(_ string, value any, err error) {
 		if err != nil {
-			logKey := key
-			if logKey == "" {
-				logKey = "<root>"
-			}
 			log.WithModule("config").With(
 				"event", "config.value.rejected",
-				"key", logKey,
+				"key", displayKey(key),
 				"error", err,
 			).Warn("config update rejected; keeping previous")
 			return
 		}
-		for {
-			old := hotReloadValue.value.Load()
-			next := &hotReloadValueWrapper[T]{val: value.(*T), version: old.version + 1}
-
-			if hotReloadValue.value.CompareAndSwap(old, next) {
-				return
-			}
-		}
+		// Manager 串行回调同一订阅，回调是构造完成后的唯一写入方，无需比较并交换。
+		version := hotReloadValue.value.Load().version + 1
+		hotReloadValue.value.Store(&hotReloadValueWrapper[T]{val: value.(*T), version: version})
 	}, defaultValue...)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	if err := config.Load(key, init, defaultValue...); err != nil {
-		cancel()
-		return nil, nil, err
-	}
-	// 已有通知发布新快照时保留它，避免较早读取的初值覆盖更新。
-	hotReloadValue.value.CompareAndSwap(initial, &hotReloadValueWrapper[T]{val: init})
-
 	return hotReloadValue, cancel, nil
 }
 

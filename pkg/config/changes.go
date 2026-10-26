@@ -4,24 +4,17 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 )
 
-// changedPaths 返回订阅范围内的绝对 JSON Pointer 路径，不包含配置值。
-// 新增、删除、类型变化和数组变化停在该节点；最多记录 32 项，避免大批更新放大日志。
+// changedPaths 返回订阅范围内发生变化的点分路径（如 server.http.addr），不包含配置值。
+// 含点号或为空的段使用 ["段"] 表示；新增、删除、类型变化和数组变化停在该节点；
+// 最多记录 32 项，避免大批更新放大日志。根节点变化记为 <root>。
 func changedPaths(key string, before any, existed bool, after any, exists bool) ([]string, bool) {
 	const limit = 32
 	paths := make([]string, 0)
 	truncated := false
-	escape := func(segment string) string {
-		return strings.ReplaceAll(strings.ReplaceAll(segment, "~", "~0"), "/", "~1")
-	}
-	var prefix strings.Builder
-	if key != "" {
-		for segment := range strings.SplitSeq(key, ".") {
-			prefix.WriteString("/" + escape(segment))
-		}
-	}
 	var walk func(string, any, bool, any, bool)
 	walk = func(path string, old any, had bool, next any, has bool) {
 		if truncated || had == has && reflect.DeepEqual(old, next) {
@@ -40,7 +33,7 @@ func changedPaths(key string, before any, existed bool, after any, exists bool) 
 			for _, name := range keys {
 				oldValue, oldFound := oldMap[name]
 				nextValue, nextFound := nextMap[name]
-				walk(path+"/"+escape(name), oldValue, oldFound, nextValue, nextFound)
+				walk(joinPath(path, name), oldValue, oldFound, nextValue, nextFound)
 				if truncated {
 					break
 				}
@@ -51,12 +44,23 @@ func changedPaths(key string, before any, existed bool, after any, exists bool) 
 			truncated = true
 			return
 		}
-		// JSON Pointer 的空路径表示根；用非空展示值避免日志过滤器丢失标记。
+		// 空路径表示根；用非空展示值避免日志过滤器丢失标记。
 		if path == "" {
 			path = "<root>"
 		}
 		paths = append(paths, path)
 	}
-	walk(prefix.String(), before, existed, after, exists)
+	walk(key, before, existed, after, exists)
 	return paths, truncated
+}
+
+// joinPath 以点号拼接配置路径段，含点号或为空的段加引号，保证路径可无歧义还原。
+func joinPath(prefix, segment string) string {
+	if segment == "" || strings.Contains(segment, ".") {
+		return prefix + "[" + strconv.Quote(segment) + "]"
+	}
+	if prefix == "" {
+		return segment
+	}
+	return prefix + "." + segment
 }

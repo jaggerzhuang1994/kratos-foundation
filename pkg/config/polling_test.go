@@ -317,18 +317,30 @@ func TestPollingHotReloadSubscriptionCaller(t *testing.T) {
 }
 
 func TestPollingSubscriptionUpdateLogs(t *testing.T) {
-	events := make(chan map[string]any, 32)
+	events := make(chan map[string]any, 64)
 	t.Cleanup(log.SetLogger(pollingLogFunc(func(level kratoslog.Level, fields ...any) error {
 		event := make(map[string]any)
 		for i := 0; i+1 < len(fields); i += 2 {
 			event[fields[i].(string)] = fields[i+1]
 		}
-		if event["event"] == "config.watch" || event["event"] == "config.change" || event["event"] == "config.observer.panicked" {
+		switch event["event"] {
+		case "config.snapshot.changed", "config.subscription.replayed", "config.subscription.notified", "config.observer.panicked":
 			event["level"] = level
 			events <- event
 		}
 		return nil
 	})))
+	drain := func() (changed []map[string]any, subscriptions []map[string]any) {
+		for len(events) > 0 {
+			event := <-events
+			if event["event"] == "config.snapshot.changed" {
+				changed = append(changed, event)
+			} else {
+				subscriptions = append(subscriptions, event)
+			}
+		}
+		return changed, subscriptions
+	}
 	backend := &scanBackend{values: map[string]any{"key": "secret-value"}}
 	m := &manager{backend: backend, snapshot: backend.values}
 	var wantCaller string
@@ -351,27 +363,33 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 	}
 	cancel()
 	for _, step := range []struct {
-		name    string
-		values  map[string]any
-		scanErr error
-		initial bool
-		want    int
+		name        string
+		values      map[string]any
+		scanErr     error
+		initial     bool
+		changed     []string
+		subscribers int
 	}{
-		{name: "initial replay", values: backend.values, initial: true, want: 3},
+		{name: "initial replay", values: backend.values, initial: true, subscribers: 3},
 		{name: "unchanged", values: backend.values},
-		{name: "changed", values: map[string]any{"key": "new-secret-value"}, want: 3},
-		{name: "decode failure", values: map[string]any{"key": map[string]any{"nested": true}}, want: 3},
-		{name: "removed", values: map[string]any{}, want: 3},
+		{name: "changed", values: map[string]any{"key": "new-secret-value"}, changed: []string{"key"}, subscribers: 3},
+		{name: "decode failure", values: map[string]any{"key": map[string]any{"nested": true}}, changed: []string{"key"}, subscribers: 3},
+		{name: "removed", values: map[string]any{}, changed: []string{"key"}, subscribers: 3},
 		{name: "scan failure", scanErr: errors.New("scan failed")},
 	} {
 		t.Run(step.name, func(t *testing.T) {
 			backend.values, backend.err = step.values, step.scanErr
 			m.poll()
-			if len(events) != step.want {
-				t.Fatalf("got %d log events, want %d", len(events), step.want)
+			changed, subscriptions := drain()
+			// 同一轮变化只输出一条 INFO，逐订阅通知为 DEBUG。
+			if step.changed == nil && len(changed) != 0 || step.changed != nil && (len(changed) != 1 || changed[0]["level"] != kratoslog.LevelInfo ||
+				!reflect.DeepEqual(changed[0]["changed"], step.changed) || changed[0]["module"] != "config") {
+				t.Fatalf("snapshot change events = %v, want paths %v", changed, step.changed)
 			}
-			for i := 0; i < step.want; i++ {
-				event := <-events
+			if len(subscriptions) != step.subscribers {
+				t.Fatalf("got %d subscription events, want %d", len(subscriptions), step.subscribers)
+			}
+			for i, event := range subscriptions {
 				key := "key"
 				if i == 2 {
 					key = ""
@@ -380,29 +398,19 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 				if key == "" {
 					key = "<root>"
 				}
-				wantLevel := kratoslog.LevelInfo
+				wantEvent := "config.subscription.notified"
 				if step.initial {
-					wantLevel = kratoslog.LevelDebug
+					wantEvent = "config.subscription.replayed"
 				}
-				if event["level"] != wantLevel || event["module"] != "config" ||
+				if event["event"] != wantEvent || event["level"] != kratoslog.LevelDebug || event["module"] != "config" ||
 					event["key"] != key || event["subscription"] != wantCaller {
 					t.Fatalf("unexpected event: %v", event)
 				}
 				if got, present := event["found"]; present != !found || (!found && got != false) {
 					t.Fatalf("unexpected presence flag: %v", event)
 				}
-				for _, field := range []string{"observer", "subscription_id", "target_type", "initial", "paths_truncated"} {
-					if _, present := event[field]; present {
-						t.Fatalf("redundant field %s: %v", field, event)
-					}
-				}
-				if step.initial {
-					if _, present := event["changed_paths"]; present || event["event"] != "config.watch" {
-						t.Fatalf("unexpected initial event: %v", event)
-					}
-				} else if event["event"] != "config.change" || !reflect.DeepEqual(event["changed_paths"], []string{"/key"}) {
-					t.Fatalf("unexpected change event: %v", event)
-				}
+			}
+			for _, event := range append(changed, subscriptions...) {
 				for _, value := range event {
 					if reflect.DeepEqual(value, "secret-value") || reflect.DeepEqual(value, "new-secret-value") {
 						t.Fatal("configuration value leaked into log")
@@ -415,23 +423,16 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 	backend.err = nil
 	backend.values = map[string]any{"key": map[string]any{}}
 	m.poll()
-	for len(events) > 0 {
-		<-events
-	}
+	drain()
 	fields := make(map[string]any)
 	for i := 0; i < 33; i++ {
 		fields[fmt.Sprintf("field%02d", i)] = i
 	}
 	backend.values = map[string]any{"key": fields}
 	m.poll()
-	if len(events) != 3 {
-		t.Fatalf("got %d truncated events, want 3", len(events))
-	}
-	for len(events) > 0 {
-		event := <-events
-		if event["paths_truncated"] != true || len(event["changed_paths"].([]string)) != 32 {
-			t.Fatalf("missing truncation indication: %v", event)
-		}
+	changed, _ := drain()
+	if len(changed) != 1 || changed[0]["changed_truncated"] != true || len(changed[0]["changed"].([]string)) != 32 || changed[0]["changed"].([]string)[0] != "key.field00" {
+		t.Fatalf("missing truncation indication: %v", changed)
 	}
 
 	// 通过 Manager 接口登记，异常日志也必须指向登记位置而非回调定义。
@@ -443,21 +444,16 @@ func TestPollingSubscriptionUpdateLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.poll()
-	if len(events) != 2 {
-		t.Fatalf("got %d events, want replay and panic", len(events))
+	_, subscriptions := drain()
+	if len(subscriptions) != 2 {
+		t.Fatalf("got %d events, want replay and panic", len(subscriptions))
 	}
-	for _, level := range []kratoslog.Level{kratoslog.LevelDebug, kratoslog.LevelError} {
-		event := <-events
+	for index, level := range []kratoslog.Level{kratoslog.LevelDebug, kratoslog.LevelError} {
+		event := subscriptions[index]
 		if event["subscription"] != fmt.Sprintf("config/polling_test.go:%d", line+1) || event["level"] != level {
 			t.Fatalf("unexpected subscription caller: %v", event)
 		}
-		for _, field := range []string{"observer", "subscription_id"} {
-			if _, present := event[field]; present {
-				t.Fatalf("obsolete field %s: %v", field, event)
-			}
-		}
 	}
-
 }
 
 func TestPollingScanFailureLogsWarningAndRetainsSnapshot(t *testing.T) {

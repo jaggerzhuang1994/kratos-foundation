@@ -119,28 +119,28 @@ defer cancel()
 
 cancel 幂等移除订阅，首次回放前取消会跳过该次回放；不等待已通过执行检查的回调。扫描、比较、解码和业务回调均不持有订阅锁；普通互斥锁只保护快照指针、订阅登记/移除和关闭状态的复合操作，避免注册和扫描交错导致状态不一致。
 
-每个订阅实际通知前记录一行，不记录配置值：首次回放使用 DEBUG `event=config.watch`，后续变更使用 INFO `event=config.change`。空 key 的整份配置订阅以 `<root>` 标识，使用 `subscription` 定位订阅登记位置；同一位置重复登记会显示相同值，不表示唯一订阅标识。
+日志不记录配置值。每轮扫描若整份配置有变化，只记录一条 INFO `event=config.snapshot.changed`，列出变化路径；随后每个订阅实际通知前记录一条 DEBUG：首次回放为 `config.subscription.replayed`，后续变更为 `config.subscription.notified`。同一变更不再按订阅者重复输出 INFO。
 
-| 字段 | 含义 |
-| --- | --- |
-| `key` | 订阅范围 |
-| `subscription` | 直接调用 `Subscribe` 的源码位置；通过 `NewHotReloadValue` 订阅时为其调用位置。格式为 `末级目录/文件.go:行号`；无法获取时为 `<unknown>` |
-| `changed_paths` | 仅变更事件记录，相对该订阅上次快照的绝对 JSON Pointer 路径 |
-| `found` | 仅当前快照缺失该范围时记录 false；有默认值时仍可能正常解码 |
-| `paths_truncated` | 仅路径超过 32 项时记录 true，此时列表不完整 |
+| 字段 | 事件 | 含义 |
+| --- | --- | --- |
+| `changed` | snapshot.changed | 整份配置中发生变化的点分路径，按键排序 |
+| `changed_truncated` | snapshot.changed | 仅路径超过 32 项时记录 true，此时列表不完整 |
+| `key` | subscription.* | 订阅范围；空 key 的整份配置订阅以 `<root>` 标识 |
+| `subscription` | subscription.* | 登记订阅的业务源码位置，跳过 `Subscribe` 与 `NewHotReloadValue` 等本包封装；格式为 `末级目录/文件.go:行号`，无法获取时为 `<unknown>` |
+| `found` | subscription.* | 仅当前快照缺失该范围时记录 false；有默认值时仍可能正常解码 |
 
 例如（省略时间戳与 caller）：
 
 ```text
-DEBUG module=config key=job subscription=job/config_reload.go:37 event=config.watch msg=config subscription replayed
-INFO module=config key=job subscription=job/config_reload.go:37 changed_paths=[/job/cron/refresh/disabled] event=config.change msg=config changed
+INFO  module=config event=config.snapshot.changed changed=[job.cron.refresh.disabled server.http.timeout] msg=configuration changed
+DEBUG module=config key=job subscription=job/config_reload.go:37 event=config.subscription.notified msg=config subscription notified
 ```
 
-变更路径按键排序，新增、删除、类型变化和数组变化只记录对应节点，不展开其值；路径中的 `~` 和 `/` 分别转义为 `~0` 和 `~1`，根节点变化显示 `<root>`。首次回放是当前值交付而非变更事件，不记录变更路径。字段路径可能包含业务自定义键名，配置键名本身不应承载凭据或隐私数据。
+变更路径以点号连接，含点号或为空的键写成 `["键名"]`（如 `client.clients["orders.v2"].target`）；新增、删除、类型变化和数组变化只记录对应节点，不展开其值；根节点变化显示 `<root>`。首次回放是当前值交付而非变更事件，不产生 snapshot.changed。字段路径可能包含业务自定义键名，配置键名本身不应承载凭据或隐私数据。
 
-根订阅和局部订阅可能记录相同变更路径，可结合 `key` 和 `subscription` 定位其订阅范围与调用点。日志只说明即将通知，不表示这些路径都被该订阅使用，也不保证解码或业务应用成功；业务是否应用仍以相应组件的结果日志为准。
+snapshot.changed 只说明配置变化，不表示这些路径都有订阅者使用，也不保证解码或业务应用成功；业务是否应用以相应组件的结果日志为准（例如 `server.middleware.updated` 的 changed 字段列出实际替换的中间件）。同一位置重复登记会显示相同 subscription，不表示唯一订阅标识。
 
-后续未变化、已取消或扫描失败时不记录通知事件。通知日志不再输出 `observer`、`subscription_id`、`target_type`、`initial` 字段；回调 panic 的 ERROR config.observer.panicked 同样使用 key、subscription 调用点及 panic_type，不打印 panic 原文，便于关联。调用点在登记时捕获；`NewHotReloadValue` 会跳过自身的封装层，记录调用它的位置，不记录回调函数的定义位置。其他封装层仍记录其直接调用 `Subscribe` 的位置。输出受当前 Logger 级别和过滤规则控制。
+后续未变化、已取消或扫描失败时不记录通知事件。回调 panic 的 ERROR config.observer.panicked 同样使用 key、subscription 调用点及 panic_type，不打印 panic 原文。调用点在登记时捕获，不记录回调函数的定义位置。输出受当前 Logger 级别和过滤规则控制。
 
 存在性与值分别比较：若扫描结果中的 key 消失，无默认值通过 observer 返回 `ErrNotFound`，有默认值解码默认值；显式 null 按目标解码规则处理。源文件中省略字段不等于有效配置删除，仍受官方 merge 约束。Manager 不再使用官方 Value/Watch，因此不受其缺失 key、同 key 单 observer 和直接监听 null 的限制；resolver 等官方处理仍沿用上游行为。
 
@@ -153,21 +153,25 @@ flowchart TD
  C -- 是 --> Z([退出；不等待在途业务回调])
  C -- 否 --> D[锁外 Scan 完整配置]
  D --> E{Scan 成功?}
- E -- 否 --> F[ERROR failed to scan configuration；保留旧快照]
+ E -- 否 --> F[WARN config.snapshot.rejected；保留旧快照]
  F --> B
  E -- 是 --> G[获取 mu；检查关闭状态]
  G -- 已关闭 --> G1[释放 mu]
  G1 --> Z
  G -- 未关闭 --> H[发布新快照并复制订阅表；释放 mu]
  H --> I[锁外比较各订阅存在性和值；更新比较基线]
+ H --> H1{整份配置有变化?}
+ H1 -- 是 --> H2[INFO config.snapshot.changed 点分变化路径]
+ H1 -- 否 --> I
+ H2 --> I
  I --> J{首次通知或值变化?}
  J -- 否 --> O
  J -- 是 --> K[获取 mu；检查取消与关闭；释放 mu]
  K --> L{可交付?}
  L -- 否 --> O
  L -- 是 --> L1{首次回放?}
- L1 -- 是 --> L2[DEBUG config.watch；key 和 subscription 调用点；缺失时 found=false]
- L1 -- 否 --> L3[INFO config.change；追加变更路径；截断时 paths_truncated=true]
+ L1 -- 是 --> L2[DEBUG config.subscription.replayed；key 和 subscription 调用点；缺失时 found=false]
+ L1 -- 否 --> L3[DEBUG config.subscription.notified；key 和 subscription 调用点]
  L2 --> M
  L3 --> M[锁外按登记顺序解码并执行回调]
  M -- panic --> N[ERROR configuration observer panicked；继续其余订阅]
@@ -184,36 +188,26 @@ flowchart TD
 
 ## HotReloadValue
 
-`NewHotReloadValue[T](manager, key, defaults...)` 先登记订阅，再初始 Load，避免读取与登记之间遗漏更新。初始值仅通过 CAS 替换构造期占位快照；如果回调已经发布新值，则保留该值。订阅失败不执行 Load，初始 Load 失败会取消订阅并返回错误。它原子保存最近一次成功解码的值；业务解码错误记 WARN 并保留旧值，但无法报告来源健康状态。读取结果是共享只读对象，修改前须自行复制。版本只是成功回调次数，包含首次回放，不能用版本零判断初始化状态；首次回放后未观察到变化时不会增加；提供默认值后可从缺失 key 开始监听，后续新增配置会更新容器。
-
+`NewHotReloadValue[T](manager, key, defaults...)` 先 Load 初值，再登记订阅；Manager 契约保证在登记后的下一轮扫描回放当前值，因此加载与登记之间发生的更新会经回放覆盖初值。初始 Load 失败不登记订阅，登记失败直接返回错误。构造完成后订阅回调是唯一写入方（Manager 串行回调），原子保存最近一次成功解码的值及版本；业务解码错误记 WARN `config.value.rejected` 并保留旧值，但无法报告来源健康状态。读取结果是共享只读对象，修改前须自行复制。版本只是成功回调次数，包含首次回放，不能用版本零判断初始化状态；提供默认值后可从缺失 key 开始监听，后续新增配置会更新容器。
 
 ```mermaid
 flowchart TD
- A([开始构造 HotReloadValue]) --> B[原子保存构造期占位快照]
- B --> C{登记订阅成功?}
- C -- 否 --> X([返回错误])
- C -- 是 --> D[Load 初始值]
- D --> E{加载成功?}
- E -- 否 --> F[取消订阅]
- F --> X
- E -- 是 --> G{CAS 占位快照为初值成功?}
- G -- 是 --> Z([返回容器及取消函数])
- G -- 否 --> H[保留回调已发布的快照]
- H --> Z
- C -- 并发通知 --> I{通知解码成功?}
- I -- 否 --> J[WARN failed to update the subscribed configuration value；保留旧值]
- I -- 是 --> K[原子读取共享快照及版本]
- K --> L{CAS 发布通知值及递增版本成功?}
- L -- 否 --> K
- L -- 是 --> N([本次回调结束])
- J --> N
+ A([开始构造 HotReloadValue]) --> B{Load 初值成功?}
+ B -- 否 --> X([返回错误 不登记订阅])
+ B -- 是 --> C[原子保存初值 版本 0]
+ C --> D{登记订阅成功?}
+ D -- 否 --> X
+ D -- 是 --> Z([返回容器及取消函数])
+ N[串行订阅通知 含首次回放] --> I{解码成功?}
+ I -- 否 --> J[WARN config.value.rejected 保留旧值]
+ I -- 是 --> K[原子发布新值 版本加一]
 ```
 
 Job 的 `job.cron` 订阅调度参数变更，按配置 > 注册 > Task 默认值解析；热更新与启动立即执行的边界见 [Job 配置](../job/README.md#配置热更新与生命周期)。
 
 ## 加载与失败诊断
 
-初始 Load 和 Scan 全部完成后记录 INFO `config.loaded`，包含来源类型列表 sources/source_count（取实现所在包名，如 `[env file]`、`[env consul]`，包括最低优先级 env）和 poll_interval。文件与 Consul 适配器的 selected 事件记录具体来源路径，Manager 不要求自定义 Source 暴露敏感配置或新增诊断接口。后续 Scan 失败保留旧快照，记录 WARN `config.snapshot.rejected`；HotReloadValue 解码失败记录 WARN `config.value.rejected`，key/error 定位失败范围；无返回值的 cleanup 失败记录 ERROR `config.cleanup.failed`。普通同步 Load/Subscribe 校验错误仍返回，不重复日志。
+初始 Load 和 Scan 全部完成后记录 INFO `config.loaded`，包含来源类型列表 sources（取实现所在包名，如 `[env file]`、`[env consul]`，包括最低优先级 env）和 poll_interval。文件与 Consul 适配器的 selected 事件记录具体来源路径，Manager 不要求自定义 Source 暴露敏感配置或新增诊断接口。后续 Scan 失败保留旧快照，记录 WARN `config.snapshot.rejected`；HotReloadValue 解码失败记录 WARN `config.value.rejected`，key/error 定位失败范围；无返回值的 cleanup 失败记录 ERROR `config.cleanup.failed`。普通同步 Load/Subscribe 校验错误仍返回，不重复日志。
 
 官方 Config watcher 的正常取消经现有日志桥接变为 DEBUG `config.watcher.stopped`，解码/合并失败原文由安全摘要替代并带 `config.source.rejected`；其余 SDK 日志保留原级别和文本。应用 Logger 安装前使用启动 fallback，安装后使用当前输出；早期日志不回放到后来创建的日志文件。
 
@@ -230,8 +224,10 @@ flowchart TD
  P -- 成功 --> C[锁内发布快照 复制订阅后释放]
  C --> D{有效订阅首次回放或有变更?}
  D -- 否 --> P
- D -- 首次 --> DL[DEBUG config.watch]
- D -- 变化 --> IL[INFO config.change]
+ C --> CH{整份配置有变化?}
+ CH -- 是 --> CL[INFO config.snapshot.changed]
+ D -- 首次 --> DL[DEBUG config.subscription.replayed]
+ D -- 变化 --> IL[DEBUG config.subscription.notified]
  DL & IL --> N[锁外调用 observer]
  N -- panic --> PL[ERROR config.observer.panicked 继续其他订阅]
  N -- 返回 --> P

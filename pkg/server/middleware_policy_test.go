@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -74,7 +75,7 @@ func TestMiddlewareUpdateRejectsBBRWithoutChangingOtherPolicies(t *testing.T) {
 	}
 }
 
-func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t *testing.T) {
+func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancel(t *testing.T) {
 	logger := newRuntimeTestLogger(t)
 	metricsProvider := testMetricsProvider{registry: prometheus.NewRegistry()}
 	tracingProvider := runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()}
@@ -125,7 +126,7 @@ func TestMiddlewarePoliciesApplyValidUpdatesRejectInvalidUpdatesAndCancelOnce(t 
 		t.Fatal("invalid middleware update replaced active state")
 	}
 
-	cancel()
+	// cleanup 直接返回 Manager 的取消函数，其幂等性由 Manager 契约保证。
 	cancel()
 	if manager.cancelCount != 1 {
 		t.Fatalf("cancel count = %d, want 1", manager.cancelCount)
@@ -149,7 +150,8 @@ func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
 	next := proto.CloneOf(initial)
 	next.Logging = &config_pb.Middleware_Logging{Disable: proto.Bool(!initial.GetLogging().GetDisable())}
 	manager.observer("server", next, nil)
-	if len(*logger.entries) != 1 || (*logger.entries)[0].level != "info" || (*logger.entries)[0].fields["event"] != "server.middleware.updated" {
+	if len(*logger.entries) != 1 || (*logger.entries)[0].level != "info" || (*logger.entries)[0].fields["event"] != "server.middleware.updated" ||
+		!reflect.DeepEqual((*logger.entries)[0].fields["changed"], []string{"logging"}) {
 		t.Fatalf("changed config logs = %#v", *logger.entries)
 	}
 	manager.observer("server", proto.CloneOf(next), nil)
