@@ -201,7 +201,7 @@ reset := wrapped.WithCallerDepth(1) // 恢复直接调用点
 _ = reset
 ```
 
-Foundation 自身的派生方法不增加日志转发帧，内置适配器也无需用户补偿。未识别的自定义包装仍会计入深度。旧版本固定栈数字不能直接沿用，迁移说明见 [caller API 迁移](../../MIGRATION_V2.md#caller-api-简化)。
+Foundation 自身的派生方法不增加日志转发帧，内置适配器也无需用户补偿。未识别的自定义包装仍会计入深度。旧版本固定栈数字不能直接沿用，迁移说明见 [caller API 迁移](../../MIGRATION.md)。
 
 显式 `caller` 字段沿用字段去重的后值覆盖前值规则（仍受字段过滤规则约束）。GORM Writer 从 GORM 提供的首参数提取查询来源，规范化为 `目录/文件:行号`；有效来源优先于深度选择，来源缺失或行号无效时沿用普通 caller。SQL 消息格式不变。
 
@@ -384,7 +384,7 @@ go vet ./pkg/log/...
 
 ## 集成测试与边界用法
 
-参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+参见[核心组件集成用例](../../test/README.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
 
 ## 全局日志桥的并发边界
 
@@ -418,7 +418,7 @@ flowchart TD
 
 ## 事件与级别
 
-Foundation 自有运行事件使用稳定的点分 `event` 和 `module`。事件名统一为 `<领域>.<对象>.<动作>`，首段与所属领域一致（`app.*`、`config.*`、`server.*`、`client.*`、`job.*`、`queue.*`、`kafka.*`、`database.*`、`registry.*` 等），可用 `event=queue.*` 这类前缀归类；业务自定义事件应使用业务自己的前缀，避免与框架事件混淆。每条事件都带一句简短 msg 解释结果。已有 caller 不再附 function。service.id/name/version、env 由 Bootstrap 提供；有请求、任务或连接 Context 时调用 WithContext，保留 trace/span/request 字段。启动身份摘要及逐包事件出口见[包职责与日志审查](../../PACKAGE_REVIEW.md)。
+Foundation 自有运行事件使用稳定的点分 `event` 和 `module`。事件名统一为 `<领域>.<对象>.<动作>`，首段与所属领域一致（`app.*`、`config.*`、`server.*`、`client.*`、`job.*`、`queue.*`、`kafka.*`、`database.*`、`registry.*` 等），可用 `event=queue.*` 这类前缀归类；业务自定义事件应使用业务自己的前缀，避免与框架事件混淆。每条事件都带一句简短 msg 解释结果。已有 caller 不再附 function。service.id/name/version、env 由 Bootstrap 提供；有请求、任务或连接 Context 时调用 WithContext，保留 trace/span/request 字段。
 
 | 级别 | 使用范围 |
 | --- | --- |

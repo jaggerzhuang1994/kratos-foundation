@@ -9,7 +9,7 @@
 
 ## 首次使用
 
-需要 Go、`protoc` 和 `protoc-gen-go`（后者由仓库根目录 `make init-proto` 安装）。以下命令从**仓库根目录**执行，仅在临时目录构建当前插件和生成示例：
+需要 Go、`protoc` 和 `protoc-gen-go`（仓库根目录 `make init` 会把固定版本安装到 `tools/`）。以下命令从**仓库根目录**执行，仅在临时目录构建当前插件和生成示例：
 
 ```sh
 set -eu

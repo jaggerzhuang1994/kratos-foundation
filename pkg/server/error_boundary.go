@@ -20,7 +20,7 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 			reply, err := next(ctx, req)
 			err = foundationerrors.Normalize(err)
 			if err != nil && foundationerrors.Code(err) >= 500 {
-				summary := error(err)
+				summary := err
 				if cause := errors.Unwrap(err); cause != nil {
 					summary = cause
 				}

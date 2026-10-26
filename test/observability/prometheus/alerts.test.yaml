@@ -1,0 +1,774 @@
+# 规则源位于 observability/prometheus，路径相对本测试文件。
+rule_files:
+  - ../../../observability/prometheus/alerts.yaml
+evaluation_interval: 1m
+tests:
+  - name: 单实例持续未就绪告警，其他实例就绪时整体不告警
+    interval: 1m
+    input_series:
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-1"}
+        values: "0x10"
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-2"}
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationAppNotReady
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: FoundationAppNotReady
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: worker
+              pod: worker-1
+              severity: warning
+            exp_annotations:
+              summary: 应用实例持续未就绪（启动未完成、依赖不可用或停机卡住）
+              runbook: observability/troubleshooting.md#foundationappnotready
+      - eval_time: 6m
+        alertname: FoundationAppUnavailable
+        exp_alerts: []
+  - name: 全部实例未就绪触发服务不可用
+    interval: 1m
+    input_series:
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-1"}
+        values: "0x10"
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-2"}
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationAppUnavailable
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: worker
+              severity: critical
+            exp_annotations:
+              summary: 应用全部实例未就绪，服务不可用
+              runbook: observability/troubleshooting.md#foundationappnotready
+  - name: 持续高错误率只影响 prod orders，不混合 env
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="500"}
+        values: 0+20x20
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="200"}
+        values: 0+80x20
+      - series: server_requests_code_total{foundation="true",env="dev",cluster="c1",namespace="apps",app="orders",code="200"}
+        values: 0+10000x20
+    alert_rule_test:
+      - alertname: FoundationHighServerErrorRate
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: 应用 5xx 比例超过 5%，且最近 5 分钟请求至少 100 次
+              runbook: observability/troubleshooting.md#foundationhighservererrorrate
+        eval_time: 12m
+  - name: 低流量即使全部 500 也不触发阈值告警
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="500"}
+        values: 0+1x20
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHighServerErrorRate
+        exp_alerts: []
+  - name: 采集失败满足 for 才触发
+    interval: 1m
+    input_series:
+      - series: up{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",node="n1",pod="p1",instance="10.0.0.1:9001",job="foundation-app"}
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: FoundationTargetDown
+        exp_alerts: []
+      - alertname: FoundationTargetDown
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+              foundation: "true"
+              node: n1
+              pod: p1
+              instance: 10.0.0.1:9001
+              job: foundation-app
+            exp_annotations:
+              summary: 应用指标采集失败
+              runbook: observability/troubleshooting.md#foundationtargetdown
+        eval_time: 3m
+  - name: 健康请求不触发错误率
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",code="200"}
+        values: 0+100x20
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHighServerErrorRate
+        exp_alerts: []
+  - name: 持续长尾延迟在请求门槛后触发
+    interval: 1m
+    input_series:
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",le="0.5"}
+        values: 0+50x30
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",le="1"}
+        values: 0+100x30
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",le="+Inf"}
+        values: 0+100x30
+      - series: server_requests_seconds_count{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders"}
+        values: 0+100x30
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FoundationHighLatency
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: 应用 P95 超过 500ms，且最近 5 分钟请求至少 100 次
+              runbook: observability/troubleshooting.md#foundationhighlatency
+  - name: 机器告警只关联承载所选应用的节点
+    interval: 1m
+    input_series:
+      - series: up{foundation="true",env="prod",cluster="c1",namespace="apps",app="orders",node="n1"}
+        values: 1x30
+      - series: node_cpu_seconds_total{env="prod",cluster="c1",node="n1",mode="idle",cpu="0"}
+        values: 0+1x30
+      - series: node_memory_MemAvailable_bytes{env="prod",cluster="c1",node="n1"}
+        values: 5x30
+      - series: node_memory_MemTotal_bytes{env="prod",cluster="c1",node="n1"}
+        values: 100x30
+      - series: node_filesystem_avail_bytes{env="prod",cluster="c1",node="n1",mountpoint="/",fstype="ext4"}
+        values: 5x30
+      - series: node_filesystem_size_bytes{env="prod",cluster="c1",node="n1",mountpoint="/",fstype="ext4"}
+        values: 100x30
+      - series: node_cpu_seconds_total{env="prod",cluster="c1",node="n2",mode="idle",cpu="0"}
+        values: 0+1x30
+      - series: node_memory_MemAvailable_bytes{env="prod",cluster="c1",node="n2"}
+        values: 5x30
+      - series: node_memory_MemTotal_bytes{env="prod",cluster="c1",node="n2"}
+        values: 100x30
+      - series: node_filesystem_avail_bytes{env="prod",cluster="c1",node="n2",mountpoint="/",fstype="ext4"}
+        values: 5x30
+      - series: node_filesystem_size_bytes{env="prod",cluster="c1",node="n2",mountpoint="/",fstype="ext4"}
+        values: 100x30
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FoundationNodeCPUHigh
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              node: n1
+              severity: warning
+            exp_annotations:
+              summary: 承载应用的机器 CPU 使用率超过 90%
+              runbook: observability/troubleshooting.md#机器资源告警
+      - eval_time: 20m
+        alertname: FoundationNodeMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              node: n1
+              severity: warning
+            exp_annotations:
+              summary: 承载应用的机器内存使用率超过 90%
+              runbook: observability/troubleshooting.md#机器资源告警
+      - eval_time: 20m
+        alertname: FoundationNodeDiskLow
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              node: n1
+              severity: warning
+            exp_annotations:
+              summary: 承载应用的机器根分区可用空间不足 10%
+              runbook: observability/troubleshooting.md#机器资源告警
+  - name: 无样本不产生虚假告警
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FoundationTargetDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationHighServerErrorRate
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationHighLatency
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationNodeCPUHigh
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationNodeMemoryHigh
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationNodeDiskLow
+        exp_alerts: []
+  - name: FoundationKafkaRuntimeFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "kafka_consumer_runtime_failures_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",kafka_destination=\"orders\",kafka_consumer=\"worker\"}"
+        values: "0+1x10"
+      - series: "kafka_consumer_runtime_failures_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",kafka_destination=\"orders\",kafka_consumer=\"worker\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationKafkaRuntimeFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              kafka_destination: "orders"
+              kafka_consumer: "worker"
+              severity: "warning"
+            exp_annotations:
+              summary: "Kafka 消费运行时出现故障"
+              runbook: observability/troubleshooting.md#组件告警
+  - name: FoundationQueueRuntimeFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "queue_consumer_runtime_failures_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\",queue_consumer=\"worker\"}"
+        values: "0+1x10"
+      - series: "queue_consumer_runtime_failures_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\",queue_consumer=\"worker\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationQueueRuntimeFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              queue_destination: "orders"
+              queue_consumer: "worker"
+              severity: "warning"
+            exp_annotations:
+              summary: "Queue 消费运行时出现故障"
+              runbook: observability/troubleshooting.md#组件告警
+  - name: FoundationJobFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "job_runs_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",exported_job=\"cleanup\",status=\"failure\"}"
+        values: "0+1x10"
+      - series: "job_runs_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",exported_job=\"cleanup\",status=\"failure\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationJobFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              exported_job: "cleanup"
+              severity: "warning"
+            exp_annotations:
+              summary: "Job 执行失败"
+              runbook: observability/troubleshooting.md#组件告警
+  - name: FoundationLockRenewalFailure 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "lock_operations_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",lock_name=\"orders\",result=\"not_held\",operation=\"refresh\"}"
+        values: "0+1x10"
+      - series: "lock_operations_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",lock_name=\"orders\",result=\"not_held\",operation=\"refresh\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationLockRenewalFailure
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              lock_name: "orders"
+              result: "not_held"
+              severity: "warning"
+            exp_annotations:
+              summary: "Lock 续租失败，需确认任务是否停止受保护操作"
+              runbook: observability/troubleshooting.md#组件告警
+  - name: FoundationRedisPoolTimeout 保留组件身份且区分环境
+    interval: 1m
+    input_series:
+      - series: "db_client_connections_timeouts{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",redis_connection=\"cache\",pool_name=\"redis:6379\",db_system=\"redis\"}"
+        values: "0+1x10"
+      - series: "db_client_connections_timeouts{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",redis_connection=\"cache\",pool_name=\"redis:6379\",db_system=\"redis\"}"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationRedisPoolTimeout
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              redis_connection: "cache"
+              pool_name: "redis:6379"
+              severity: "warning"
+            exp_annotations:
+              summary: "Redis 客户端连接池等待超时"
+              runbook: observability/troubleshooting.md#组件告警
+  - name: 无组件样本不触发组件告警
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: FoundationKafkaRuntimeFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationQueueRuntimeFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationJobFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationLockRenewalFailure
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationRedisPoolTimeout
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: FoundationDatabasePoolSaturated
+        exp_alerts: []
+  - name: 数据库池按实例报警且排除无限上限
+    interval: 1m
+    input_series:
+      - series: "go_sql_in_use_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"busy\",db_name=\"default\"}"
+        values: "10x20"
+      - series: "go_sql_max_open_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"busy\",db_name=\"default\"}"
+        values: "10x20"
+      - series: "go_sql_in_use_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"unlimited\",db_name=\"default\"}"
+        values: "10x20"
+      - series: "go_sql_max_open_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"unlimited\",db_name=\"default\"}"
+        values: "0x20"
+      - series: "go_sql_in_use_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"idle\",db_name=\"default\"}"
+        values: "1x20"
+      - series: "go_sql_max_open_connections{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",instance=\"idle\",db_name=\"default\"}"
+        values: "10x20"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationDatabasePoolSaturated
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationDatabasePoolSaturated
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation: "true"
+              instance: "busy"
+              db_name: "default"
+              severity: "warning"
+            exp_annotations:
+              summary: 数据库实例连接池利用率持续超过 90%
+              runbook: observability/troubleshooting.md#组件告警
+  - name: FoundationHealthProbeFailed 正常触发
+    interval: 1m
+    input_series:
+      - series: "probe_success{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation_probe=\"true\",probe=\"readyz\",instance=\"a:9001\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHealthProbeFailed
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation_probe: "true"
+              probe: "readyz"
+              instance: "a:9001"
+              severity: "warning"
+            exp_annotations:
+              summary: "应用 readyz 或 healthz 实际 HTTP 探测失败"
+              runbook: observability/troubleshooting.md#健康探测与配置状态
+  - name: FoundationHealthProbeUnavailable 正常触发
+    interval: 1m
+    input_series:
+      - series: "up{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation_probe=\"true\",probe=\"healthz\",instance=\"a:9001\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHealthProbeUnavailable
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation_probe: "true"
+              probe: "healthz"
+              instance: "a:9001"
+              severity: "warning"
+            exp_annotations:
+              summary: "健康探测结果采集失败，不能判断应用健康"
+              runbook: observability/troubleshooting.md#健康探测与配置状态
+  - name: FoundationQueueStatsFailed 正常触发
+    interval: 1m
+    input_series:
+      - series: "queue_stats_collection_success{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\"}"
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationQueueStatsFailed
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              foundation: "true"
+              queue_destination: "orders"
+              severity: "warning"
+            exp_annotations:
+              summary: "Queue 状态采集失败，积压数量与年龄不可用"
+              runbook: observability/troubleshooting.md#积压与传输指标
+  - name: FoundationQueueReadyTooOld 正常触发
+    interval: 1m
+    input_series:
+      - series: "queue_oldest_ready_age_seconds{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",queue_destination=\"orders\"}"
+        values: "400x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationQueueReadyTooOld
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "orders"
+              queue_destination: "orders"
+              severity: "warning"
+            exp_annotations:
+              summary: "Queue 最老就绪任务等待超过 5 分钟"
+              runbook: observability/troubleshooting.md#积压与传输指标
+  - name: FoundationKafkaLagHigh 正常触发
+    interval: 1m
+    input_series:
+      - series: "kafka_consumergroup_lag{env=\"prod\",cluster=\"c1\",foundation_kafka=\"true\",kafka_cluster=\"business\",consumergroup=\"orders\",topic=\"orders\",partition=\"0\"}"
+        values: "1500x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationKafkaLagHigh
+        exp_alerts:
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              kafka_cluster: "business"
+              consumergroup: "orders"
+              topic: "orders"
+              severity: "warning"
+            exp_annotations:
+              summary: "Kafka 消费组 Topic Lag 持续超过 1000"
+              runbook: observability/troubleshooting.md#积压与传输指标
+  - name: 无状态样本不制造健康或积压告警
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationHealthProbeFailed
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationHealthProbeUnavailable
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationQueueStatsFailed
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationQueueReadyTooOld
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FoundationKafkaLagHigh
+        exp_alerts: []
+  - name: 重复 Kafka exporter 不累加且未知负 lag 不报警
+    interval: 1m
+    input_series:
+      - series: kafka_consumergroup_lag{foundation_kafka="true",env="prod",cluster="c1",kafka_cluster="shared",consumergroup="orders",topic="orders",partition="0",instance="exporter1"}
+        values: "600x20"
+      - series: kafka_consumergroup_lag{foundation_kafka="true",env="prod",cluster="c1",kafka_cluster="shared",consumergroup="orders",topic="orders",partition="0",instance="exporter2"}
+        values: "600x20"
+      - series: kafka_consumergroup_lag{foundation_kafka="true",env="prod",cluster="c1",kafka_cluster="shared",consumergroup="unknown",topic="orders",partition="0"}
+        values: "-1x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationKafkaLagHigh
+        exp_alerts: []
+  - name: 舰队预聚合按应用汇总并区分消费类型
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{env="prod",namespace="apps",app="api",pod="api-0",code="200"}
+        values: 0+54x15
+      - series: server_requests_code_total{env="prod",namespace="apps",app="api",pod="api-1",code="500"}
+        values: 0+6x15
+      - series: server_requests_seconds_bucket{env="prod",namespace="apps",app="api",pod="api-0",le="+Inf"}
+        values: 0+60x15
+      - series: app_ready{env="prod",namespace="apps",app="api",pod="api-0"}
+        values: 1x15
+      - series: app_ready{env="prod",namespace="apps",app="api",pod="api-1"}
+        values: 0x15
+      - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="success"}
+        values: 0+48x15
+      - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="failed"}
+        values: 0+12x15
+      - series: kafka_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",kafka_destination="events",kafka_consumer="sync",kafka_result="dead_lettered"}
+        values: 0+6x15
+      - series: job_runs_total{env="prod",namespace="apps",app="cron",pod="c-0",exported_job="cleanup",status="failure"}
+        values: 0+1x15
+      - series: queue_oldest_ready_age_seconds{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
+        values: 30x15
+      - series: queue_stats_oldest_ready_known{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
+        values: 1x15
+      - series: queue_stats_collection_success{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
+        values: 1x15
+      - series: queue_oldest_ready_age_seconds{env="prod",namespace="apps",app="worker",pod="w-0",instance="b",queue_destination="emails"}
+        values: 999x15
+      - series: queue_stats_oldest_ready_known{env="prod",namespace="apps",app="worker",pod="w-0",instance="b",queue_destination="emails"}
+        values: 0x15
+      - series: queue_stats_collection_success{env="prod",namespace="apps",app="worker",pod="w-0",instance="b",queue_destination="emails"}
+        values: 1x15
+    promql_expr_test:
+      - expr: app:server_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:server_requests:rate5m{env="prod",namespace="apps",app="api"}'
+            value: 1
+      - expr: app:server_errors:rate5m / app:server_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",namespace="apps",app="api"}'
+            value: 0.1
+      - expr: app:app_ready:ready
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:app_ready:ready{env="prod",namespace="apps",app="api"}'
+            value: 1
+      - expr: app:app_ready:instances
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:app_ready:instances{env="prod",namespace="apps",app="api"}'
+            value: 2
+      - expr: app:consumer_failures:rate5m / app:consumer_messages:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",namespace="apps",app="worker",consumer_type="queue"}'
+            value: 0.2
+          - labels: '{env="prod",namespace="apps",app="worker",consumer_type="kafka"}'
+            value: 1
+      - expr: app:job_failures:increase1h
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:job_failures:increase1h{env="prod",namespace="apps",app="cron"}'
+            value: 10
+      - expr: app:queue_oldest_ready_age:max
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:queue_oldest_ready_age:max{env="prod",namespace="apps",app="worker"}'
+            value: 30
+  - name: FoundationJobFailed 关联 owner 与 app，CronJob 之后成功则恢复
+    interval: 1m
+    input_series:
+      # 独立 Job：owner 为 <none>，app 来自 metricLabelsAllowlist 放开的 app.kubernetes.io/name。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="migrate-1"}
+        values: "1x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="migrate-1",owner_kind="<none>",owner_name="<none>",owner_is_controller="<none>"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="migrate-1",label_app_kubernetes_io_name="orders"}
+        values: "1x15"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="migrate-1"}
+        values: "100x15"
+      # CronJob 失败晚于最近一次成功：继续告警。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="report-100"}
+        values: "1x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="report-100",owner_kind="CronJob",owner_name="report",owner_is_controller="true"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="report-100",label_app_kubernetes_io_name="reports"}
+        values: "1x15"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="report-100"}
+        values: "100x15"
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="report"}
+        values: "50x15"
+      # CronJob 失败后已有新的成功运行：失败 Job 仍保留在历史中，但不再告警。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100"}
+        values: "1x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100",owner_kind="CronJob",owner_name="cleanup",owner_is_controller="true"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100"}
+        values: "1x15"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100"}
+        values: "100x15"
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="cleanup"}
+        values: "500x15"
+      # 成功的 Job 不告警。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="ok-1"}
+        values: "0x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="ok-1",owner_kind="<none>",owner_name="<none>",owner_is_controller="<none>"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="ok-1"}
+        values: "1x15"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FoundationJobFailed
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              job_name: migrate-1
+              owner_kind: "<none>"
+              owner_name: "<none>"
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: K8s Job 执行失败（owner_name 为所属 CronJob，独立 Job 为 <none>）
+              runbook: observability/troubleshooting.md#foundationjobfailed
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              job_name: report-100
+              owner_kind: CronJob
+              owner_name: report
+              app: reports
+              severity: warning
+            exp_annotations:
+              summary: K8s Job 执行失败（owner_name 为所属 CronJob，独立 Job 为 <none>）
+              runbook: observability/troubleshooting.md#foundationjobfailed
+  - name: FoundationCronJobMissedSchedule 排除暂停的 CronJob
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_next_schedule_time{env="prod",cluster="c1",namespace="batch",cronjob="late"}
+        values: "0x30"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="late"}
+        values: "0x30"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="late",label_app_kubernetes_io_name="reports"}
+        values: "1x30"
+      - series: kube_cronjob_next_schedule_time{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "0x30"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x30"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x30"
+      - series: kube_cronjob_next_schedule_time{env="prod",cluster="c1",namespace="batch",cronjob="ontime"}
+        values: "1500x30"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="ontime"}
+        values: "0x30"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="ontime"}
+        values: "1x30"
+    alert_rule_test:
+      # 10m 时仅超出 600s 阈值本身，尚未满足 for 5m。
+      - eval_time: 12m
+        alertname: FoundationCronJobMissedSchedule
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationCronJobMissedSchedule
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              cronjob: late
+              app: reports
+              severity: warning
+            exp_annotations:
+              summary: CronJob 超过预定时间 10 分钟仍未调度
+              runbook: observability/troubleshooting.md#foundationcronjobmissedschedule
+  - name: FoundationCronJobNoRecentSuccess 超过 26h 未成功且排除暂停
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="stale"}
+        values: "0x1700"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="stale"}
+        values: "0x1700"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="stale",label_app_kubernetes_io_name="reports"}
+        values: "1x1700"
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "0x1700"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x1700"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x1700"
+      # 25h 时成功一次，27h 评估时距今 2h，不告警。
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="fresh"}
+        values: "90000x1700"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="fresh"}
+        values: "0x1700"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="fresh"}
+        values: "1x1700"
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: FoundationCronJobNoRecentSuccess
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: FoundationCronJobNoRecentSuccess
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              cronjob: stale
+              app: reports
+              severity: warning
+            exp_annotations:
+              summary: CronJob 超过 26 小时没有成功运行（阈值按调度周期调整）
+              runbook: observability/troubleshooting.md#foundationcronjobnorecentsuccess
+  - name: FoundationJobRunningTooLong 只计仍有活跃 Pod 的 Job
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="long-1"}
+        values: "0x80"
+      - series: kube_job_status_active{env="prod",cluster="c1",namespace="batch",job_name="long-1"}
+        values: "1x80"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="long-1",label_app_kubernetes_io_name="orders"}
+        values: "1x80"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="done-1"}
+        values: "0x80"
+      - series: kube_job_status_active{env="prod",cluster="c1",namespace="batch",job_name="done-1"}
+        values: "0x80"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="done-1"}
+        values: "1x80"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="short-1"}
+        values: "3000x80"
+      - series: kube_job_status_active{env="prod",cluster="c1",namespace="batch",job_name="short-1"}
+        values: "1x80"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="short-1"}
+        values: "1x80"
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: FoundationJobRunningTooLong
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: FoundationJobRunningTooLong
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              job_name: long-1
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: K8s Job 运行超过 1 小时仍未结束
+              runbook: observability/troubleshooting.md#foundationjobrunningtoolong

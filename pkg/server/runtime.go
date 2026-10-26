@@ -140,12 +140,12 @@ func NewRuntime(
 		runtime.managementServers = append(runtime.managementServers, &managementRuntime{Server: withStopLifecycle(srv, stopDelay, nil, health)})
 	}
 	return runtime, sync.OnceFunc(func() {
-			health.stopped.Store(true)
-			if err := closeListeners(); err != nil {
-				logger.With("event", "server.listener.cleanup.failed", "error", err).Error("listener cleanup failed")
-			}
-			cleanup()
-		}), nil
+		health.stopped.Store(true)
+		if err := closeListeners(); err != nil {
+			logger.With("event", "server.listener.cleanup.failed", "error", err).Error("listener cleanup failed")
+		}
+		cleanup()
+	}), nil
 }
 
 type registeredEndpoint struct {
@@ -229,8 +229,8 @@ func withStopLifecycle(
 	}
 
 	runtime := &stopRuntime{
-		Server:     server,
-		health:     health,
+		Server:    server,
+		health:    health,
 		delay:     delay,
 		alongside: alongside,
 	}

@@ -147,9 +147,9 @@ Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须�
 
 ## 验证与迁移
 
-在仓库根目录执行 `make verify`（所有模块的 test/vet/race）与 `make lint`。Redis Lua 需要真实服务测试，隔离入口是 `make test-external`；数据库队列完整 Repo 的真实服务测试由业务提供，框架在 `pkg/database` 的 SQLite 测试中验证同事务投递的提交、回滚和可见性；队列包普通测试使用确定性存储/Repo 替身，不会自行启动服务。详细范围见 [外部服务验证](../../testdata/external/README.md)。旧 Redis Streams 无自动数据转换，旧消息 API 与调用迁移见 [迁移说明](../../MIGRATION_V2.md#持久化任务队列与-kafka-分离)。
+在仓库根目录执行 `make verify`（所有模块的 test/vet/race）与 `make lint`。Redis Lua 需要真实服务测试，隔离入口是 `make test-external`；数据库队列完整 Repo 的真实服务测试由业务提供，框架在 `pkg/database` 的 SQLite 测试中验证同事务投递的提交、回滚和可见性；队列包普通测试使用确定性存储/Repo 替身，不会自行启动服务。详细范围见 [外部服务验证](../../test/external/README.md)。旧 Redis Streams 无自动数据转换。
 
-共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../observability/components.md)。
 
 ## 持久化积压统计
 
@@ -192,4 +192,4 @@ flowchart TD
 
 ## 集成测试与边界用法
 
-参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+参见[核心组件集成用例](../../test/README.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。

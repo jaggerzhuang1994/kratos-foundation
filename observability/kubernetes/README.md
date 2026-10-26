@@ -1,0 +1,104 @@
+# Kubernetes / kube-prometheus-stack 接入
+
+本目录是接入已有 Prometheus Operator 与 Grafana 的参考配置，不创建或升级集群监控栈，也不包含业务应用的部署清单。所有命令在仓库根目录执行；应用前确认 kubectl context、命名空间与现有 release 选择器。
+
+## 1. 业务 Deployment 前提
+
+- 容器暴露名为 `management` 的管理端口（示例 9001，对应 `server.http.metrics.addr` / `server.http.health.addr`），Service 与 Pod 带 `app.kubernetes.io/name` 和 `environment` 标签。
+- 探针：startup 与 liveness 用 `/healthz`，readiness 用 `/readyz`；改用 gRPC 原生探针时 liveness 的 service 必须为 `liveness`。
+- `terminationGracePeriodSeconds` 大于 `app.stop_timeout`，为 Wire cleanup 留出余量；`server.stop_delay` 覆盖网关或注册中心摘流的传播时间。
+- 管理端口不经 Ingress 公开，用 NetworkPolicy 限制为监控与探针访问。
+
+## 2. 让 Prometheus 发现每个 Pod
+
+修改 ServiceMonitor 中的 `release: monitoring` 和 `cluster: example-cluster`；env 从 Service 的 `environment` 标签读取，示例为 dev。按业务调整 namespace、App 名和 Service/Deployment 的相同 selector。然后应用：
+
+```sh
+kubectl apply -f observability/kubernetes/servicemonitor.yaml
+```
+
+已有 Prometheus 必须同时满足：
+
+- `serviceMonitorSelector` 能选中该 ServiceMonitor 的标签；`release` 是示例，不是通用固定值。
+- `serviceMonitorNamespaceSelector` 允许发现 `foundation-demo` 中的 ServiceMonitor。
+- 该 ServiceMonitor 的 namespaceSelector 能选择 Service 所在命名空间，Service selector 能选择业务 Pod，端口名称 `management` 一致。
+- Prometheus 能访问 Pod 的 9001 端口，相关 RBAC/网络策略允许发现和抓取。
+
+ServiceMonitor 发现 Service 后，抓取的是每个后端 Pod 地址，不能另外对 Service ClusterIP 再抓一次。若已有 PodMonitor/注解采集，请二选一，避免重复计数。`instance` 保留真实采集地址；node 取 `__meta_kubernetes_pod_node_name`，不从 hostname 推断。honorLabels=false 时 OTel 指标与目标冲突的 job/instance 会变为 exported_job/exported_instance，Dashboard 使用的是目标 instance。
+
+## 3. 机器指标
+
+[kube-prometheus-values.yaml](kube-prometheus-values.yaml) 给出已有 node-exporter ServiceMonitor 的标签补齐方式。将其中 relabelings 合并到**已固定版本**的 kube-prometheus-stack values，保留现有规则；按该版本 Chart 的 values 验证后，用已有 Helm 发布流程更新。本文不自动升级 Chart。
+
+node-exporter 的 env/cluster 必须和应用 ServiceMonitor 一致，node 必须为真实 Kubernetes Node 名。仅设置 Prometheus externalLabels 不会给本地存储中的每条序列补齐这些标签；示例告警要求在目标 relabeling 中补齐；默认应用面板不使用这些标签。
+
+同一集群承载多个环境时，机器指标通常只有一份：应统一机器层的环境归属，或按部署平台定义独立的集群/机器 Dashboard。不能随意给同一 node-exporter 复制多个 env 抓取任务来伪造独立机器资源。本例面向一个 env 对应一组监控目标的部署。
+
+ACK 容器概览已展示 cAdvisor CPU/内存、容器重启与节点资源，支持四种视图；应用进程 RSS 与容器 Working Set 分开。Deployment 期望副本与更完整的控制面指标使用平台面板。
+
+## 4. 导入 Dashboard 和告警
+
+可以直接在 Grafana 导入 [面板目录](../grafana/dashboards/) 下的九份 JSON（清单见 [面板入口](../README.md)），选择已有 Prometheus 数据源。也可以使用 sidecar；生成的 `dashboard.json` 按 [folders.json](../grafana/folders.json) 拆成四个 ConfigMap，注解 `grafana_folder` 为 00 总览 / 10 服务 / 20 中间件 / 30 基础设施，示例 values 已开启 sidecar 的 `folderAnnotation`：
+
+```sh
+# 将 namespace/release 改成现有监控栈的真实值；仅生成本地文件。
+python3 observability/kubernetes/render.py \
+  --namespace monitoring --release monitoring \
+  --output /tmp/foundation-monitoring
+
+# 核对生成文件和选择器之后，按部署流程应用。
+# 面板 JSON 较大，使用 server-side apply 避免 last-applied 注解超过 256KiB。
+kubectl apply --server-side -f /tmp/foundation-monitoring/dashboard.json
+kubectl apply -f /tmp/foundation-monitoring/rules.yaml
+```
+
+ConfigMap 必须位于 Grafana sidecar 搜索的命名空间，标签需匹配 sidecar 的 label/labelValue；默认示例为 `grafana_dashboard=1`。Dashboard 数据源变量可选择已有 Prometheus；新面板不固定本地数据源 UID，导入后选择实际单集群数据源。
+
+生成的 rules.yaml 仍是示例应用规则，部署前需核对采集标签与阈值；它不是 ACK 新面板全部指标的告警策略。
+
+Prometheus 的 `ruleSelector` 与 `ruleNamespaceSelector` 必须允许读取生成的 PrometheusRule。普通 Prometheus 和 Operator 使用同一个 alerts.yaml 源；不要同时加载普通规则与对应 PrometheusRule。通知接入见 [告警说明](../alerts.md)。
+
+## 验证与失败分支
+
+```sh
+kubectl -n foundation-demo get pods -o wide
+kubectl -n foundation-demo get endpointslices -l kubernetes.io/service-name=minimal-api
+kubectl -n foundation-demo get servicemonitor minimal-api -o yaml
+kubectl -n foundation-demo port-forward service/minimal-api 18000:8000 19001:9001
+```
+
+另一个终端请求 `/hello`、`/readyz` 和 `/metrics`，然后在 Prometheus Targets 确认两个 Pod 均可见，且 env/cluster/namespace/app/node/pod/instance 齐全。端口转发只验证选中的后端，不证明 Prometheus 抓取了所有 Pod；务必检查 Targets。
+
+```mermaid
+flowchart TD
+    A([审阅镜像配置及现有选择器]) --> B[部署 ConfigMap Deployment Service]
+    B --> C{Pod 启动且就绪?}
+    C -- 否 --> D[查看 Pod 事件及应用启动日志 修正镜像配置或资源]
+    D --> B
+    C -- 是 --> E[应用 ServiceMonitor]
+    E --> F{Prometheus 能发现并抓取全部 Pod?}
+    F -- 否 --> G[检查 namespace selector 端口网络及 Targets 错误]
+    G --> E
+    F -- 是 --> H[检查应用和 node-exporter 标签对应]
+    H --> I[生成并应用 Dashboard ConfigMap 与 PrometheusRule]
+    I --> J{sidecar 与规则选择器匹配?}
+    J -- 否 --> K[查看 sidecar 与 Operator 日志 修正标签范围]
+    K --> I
+    J -- 是 --> L([在 Grafana 切换四种视图验证真实 ACK 指标])
+```
+
+参考 [Prometheus Operator API](https://prometheus-operator.dev/docs/api-reference/api/)、[node-exporter Chart values](https://github.com/prometheus-community/helm-charts/blob/main/charts/prometheus-node-exporter/values.yaml)。
+
+## 一次性脚本与 CronJob
+
+一次性脚本常在被 Prometheus 抓取前退出，成功/失败以 K8s Job 状态为准。`alerts.yaml` 的 `foundation-kubernetes-jobs` 组读取 kube-state-metrics 的 `kube_job_*` / `kube_cronjob_*`，规则含义与阈值见 [告警说明](../alerts.md#一次性脚本与-cronjob-告警)。前提：
+
+- kube-state-metrics 已部署并被同一 Prometheus 抓取；[kube-prometheus-values.yaml](kube-prometheus-values.yaml) 给出 `metricLabelsAllowlist` 与 env/cluster relabelings 示例，合并到现有 values 而不是覆盖。
+- Job/CronJob 对象自身带 `app.kubernetes.io/name`（CronJob 写在 `spec.jobTemplate.metadata.labels`）。未放开或未打标签时告警仍会触发，只是没有 `app` 标签，按 namespace 路由。
+- 需要框架内 `job_runs_total` 等指标时，可为该进程开启 `metrics.push`，在退出前推送到 Pushgateway，见 [Metrics 推送](../../pkg/metrics/README.md#一次性进程推送到-pushgateway)。
+
+## 健康探测与共享 Kafka
+
+新增 [blackbox 部署](blackbox.yaml) 与 [health-values.yaml](health-values.yaml)，实际逐Pod探测readyz/healthz；将additionalScrapeConfigs合并而非覆盖现有列表。可选 [Kafka exporter](kafka-exporter.yaml) 提供消费组lag，先修改broker、版本、认证及监控release。完整前提、标签和边界见 [外部采集指南](../external-metrics.md)。这些资源不会随渲染脚本自动部署。
+
+应用 ServiceMonitor 的 target 标签仅为示例扩展身份。ACK 对象筛选从 kube_pod_info 发现，不使用 target。此示例 ServiceMonitor 的 pod 标签可供应用指标使用，在面板可见的“应用 Pod 标签”选择 pod，并在应用采集端提供真实 app/container；前三页还需要现有 ACK 的基础采集组件。共享页按独立 env/cluster 与资源身份筛选，外部 exporter 的接入条件见 [监控入口](../README.md)。

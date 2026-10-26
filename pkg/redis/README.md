@@ -126,10 +126,10 @@ flowchart LR
 
 `redis.metrics.disable` 未开启时，创建 client 会安装 redisotel 指标，使用注入的 Provider。所有池和命令指标增加 `redis_connection`（配置连接名），保留 SDK 的 `pool_name`（地址）；同一地址的不同连接不会混合。新增标签会形成新序列，升级时历史序列没有此标签；查询全部兼容旧样本，按连接名筛选只覆盖升级后的数据。名称不要包含用户或请求 ID。
 
-当前 SDK 的调用耗时包括命令或 pipeline hook，pipeline 按批次而非命令数统计；`redis.Nil` 也记为 status=error。池 hits/misses 是连接复用，不是业务缓存命中率。详见 [组件指标与面板](../../deploy/observability/docs/components.md)。
+当前 SDK 的调用耗时包括命令或 pipeline hook，pipeline 按批次而非命令数统计；`redis.Nil` 也记为 status=error。池 hits/misses 是连接复用，不是业务缓存命中率。详见 [组件指标与面板](../../observability/components.md)。
 
 ## 集成测试与边界用法
 
-参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+参见[核心组件集成用例](../../test/README.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
 
 日志通过 `WithModule("redis")` 声明归属，使用 `log.modules` 热更新级别、禁用和追加过滤；`redis.log` 已移除。启动默认 client 构造完成记录 INFO `redis.manager.ready`（`default` 连接名），这不代表已验证服务端连通；cleanup 成功记录 INFO `redis.manager.closed`，失败只记录一次 ERROR `redis.cleanup.failed`（`error`）。日志均在 Manager 状态锁外输出；命令和拨号错误返回调用方，不在低层重复记录。规则见 [log](../log/README.md#模块策略)。

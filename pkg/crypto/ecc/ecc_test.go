@@ -17,7 +17,7 @@ func TestECIESRoundTripSupportedCurves(t *testing.T) {
 
 	curves := []elliptic.Curve{elliptic.P256(), elliptic.P384(), elliptic.P521()}
 	for _, curve := range curves {
-		curve := curve
+
 		t.Run(curve.Params().Name, func(t *testing.T) {
 			t.Parallel()
 			privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)

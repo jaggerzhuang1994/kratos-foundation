@@ -329,7 +329,7 @@ flowchart LR
 
 本地基准（仓库根目录）`go test ./pkg/kafka -run '^$' -bench BenchmarkProcessFetches -benchmem -count=6` 只测解码、投递和提交前的本地开销，提交器无网络延迟，不能作为 Broker 吞吐或最佳批量的结论。实际提交与失败恢复流程见上图。
 
-真实 Docker 验证入口为仓库根目录 `make test-external`，包括 Broker 重启恢复、未提交消息重放，以及 1/32/128 批次的网络提交分位数；环境、隔离和结果边界见 [外部测试说明](../../testdata/external/README.md)。
+真实 Docker 验证入口为仓库根目录 `make test-external`，包括 Broker 重启恢复、未提交消息重放，以及 1/32/128 批次的网络提交分位数；环境、隔离和结果边界见 [外部测试说明](../../test/external/README.md)。
 
 ## 并发与停止边界
 
@@ -353,8 +353,8 @@ flowchart TD
     L --> M([结束])
 ```
 
-共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../observability/components.md)。
 
 ## 集成测试与边界用法
 
-参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+参见[核心组件集成用例](../../test/README.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。

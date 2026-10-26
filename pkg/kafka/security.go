@@ -19,7 +19,7 @@ func newTLSConfig(config *config_pb.KafkaTLS) (*tls.Config, error) {
 		MinVersion: tls.VersionTLS12,
 		ServerName: strings.TrimSpace(config.GetServerName()),
 		// 仅当应用显式配置时透传该兼容开关；默认仍执行证书链和主机名校验。
-		InsecureSkipVerify: config.GetInsecureSkipVerify(), //nolint:gosec
+		InsecureSkipVerify: config.GetInsecureSkipVerify(), //nolint:gosec // G402：显式配置的兼容开关，默认校验证书
 	}
 	if caFile := strings.TrimSpace(config.GetCaFile()); caFile != "" {
 		pem, err := os.ReadFile(caFile)

@@ -92,7 +92,7 @@ Consul 没有文件系统目录类型，因此每份快照根据精确键是否�
 目录简写的 Source Key 相对于该目录；文件或 glob 的 Key 去掉固定前缀中最后一个 `/` 及其前面的部分，保留相对路径和完整文件名；
 例如固定前缀 `configs/app` 对应键 `configs/app1/config.yaml` 时，Key 是 `app1/config.yaml`。
 目录简写不提供隐式递归加载，多层匹配请显式写出 glob。无通配符的文件键也采用相同的相对 Key 规则，例如 `configs/common.yaml` 的 Key 为 `common.yaml`。
-默认应用路径和环境选择见 [Bootstrap](../../../pkg/bootstrap/README.md#配置选择和路径约定)。
+默认应用路径和环境选择见 [Bootstrap](../../../pkg/bootstrap/README.md#configuration-配置阶段)。
 
 ```mermaid
 flowchart TD

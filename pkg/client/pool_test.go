@@ -43,7 +43,7 @@ func TestFactoryBuildsDifferentNamesConcurrently(t *testing.T) {
 		return fakeHTTPResult(new(atomic.Int32)), nil
 	}})
 	for _, name := range []string{"orders", "payments"} {
-		name := name
+
 		go func() {
 			_, _, release, err := factory.AcquireClient(context.Background(), name)
 			if err == nil {

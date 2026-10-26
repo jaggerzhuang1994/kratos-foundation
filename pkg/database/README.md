@@ -280,7 +280,7 @@ flowchart TD
     F --> K
 ```
 
-Database Manager 不执行 `SHOW STATUS` 或 `SHOW GLOBAL STATUS`。这类服务器状态属于 MySQL 实例而非某个应用连接，会涉及独立权限、抓取频率和高可用拓扑，应由平台部署的 `mysqld-exporter` 等采集器负责；应用侧只暴露 `go_sql_*` 连接池指标以及 Foundation GORM 操作指标。迁移时删除 `database.metrics.mysql` 配置，外部采集边界见[外部指标](../../deploy/observability/docs/external-metrics.md#mysql-服务端指标)。
+Database Manager 不执行 `SHOW STATUS` 或 `SHOW GLOBAL STATUS`。这类服务器状态属于 MySQL 实例而非某个应用连接，会涉及独立权限、抓取频率和高可用拓扑，应由平台部署的 `mysqld-exporter` 等采集器负责；应用侧只暴露 `go_sql_*` 连接池指标以及 Foundation GORM 操作指标。迁移时删除 `database.metrics.mysql` 配置，外部采集边界见[外部指标](../../observability/external-metrics.md#mysql-服务端指标)。
 
 ```mermaid
 flowchart LR
@@ -292,11 +292,11 @@ flowchart LR
     E --> G([应用与数据库实例指标分开聚合])
 ```
 
-共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../observability/components.md)。
 
 ## 可运行的组合用例
 
-参见[核心组件集成用例](../INTEGRATION_TESTS.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。
+参见[核心组件集成用例](../../test/README.md)，从仓库根目录运行 `make test-components`，覆盖配置、SQLite 事务与 HTTP 客户端组合的成功、失败及资源释放场景。
 
 ## SQL 日志来源
 

@@ -193,7 +193,7 @@ flowchart TD
 
 真实 Wire 生成、逆序 cleanup 与失败回滚由 `wire_test.go` 在临时模块验证，不提交或手改生成副本。
 该 fixture 还启动 HTTP 订单服务并访问临时 SQLite，检查事务提交、回滚、具名连接隔离和旧配置拒绝；
-通过根目录 `make test-business` 运行，验收范围及发布检查见 [v2 迁移清单](../../MIGRATION_V2.md)。
+通过根目录 `make test-business` 运行。
 
 ## 可选依赖由 Wire 构造注入
 
@@ -230,7 +230,7 @@ NewServerBootstrap 同时登记业务监听与 `Runtime.ManagementServers()` 返
 app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo、RegisterLogger 或 Ready；
 Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterRuntime()、RegisterKafkaConsumer() 声明，其他运行时使用 RegisterRuntime()。各 provider 按需直接注入相同的领域 Spec。
 
-日志 Wire provider 使用 log.NewLogger 创建输出；NewLogBootstrap 注入 config.Manager 订阅 log，日志包校验并原子发布完整策略。策略优先级与 API 边界见 [日志文档](../log/README.md#三层策略与公共-api)。
+日志 Wire provider 使用 log.NewLogger 创建输出；NewLogBootstrap 注入 config.Manager 订阅 log，日志包校验并原子发布完整策略。策略优先级与 API 边界见 [日志文档](../log/README.md#策略优先级与公共-api)。
 
 ## 驱动组装
 
@@ -301,6 +301,4 @@ flowchart TD
  H --> I([配置阶段完成])
 ```
 
-可执行示例见 `examples/minimal/cmd/api/bootstrap.go`，对应生成入口为仓库根目录执行 `make -C examples/minimal generate`。
-
-启动与配置事件的字段、级别和来源选择流程见[逐包日志审查](../../PACKAGE_REVIEW.md#启动与配置日志)。
+可执行示例见 `examples/minimal/cmd/api/bootstrap.go`，对应生成入口为仓库根目录执行 `make generate`。

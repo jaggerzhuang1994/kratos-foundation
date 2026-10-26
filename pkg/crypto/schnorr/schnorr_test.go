@@ -13,7 +13,7 @@ func TestSchnorrProofRoundTripSupportedCurves(t *testing.T) {
 	t.Parallel()
 
 	for _, curve := range []elliptic.Curve{elliptic.P256(), elliptic.P384(), elliptic.P521()} {
-		curve := curve
+
 		t.Run(curve.Params().Name, func(t *testing.T) {
 			t.Parallel()
 			privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)

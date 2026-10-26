@@ -542,7 +542,7 @@ func TestExternalKafkaBrokerRestart(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	compose, err := filepath.Abs("../../testdata/external/compose.yaml")
+	compose, err := filepath.Abs("../../test/external/compose.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

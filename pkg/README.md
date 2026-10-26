@@ -2,7 +2,7 @@
 
 本索引按当前工作树的公共 API 和资源所有权分类，不调整现有 import 路径。新增能力时，先查本页，再使用[包开发模式指南](DEVELOPMENT.md)。
 
-组件组合使用与可运行测试见[核心组件集成用例](INTEGRATION_TESTS.md)。根目录 `make test-components` 验证配置、事务、客户端、Job、Queue、Log 和 Server；`make test-components-external` 验证隔离 Docker 中的真实 Kafka、Redis 和锁等功能。
+组件组合使用与可运行测试见[测试说明](../test/README.md)。根目录 `make test-components` 验证配置、事务、客户端、Job、Queue、Log 和 Server；`make test-components-external` 验证隔离 Docker 中的真实 Kafka、Redis 和锁等功能。
 
 ## 分类方法
 
@@ -123,5 +123,3 @@ Job 仅提供本进程并发策略。跨进程租约若需自动续租，应作�
 业务 HTTP 默认开启，gRPC 按有效服务注册默认开启，显式配置开关优先；健康检查通过 `spec.Health().Checks(...)` 独立声明。管理端点可复用业务 HTTP 或独立监听，详见 [server](server/README.md)。
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口，内置 `null` 支持[通过配置关闭服务注册](registry/README.md#通过配置关闭服务注册)。详见[驱动组装与迁移](registry/README.md)。
-
-逐包职责、拆分结论与日志事件清单见[包职责与日志审查](../PACKAGE_REVIEW.md)。

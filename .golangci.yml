@@ -1,13 +1,34 @@
 version: "2"
 
+# 公共库规则集：在 standard 之上只启用能发现真实缺陷、资源泄漏或 API 误用的检查器，
+# 不引入纯风格偏好（revive、gocritic 风格类、perfsprint 等），避免门禁沦为噪音。
+# 新增检查器前先用 `golangci-lint run --default=none --enable=<name>` 评估现有误报。
+
 # 默认上限（每类 50 条、同类 3 条）会静默截断报告，让门禁看起来比实际干净。
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 
-# 只启用能发现真实缺陷的检查器，不引入纯风格偏好，避免门禁沦为噪音。
 linters:
-  default: standard
+  default: standard # errcheck、govet、ineffassign、staticcheck、unused
+  enable:
+    # 正确性
+    - asasalint # 可变参数误传 []any
+    - durationcheck # 两个 time.Duration 相乘
+    - reassign # 修改其他包的导出变量（如 io.EOF）
+    - wastedassign # 被覆盖前从未使用的赋值
+    - unconvert # 多余的类型转换
+    - copyloopvar # Go 1.22+ 不再需要的循环变量副本
+    - exptostd # golang.org/x/exp 中已进入标准库的函数
+    - mirror # bytes/strings 互转的低效等价调用
+    # 资源与数据库
+    - rowserrcheck # sql.Rows 未检查 Err
+    - sqlclosecheck # sql.Rows/Stmt 未关闭
+    # 安全与源码卫生
+    - bidichk # 源码中危险的 Unicode 双向控制字符
+    - gocheckcompilerdirectives # 拼写错误的 //go: 指令
+    - misspell
+    - nolintlint # nolint 必须指明检查器并说明原因
 
   settings:
     errcheck:
@@ -19,6 +40,10 @@ linters:
         - (io.ReadCloser).Close
         - (*database/sql.Rows).Close
         - (*gorm.io/gorm.DB).AddError
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
 
     staticcheck:
       # 前 6 项是 golangci-lint 的默认排除集（命名与包注释类风格约定），
@@ -40,15 +65,28 @@ linters:
         - -ST1005
 
   exclusions:
+    generated: strict
     rules:
       # 测试用例会故意传入 nil Context 来验证参数校验分支。
       - path: _test\.go
         text: do not pass a nil Context
         linters:
           - staticcheck
+      # 测试只等待后台 goroutine 退出，接收值是否为 error 由各自断言处理。
+      - path: _test\.go
+        source: '^\s*(case )?<-'
+        linters:
+          - errcheck
       # ECIES 加密与 Schnorr 零知识证明都需要底层椭圆曲线点运算，crypto/ecdh 只覆盖
       # 密钥交换，不提供等价替代，因此这里只能继续使用已废弃的 elliptic 低层 API。
       - path: pkg/crypto/(ecc|schnorr)/
         text: "SA1019"
         linters:
           - staticcheck
+
+# goimports 的分组属于风格偏好，启用会改写大量文件，因此只强制 gofmt。
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: strict

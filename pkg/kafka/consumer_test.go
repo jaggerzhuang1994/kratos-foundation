@@ -332,7 +332,7 @@ func TestConsumerLeavesGroupBeforeCancelingSDKSession(t *testing.T) {
 			if len(sessions) > 0 && sessions[len(sessions)-1].ctx.Err() == nil {
 				t.Error("replacement created before old SDK session canceled")
 			}
-			failure := error(io.EOF)
+			failure := io.EOF
 			if len(sessions) > 0 {
 				failure = terminal
 			}

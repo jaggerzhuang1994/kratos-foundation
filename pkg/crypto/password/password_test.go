@@ -138,7 +138,7 @@ func TestArgon2idParamsRejectUnsafeOrExcessiveValues(t *testing.T) {
 	mutate("long key", func(params *password.Argon2idParams) { params.KeyLength = 65 })
 
 	for name, params := range tests {
-		params := params
+
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if _, err := password.HashPasswordWithParams([]byte("password"), params); err == nil {
@@ -178,7 +178,7 @@ func TestVerifyPasswordRejectsOversizedPHCFieldsBeforeDecode(t *testing.T) {
 		"hash": "$argon2id$v=19$m=8,t=1,p=1$" + validSalt + "$" + oversized,
 	}
 	for name, encoded := range tests {
-		encoded := encoded
+
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			_, err := password.VerifyPassword([]byte("password"), encoded)

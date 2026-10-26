@@ -44,12 +44,12 @@ func TestCompressionRoundTrip(t *testing.T) {
 	}
 
 	for _, format := range compressionFormats() {
-		format := format
+
 		t.Run(format.name, func(t *testing.T) {
 			t.Parallel()
 
 			for _, input := range inputs {
-				input := input
+
 				t.Run(input.name, func(t *testing.T) {
 					t.Parallel()
 
@@ -87,7 +87,7 @@ func TestDecompressLimit(t *testing.T) {
 	}
 
 	for _, format := range compressionFormats() {
-		format := format
+
 		t.Run(format.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -97,7 +97,7 @@ func TestDecompressLimit(t *testing.T) {
 			}
 
 			for _, limit := range limits {
-				limit := limit
+
 				t.Run(limit.name, func(t *testing.T) {
 					t.Parallel()
 
@@ -118,7 +118,7 @@ func TestDecompressLimitMaxInt64(t *testing.T) {
 	t.Parallel()
 
 	for _, format := range compressionFormats() {
-		format := format
+
 		t.Run(format.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -143,7 +143,7 @@ func TestDecompressRejectsTruncatedData(t *testing.T) {
 	t.Parallel()
 
 	for _, format := range compressionFormats() {
-		format := format
+
 		t.Run(format.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -165,7 +165,7 @@ func TestDecompressLimitRejectsTruncatedDataAtExactLimit(t *testing.T) {
 	t.Parallel()
 
 	for _, format := range compressionFormats() {
-		format := format
+
 		t.Run(format.name, func(t *testing.T) {
 			t.Parallel()
 

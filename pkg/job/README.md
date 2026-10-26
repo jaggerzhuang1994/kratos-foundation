@@ -206,11 +206,11 @@ flowchart TD
 任务和中间件通过 `job.JobNameFromContext(ctx)` 读取注册名；非任务 Context 返回空字符串。
 Cron 注册执行上下文时，还通过 `log.WithKv` 追加 `job=注册名`，保留父 Context 的日志字段与取消信号。Task、业务中间件及最终 ErrorHandler 使用 `logger.WithContext(ctx)` 时会自动携带该字段；父 Context 不会被修改，后续调度变更继续复用此任务上下文。
 
-共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../deploy/observability/docs/components.md)。
+共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../observability/components.md)。
 
 ## 集成测试与边界用法
 
-参见[核心组件集成用例](../INTEGRATION_TESTS.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
+参见[核心组件集成用例](../../test/README.md#扩展模块与常见边界)。根目录 `make test-components` 运行自包含组合；`make test-components-external` 创建隔离 Docker 服务，验证真实 Kafka、Redis 和锁等功能。具体场景、所有权及适用边界见用例说明。
 
 高频成功默认通过指标统计，按需开启模块 Debug 查看逐次执行。任务中间件在每次实际执行前记录 `DEBUG event=job.execution.started`，并在退出时始终记录一次 `DEBUG event=job.execution.finished`，携带 `result=success|failure|stopped` 和 `duration`。失败详情与 panic 堆栈仍只交给最终 ErrorHandler，避免同一错误重复记录；默认处理器携带 Context 记录一次最终错误，自定义 `WithErrorHandler` 时由业务负责最终错误日志。
 

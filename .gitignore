@@ -44,3 +44,6 @@ AGENTS.override.md
 .superpowers/
 
 __pycache__
+
+# Makefile 安装的固定版本开发工具
+/tools/

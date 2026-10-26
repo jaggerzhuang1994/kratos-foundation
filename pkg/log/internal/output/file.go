@@ -42,14 +42,19 @@ func NewFile(config FileConfig) (log.Logger, func(), error) {
 		writer = file
 	} else {
 		// Close 同时等待压缩/保留任务退出，旧配置及未发布候选才能被完整释放。
+		// timberjack 1.4.8 起以 Compression 取代布尔 Compress；开启时沿用原有 gzip 格式。
+		compression := "none"
+		if config.Rotating.Compress {
+			compression = "gzip"
+		}
 		rotating := &timberjack.Logger{
-			Filename:   config.Path,
-			MaxSize:    config.Rotating.MaxSize,
-			MaxAge:     config.Rotating.MaxFileAge,
-			MaxBackups: config.Rotating.MaxFiles,
-			LocalTime:  config.Rotating.LocalTime,
-			Compress:   config.Rotating.Compress,
-			FileMode:   0o600,
+			Filename:    config.Path,
+			MaxSize:     config.Rotating.MaxSize,
+			MaxAge:      config.Rotating.MaxFileAge,
+			MaxBackups:  config.Rotating.MaxFiles,
+			LocalTime:   config.Rotating.LocalTime,
+			Compression: compression,
+			FileMode:    0o600,
 		}
 		// 准备阶段只验证可追加，不启动轮转或保留任务；旧代仍可能正在写同一路径。
 		if err := os.MkdirAll(filepath.Dir(config.Path), 0o755); err != nil {

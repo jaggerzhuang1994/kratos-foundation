@@ -356,7 +356,6 @@ func TestLoggerFatalMethodsLogAndExit(t *testing.T) {
 		"disabled-fatalw": "",
 	}
 	for mode, want := range tests {
-		mode, want := mode, want
 		t.Run(mode, func(t *testing.T) {
 			command := exec.Command(os.Args[0], "-test.run=^TestLoggerFatalHelperProcess$")
 			command.Env = append(os.Environ(), fatalHelperEnvironment+"="+mode)
@@ -840,7 +839,7 @@ func TestCallerAcrossLoggingEntrypoints(t *testing.T) {
 	} {
 		t.Run(entry.name, func(t *testing.T) {
 			previous := GetLogger()
-			defer SetLogger(previous)
+			t.Cleanup(func() { SetLogger(previous) })
 			shared := &sharedState{}
 			shared.custom.Store(&customState{})
 			var caller any

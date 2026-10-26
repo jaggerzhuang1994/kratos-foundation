@@ -122,7 +122,7 @@ metrics:
 - **分组与标签**：分组键只有 `job`，不带 pod 或实例 ID，避免每次运行在 Pushgateway 留下一组永不过期的序列；同一 job 的并发进程会互相覆盖，需要区分时为每个脚本配置不同 `job`。PUT 替换同组上一次结果。指标自身的 `job` 标签（如 `job_runs_total` 的任务名）推送时改为 `exported_job`——Pushgateway 分组独占 `job`，`client_golang/push` 会拒绝含 `job` 标签的指标；改名与 Prometheus `honorLabels=false` 抓取时的规则一致，`/metrics` 抓取不受影响。地址中的 `user:password@` 转为 Basic Auth。
 - **适用范围**：建议只对 `IsOneShot()` 的进程开启，按部署（K8s Job/CronJob 的配置）启用即可。常驻服务继续由 Prometheus 抓取，开启只会在每次停机时多一次推送，并留下可能过期的分组。Pushgateway 抓取需 `honorLabels: true`。
 
-推送数据描述**最近一次运行**，查询时按“最近一次” gauge 理解：`push_time_seconds` 即最近运行时间（`job_last_run_timestamp_seconds` 语义），最近一次无失败时它也是最近成功时间（`job_last_success_timestamp_seconds`），单任务进程的 `job_duration_seconds_sum` 即本次耗时（`job_last_duration_seconds`）。对 Pushgateway 序列不要使用 `increase`，查询示例与 K8s Job 告警见 [一次性脚本与 CronJob 告警](../../deploy/observability/docs/alerts.md#一次性脚本与-cronjob-告警)。框架不额外导出这三个 gauge。
+推送数据描述**最近一次运行**，查询时按“最近一次” gauge 理解：`push_time_seconds` 即最近运行时间（`job_last_run_timestamp_seconds` 语义），最近一次无失败时它也是最近成功时间（`job_last_success_timestamp_seconds`），单任务进程的 `job_duration_seconds_sum` 即本次耗时（`job_last_duration_seconds`）。对 Pushgateway 序列不要使用 `increase`，查询示例与 K8s Job 告警见 [一次性脚本与 CronJob 告警](../../observability/alerts.md#一次性脚本与-cronjob-告警)。框架不额外导出这三个 gauge。
 
 ```mermaid
 flowchart TD
@@ -148,4 +148,4 @@ flowchart TD
 
 Provider 默认 Go collector 之外额外启用 `/cpu/classes/gc/total:cpu-seconds` 与 `/sched/latencies:seconds`，用于 GC CPU 估计开销和调度等待分布；保留现有默认 Go/Process 指标，不导出全部 runtime 指标。不同平台的 process 指标可能不同，缺失不补零。
 
-完整可编译示例、指标设计、Grafana 查询、实例图例及可复用接入任务说明见 [业务指标接入指南](../../deploy/observability/docs/business-metrics.md)。
+完整可编译示例、指标设计、Grafana 查询、实例图例及可复用接入任务说明见 [业务指标接入指南](../../observability/business-metrics.md)。

@@ -13,9 +13,9 @@
 - **生产环境不再返回错误堆栈**：HTTP 响应 metadata 与 gRPC `ErrorInfo` 中的 `err_stack` 仅在 `env.ExposeDiagnostics()` 为 true 时携带（local/dev/test 始终、pre 需 `APP_DEBUG=true`、prod 一律不带）。依赖跨服务远端堆栈排障的 prod 场景需改用服务端日志。见 [诊断出口环境约束](pkg/errors/README.md#诊断出口环境约束)。
 - **gRPC 健康检查改为跟随应用就绪**：默认注册的 `grpc.health.v1.Health` 不再在 Server 启动后立即报 `SERVING`。空服务名与已注册业务服务名在应用就绪、未停机且 readiness 依赖检查通过时才返回 `SERVING`（`Watch` 只看就绪与停机，不跑依赖检查）；服务名 `liveness` 恒为 `SERVING`。影响与迁移：
   - Kratos gRPC 客户端默认开启客户端健康检查（`Watch` 空服务名），启动钩子完成前不再把流量发往新实例，进入停机后 1s 内摘流，随后 `stop_delay` 内完成切换；无需改动。需要旧行为的调用方可用 `kratosgrpc.WithHealthCheck(false)`。
-  - 使用 K8s 原生 gRPC 探针时，liveness 须改为 `grpc: {port: <grpc>, service: liveness}`；仍用空服务名会在依赖检查失败时判定存活失败并反复重启 Pod。readiness 使用空服务名，`timeoutSeconds` 应大于 `server.http.health.timeout`。仓库 `deploy/kubernetes` 模板使用 HTTP 探针，不受影响。
+  - 使用 K8s 原生 gRPC 探针时，liveness 须改为 `grpc: {port: <grpc>, service: liveness}`；仍用空服务名会在依赖检查失败时判定存活失败并反复重启 Pod。readiness 使用空服务名，`timeoutSeconds` 应大于 `server.http.health.timeout`。框架此前提供的部署示例使用 HTTP 探针，不受影响。
   - 已通过 `custom_health: true` 或自行注册健康服务的业务保持原实现。
-- **日志事件、文案与字段统一**：全框架日志按 [日志格式约定](AGENTS.md#日志格式约定) 收敛，msg 改为小写“主语+结果”短语（如 `servers assembled`、`client config rejected; keeping previous`），由 `TestFrameworkLogConventions` 持续校验。依赖下列旧名的告警、看板或检索需同步调整：
+- **日志事件、文案与字段统一**：全框架日志按 [日志格式约定](AGENTS.md#4-日志与可观测性) 收敛，msg 改为小写“主语+结果”短语（如 `servers assembled`、`client config rejected; keeping previous`），由 `TestFrameworkLogConventions` 持续校验。依赖下列旧名的告警、看板或检索需同步调整：
 
   | 旧 | 新 |
   | --- | --- |
@@ -41,7 +41,7 @@
 - `env.ExposeDiagnostics()` 统一判断是否允许向调用方返回内部诊断，非法环境值按拒绝处理且不 panic。
 - `server.middleware.updated` 增加 `changed` 字段，列出实际替换的中间件。
 - 可选 `metrics.push`（默认关闭）：一次性进程在应用结束（成功或失败）后的停止后钩子中，把与 `/metrics` 相同的实例 Registry 推送到 Pushgateway 一次；分组键只有 `job`（默认应用名），指标自身的 `job` 标签改为 `exported_job`，失败只记 WARN `metrics.push.failed` 且不改变退出码。新增 `metrics.NewPusher`（已加入 `BaseProviderSet`），`bootstrap.NewMetricsBootstrap` 签名增加 `pusher`、`logger`；显式列出 provider 的 injector 需加入 `metrics.NewPusher` 并重新执行 `wire`。见 [Metrics 推送](pkg/metrics/README.md#一次性进程推送到-pushgateway)。
-- 监控模板新增 `foundation-kubernetes-jobs` 告警组（基于 kube-state-metrics）：`FoundationJobFailed`、`FoundationCronJobMissedSchedule`、`FoundationCronJobNoRecentSuccess`、`FoundationJobRunningTooLong`，及规则测试；`app` 标签需 kube-state-metrics `metricLabelsAllowlist` 放开 `app.kubernetes.io/name`，示例见 `deploy/kubernetes/kube-prometheus-values.yaml`。
+- 监控模板新增 `foundation-kubernetes-jobs` 告警组（基于 kube-state-metrics）：`FoundationJobFailed`、`FoundationCronJobMissedSchedule`、`FoundationCronJobNoRecentSuccess`、`FoundationJobRunningTooLong`，及规则测试；`app` 标签需 kube-state-metrics `metricLabelsAllowlist` 放开 `app.kubernetes.io/name`，示例见 `observability/kubernetes/kube-prometheus-values.yaml`。
 
 ### Changed
 
@@ -52,10 +52,72 @@
 - 日志热路径：caller 按调用地址缓存帧解析结果，字段过滤、module 归一化、格式化、去空与去重合并为一遍处理，输出内容不变；启用级别下单条日志开销约降低 6 倍。
 - Client：已构建版本的 `AcquireClient` / release 走无锁分片计数快速路径，16 并发下约 6 倍吞吐，租约与退役语义不变。
 - HTTP 监听、Queue Worker、Kafka ConsumerRuntime 与错误树判断改为共享的精简实现，外部行为不变。
+- 仓库结构调整（不影响 Go API）：`deploy/` 拆分为 `observability/`（Grafana 面板、Prometheus 规则与接入说明）与 `test/`（本地可运行的外部服务测试、面板校验与演示环境）；`examples/` 只保留用法代码；`MIGRATION_V2.md` 精简为 [MIGRATION.md](MIGRATION.md)，删除 `PROJECT_VISION.md`、`PACKAGE_REVIEW.md`；开发工具通过 `make init` 安装到 `tools/` 并锁定版本，新增 `make help`、`make vulncheck`、`make changelog`。
 - 依赖安全升级：grpc 1.84、OpenTelemetry 1.47（Prometheus exporter 0.69，导出的指标名与标签经比对不变）、golang.org/x/net 0.61、x/crypto 0.58、x/text、x/sys、pgx 5.11、ch-go 等升级到不受已知漏洞影响的版本，`govulncheck` 在 go1.26.10 下无可达漏洞。go-redis（9.23 在建连时新增 DNS 解析）、franz-go（1.22 改变主题重建与缓冲默认值）、fsnotify（1.10 在 macOS 下热重载偶发 bad file descriptor）均无已知漏洞，为避免行为变化暂保持原版本。剩余未修复公告：Kratos GO-2026-5471（`transport/http`，无上游修复，代码未调用受影响符号）与 x/crypto `openpgp` 包弃用公告（未导入）。
 - WebSocket 停机关闭与 HTTP `Shutdown` 并行执行、共享同一预算，卡住的 WebSocket 回调不再推迟 HTTP 停止接收新连接或挤占在途请求的优雅完成时间；停机关闭帧由 1000 改为 1001 Going Away（业务主动 `Close()` 仍为 1000），依赖关闭码判断是否重连的客户端需同步调整。
 
-## v2.4.1
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- **observability**：platform overview with templated detail dashboards（`23b1f92`）
+- **observability**：add Kubernetes Job alerts and optional Pushgateway push（`aee73b3`）
+- **observability**：add fleet recording rules and overview dashboard（`68bf5a2`）
+- harden runtimes, gRPC health and readiness observability（`83df748`）
+- **errors**：return err_stack only outside production（`0403f8c`）
+
+**修复**
+
+- **server**：stop WebSockets alongside HTTP shutdown and send 1001（`caccaca`）
+- **validation**：reject CGNAT, multicast and reserved ranges in IsSafeIP（`0d28b4a`）
+
+**性能**
+
+- **log**：cache caller frames and fuse the field pipeline（`396c008`）
+- **client**：lock-free lease fast path for built clients（`ed69c81`）
+
+**重构**
+
+- ⚠️ 不兼容：**log**：unify log events, messages and fields（`c841cb0`）
+- remove redundant defensive code（`9763fc2`）
+- ⚠️ 不兼容：**config**：simplify hot reload and consolidate change logs（`9bcd9b5`）
+- ⚠️ 不兼容：**app**：own the application lifecycle and expose *app.App（`f3dcdd2`）
+- **server**：simplify managed listener and build wrappers once（`cc9a915`）
+- **lifecycle**：share single-run start/stop coordination（`ce7b01e`）
+- **errtree**：unify cancellation-only error tree checks（`10cacf2`）
+
+**文档**
+
+- **changelog**：record WebSocket shutdown changes（`20947b6`）
+- **changelog**：record planned foundation review changes（`08450ee`）
+
+**测试**
+
+- **server**：verify Kratos client health checking across the lifecycle（`4c381b7`）
+- cover composed lifecycle, hot reload and startup signals（`95d8169`）
+- merge scenario-suffixed test files into their implementation tests（`7ff4302`）
+
+**构建与依赖**
+
+- ⚠️ 不兼容：**deps**：require Go 1.26 and upgrade vulnerable dependencies（`7e1b3ae`）
+<!-- changelog:auto:end -->
+
+## v2.4.2（2026-10-06）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**重构**
+
+- **queue, job**：add debug query sessions and improve job lifecycle logs（`693a6a6`）
+<!-- changelog:auto:end -->
+
+## v2.4.1（2026-10-02）
 
 ### Added
 
@@ -73,7 +135,17 @@
 - 默认配置源合并会保留省略字段，仅删除源文件中的局部覆盖不保证从有效快照中移除该值；热更新回退规则见 [Server](pkg/server/README.md) 与 [Client](pkg/client/README.md)。
 - 使用禁用注册实例时，YAML 的驱动名必须写为 `"null"`；需要服务发现的客户端应选择提供 Discovery 的其他实例。
 
-## v2.4.0
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- add null registry driver and inherit tracing defaults（`e8f3368`）
+<!-- changelog:auto:end -->
+
+## v2.4.0（2026-09-30）
 
 本版本包含不兼容变更，升级前逐项确认下面的“升级风险”。
 
@@ -100,7 +172,7 @@
 
 ### Migration
 
-API 与配置迁移细节见 [V2 迁移指南](MIGRATION_V2.md)。按事件名检索或告警的日志查询需要替换为新名称：
+API 与配置迁移细节见 [迁移指南](MIGRATION.md)。按事件名检索或告警的日志查询需要替换为新名称：
 
 | 旧事件 | 新事件 |
 | --- | --- |
@@ -115,11 +187,168 @@ API 与配置迁移细节见 [V2 迁移指南](MIGRATION_V2.md)。按事件名�
 | `gorm.query` | `database.gorm.query` |
 | `consul.heartbeat.*`、`consul.discovery.*`、`consul.registration.restored`、`consul.cleanup.failed` | 分别加 `registry.` 前缀 |
 
-## v2.1.1 – v2.3.3
+<!-- changelog:auto:start -->
+### 提交记录
 
-未在本文件记录，变更以对应 Git tag 的提交历史为准。
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-## v2.1.0
+**重构**
+
+- unify log events and harden startup lifecycle（`26d6bc1`）
+
+**文档**
+
+- prepare v2.4.0 changelog with upgrade risks（`6babe73`）
+<!-- changelog:auto:end -->
+
+## v2.3.3（2026-09-23）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**修复**
+
+- improve RPC and configuration diagnostics（`6da3c70`）
+<!-- changelog:auto:end -->
+
+## v2.3.2（2026-09-23）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**重构**
+
+- **log**：normalize messages and remove redundant function fields（`90c3d70`）
+<!-- changelog:auto:end -->
+
+## v2.3.1（2026-09-23）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**重构**
+
+- **consulconfig**：require business config prefixes and paths（`1b3d143`）
+<!-- changelog:auto:end -->
+
+## v2.3.0（2026-09-23）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- **consulconfig**：provide default remote config directories（`49acf50`）
+- **bootstrap**：support templated configuration paths（`f3bc19c`）
+- **observability**：redesign ACK container and node dashboards（`a8741aa`）
+<!-- changelog:auto:end -->
+
+## v2.2.1（2026-09-21）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- **app**：增加独立的服务注册禁用开关（`c238112`）
+<!-- changelog:auto:end -->
+
+## v2.2.0（2026-09-21）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- add utility helpers and configurable input validation（`e8d847a`）
+
+**重构**
+
+- **config**：优化配置变更路径前缀构建（`933b284`）
+- **config**：精简订阅日志并记录订阅调用点（`d504bd2`）
+<!-- changelog:auto:end -->
+
+## v2.1.5（2026-09-18）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**重构**
+
+- 统一路由注册与 SQL 日志上下文（`acc7ccf`）
+<!-- changelog:auto:end -->
+
+## v2.1.4（2026-09-18）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**重构**
+
+- **server**：统一自定义 HTTP 响应编码（`421b27f`）
+<!-- changelog:auto:end -->
+
+## v2.1.3（2026-09-18）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- **server**：支持自定义 HTTP 端点与 WebSocket 并发（`3f060d6`）
+<!-- changelog:auto:end -->
+
+## v2.1.2（2026-09-18）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**修复**
+
+- **http**：恢复 v1 JSON 序列化契约（`b2ad372`）
+
+**重构**
+
+- flatten middleware configuration（`e93f38f`）
+
+**文档**
+
+- design flattened middleware config（`dc3abdb`）
+<!-- changelog:auto:end -->
+
+## v2.1.1（2026-09-18）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**修复**
+
+- preserve v1 v2 transport compatibility（`4b10a8c`）
+<!-- changelog:auto:end -->
+
+## v2.1.0（2026-09-17）
 
 ### Added
 
@@ -147,3 +376,80 @@ API 与配置迁移细节见 [V2 迁移指南](MIGRATION_V2.md)。按事件名�
 - Queue 运维入口必须由业务自行实现鉴权、审计、脱敏和限流；`List` 不返回正文，正文仅由 `Get` 获取。
 - 应用业务端口与管理端口均不可直接暴露到不可信网络；TLS/mTLS 在平台层完成。
 - v2.1 的 GORM Queue 表不兼容旧主键、`identity` 和整数时间列；升级时停止旧 Worker，清空并按当前模型重建任务表，不提供旧任务原地迁移。
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- prepare v2.1 operations and observability（`939c363`）
+- **config**：在热更新日志中标明变更路径和订阅身份（`7dad5e8`）
+- **job**：支持通过 disabled 动态禁用 Cron 任务（`41afec3`）
+- **queue**：支持保留任务执行记录并优化数据库查询（`a88f5c9`）
+- **log**：新增根级别配置并作为输出端默认级别（`588ae9d`）
+- **config**：支持自定义远程配置名称并记录加载路径（`551165e`）
+- **config**：为订阅热更新添加 Info 日志（`d82e813`）
+- **queue**：提供类型化接入与数据库简单模式（`13d1ca7`）
+- **consulconfig**：支持自定义远程配置名称 provider（`aaf95dc`）
+- **client**：支持根级超时与服务发现默认配置（`6b4a9f9`）
+- **bootstrap**：提供 Consul 默认配置路径组装集合（`fbd9a52`）
+
+**修复**
+
+- **log**：标准输出默认保留 service 字段（`bc49ef7`）
+- 补充驱动注册日志并抑制连接池重复配置日志（`b49caa6`）
+- **log**：将 module 展示在时间戳和 caller 之间（`e655985`）
+
+**重构**
+
+- **queue**：infer message versions and clarify struct contracts（`db57487`）
+- **job**：移除跨进程协调并支持调度配置热更新（`9578514`）
+- **bootstrap**：统一配置来源组装与路径优先级（`bcf563c`）
+- **queue**：统一类型化队列 API 并整理文件职责（`2471936`）
+- **bootstrap**：简化 Spec 蓝图组装与协议启用规则（`9c45d00`）
+- **consulconfig**：将远程配置路径函数归入 spec（`3358f5a`）
+- **bootstrap**：重命名 consulconfig 并导出远程配置路径函数（`e56ae53`）
+- 简化配置组装并完善运行日志（`2f08e00`）
+- ⚠️ 不兼容：统一配置源组装、Registry 驱动与动态日志策略（`6a954b4`）
+- ⚠️ 不兼容：拆分配置组装并统一路径与日志语义（`39fc005`）
+<!-- changelog:auto:end -->
+
+## v2.0.0（2026-09-14）
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- ⚠️ 不兼容：重构持久化任务队列并完善组件监控与示例（`3286f77`）
+
+**修复**
+
+- **database**：skip AES decryption for empty values（`b99a367`）
+- **errors**：兼容旧协议错误并保留服务间诊断链（`ab84415`）
+- **log**：单元测试默认禁用文件日志（`144fc32`）
+- ⚠️ 不兼容：**log**：resolve caller through adapters and simplify depth API（`78dcfdd`）
+
+**性能**
+
+- 优化基础组件热点并完善资源边界与外部验证（`c66ef5e`）
+
+**重构**
+
+- 通过 Wire 构造注入注册中心和任务协调器（`7de373d`）
+- ⚠️ 不兼容：统一 bootstrap 组装与日志资源所有权（`e28a1d9`）
+- ⚠️ 不兼容：重构 v2 组装边界与资源生命周期（`cac93a9`）
+
+**文档**
+
+- 修正文档契约与接入示例并补充防漂移规范（`888ed74`）
+
+**其他**
+
+- 忽略应用与测试产生的 app.log（`4560ac2`）
+- Refactor `Makefile` and update serviceName logic in `protoc-gen-kratos-foundation-client`.（`4fd91b2`）
+<!-- changelog:auto:end -->
