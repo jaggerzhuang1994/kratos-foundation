@@ -3,7 +3,6 @@ package wireassembly
 import (
 	"context"
 
-	"github.com/go-kratos/kratos/v2"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/bootstrap/consulconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
@@ -23,7 +22,7 @@ type assembly struct {
 	// 首先请求阶段结果，防止 Wire 输出字段顺序偶然掩盖 Boot 前置依赖。
 	JobStage    bootstrap.JobBootstrap
 	ServerStage bootstrap.ServerBootstrap
-	App         *kratos.App
+	App         *app.App
 	Spec        *app.Spec
 	Info        appinfo.AppInfo
 	Manager     config.Manager
@@ -55,7 +54,7 @@ func componentsBoot(_ bootstrap.InfrastructureBootstrap, components *bootstrap.S
 type driverAssembly struct {
 	LocalPaths  bootstrap.LocalConfigPaths
 	RemotePaths bootstrap.RemoteConfigPaths
-	App         *kratos.App
+	App         *app.App
 	Client      client.Factory
 	Registry    *foundationregistry.Factory
 	Config      config.Manager

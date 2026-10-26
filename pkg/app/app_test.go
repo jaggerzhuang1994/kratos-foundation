@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"os/signal"
 	"reflect"
 	"strings"
 	"sync"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -21,8 +24,6 @@ import (
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/types/known/durationpb"
-	"net/url"
-	"testing/synctest"
 )
 
 type newAppTestInfo struct{}
@@ -35,6 +36,13 @@ func newTestApp(t testing.TB, snapshot appSnapshot, policy *StopPolicy) *App {
 	}
 	if snapshot.logger == nil {
 		snapshot.logger = kratoslog.NewStdLogger(io.Discard)
+	}
+	// 生产快照的就绪与停止信号来自 Spec；内部单测直接构造快照时在此补齐。
+	if snapshot.readySignal == nil {
+		snapshot.readySignal = make(chan struct{})
+	}
+	if snapshot.stoppingSignal == nil {
+		snapshot.stoppingSignal = make(chan struct{})
 	}
 	return newApp(snapshot, policy)
 }
@@ -104,9 +112,6 @@ func TestNewAppConstructsApplicationFromSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if application.App == nil {
-		t.Fatal("App does not own a Kratos application")
-	}
 	if application.ID() != "test-id" || application.Name() != "test-name" {
 		t.Fatalf("application identity = %q/%q", application.ID(), application.Name())
 	}
@@ -129,30 +134,6 @@ func TestNewAppRestoresKratosGlobalLoggerAfterConstruction(t *testing.T) {
 	}
 	if got := foundationlog.GetLogger(); got != previous {
 		t.Fatalf("global logger after NewApp has type %T, want previous %T", got, previous)
-	}
-}
-
-func TestOnceStopSharesOneResultAcrossCallers(t *testing.T) {
-	want := errors.New("stop failed")
-	calls := 0
-	release := make(chan struct{})
-	stop := onceStop(func() error {
-		calls++
-		<-release
-		return want
-	})
-
-	results := make(chan error, 2)
-	go func() { results <- stop() }()
-	go func() { results <- stop() }()
-	close(release)
-	for range 2 {
-		if err := <-results; !errors.Is(err, want) {
-			t.Fatalf("stop error = %v", err)
-		}
-	}
-	if calls != 1 {
-		t.Fatalf("stop calls = %d, want 1", calls)
 	}
 }
 
@@ -201,18 +182,16 @@ func TestNewAppServiceRegistrationSwitch(t *testing.T) {
 	}
 }
 
-// TestNewAppRollsBackStartupFailures 验证底层 SDK 入口同样经过受监督的 Endpoint。
+// TestNewAppRollsBackStartupFailures 验证端点、启动前钩子失败和父 Context 已取消时逆序回滚未启动资源。
 func TestNewAppRollsBackStartupFailures(t *testing.T) {
 	for _, test := range []struct {
 		name         string
 		endpointFail bool
 		parentCancel bool
-		runSDK       bool
 	}{
-		{name: "foundation endpoint failure", endpointFail: true},
-		{name: "SDK endpoint failure", endpointFail: true, runSDK: true},
-		{name: "SDK before-start failure", runSDK: true},
-		{name: "canceled parent", parentCancel: true, runSDK: true},
+		{name: "endpoint failure", endpointFail: true},
+		{name: "before-start failure"},
+		{name: "canceled parent", parentCancel: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			type contextKey string
@@ -294,11 +273,7 @@ func TestNewAppRollsBackStartupFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if test.runSDK {
-				err = application.App.Run()
-			} else {
-				err = application.Run()
-			}
+			err = application.Run()
 			for _, want := range []error{cause, abortErr, beforeStopErr, afterStopErr} {
 				if !errors.Is(err, want) {
 					t.Fatalf("Run=%v, missing %v", err, want)
@@ -378,7 +353,7 @@ func TestNewAppSuccessfulStartupDoesNotAbortResources(t *testing.T) {
 			t.Fatal(err)
 		}
 		result := make(chan error, 1)
-		go func() { result <- application.App.Run() }()
+		go func() { result <- application.Run() }()
 		synctest.Wait()
 		if !spec.Ready() {
 			t.Fatal("application did not become ready")
@@ -1007,5 +982,114 @@ func TestNewAppRawLoggerHasOneApplicationModule(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "module=") {
 		t.Fatalf("input logger changed: %s", output.String())
+	}
+}
+
+func TestApplicationRunPreservesRuntimeFailureJoinedWithCancellation(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		failure := errors.New("runtime failed")
+		release := make(chan struct{})
+		spec := newApplicationTestSpec(t)
+		spec.AddSignals(syscall.SIGUSR2)
+		runtime := &cancellationFailureRuntime{release: release, startErr: errors.Join(context.Canceled, failure)}
+		registerApplicationRuntime(t, spec, runtime)
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan error, 1)
+		go func() { result <- application.Run() }()
+		// 等待 Run 完成启动并阻塞在运行阶段，避免测试偶然走到 AfterStart 故障分支。
+		synctest.Wait()
+		close(release)
+		synctest.Wait()
+		if err := <-result; !errors.Is(err, failure) {
+			t.Fatalf("Run = %v, want runtime failure", err)
+		}
+	})
+}
+
+func TestApplicationRunPreservesStopFailureJoinedWithCancellation(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		failure := errors.New("runtime stop failed")
+		release := make(chan struct{})
+		spec := newApplicationTestSpec(t)
+		spec.AddSignals(syscall.SIGUSR2)
+		runtime := &cancellationFailureRuntime{release: release, startErr: ErrStopRequested, stopErr: errors.Join(context.Canceled, failure)}
+		registerApplicationRuntime(t, spec, runtime)
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan error, 1)
+		go func() { result <- application.Run() }()
+		synctest.Wait()
+		close(release)
+		synctest.Wait()
+		if err := <-result; !errors.Is(err, failure) {
+			t.Fatalf("Run = %v, want stop failure", err)
+		}
+	})
+}
+
+type cancellationFailureRuntime struct {
+	release  <-chan struct{}
+	startErr error
+	stopErr  error
+}
+
+func (r *cancellationFailureRuntime) Start(context.Context) error {
+	<-r.release
+	return r.startErr
+}
+
+func (r *cancellationFailureRuntime) Stop(context.Context) error { return r.stopErr }
+
+// Kratos Run 会注册系统信号；信号线程须在 synctest bubble 外初始化。
+func initializeRuntimeSignals(t *testing.T) {
+	t.Helper()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGUSR2)
+	t.Cleanup(func() {
+		// Kratos 未清理 Run 内登记的信号 channel；测试只使用独立信号并在退出时移除。
+		signal.Stop(signals)
+		signal.Reset(syscall.SIGUSR2)
+	})
+}
+
+func TestApplicationRunTreatsCancellationOnlyAsCleanShutdown(t *testing.T) {
+	initializeRuntimeSignals(t)
+	for _, test := range []struct {
+		name              string
+		startErr, stopErr error
+	}{
+		{name: "start cancellation", startErr: context.Canceled},
+		{name: "wrapped start cancellation", startErr: fmt.Errorf("runtime: %w", context.Canceled)},
+		{name: "joined start cancellation", startErr: errors.Join(context.Canceled, context.Canceled)},
+		{name: "stop cancellation", startErr: ErrStopRequested, stopErr: context.Canceled},
+		{name: "wrapped stop cancellation", startErr: ErrStopRequested, stopErr: fmt.Errorf("runtime: %w", context.Canceled)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				release := make(chan struct{})
+				spec := newApplicationTestSpec(t)
+				spec.AddSignals(syscall.SIGUSR2)
+				registerApplicationRuntime(t, spec, &cancellationFailureRuntime{release: release, startErr: test.startErr, stopErr: test.stopErr})
+				application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				result := make(chan error, 1)
+				go func() { result <- application.Run() }()
+				synctest.Wait()
+				close(release)
+				synctest.Wait()
+				if err := <-result; err != nil {
+					t.Fatalf("Run = %v, want clean shutdown", err)
+				}
+			})
+		})
 	}
 }

@@ -23,7 +23,7 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 | [ ] 工具链 | Go 1.24.12 | 使用根 go.mod 要求的 Go 1.25+；SQLite 验证需要 CGO 和 C 编译器 |
 | [ ] 模块路径 | `github.com/jaggerzhuang1994/kratos-foundation` | 改为 `github.com/jaggerzhuang1994/kratos-foundation/v2`，执行 `go mod tidy` |
 | [ ] 组装入口 | 领域包中的 Wire/Bootstrap、根 provider set | 使用 `pkg/bootstrap` 和公开构造函数；不得导入领域 internal；重新运行业务 Wire |
-| [ ] 组装顺序 | App 直接依赖多个领域 Bootstrap | `InfrastructureBootstrap → Bootstrap → StartupReady → NewKratosApp`；业务 provider 显式依赖基础设施标记 |
+| [ ] 组装顺序 | App 直接依赖多个领域 Bootstrap | `InfrastructureBootstrap → Bootstrap → StartupReady → bootstrap.NewApp`；业务 provider 显式依赖基础设施标记 |
 | [ ] 资源所有权 | 各组件 release/关闭方式不一致 | 保留构造函数返回的 cleanup；先停止 App，再由 Wire 逆序清理；启动失败检查回滚 |
 | [ ] 应用身份 | `pkg/app_info`、GetId/GetName 等 | 使用 `pkg/appinfo` 的 ID/Name/Version/Metadata；检查注册信息与日志身份 |
 | [ ] 配置源 | NewConfig 根据环境安排文件/Consul 优先级 | 用 `config.NewSources` 显式排序，后面的源优先；使用 `contrib/config/file/consul/text` |
@@ -90,7 +90,7 @@ tracing.sampler、job.cron 和数据库连接池参数。DSN、驱动、连接�
 
 ### v2 开发期可选依赖迁移
 
-此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 已移除；Registrar 由 app.NewApp 或 bootstrap.NewKratosApp 显式注入。
+此前 v2 开发版本的 `app.Spec.RegisterRegistrar`、`bootstrap.Spec.RegisterRegistrar` 已移除；Registrar 由 app.NewApp 或 bootstrap.NewApp 显式注入。
 
 Job 的 Coordinator、ExecutionGuard、锁租约实现、Redis Job 适配和两种分布式并发策略全部删除。移除对应 Wire provider，统一使用 BaseProviderSet；NewJobBootstrap 第三个参数和 job.NewManager 最后一个参数改为 config.Manager。`RunImmediately()` 改为 `RunImmediately(true)`，可用 false 显式覆盖 Task 声明。重新生成 Wire。配置 `job.cron` 支持逐字段覆盖及热更新，优先级为配置 > 注册 > Task > 框架默认值；disabled 默认 false，可热更新禁用/启用已注册 Cron，禁用不取消已执行或排队的调用。run_immediately 仅在首次 Start 且启用时生效，运行中修改或重新启用不补触发；进程重启重新判断。完整示例见 [Job 文档](pkg/job/README.md)。
 
@@ -501,7 +501,7 @@ flowchart LR
 
 应用停机策略直接注入 `app.NewStopPolicy(config, manager, logger)`，删除 `bootstrap.NewStopPolicy` 包装和第四个 stopDelay 参数。RuntimeBootstrap 仅表示组装完成，不再携带 StopDelay。`stop_timeout > server.stop_delay` 为部署建议，不再阻止构造或热更新；正数及 Duration 合法性校验保留。
 
-删除 `bootstrap.NewBootstrap`，统一使用 `NewRuntimeBootstrap` → `NewApplicationBootstrap` → `NewKratosApp`。业务 Boot 返回 `Bootstrap` 标记；自行构造组件的登记贡献也须作为 Boot 的前置依赖，并共享 Wire 注入的应用 Spec，避免重复登记。
+删除 `bootstrap.NewBootstrap`，统一使用 `NewRuntimeBootstrap` → `NewApplicationBootstrap` → `bootstrap.NewApp`。业务 Boot 返回 `Bootstrap` 标记；自行构造组件的登记贡献也须作为 Boot 的前置依赖，并共享 Wire 注入的应用 Spec，避免重复登记。
 
 `NewServerBootstrap` 改为接收共享 app.Spec/server.Spec、配置及观测依赖和 Bootstrap 标记，在业务 Boot 后构造并登记服务器，返回独立 cleanup。NewRuntimeBootstrap 注入 ServerBootstrap 保证顺序；旧的直接传入 app.Spec 和 Runtime 的登记签名不保留。
 

@@ -3,7 +3,6 @@
 package wireassembly
 
 import (
-	"github.com/go-kratos/kratos/v2"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/google/wire"
@@ -46,13 +45,13 @@ func initialize(sources config.Sources, version string, decorate app.ContextDeco
 
 		bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
 		bootstrap.NewApplicationBootstrap,
-		bootstrap.NewKratosApp,
+		bootstrap.NewApp,
 		wire.Struct(new(assembly), "*"),
 	)
 	return nil, nil, nil
 }
 
-func initializeComponents(sources config.Sources, version string) (*kratos.App, func(), error) {
+func initializeComponents(sources config.Sources, version string) (*app.App, func(), error) {
 	wire.Build(
 		newRegistrar, bootstrap.NewConfigManager, app.NewSpec, server.NewSpec, job.NewSpec, app.NewConfig, app.NewStopPolicy,
 		appinfo.New, log.NewLogger,
@@ -62,7 +61,7 @@ func initializeComponents(sources config.Sources, version string) (*kratos.App, 
 		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,
 		bootstrap.NewInfrastructureBootstrap, newSpec,
 		componentsBoot, bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
-		bootstrap.NewApplicationBootstrap, bootstrap.NewKratosApp,
+		bootstrap.NewApplicationBootstrap, bootstrap.NewApp,
 	)
 	return nil, nil, nil
 }

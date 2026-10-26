@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/registry"
@@ -61,37 +63,26 @@ func (f *registrarCallFake) calls() (int, int) {
 	return f.registerCalls, f.deregisterCalls
 }
 
-func newRegistrarTestHarness(
-	t testing.TB,
-	registrar registry.Registrar,
-	snapshot appSnapshot,
-) (*supervisedRegistrar, *App) {
+// newRegistrarTestApp 构造只验证注册协调的 App；Run 中的注册前置步骤由 NewApp 黑盒测试覆盖。
+func newRegistrarTestApp(t testing.TB, registrar registry.Registrar, snapshot appSnapshot) *App {
 	t.Helper()
-	lifecycle := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
-	lifecycle.initServers(0)
-	lifecycle.stop = func() error { return nil }
-	return newSupervisedRegistrar(
-		registrar,
-		lifecycle,
-		100*time.Millisecond,
-	), lifecycle
+	application := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
+	application.registrar = registrar
+	application.registrarTimeout = 100 * time.Millisecond
+	application.instance = &registry.ServiceInstance{ID: "registered"}
+	return application
 }
 
-func TestSupervisedRegistrarRegistersAndDeregistersStoredInstanceOnce(t *testing.T) {
+func TestRegisterAndStopDeregisterStoredInstanceOnce(t *testing.T) {
 	underlying := new(registrarCallFake)
-	registrar, _ := newRegistrarTestHarness(t, underlying, appSnapshot{})
-	registered := &registry.ServiceInstance{ID: "registered"}
-	if err := registrar.Register(context.Background(), registered); err != nil {
+	application := newRegistrarTestApp(t, underlying, appSnapshot{})
+	if err := application.register(application.instance); err != nil {
 		t.Fatal(err)
 	}
-	if err := registrar.Deregister(
-		context.Background(),
-		&registry.ServiceInstance{ID: "different"},
-	); err != nil {
-		t.Fatal(err)
-	}
-	if err := registrar.Deregister(context.Background(), registered); err != nil {
-		t.Fatal(err)
+	for range 2 {
+		if err := application.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	registerCalls, deregisterCalls := underlying.calls()
 	if registerCalls != 1 || deregisterCalls != 1 {
@@ -100,64 +91,55 @@ func TestSupervisedRegistrarRegistersAndDeregistersStoredInstanceOnce(t *testing
 	underlying.mu.Lock()
 	deregistered := underlying.deregistered
 	underlying.mu.Unlock()
-	if deregistered != registered {
-		t.Fatalf("Deregister used instance %p, want registered instance %p", deregistered, registered)
+	if deregistered != application.instance {
+		t.Fatalf("Deregister used instance %p, want registered instance %p", deregistered, application.instance)
 	}
 }
 
-func TestSupervisedRegistrarRegisterFailureStopsAndAggregatesCleanupErrors(t *testing.T) {
+func TestRegisterFailureStopsApplicationAndAggregatesCleanupErrors(t *testing.T) {
 	registerErr := errors.New("register failed")
 	beforeStopErr := errors.New("before stop failed")
 	afterStopErr := errors.New("after stop failed")
-	underlying := &registrarCallFake{registerFn: func(
-		context.Context,
-		*registry.ServiceInstance,
-	) error {
-		return registerErr
-	}}
-	snapshot := appSnapshot{
-		beforeStop: []HookFunc{func(context.Context) error { return beforeStopErr }},
-		afterStop:  []HookFunc{func(context.Context) error { return afterStopErr }},
+	underlying := &registrarCallFake{registerFn: func(context.Context, *registry.ServiceInstance) error { return registerErr }}
+	spec := newApplicationTestSpec(t)
+	spec.BeforeStop(func(context.Context) error { return beforeStopErr })
+	spec.AfterStop(func(context.Context) error { return afterStopErr })
+	runtime := newApplicationRuntime()
+	registerApplicationRuntime(t, spec, runtime)
+	application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), underlying)
+	if err != nil {
+		t.Fatal(err)
 	}
-	registrar, lifecycle := newRegistrarTestHarness(t, underlying, snapshot)
-	stopErr := errors.New("application stop failed")
-	registrar.app.stop = func() error { return stopErr }
-
-	err := registrar.Register(context.Background(), &registry.ServiceInstance{ID: "instance"})
-	for _, want := range []error{registerErr, stopErr, beforeStopErr, afterStopErr} {
+	err = application.Run()
+	for _, want := range []error{registerErr, beforeStopErr, afterStopErr} {
 		if !errors.Is(err, want) {
-			t.Fatalf("Register error = %v, missing %v", err, want)
+			t.Fatalf("Run error = %v, missing %v", err, want)
 		}
 	}
-	if !lifecycle.isStopping() {
-		t.Fatal("register failure did not request application stop")
-	}
-	registerCalls, deregisterCalls := underlying.calls()
-	if registerCalls != 1 || deregisterCalls != 0 {
+	if registerCalls, deregisterCalls := underlying.calls(); registerCalls != 1 || deregisterCalls != 0 {
 		t.Fatalf("underlying calls = register %d, deregister %d", registerCalls, deregisterCalls)
+	}
+	if starts, stops := runtime.counts(); starts != 1 || stops != 1 {
+		t.Fatalf("runtime calls = start %d, stop %d", starts, stops)
 	}
 }
 
-func TestSupervisedRegistrarSkipsRegistrationAfterStopRequested(t *testing.T) {
+func TestRegisterSkipsRegistrationAfterStopRequested(t *testing.T) {
 	underlying := new(registrarCallFake)
-	registrar, lifecycle := newRegistrarTestHarness(t, underlying, appSnapshot{})
-	lifecycle.requestStop()
-	if err := registrar.Register(
-		context.Background(),
-		&registry.ServiceInstance{ID: "late"},
-	); err != nil {
-		t.Fatalf("late registration returned shutdown noise: %v", err)
+	application := newRegistrarTestApp(t, underlying, appSnapshot{})
+	application.requestStop()
+	if err := application.register(application.instance); !errors.Is(err, errAppStopping) {
+		t.Fatalf("late registration = %v, want stopping signal", err)
 	}
-	registerCalls, deregisterCalls := underlying.calls()
-	if registerCalls != 0 || deregisterCalls != 0 {
+	if registerCalls, deregisterCalls := underlying.calls(); registerCalls != 0 || deregisterCalls != 0 {
 		t.Fatalf("late registration touched registry: register %d, deregister %d", registerCalls, deregisterCalls)
 	}
 }
 
-func TestSupervisedRegistrarCompensatesWhenStopArrivesDuringRegister(t *testing.T) {
+func TestRegisterCompensatesWhenStopArrivesDuringRegister(t *testing.T) {
 	registerEntered := make(chan struct{})
 	releaseRegister := make(chan struct{})
-	deregisterContext := make(chan error, 1)
+	deregisterContext := make(chan error, 2)
 	underlying := &registrarCallFake{
 		registerFn: func(context.Context, *registry.ServiceInstance) error {
 			close(registerEntered)
@@ -169,119 +151,77 @@ func TestSupervisedRegistrarCompensatesWhenStopArrivesDuringRegister(t *testing.
 			return nil
 		},
 	}
-	registrar, lifecycle := newRegistrarTestHarness(t, underlying, appSnapshot{})
-	ctx, cancel := context.WithCancel(context.Background())
+	application := newRegistrarTestApp(t, underlying, appSnapshot{})
 	result := make(chan error, 1)
-	go func() {
-		result <- registrar.Register(ctx, &registry.ServiceInstance{ID: "racing"})
-	}()
+	go func() { result <- application.register(application.instance) }()
 	receiveSignal(t, registerEntered, "registrar Register entry")
-	lifecycle.requestStop()
-	cancel()
+	// Stop 在注册返回前执行，此时尚未注册，注销由注册完成后的补偿完成。
+	if err := application.Stop(); err != nil {
+		t.Fatal(err)
+	}
 	close(releaseRegister)
-	if err := receiveError(t, result, "compensating Register"); err != nil {
+	if err := receiveError(t, result, "compensating Register"); !errors.Is(err, errAppStopping) {
 		t.Fatalf("compensating Register error = %v", err)
 	}
 	if err := receiveError(t, deregisterContext, "compensating Deregister context"); err != nil {
 		t.Fatalf("compensating Deregister inherited canceled context: %v", err)
 	}
-	registerCalls, deregisterCalls := underlying.calls()
-	if registerCalls != 1 || deregisterCalls != 1 {
+	if registerCalls, deregisterCalls := underlying.calls(); registerCalls != 1 || deregisterCalls != 1 {
 		t.Fatalf("compensation calls = register %d, deregister %d", registerCalls, deregisterCalls)
 	}
 }
 
-func TestSupervisedRegistrarConcurrentDeregisterSharesResultAndRespectsWaiterContext(t *testing.T) {
-	deregisterErr := errors.New("deregister failed")
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	underlying := &registrarCallFake{deregisterFn: func(
-		context.Context,
-		*registry.ServiceInstance,
-	) error {
-		close(entered)
-		<-release
-		return deregisterErr
-	}}
-	registrar, _ := newRegistrarTestHarness(t, underlying, appSnapshot{})
-	instance := &registry.ServiceInstance{ID: "instance"}
-	if err := registrar.Register(context.Background(), instance); err != nil {
-		t.Fatal(err)
-	}
-
-	first := make(chan error, 1)
-	go func() { first <- registrar.Deregister(context.Background(), instance) }()
-	receiveSignal(t, entered, "first Deregister entry")
-
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := registrar.Deregister(canceledCtx, instance); !errors.Is(err, context.Canceled) {
-		t.Fatalf("canceled waiter error = %v, want context.Canceled", err)
-	}
-	second := make(chan error, 1)
-	go func() { second <- registrar.Deregister(context.Background(), instance) }()
-	close(release)
-	if err := receiveError(t, first, "first Deregister"); !errors.Is(err, deregisterErr) {
-		t.Fatalf("first Deregister error = %v", err)
-	}
-	if err := receiveError(t, second, "second Deregister"); !errors.Is(err, deregisterErr) {
-		t.Fatalf("second Deregister error = %v", err)
-	}
-	if err := registrar.Deregister(context.Background(), instance); !errors.Is(err, deregisterErr) {
-		t.Fatalf("replayed Deregister error = %v", err)
-	}
-	_, deregisterCalls := underlying.calls()
-	if deregisterCalls != 1 {
-		t.Fatalf("underlying Deregister calls = %d, want 1", deregisterCalls)
+// Stop 与注册完成交错时注销恰好执行一次。
+func TestRegisterAndConcurrentStopDeregisterExactlyOnce(t *testing.T) {
+	for range 200 {
+		underlying := new(registrarCallFake)
+		application := newRegistrarTestApp(t, underlying, appSnapshot{})
+		var wg sync.WaitGroup
+		wg.Go(func() { _ = application.register(application.instance) })
+		wg.Go(func() { _ = application.Stop() })
+		wg.Wait()
+		registerCalls, deregisterCalls := underlying.calls()
+		if registerCalls == 1 && deregisterCalls != 1 || registerCalls == 0 && deregisterCalls != 0 {
+			t.Fatalf("calls = register %d, deregister %d", registerCalls, deregisterCalls)
+		}
 	}
 }
 
-func TestContinuingRegistrarPreservesDeregisterFailureForFinalAggregation(t *testing.T) {
-	deregisterErr := errors.New("registry unavailable")
-	underlying := &registrarCallFake{deregisterFn: func(
-		context.Context,
-		*registry.ServiceInstance,
-	) error {
-		return deregisterErr
-	}}
-	supervised, _ := newRegistrarTestHarness(t, underlying, appSnapshot{})
-	continuing := &continuingRegistrar{registrar: supervised}
-	instance := &registry.ServiceInstance{ID: "instance"}
-	if err := continuing.Register(context.Background(), instance); err != nil {
-		t.Fatal(err)
-	}
-	if err := continuing.Deregister(context.Background(), instance); err != nil {
-		t.Fatalf("continuing Deregister blocked shutdown: %v", err)
-	}
-	if err := supervised.finalError(); !errors.Is(err, deregisterErr) {
-		t.Fatalf("final registrar error = %v, want %v", err, deregisterErr)
-	}
-
-	shutdownErr := errors.New("additional shutdown failure")
-	empty, _ := newRegistrarTestHarness(t, new(registrarCallFake), appSnapshot{})
-	empty.recordShutdownError(nil)
-	empty.recordShutdownError(shutdownErr)
-	if err := empty.finalError(); !errors.Is(err, shutdownErr) {
-		t.Fatalf("recorded shutdown error = %v, want %v", err, shutdownErr)
-	}
-	empty.deregisterError = deregisterErr
-	empty.recordShutdownError(errors.New("ignored after primary"))
-	if err := empty.finalError(); !errors.Is(err, deregisterErr) || !errors.Is(err, shutdownErr) {
-		t.Fatalf("combined final error = %v", err)
-	}
+func TestDeregisterFailureIsReturnedWithoutBlockingRuntimeStop(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		deregisterErr := errors.New("registry unavailable")
+		underlying := &registrarCallFake{deregisterFn: func(context.Context, *registry.ServiceInstance) error { return deregisterErr }}
+		spec := newApplicationTestSpec(t)
+		spec.AddSignals(syscall.SIGUSR2)
+		runtime := newApplicationRuntime()
+		registerApplicationRuntime(t, spec, runtime)
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), underlying)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan error, 1)
+		go func() { result <- application.Run() }()
+		synctest.Wait()
+		if err := application.Stop(); err != nil {
+			t.Fatalf("Stop = %v, deregistration failure must not fail BeforeStop", err)
+		}
+		if err := <-result; !errors.Is(err, deregisterErr) {
+			t.Fatalf("Run = %v, want %v", err, deregisterErr)
+		}
+		if starts, stops := runtime.counts(); starts != 1 || stops != 1 {
+			t.Fatalf("runtime calls = start %d, stop %d", starts, stops)
+		}
+	})
 }
 
-func TestSupervisedRegistrarDeregisterBeforeRegisterIsNoop(t *testing.T) {
+func TestStopBeforeRegisterDoesNotDeregister(t *testing.T) {
 	underlying := new(registrarCallFake)
-	registrar, _ := newRegistrarTestHarness(t, underlying, appSnapshot{})
-	if err := registrar.Deregister(
-		context.Background(),
-		&registry.ServiceInstance{ID: "never-registered"},
-	); err != nil {
+	application := newRegistrarTestApp(t, underlying, appSnapshot{})
+	if err := application.Stop(); err != nil {
 		t.Fatal(err)
 	}
-	_, deregisterCalls := underlying.calls()
-	if deregisterCalls != 0 {
+	if _, deregisterCalls := underlying.calls(); deregisterCalls != 0 {
 		t.Fatalf("unregistered Deregister calls = %d", deregisterCalls)
 	}
 }

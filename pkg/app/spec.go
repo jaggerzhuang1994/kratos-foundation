@@ -16,7 +16,7 @@ import (
 type Spec struct {
 	// application 原子发布已构造应用，供就绪探针读取。
 	application atomic.Pointer[App]
-	// readySignal 在 Kratos 进入 AfterStart 且启动后钩子成功后关闭，供 Job 等后台运行时等待。
+	// readySignal 在全部 Runtime 已启动、服务已注册且启动后钩子成功后关闭，供 Job 等后台运行时等待。
 	readySignal chan struct{}
 	// stoppingSignal 在 App 首次请求停止时关闭，使 Ready 前的等待也能结束。
 	stoppingSignal chan struct{}
@@ -199,10 +199,6 @@ func (s *Spec) addHooks(destination *[]HookFunc, hooks []HookFunc) {
 
 // freeze 关闭后续注册，并在锁外执行所有外部贡献。
 func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
-	if base == nil {
-		return appSnapshot{}, fmt.Errorf("base context is nil")
-	}
-
 	s.mu.Lock()
 	if s.frozen {
 		s.mu.Unlock()
@@ -252,18 +248,15 @@ func (s *Spec) checkMutable() {
 	}
 }
 
-// Ready 在 Kratos 进入 AfterStart、启动后钩子成功且尚未请求停机时返回 true，可并发用于就绪探针。
+// Ready 在启动后钩子全部成功且尚未请求停机时返回 true，可并发用于就绪探针。
 func (s *Spec) Ready() bool {
 	application := s.application.Load()
 	return application != nil && application.ready.Load() && !application.isStopping()
 }
 
-// WaitReady 等待 Kratos 进入 AfterStart 且启动后钩子成功；应用已请求停止时返回 context.Canceled。
+// WaitReady 等待启动后钩子全部成功；应用已请求停止时返回 context.Canceled。
 // 调用方 Context 取消也会解除等待；Ready 已发布后仍优先拒绝已经开始的应用停机。
 func (s *Spec) WaitReady(ctx context.Context) error {
-	if ctx == nil {
-		return fmt.Errorf("ready context is nil")
-	}
 	// Ready 和停止可能都已发布，先检查停止，不能依赖 select 随机选择就绪分支。
 	select {
 	case <-s.stoppingSignal:

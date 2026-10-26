@@ -84,7 +84,7 @@ func NewJobBootstrap(
 type jobRuntime struct {
 	// Manager 借用任务管理器，将任务生命周期适配为应用运行时。
 	*job.Manager
-	// application 提供 Kratos 进入 AfterStart 且启动后钩子完成后的 ready 屏障。
+	// application 提供启动后钩子全部成功后的 ready 屏障。
 	application *app.Spec
 }
 

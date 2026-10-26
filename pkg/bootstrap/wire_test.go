@@ -63,7 +63,7 @@ func TestWireAssemblyGeneratesAndRunsCleanup(t *testing.T) {
 			}
 			// 检查真实依赖图形成阶段链，不约束各阶段内部 provider 的排序。
 			previous := -1
-			for _, call := range []string{"bootstrap.NewConfigManager(", "bootstrap.NewInfrastructureBootstrap(", "newBootstrap(", "bootstrap.NewServerBootstrap(", "bootstrap.NewRuntimeBootstrap(", "bootstrap.NewApplicationBootstrap(", "bootstrap.NewKratosApp("} {
+			for _, call := range []string{"bootstrap.NewConfigManager(", "bootstrap.NewInfrastructureBootstrap(", "newBootstrap(", "bootstrap.NewServerBootstrap(", "bootstrap.NewRuntimeBootstrap(", "bootstrap.NewApplicationBootstrap(", "bootstrap.NewApp("} {
 				position := strings.Index(string(generated), call)
 				if position <= previous {
 					t.Fatalf("generated stage %s is missing or out of order", call)

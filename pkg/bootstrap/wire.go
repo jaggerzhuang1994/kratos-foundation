@@ -59,5 +59,5 @@ var BaseProviderSet = wire.NewSet(
 	NewJobBootstrap,
 	NewRuntimeBootstrap,
 	NewApplicationBootstrap,
-	NewKratosApp,
+	NewApp,
 )

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/go-kratos/kratos/v2"
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
 	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/database/sqlite"
@@ -23,7 +22,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 )
 
-func initialize(path configPath, version string) (*kratos.App, func(), error) {
+func initialize(path configPath, version string) (*app.App, func(), error) {
 	wire.Build(
 		newSpec, app.NewRegistrar, registry.NewFactory, newDemoService, newDataService, newObjectStorage, newMessaging, wire.Bind(new(client.DiscoveryResolver), new(*registry.Factory)), client.NewFactory, database.NewManager, redis.NewManager, kafka.NewClientFactory, boot,
 		log.NewLogger, wire.Bind(new(kratoslog.Logger), new(log.Logger)),
@@ -34,7 +33,7 @@ func initialize(path configPath, version string) (*kratos.App, func(), error) {
 		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,
 		bootstrap.NewInfrastructureBootstrap,
 		bootstrap.NewServerBootstrap, bootstrap.NewJobBootstrap, bootstrap.NewRuntimeBootstrap,
-		app.NewStopPolicy, bootstrap.NewApplicationBootstrap, bootstrap.NewKratosApp,
+		app.NewStopPolicy, bootstrap.NewApplicationBootstrap, bootstrap.NewApp,
 	)
 	return nil, nil, nil
 }

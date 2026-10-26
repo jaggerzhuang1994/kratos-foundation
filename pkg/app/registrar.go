@@ -2,9 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"sync"
-	"time"
 
 	"github.com/go-kratos/kratos/v2/registry"
 	foundationregistry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/registry"
@@ -20,178 +17,48 @@ func NewRegistrar(settings Config, factory *foundationregistry.Factory) (registr
 	return factory.Registrar(name)
 }
 
-type supervisedRegistrar struct {
-	// Registrar 执行底层服务注册和注销，资源由 Registry Factory 管理。
-	registry.Registrar
-	// app 关联应用停机协调与错误收敛。
-	app *App
-	// timeout 约束注册完成后补偿注销的时长；非正值不额外设限。
-	timeout time.Duration
-
-	// mu 保护注册、注销状态及错误。
-	mu sync.Mutex
-	// registered 标记服务已成功注册。
-	registered bool
-	// deregistering 标记注销正在执行，其他调用等待同一次操作。
-	deregistering bool
-	// deregistered 标记注销已结束，即使失败也复用其结果。
-	deregistered bool
-	// deregisterDone 在本次注销完成后关闭，唤醒并发等待者。
-	deregisterDone chan struct{}
-	// deregisterError 保存第一次注销的结果。
-	deregisterError error
-	// shutdownError 保留继续清理阶段的附加停机错误。
-	shutdownError error
-	// instance 保存成功注册的实例，供注销复用。
-	instance *registry.ServiceInstance
-}
-
-// Register 执行服务注册；若注册期间已收到停止请求，则立即补偿注销并收敛应用。
-func (r *supervisedRegistrar) Register(
-	ctx context.Context,
-	instance *registry.ServiceInstance,
-) error {
-	if r.app.isStopping() {
-		return r.app.stopAfterFailure(
-			ctx,
-			r.app.failureOr(errAppStopping),
-		)
-	}
-	if err := r.Registrar.Register(ctx, instance); err != nil {
-		return r.app.stopAfterFailure(
-			ctx,
-			r.app.startupCallbackError(ctx, err),
-		)
-	}
-
-	r.mu.Lock()
-	r.registered = true
-	r.instance = instance
-	stopping := r.app.isStopping()
-	r.mu.Unlock()
-	if !stopping {
+// register 在全部 Runtime 启动后注册服务。已请求停止时跳过；注册期间到达的停止请求
+// 可能已让 Stop 跳过注销，因此注册成功后若发现正在停止，由这里补偿注销一次。
+func (a *App) register(instance *registry.ServiceInstance) error {
+	if a.registrar == nil {
 		return nil
 	}
-
-	cleanupCtx := context.WithoutCancel(ctx)
-	cancel := func() {}
-	if r.timeout > 0 {
-		cleanupCtx, cancel = context.WithTimeout(cleanupCtx, r.timeout)
+	if a.isStopping() {
+		return errAppStopping
 	}
+	ctx, cancel := context.WithTimeout(a.runCtx, a.registrarTimeout)
 	defer cancel()
-	_ = r.Deregister(cleanupCtx, instance)
-	return r.app.stopAfterFailure(
-		ctx,
-		errAppStopping,
-	)
-}
-
-// Deregister 幂等注销服务，并让并发调用共享第一次注销的稳定结果。
-func (r *supervisedRegistrar) Deregister(
-	ctx context.Context,
-	instance *registry.ServiceInstance,
-) error {
-	r.mu.Lock()
-	if !r.registered {
-		r.mu.Unlock()
-		return nil
+	if err := a.registrar.Register(ctx, instance); err != nil {
+		return a.startupCallbackError(ctx, err)
 	}
-	if r.deregistered {
-		err := r.deregisterError
-		r.mu.Unlock()
-		return err
+	a.mu.Lock()
+	a.registered = true
+	a.mu.Unlock()
+	// stopping 在 Stop 读取 registered 之前发布；这里在写入 registered 之后读取，
+	// 因此 Stop 与本函数至少有一方看到对方的状态，注销不会遗漏。
+	if a.isStopping() {
+		a.deregister()
+		return errAppStopping
 	}
-	if r.deregistering {
-		// Kratos Stop 与注册完成后的补偿注销可能并发到达；等待同一次操作可避免
-		// 对注册中心重复发送注销请求，同时仍尊重各调用方自己的 Context。
-		done := r.deregisterDone
-		r.mu.Unlock()
-		select {
-		case <-done:
-			r.mu.Lock()
-			err := r.deregisterError
-			r.mu.Unlock()
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	r.deregistering = true
-	r.deregisterDone = make(chan struct{})
-	done := r.deregisterDone
-	if r.instance != nil {
-		instance = r.instance
-	}
-	r.mu.Unlock()
-
-	err := r.Registrar.Deregister(ctx, instance)
-
-	r.mu.Lock()
-	r.deregistering = false
-	r.deregistered = true
-	r.deregisterError = err
-	close(done)
-	r.mu.Unlock()
-	return err
-}
-
-// finalError 汇总真正的注销错误和继续清理阶段记录的停机错误。
-func (r *supervisedRegistrar) finalError() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return errors.Join(r.deregisterError, r.shutdownError)
-}
-
-// recordShutdownError 在注销错误尚未成为主错误时保留额外停机错误。
-func (r *supervisedRegistrar) recordShutdownError(err error) {
-	if err == nil {
-		return
-	}
-	r.mu.Lock()
-	if r.deregisterError == nil {
-		r.shutdownError = errors.Join(r.shutdownError, err)
-	}
-	r.mu.Unlock()
-}
-
-// newSupervisedRegistrar 为已启用的注册器增加停止协调和错误保留能力。
-func newSupervisedRegistrar(
-	registrar registry.Registrar,
-	application *App,
-	registrarTimeout time.Duration,
-) *supervisedRegistrar {
-	return &supervisedRegistrar{
-		Registrar: registrar,
-		app:       application,
-		timeout:   registrarTimeout,
-	}
-}
-
-var _ registry.Registrar = (*supervisedRegistrar)(nil)
-
-// continuingRegistrar 适配 Kratos 的停机顺序。Kratos 遇到注销错误会在取消运行时前
-// 提前返回，因此这里先保留真实错误，再向 Kratos 返回 nil 让其继续释放运行时。
-type continuingRegistrar struct {
-	// registrar 委托受监督注册器执行注册及注销。
-	registrar *supervisedRegistrar
-}
-
-// Register 将注册调用交给受监督注册器。
-func (r *continuingRegistrar) Register(
-	ctx context.Context,
-	instance *registry.ServiceInstance,
-) error {
-	return r.registrar.Register(ctx, instance)
-}
-
-// Deregister 保留真实注销错误但向 Kratos 返回 nil，确保后续运行时仍会停止。
-func (r *continuingRegistrar) Deregister(
-	ctx context.Context,
-	instance *registry.ServiceInstance,
-) error {
-	err := r.registrar.Deregister(ctx, instance)
-	r.registrar.recordShutdownError(err)
 	return nil
 }
 
-var _ registry.Registrar = (*continuingRegistrar)(nil)
+// deregister 最多注销一次已注册的服务，结果参与最终错误汇总；未注册时不调用注册中心。
+// 使用不受停止取消影响的 Context，并受 registrar_timeout 约束。
+func (a *App) deregister() {
+	a.mu.Lock()
+	if !a.registered || a.deregistered {
+		a.mu.Unlock()
+		return
+	}
+	a.deregistered = true
+	instance := a.instance
+	a.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(a.base, a.registrarTimeout)
+	defer cancel()
+	err := a.registrar.Deregister(ctx, instance)
+	a.mu.Lock()
+	a.deregisterErr = err
+	a.mu.Unlock()
+}

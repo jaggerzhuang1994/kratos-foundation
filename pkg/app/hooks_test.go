@@ -31,22 +31,20 @@ func TestAppHooksHooksOrderFailureAndCleanupAggregation(t *testing.T) {
 		},
 	}
 	runner := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
-	if err := runner.runBeforeStart(context.Background()); !errors.Is(err, fail) {
+	if err := runStartHooks(context.Background(), runner.beforeStart); !errors.Is(err, fail) {
 		t.Fatalf("before start = %v", err)
 	}
 	if want := []string{"first", "fail"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("start calls = %#v", calls)
 	}
-	err := runner.runAfterStop(context.Background())
+	_ = runner.Stop()
+	_ = runner.Stop()
+	err := runner.finish(nil)
 	if !stringsContain(err.Error(), "before") || !stringsContain(err.Error(), "after-one") || !stringsContain(err.Error(), "after-two") {
 		t.Fatalf("cleanup error = %v", err)
 	}
 	if want := []string{"first", "fail", "before-stop", "after-one", "after-two"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("all calls = %#v", calls)
-	}
-	_ = runner.runAfterStop(context.Background())
-	if len(calls) != 5 {
-		t.Fatalf("stop hooks reran: %#v", calls)
 	}
 }
 
@@ -100,24 +98,47 @@ func TestStartupCallbackErrorPreservesRegistrarTimeoutDuringStop(t *testing.T) {
 	}
 }
 
-func TestAppHooksFinalErrorAndFallbackShutdownContext(t *testing.T) {
-	finalErr := errors.New("final cleanup failed")
-	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
-	runner.setFinalError(func() error { return finalErr })
-	if err := runner.runAfterStop(context.Background()); !errors.Is(err, finalErr) {
-		t.Fatalf("runAfterStop final error = %v, want %v", err, finalErr)
+// 并发 Stop 只执行一次停止前钩子，并共享同一结果。
+func TestStopRunsBeforeStopOnceAndSharesResult(t *testing.T) {
+	want := errors.New("before stop failed")
+	release := make(chan struct{})
+	calls := 0
+	runner := newTestApp(t, appSnapshot{beforeStop: []HookFunc{func(context.Context) error {
+		calls++
+		<-release
+		return want
+	}}}, newStaticStopPolicy(time.Second))
+	results := make(chan error, 2)
+	go func() { results <- runner.Stop() }()
+	go func() { results <- runner.Stop() }()
+	close(release)
+	for range 2 {
+		if err := <-results; !errors.Is(err, want) {
+			t.Fatalf("Stop = %v", err)
+		}
 	}
+	if calls != 1 || !runner.isStopping() {
+		t.Fatalf("before-stop calls = %d stopping=%v", calls, runner.isStopping())
+	}
+}
 
+// 停止与清理钩子使用保留父值、不受取消影响的 Context。
+func TestStopHooksUseUncanceledContextWithValues(t *testing.T) {
 	type contextKey string
-	ctx, cancel := context.WithCancel(context.WithValue(
-		context.Background(),
-		contextKey("key"),
-		"value",
-	))
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey("key"), "value"))
 	cancel()
-	clean := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second)).shutdownContext(ctx)
-	if clean.Err() != nil || clean.Value(contextKey("key")) != "value" {
-		t.Fatalf("shutdown fallback context = err %v, value %v", clean.Err(), clean.Value(contextKey("key")))
+	check := func(ctx context.Context) error {
+		if ctx.Err() != nil || ctx.Value(contextKey("key")) != "value" {
+			return errors.New("hook context lost value or inherited cancellation")
+		}
+		return nil
+	}
+	runner := newTestApp(t, appSnapshot{context: parent, beforeStop: []HookFunc{check}, afterStop: []HookFunc{check}}, newStaticStopPolicy(time.Second))
+	if err := runner.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.finish(nil); err != nil {
+		t.Fatal(err)
 	}
 }
 

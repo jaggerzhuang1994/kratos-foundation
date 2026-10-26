@@ -127,7 +127,8 @@ func TestNewStopPolicyAppliesValidUpdatesRejectsInvalidSnapshotsAndCancels(t *te
 			t.Fatalf("rejection event = %v", event)
 		}
 	}
-	if counts["app.stop_policy.updated"] != 3 || counts["app.stop_policy.rejected"] != 1 {
+	// 非正预算与解码失败都在通知时拒绝并保留原预算。
+	if counts["app.stop_policy.updated"] != 3 || counts["app.stop_policy.rejected"] != 2 {
 		t.Fatalf("policy events = %v", counts)
 	}
 	cleanup()

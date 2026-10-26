@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
@@ -67,19 +66,15 @@ func NewApplicationBootstrap(
 	return StartupReady{}
 }
 
-// NewKratosApp 在最终组装屏障之后构造 Kratos 应用。
+// NewApp 在最终组装屏障之后构造应用，返回的 *app.App 提供 Run、Stop 与应用身份。
 // 内部创建根 Context，不通过 Wire 注入；业务上下文贡献使用 Spec.AddContext。
-// 不接收提前构造的 App，确保 Spec 冻结发生在全部贡献登记之后。
-func NewKratosApp(
+// 依赖 StartupReady，确保 Spec 冻结发生在全部贡献登记之后。
+func NewApp(
 	spec *app.Spec,
 	config app.Config,
 	stopPolicy *app.StopPolicy,
 	registrar registry.Registrar,
 	_ StartupReady,
-) (*kratos.App, error) {
-	application, err := app.NewApp(context.Background(), spec, config, stopPolicy, registrar)
-	if err != nil {
-		return nil, err
-	}
-	return application.App, nil
+) (*app.App, error) {
+	return app.NewApp(context.Background(), spec, config, stopPolicy, registrar)
 }

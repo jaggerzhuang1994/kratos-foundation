@@ -98,7 +98,7 @@ func (s *Spec) AddEndpoints(endpoints ...*url.URL) *Spec {
 }
 
 // DisableServiceRegistration 关闭本应用的服务注册与注销，返回同一 Spec。
-// 须在 NewKratosApp 前声明；不影响服务器、服务发现或 Registrar provider 构造。
+// 须在 NewApp 前声明；不影响服务器、服务发现或 Registrar provider 构造。
 func (s *Spec) DisableServiceRegistration() *Spec {
 	s.application.DisableServiceRegistration()
 	return s

@@ -58,12 +58,12 @@ wire.Build(
 )
 ```
 
-`NewServerBootstrap` 注入 `*app.Spec` 和 `*server.Spec`；`NewJobBootstrap` 注入 `*app.Spec` 和 `*job.Spec`；其他应用贡献 provider 与 `NewKratosApp` 直接注入 `*app.Spec`。手动组装同样必须复用传给 bootstrap.NewSpec 的实例，不能在各依赖处重新 NewSpec。原 `ApplicationSpec` 转发 provider 已删除。
+`NewServerBootstrap` 注入 `*app.Spec` 和 `*server.Spec`；`NewJobBootstrap` 注入 `*app.Spec` 和 `*job.Spec`；其他应用贡献 provider 与 `bootstrap.NewApp` 直接注入 `*app.Spec`。手动组装同样必须复用传给 bootstrap.NewSpec 的实例，不能在各依赖处重新 NewSpec。原 `ApplicationSpec` 转发 provider 已删除。
 
 领域 Spec 是共享可变声明，不拥有运行时资源，也没有 cleanup。直接注入领域 Spec 不会绕过 Wire 的组装顺序要求：业务声明 provider 仍应依赖 `InfrastructureBootstrap`，在 Boot 返回前完成修改；调用方应在组件构造开始前完成声明。
 
 Boot 返回 `Bootstrap`，NewServerBootstrap 与 NewJobBootstrap 分别依赖该标记，保证配置加载 → 业务声明 → 组件构造；Server 与 Job 不相互依赖，Wire 可以按实际依赖以任意顺序构造二者。NewRuntimeBootstrap 再依赖 ServerBootstrap 和 JobBootstrap。
-NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 NewKratosApp 才能冻结应用；这是唯一的 StartupReady 构造入口。这里的 `StartupReady` 是构造阶段完成标记，不等于运行期应用已经 Ready。运行期 Ready 由 `app.Spec` 在 Kratos 进入 AfterStart 且 Foundation 的 AfterStart hook 成功后关闭内部信号；它不等待阻塞型 Runtime.Start 返回。Job Bootstrap 登记的 Runtime 会等待该信号再启动任务。
+NewApplicationBootstrap 等待组件登记完成并返回 `StartupReady`，随后 bootstrap.NewApp 才能冻结应用；这是唯一的 StartupReady 构造入口。这里的 `StartupReady` 是构造阶段完成标记，不等于运行期应用已经 Ready。运行期 Ready 由 `app.Spec` 在全部 AfterStart hook 成功后关闭内部信号；它不等待阻塞型 Runtime.Start 返回。Job Bootstrap 登记的 Runtime 会等待该信号再启动任务。
 Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则形成循环；Boot 只接收 *bootstrap.Spec，直接调用 BeforeStart 等方法登记应用贡献。
 停机策略直接使用 `app.NewStopPolicy(config, manager, logger)`，不依赖组件标记或服务器等待时间。建议总停机预算为服务器等待和资源清理预留足够时间，不做跨组件硬校验。
 业务无需提供 time.Duration 适配函数；各 provider 的 cleanup 由 Wire 按实际依赖逆序释放。
@@ -111,7 +111,7 @@ flowchart TD
     J -- 是 --> K[Job 完成]
     K --> L[NewRuntimeBootstrap 汇合完成标记]
     L --> M[NewApplicationBootstrap 返回 StartupReady]
-    M --> N[NewKratosApp 冻结应用 Spec]
+    M --> N[bootstrap.NewApp 冻结应用 Spec]
     N --> O{应用构造成功?}
     O -- 否 --> X
     O -- 是 --> R([返回应用和 cleanup])
@@ -135,7 +135,7 @@ flowchart TD
 
 AppInfoBootstrap 和 MetricsBootstrap 只返回完成标记；LogBootstrap、ServerBootstrap、JobBootstrap 仍返回真实配置/构造错误，LogBootstrap 和 ServerBootstrap 额外返回 `func()` cleanup。冻结后登记及重复 AppInfo/Logger 登记会直接 panic；ServerBootstrap 在自身登记 panic 时释放刚构造的资源，但 Wire 只为 error 返回生成回滚分支，不保证 panic 时释放整条依赖链。其他资源的 cleanup 来自领域构造函数，由 Wire 在构造返回 error 或调用方退出时逆序执行。Bootstrap 不启动 Runtime。ServerBootstrap 由 NewServerBootstrap 在业务 Boot 后构造并登记服务器，再注入 NewRuntimeBootstrap 作为前置依赖；服务器 cleanup 独立归 Wire 所有。
 
-`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap 与 NewJobBootstrap 各自在 Boot 完成后构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后标记组装完成，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `NewKratosApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 Wire 提供的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
+`NewInfrastructureBootstrap` 汇合 AppInfo、Log、Tracing 和 Metrics 的贡献标记。业务 provider 接收 `InfrastructureBootstrap` 和业务依赖，返回 `Bootstrap`。随后 NewServerBootstrap 与 NewJobBootstrap 各自在 Boot 完成后构造和登记服务器、任务，`NewRuntimeBootstrap` 等待二者完成后标记组装完成，`NewApplicationBootstrap` 汇合基础设施和 Runtime 标记，最后 `bootstrap.NewApp` 调用 `app.NewApp` 冻结 Spec。所有入口共享 Wire 提供的应用 Spec，已独立登记的组件不要再通过统一入口重复选择。
 
 Wire 只执行最终返回值的依赖链。仅把构造函数放进 set 不保证执行；业务必须让每项贡献被最终标记引用。阶段内只保留实际依赖：仅在最终业务 provider 接收基础设施标记，不会推迟其所有参数的构造。
 
@@ -153,7 +153,7 @@ flowchart TD
     S & T -- 构造返回 error --> X
     S & T --> F1[NewRuntimeBootstrap 汇合两个完成标记]
     F1 --> G[NewApplicationBootstrap 汇合基础设施并返回 StartupReady]
-    G --> H[NewKratosApp 调用 app.NewApp 冻结 Spec]
+    G --> H[bootstrap.NewApp 调用 app.NewApp 冻结 Spec]
     H --> I{App 构造成功?}
     I -- 否 --> X
     X --> Y([返回错误])
@@ -180,7 +180,7 @@ flowchart TD
     A4 --> A([App 并发启动 Job Runtime])
     A --> B[等待 app.Spec Ready 信号]
     B -- App请求停止或调用方Context取消 --> H([不启动任务并退出])
-    B -- Kratos 进入 AfterStart 且 hook 成功 --> B2[适配器调用 Manager.Start]
+    B -- AfterStart hook 全部成功 --> B2[适配器调用 Manager.Start]
     B2 --> C{返回结果}
     C -- job.ErrCompleted --> D[转换为 app.ErrStopRequested]
     D --> E[App 正常停止]
@@ -197,7 +197,7 @@ flowchart TD
 
 ## 可选依赖由 Wire 构造注入
 
-`registry.Registrar` 直接注入 `NewKratosApp(spec, config, stopPolicy, registrar, ready)`。业务 Boot 可调用 `spec.DisableServiceRegistration()` 独立关闭服务注册与注销（默认不关闭），也可由业务 provider 返回 nil Registrar 禁用；开关不跳过 provider 构造和配置校验，不影响服务器或服务发现，详见 [App 开关说明](../app/README.md#独立关闭服务注册)；默认 BaseProviderSet 使用 app.NewRegistrar。
+`registry.Registrar` 直接注入 `bootstrap.NewApp(spec, config, stopPolicy, registrar, ready)`。业务 Boot 可调用 `spec.DisableServiceRegistration()` 独立关闭服务注册与注销（默认不关闭），也可由业务 provider 返回 nil Registrar 禁用；开关不跳过 provider 构造和配置校验，不影响服务器或服务发现，详见 [App 开关说明](../app/README.md#独立关闭服务注册)；默认 BaseProviderSet 使用 app.NewRegistrar。
 
 使用默认 BaseProviderSet 时，可通过 `app.registry` 选择内置 `driver: "null"` 实例关闭 App 注册，客户端继续选择其他发现实例；配置及重启边界见 [Registry 配置关闭注册](../registry/README.md#通过配置关闭服务注册)。
 
@@ -238,7 +238,7 @@ Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterRuntime()、RegisterKaf
 
 ```go
 // wireinject 文件中的业务 provider：Boot 已声明应用组件。
-func wireApp(info appinfo.AppInfo, spec *bootstrap.Spec) (*kratos.App, func(), error) {
+func wireApp(info appinfo.AppInfo, spec *bootstrap.Spec) (*app.App, func(), error) {
     wire.Build(bootstrap.BaseProviderSet, Boot)
     return nil, nil, nil
 }
@@ -266,7 +266,7 @@ flowchart TD
  X --> L
 ```
 
-默认资源 provider 只在 Wire 依赖图需要时构造。具体数据库、OSS、配置源和 Consul 等可选注册驱动由业务显式导入；内置 `null` 始终可选。`NewKratosApp` 继续接收 Registrar 接口，App 不访问驱动工厂。
+默认资源 provider 只在 Wire 依赖图需要时构造。具体数据库、OSS、配置源和 Consul 等可选注册驱动由业务显式导入；内置 `null` 始终可选。`bootstrap.NewApp` 继续接收 Registrar 接口，App 不访问驱动工厂。
 
 根 `make test-business` 在临时模块生成并运行 Wire，验证完整驱动依赖图、失败回滚及 cleanup。已删除旧基础/Consul 组合集合和环境路径组装入口，不提供兼容别名。
 

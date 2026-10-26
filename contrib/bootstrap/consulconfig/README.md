@@ -30,7 +30,7 @@ func remoteConfigPatterns() consulconfig.ConsulConfigPaths {
 }
 
 // 放入应用的 wireinject 文件；business.ProviderSet 和 Boot 由消费项目提供。
-func wireApp(info appinfo.AppInfo) (*kratos.App, func(), error) {
+func wireApp(info appinfo.AppInfo) (*app.App, func(), error) {
     wire.Build(bootstrap.BaseProviderSet, consulconfig.ProviderSet,
         localConfigPaths, consulConfigPrefix, remoteConfigPatterns, business.ProviderSet, Boot)
     return nil, nil, nil
@@ -48,7 +48,7 @@ func remoteConfigPaths() bootstrap.RemoteConfigPaths {
     }
 }
 
-func wireAppWithFullPaths(info appinfo.AppInfo) (*kratos.App, func(), error) {
+func wireAppWithFullPaths(info appinfo.AppInfo) (*app.App, func(), error) {
     wire.Build(bootstrap.BaseProviderSet, consulconfig.BaseProviderSet,
         localConfigPaths, remoteConfigPaths, business.ProviderSet, Boot)
     return nil, nil, nil

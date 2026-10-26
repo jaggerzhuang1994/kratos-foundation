@@ -7,7 +7,6 @@
 package main
 
 import (
-	"github.com/go-kratos/kratos/v2"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
@@ -25,7 +24,7 @@ import (
 
 // Injectors from wire.go:
 
-func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
+func initialize(path configPath, version2 string) (*app.App, func(), error) {
 	spec := app.NewSpec()
 	serverSpec := server.NewSpec()
 	jobSpec := job.NewSpec()
@@ -154,7 +153,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 	}
 	runtimeBootstrap := bootstrap.NewRuntimeBootstrap(serverBootstrap, jobBootstrap)
 	startupReady := bootstrap.NewApplicationBootstrap(infrastructureBootstrap, bootstrapBootstrap, runtimeBootstrap)
-	kratosApp, err := bootstrap.NewKratosApp(spec, v, stopPolicy, registrar, startupReady)
+	appApp, err := bootstrap.NewApp(spec, v, stopPolicy, registrar, startupReady)
 	if err != nil {
 		cleanup8()
 		cleanup7()
@@ -166,7 +165,7 @@ func initialize(path configPath, version2 string) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	return kratosApp, func() {
+	return appApp, func() {
 		cleanup8()
 		cleanup7()
 		cleanup6()

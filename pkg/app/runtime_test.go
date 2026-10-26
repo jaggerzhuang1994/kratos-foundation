@@ -5,11 +5,10 @@ import (
 	"errors"
 	"net/url"
 	"reflect"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
-
-	"github.com/go-kratos/kratos/v2/transport"
 )
 
 type testServer struct {
@@ -20,68 +19,75 @@ type testServer struct {
 func (s *testServer) Start(context.Context) error { s.starts++; return s.startErr }
 func (s *testServer) Stop(context.Context) error  { s.stops++; return s.stopErr }
 
-// This kills mutations that lose runtime start failures, omit the application
-// stop request, or invoke the wrapped Stop more than once.
-func TestAppServerPropagatesFailureAndStopsOnce(t *testing.T) {
-	failure := errors.New("start failed")
-	server := &testServer{startErr: failure}
-	stopCalls := 0
-	stop := func() error { stopCalls++; return nil }
-	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
-	runner.initServers(1)
-	runner.stop = stop
-	runtime := runner.wrapServer(server)
-	err := runtime.Start(context.Background())
-	if !errors.Is(err, failure) || stopCalls != 1 || !runner.isStopping() {
-		t.Fatalf("Start = %v, stops=%d, stopping=%v", err, stopCalls, runner.isStopping())
+// runLifecycle 运行一个只登记给定 Runtime 的应用，返回 Run 结果；release 关闭后 Runtime 才从 Start 返回。
+func runLifecycle(t *testing.T, runtime Runtime, configure func(*Spec)) error {
+	t.Helper()
+	spec := newApplicationTestSpec(t)
+	spec.AddSignals(syscall.SIGUSR2)
+	if configure != nil {
+		configure(spec)
 	}
-	// 最后一个完成信号会汇总启动故障；重复 Stop 必须复用同一错误结果。
-	if err := runtime.Stop(context.Background()); !errors.Is(err, failure) {
-		t.Fatalf("Stop = %v, want start failure", err)
+	spec.RegisterRuntime(runtime)
+	application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := runtime.Stop(context.Background()); !errors.Is(err, failure) {
-		t.Fatalf("repeated Stop = %v, want start failure", err)
-	}
-	if server.stops != 1 {
-		t.Fatalf("wrapped Stop calls = %d", server.stops)
-	}
+	return application.Run()
 }
 
-func TestAppServerTreatsStopRequestAsCleanShutdown(t *testing.T) {
-	server := &testServer{startErr: ErrStopRequested}
-	stopCalls := 0
-	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
-	runner.initServers(1)
-	runner.stop = func() error { stopCalls++; return nil }
-	runtime := runner.wrapServer(server)
-
-	if err := runtime.Start(context.Background()); err != nil {
-		t.Fatalf("Start error = %v", err)
-	}
-	if stopCalls != 1 || !runner.isStopping() {
-		t.Fatalf("stops=%d stopping=%v", stopCalls, runner.isStopping())
-	}
+func TestRunPropagatesRuntimeFailureAndStopsEachRuntimeOnce(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		failure := errors.New("start failed")
+		release := make(chan struct{})
+		failing := &cancellationFailureRuntime{release: release, startErr: failure}
+		healthy := newApplicationRuntime()
+		result := make(chan error, 1)
+		go func() {
+			result <- runLifecycle(t, failing, func(spec *Spec) { spec.RegisterRuntime(healthy) })
+		}()
+		synctest.Wait()
+		close(release)
+		if err := <-result; !errors.Is(err, failure) {
+			t.Fatalf("Run = %v, want runtime failure", err)
+		}
+		if starts, stops := healthy.counts(); starts != 1 || stops != 1 {
+			t.Fatalf("healthy runtime calls = %d/%d", starts, stops)
+		}
+	})
 }
 
-func TestAppServerDoesNotSwallowJoinedStopRequestFailure(t *testing.T) {
-	failure := errors.New("start failed")
-	server := &testServer{startErr: errors.Join(ErrStopRequested, failure)}
-	stopCalls := 0
-	runner := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
-	runner.initServers(1)
-	runner.stop = func() error { stopCalls++; return nil }
-	runtime := runner.wrapServer(server)
+func TestRunTreatsStopRequestAsCleanShutdown(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		result := make(chan error, 1)
+		go func() {
+			result <- runLifecycle(t, &cancellationFailureRuntime{release: release, startErr: ErrStopRequested}, nil)
+		}()
+		synctest.Wait()
+		close(release)
+		if err := <-result; err != nil {
+			t.Fatalf("Run = %v, want clean shutdown", err)
+		}
+	})
+}
 
-	err := runtime.Start(context.Background())
-	if !errors.Is(err, ErrStopRequested) || !errors.Is(err, failure) {
-		t.Fatalf("Start error = %v, want joined stop request and failure", err)
-	}
-	if got := runner.failureOr(nil); !errors.Is(got, failure) {
-		t.Fatalf("recorded failure = %v, want %v", got, failure)
-	}
-	if stopCalls != 1 || !runner.isStopping() {
-		t.Fatalf("stops=%d stopping=%v", stopCalls, runner.isStopping())
-	}
+func TestRunDoesNotSwallowJoinedStopRequestFailure(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		failure := errors.New("start failed")
+		release := make(chan struct{})
+		result := make(chan error, 1)
+		go func() {
+			result <- runLifecycle(t, &cancellationFailureRuntime{release: release, startErr: errors.Join(ErrStopRequested, failure)}, nil)
+		}()
+		synctest.Wait()
+		close(release)
+		if err := <-result; !errors.Is(err, failure) {
+			t.Fatalf("Run = %v, want joined failure", err)
+		}
+	})
 }
 
 type endpointTestServer struct {
@@ -94,167 +100,132 @@ func (s *endpointTestServer) Endpoint() (*url.URL, error) {
 	return s.endpoint, s.endpointErr
 }
 
-func TestAppCompletionWaitCompletesOrTimesOutAndRunsFinalHooks(t *testing.T) {
-	empty := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Second))
-	empty.initServers(0)
-	if err := empty.wait(time.Second); err != nil {
-		t.Fatalf("empty tracker wait = %v", err)
-	}
+// 无显式端点时按登记顺序解析 Endpointer，Endpoint 在 Run 解析前为 nil。
+func TestRunResolvesRuntimeEndpoints(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		spec := newApplicationTestSpec(t)
+		spec.AddSignals(syscall.SIGUSR2)
+		spec.RegisterRuntime(&endpointTestServer{endpoint: &url.URL{Scheme: "grpc", Host: "127.0.0.1:9000"}})
+		spec.RegisterRuntime(new(testServer))
+		spec.RegisterRuntime(&endpointTestServer{endpoint: &url.URL{Scheme: "http", Host: "127.0.0.1:8000"}})
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if application.Endpoint() != nil {
+			t.Fatal("endpoints resolved before Run")
+		}
+		result := make(chan error, 1)
+		go func() { result <- application.Run() }()
+		synctest.Wait()
+		if got := application.Endpoint(); !reflect.DeepEqual(got, []string{"grpc://127.0.0.1:9000", "http://127.0.0.1:8000"}) {
+			t.Fatalf("Endpoint = %v", got)
+		}
+		if err := application.Stop(); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-result; err != nil {
+			t.Fatal(err)
+		}
+	})
+}
 
-	afterStopErr := errors.New("after stop failed")
-	afterCalls := 0
-	lifecycle := newTestApp(t, appSnapshot{afterStop: []HookFunc{
-		func(context.Context) error {
-			afterCalls++
-			return afterStopErr
-		},
-	}}, newStaticStopPolicy(time.Second))
-	lifecycle.initServers(1)
-	if err := lifecycle.wait(time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("incomplete tracker wait = %v, want deadline exceeded", err)
-	}
-	if err := lifecycle.complete(context.Background()); err != nil {
+// 父 Context 在运行期间取消时执行完整停机并正常返回。
+func TestRunTranslatesParentCancellationIntoCleanStop(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		parent, cancel := context.WithCancel(context.Background())
+		spec := newApplicationTestSpec(t)
+		spec.AddSignals(syscall.SIGUSR2)
+		beforeStop := 0
+		spec.BeforeStop(func(context.Context) error { beforeStop++; return nil })
+		runtime := newApplicationRuntime()
+		spec.RegisterRuntime(runtime)
+		application, err := NewApp(parent, spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan error, 1)
+		go func() { result <- application.Run() }()
+		synctest.Wait()
+		cancel()
+		if err := <-result; err != nil {
+			t.Fatalf("Run = %v", err)
+		}
+		if starts, stops := runtime.counts(); starts != 1 || stops != 1 || beforeStop != 1 {
+			t.Fatalf("runtime %d/%d before-stop %d", starts, stops, beforeStop)
+		}
+	})
+}
+
+// 系统信号在运行期间触发统一停机。
+func TestRunStopsOnSignal(t *testing.T) {
+	initializeRuntimeSignals(t)
+	runtime := newApplicationRuntime()
+	result := make(chan error, 1)
+	go func() { result <- runLifecycle(t, runtime, nil) }()
+	receiveSignal(t, runtime.started, "runtime start")
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
 		t.Fatal(err)
 	}
-	lifecycle.requestStop()
-	if err := lifecycle.complete(context.Background()); !errors.Is(err, afterStopErr) {
-		t.Fatalf("last completion error = %v, want after-stop failure", err)
+	if err := receiveError(t, result, "signal stop"); err != nil {
+		t.Fatalf("Run = %v", err)
 	}
-	if err := lifecycle.complete(context.Background()); err != nil {
-		t.Fatalf("extra completion error = %v", err)
-	}
-	if err := lifecycle.wait(time.Second); err != nil {
-		t.Fatalf("completed tracker wait = %v", err)
-	}
-	if afterCalls != 1 {
-		t.Fatalf("after-stop hook calls = %d, want 1", afterCalls)
+	if starts, stops := runtime.counts(); starts != 1 || stops != 1 {
+		t.Fatalf("runtime calls = %d/%d", starts, stops)
 	}
 }
 
-func TestAppServerPreservesEndpointContract(t *testing.T) {
-	want := &url.URL{Scheme: "grpc", Host: "127.0.0.1:9000"}
-	server := &endpointTestServer{endpoint: want}
-	lifecycle := newTestApp(t, appSnapshot{context: context.Background()}, newStaticStopPolicy(time.Second))
-	lifecycle.initServers(1)
-	lifecycle.stop = func() error { return nil }
-	wrapped := lifecycle.wrapServer(server)
-	endpointRuntime, ok := wrapped.(transport.Endpointer)
-	if !ok {
-		t.Fatalf("wrapped endpoint server type = %T", wrapped)
-	}
-	got, err := endpointRuntime.Endpoint()
-	if err != nil || got != want {
-		t.Fatalf("Endpoint = (%v, %v), want %v", got, err, want)
-	}
-
-	cause := errors.New("endpoint failed")
-	server.endpointErr = cause
-	if _, err := endpointRuntime.Endpoint(); !errors.Is(err, cause) {
-		t.Fatalf("Endpoint error = %v, want %v", err, cause)
-	}
-}
-
-func TestAppParentContextTranslatesParentCancelAndStopsIdempotently(t *testing.T) {
-	t.Run("parent cancellation", func(t *testing.T) {
-		parent, cancel := context.WithCancel(context.Background())
-		stopErr := errors.New("stop failed")
-		stopCalls := 0
-		stop := func() error {
-			stopCalls++
-			return stopErr
-		}
-		runtime := &App{
-			parent:     parent,
-			stop:       stop,
-			parentDone: make(chan struct{}),
-		}
-		cancel()
-		if err := runtime.waitParent(context.Background()); !errors.Is(err, stopErr) {
-			t.Fatalf("Start after parent cancel = %v", err)
-		}
-		if stopCalls != 1 {
-			t.Fatalf("stop calls = %d, want 1", stopCalls)
-		}
-	})
-
-	t.Run("runtime stop", func(t *testing.T) {
-		runtime := &App{
-			parent:     context.Background(),
-			stop:       func() error { return nil },
-			parentDone: make(chan struct{}),
-		}
-		if err := runtime.stopParent(context.Background()); err != nil {
+// 启动阶段失败时等待运行时退出受冻结预算约束，并保留根因与清理错误。
+func TestRunStartupFailureBoundsRuntimeWait(t *testing.T) {
+	initializeRuntimeSignals(t)
+	synctest.Test(t, func(t *testing.T) {
+		cause := errors.New("after-start failed")
+		afterStopErr := errors.New("cleanup failed")
+		stuck := make(chan struct{})
+		defer close(stuck)
+		spec := newApplicationTestSpec(t)
+		spec.AfterStart(func(context.Context) error { return cause })
+		spec.AfterStop(func(context.Context) error { return afterStopErr })
+		// Start 不响应 Stop，模拟忽略取消的 Runtime。
+		spec.RegisterRuntime(&blockingRuntime{release: stuck})
+		application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := runtime.stopParent(context.Background()); err != nil {
-			t.Fatal(err)
+		started := time.Now()
+		err = application.Run()
+		for _, want := range []error{cause, context.DeadlineExceeded, afterStopErr} {
+			if !errors.Is(err, want) {
+				t.Fatalf("Run = %v, missing %v", err, want)
+			}
 		}
-		if err := runtime.waitParent(context.Background()); err != nil {
-			t.Fatalf("Start after Stop = %v", err)
-		}
-	})
-
-	t.Run("Kratos context cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		runtime := &App{
-			parent:     context.Background(),
-			stop:       func() error { return nil },
-			parentDone: make(chan struct{}),
-		}
-		if err := runtime.waitParent(ctx); err != nil {
-			t.Fatalf("Start after runtime context cancel = %v", err)
+		if elapsed := time.Since(started); elapsed != time.Second {
+			t.Fatalf("bounded wait took %s, want frozen stop timeout", elapsed)
 		}
 	})
 }
 
-func TestStopAfterFailureAggregatesRootStopWaitAndCleanupFailures(t *testing.T) {
-	cause := errors.New("after-start failed")
-	stopErr := errors.New("application stop failed")
-	afterStopErr := errors.New("cleanup failed")
-	lifecycle := newTestApp(t, appSnapshot{
-		afterStop: []HookFunc{func(context.Context) error { return afterStopErr }},
-	}, newStaticStopPolicy(time.Second))
-	lifecycle.initServers(0)
+type blockingRuntime struct{ release <-chan struct{} }
 
-	lifecycle.stop = func() error { return stopErr }
-	err := lifecycle.stopAfterFailure(context.Background(), cause)
-	for _, want := range []error{cause, stopErr, afterStopErr} {
-		if !errors.Is(err, want) {
-			t.Fatalf("stopAfterFailure error = %v, missing %v", err, want)
-		}
-	}
-	if !lifecycle.isStopping() {
-		t.Fatal("stopAfterFailure did not freeze the stop policy")
-	}
-}
+func (r *blockingRuntime) Start(context.Context) error { <-r.release; return nil }
+func (*blockingRuntime) Stop(context.Context) error    { return nil }
 
-func TestStopAfterFailureReportsTrackerDeadline(t *testing.T) {
-	cause := errors.New("after-start failed")
-	lifecycle := newTestApp(t, appSnapshot{}, newStaticStopPolicy(time.Millisecond))
-	lifecycle.initServers(1)
-	lifecycle.stop = func() error { return nil }
-	err := lifecycle.stopAfterFailure(context.Background(), cause)
-	if !errors.Is(err, cause) || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("stopAfterFailure timeout error = %v", err)
-	}
-}
-
-func TestStopBeforeStartPreservesFirstFailureAndCleanupErrors(t *testing.T) {
+func TestAbortStartupPreservesFirstFailureAndCleanupErrors(t *testing.T) {
 	root := errors.New("first failure")
 	late := errors.New("application stopping")
-	stopErr := errors.New("stop failed")
+	beforeStopErr := errors.New("before stop failed")
 	cleanupErr := errors.New("cleanup failed")
 	lifecycle := newTestApp(t, appSnapshot{
-		afterStop: []HookFunc{func(context.Context) error { return cleanupErr }},
+		beforeStop: []HookFunc{func(context.Context) error { return beforeStopErr }},
+		afterStop:  []HookFunc{func(context.Context) error { return cleanupErr }},
 	}, newStaticStopPolicy(time.Second))
 	lifecycle.recordFailure(root)
-
-	lifecycle.stop = func() error { return stopErr }
-	err := lifecycle.stopBeforeStart(context.Background(), errors.Join(errAppStopping, late))
-	for _, want := range []error{root, stopErr, cleanupErr} {
+	err := lifecycle.abortStartup(errors.Join(errAppStopping, late))
+	for _, want := range []error{root, beforeStopErr, cleanupErr} {
 		if !errors.Is(err, want) {
-			t.Fatalf("stopBeforeRuntimeStart error = %v, missing %v", err, want)
+			t.Fatalf("abortStartup error = %v, missing %v", err, want)
 		}
 	}
 	if errors.Is(err, late) {
@@ -282,8 +253,8 @@ func TestAbortStartupUsesOneUncanceledBudgetAndContinuesAfterTimeout(t *testing.
 			<-ctx.Done()
 			return ctx.Err()
 		}}
-		lifecycle := newTestApp(t, appSnapshot{runtimes: []Runtime{first, last}}, newStaticStopPolicy(time.Second))
-		if err := lifecycle.abortStartup(ctx); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		lifecycle := newTestApp(t, appSnapshot{context: ctx, runtimes: []Runtime{first, last}}, newStaticStopPolicy(time.Second))
+		if err := lifecycle.abortStartup(nil); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			t.Fatalf("abortStartup error=%v, want only deadline exceeded", err)
 		}
 		if want := []string{"abort:last", "abort:first"}; !reflect.DeepEqual(events, want) {

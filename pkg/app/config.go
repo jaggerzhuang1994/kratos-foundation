@@ -47,12 +47,5 @@ func validateConfig(config Config) error {
 	if timeout := registrarTimeout.AsDuration(); timeout <= 0 {
 		return fmt.Errorf("app registrar_timeout must be positive")
 	}
-	stopTimeout := config.GetStopTimeout()
-	if err := stopTimeout.CheckValid(); err != nil {
-		return fmt.Errorf("app stop_timeout is invalid: %w", err)
-	}
-	if timeout := stopTimeout.AsDuration(); timeout <= 0 {
-		return fmt.Errorf("app stop_timeout must be positive")
-	}
-	return nil
+	return checkStopTimeout(config.GetStopTimeout())
 }

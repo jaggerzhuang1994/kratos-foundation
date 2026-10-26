@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -12,19 +11,10 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-type stopTimeoutSnapshot struct {
-	// version 记录已处理的配置版本，非法更新也会推进版本。
-	version uint64
-	// timeout 保存最近一次校验通过的停机预算。
-	timeout time.Duration
-}
-
-// StopPolicy 为应用提供经校验的热更新停机预算。
+// StopPolicy 为应用提供经校验的热更新停机预算；App 在首次停止请求时冻结所读预算。
 type StopPolicy struct {
-	// value 持有停机超时订阅，构造返回的 cleanup 负责取消。
-	value *foundationconfig.HotReloadValue[durationpb.Duration]
-	// currentValue 原子保存已处理版本和有效预算，防止旧版本覆盖新值。
-	currentValue atomic.Pointer[stopTimeoutSnapshot]
+	// timeout 原子保存最近一次校验通过的停机预算。
+	timeout atomic.Int64
 	// logger 记录预算更新及非法配置拒绝结果。
 	logger stopPolicyLogger
 }
@@ -35,22 +25,10 @@ type stopPolicyLogger interface {
 	Warnw(...any)
 }
 
-// NewStopPolicy 通过点分路径订阅停机超时，cleanup 取消订阅。
+// NewStopPolicy 以启动配置的 stop_timeout 为初值，并订阅 app.stop_timeout 的后续更新；cleanup 取消订阅。
+// 更新在通知时校验：合法且变化时生效并记录 INFO，非法时保留原预算并记录 WARN。
 func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger kratoslog.Logger) (*StopPolicy, func(), error) {
-	if err := validateStopTimeout(config.GetStopTimeout().AsDuration()); err != nil {
-		return nil, nil, err
-	}
-	value, cancel, err := foundationconfig.NewHotReloadValue[durationpb.Duration](configManager, "app.stop_timeout", defaultConfig.GetStopTimeout())
-	if err != nil {
-		return nil, nil, err
-	}
-	initial, version := value.GetCurrent()
-	if err := initial.CheckValid(); err != nil {
-		cancel()
-		return nil, nil, fmt.Errorf("app stop_timeout: %w", err)
-	}
-	if err := validateStopTimeout(initial.AsDuration()); err != nil {
-		cancel()
+	if err := checkStopTimeout(config.GetStopTimeout()); err != nil {
 		return nil, nil, err
 	}
 	var policyLogger stopPolicyLogger
@@ -59,46 +37,50 @@ func NewStopPolicy(config Config, configManager foundationconfig.Manager, logger
 	} else {
 		policyLogger = kratoslog.NewHelper(kratoslog.With(logger, "module", "app"))
 	}
-	policy := &StopPolicy{value: value, logger: policyLogger}
-	policy.currentValue.Store(&stopTimeoutSnapshot{version: version, timeout: initial.AsDuration()})
-	var once sync.Once
-	return policy, func() { once.Do(cancel) }, nil
+	policy := &StopPolicy{logger: policyLogger}
+	policy.timeout.Store(int64(config.GetStopTimeout().AsDuration()))
+	cancel, err := configManager.Subscribe("app.stop_timeout", new(durationpb.Duration), policy.update, defaultConfig.GetStopTimeout())
+	if err != nil {
+		return nil, nil, err
+	}
+	return policy, cancel, nil
 }
 
-// validateStopTimeout 仅校验应用自身预算；服务器预停等待由部署配置协调。
+// update 处理订阅通知；Manager 串行回调，读取方只通过原子值观察结果。
+func (p *StopPolicy) update(_ string, value any, err error) {
+	previous := time.Duration(p.timeout.Load())
+	if err == nil {
+		err = checkStopTimeout(value.(*durationpb.Duration))
+	}
+	if err != nil {
+		p.logger.Warnw("event", "app.stop_policy.rejected", "stop_timeout", previous, "error", err, "msg", "stop timeout update rejected; keeping previous")
+		return
+	}
+	next := value.(*durationpb.Duration).AsDuration()
+	if next == previous {
+		return
+	}
+	p.timeout.Store(int64(next))
+	p.logger.Infow("event", "app.stop_policy.updated", "stop_timeout", next, "previous", previous, "msg", "stop timeout updated")
+}
+
+// current 返回最近一次校验通过的停机预算。
+func (p *StopPolicy) current() time.Duration {
+	return time.Duration(p.timeout.Load())
+}
+
+// checkStopTimeout 校验停机预算为合法且为正的 Duration；服务器预停等待由部署配置协调。
+func checkStopTimeout(timeout *durationpb.Duration) error {
+	if err := timeout.CheckValid(); err != nil {
+		return fmt.Errorf("app stop_timeout is invalid: %w", err)
+	}
+	return validateStopTimeout(timeout.AsDuration())
+}
+
+// validateStopTimeout 仅校验应用自身预算。
 func validateStopTimeout(timeout time.Duration) error {
 	if timeout <= 0 {
 		return fmt.Errorf("app stop_timeout must be positive")
 	}
-
 	return nil
-}
-
-// current 在读取时校验新版本；停机流程获取该值后自行冻结本次预算。
-func (p *StopPolicy) current() time.Duration {
-	for {
-		old := p.currentValue.Load()
-		value, version := p.value.GetCurrent()
-		if old.version >= version {
-			return old.timeout
-		}
-		err := value.CheckValid()
-		if err == nil {
-			err = validateStopTimeout(value.AsDuration())
-		}
-		next := &stopTimeoutSnapshot{version: version, timeout: old.timeout}
-		if err == nil {
-			next.timeout = value.AsDuration()
-		}
-		// 记录已处理版本，即使非法也不重复校验和记录日志；CAS 避免旧版本覆盖新预算。
-		if !p.currentValue.CompareAndSwap(old, next) {
-			continue
-		}
-		if err != nil {
-			p.logger.Warnw("event", "app.stop_policy.rejected", "version", version, "stop_timeout", old.timeout, "error", err, "msg", "stop timeout update rejected; keeping previous")
-		} else if old.timeout != next.timeout {
-			p.logger.Infow("event", "app.stop_policy.updated", "version", version, "stop_timeout", next.timeout, "msg", "stop timeout updated")
-		}
-		return next.timeout
-	}
 }

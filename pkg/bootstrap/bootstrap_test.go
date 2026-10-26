@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/metric/noop"
 )
 
-func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
+func TestNewAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 	manager := testconfig.Empty(t)
 	config, err := app.NewConfig(manager)
 	if err != nil {
@@ -46,7 +46,7 @@ func TestNewKratosAppConsumesContributionsAndFreezesSpec(t *testing.T) {
 			if tt.invalid {
 				spec.AddContext(func(context.Context) context.Context { return nil })
 			}
-			application, err := bootstrap.NewKratosApp(spec, config, policy, nil, completed)
+			application, err := bootstrap.NewApp(spec, config, policy, nil, completed)
 			if tt.wantErr {
 				if err == nil || application != nil {
 					t.Fatalf("construction = (%v, %v), want error", application, err)
@@ -125,7 +125,7 @@ func runComponentsApp(t *testing.T, spec *app.Spec) error {
 	defer cancel()
 	ready := bootstrap.NewApplicationBootstrap(bootstrap.InfrastructureBootstrap{}, bootstrap.Bootstrap{}, bootstrap.RuntimeBootstrap{})
 	spec.AddContext(func(context.Context) context.Context { return ctx })
-	application, err := bootstrap.NewKratosApp(spec, config, policy, nil, ready)
+	application, err := bootstrap.NewApp(spec, config, policy, nil, ready)
 	if err != nil {
 		t.Fatal(err)
 	}
