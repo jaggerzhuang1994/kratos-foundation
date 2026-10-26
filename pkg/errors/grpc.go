@@ -8,12 +8,13 @@ import (
 
 	"github.com/go-kratos/kratos/v2/errors"
 	httpstatus "github.com/go-kratos/kratos/v2/transport/http/status"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// grpcMetadata 为服务间调用保留业务状态和完整诊断，公开出口由网关过滤。
+// grpcMetadata 为服务间调用保留业务状态；诊断堆栈受运行环境约束。
 func (e *Error) grpcMetadata() map[string]string {
 	md := e.PublicMetadata()
 	if md == nil {
@@ -26,9 +27,12 @@ func (e *Error) grpcMetadata() map[string]string {
 	}
 	// 必须以状态字段为准，避免调用方通过同名 metadata 伪造传输状态码。
 	md[mdHTTPCodeKey] = strconv.FormatInt(int64(e.Code), 10)
-	// 堆栈包含本地 cause 诊断，接收端可继续包装并转发；HTTP 响应头不随之传输。
-	if stack := e.ErrStack(); stack != "" {
-		md[mdErrStackKey] = stack
+	// 堆栈包含本地路径和 cause 原文，仅在 env.ExposeDiagnostics 允许时传给对端，prod 一律不传；
+	// 接收端可继续包装并转发。HTTP 响应头不随之传输。
+	if env.ExposeDiagnostics() {
+		if stack := e.ErrStack(); stack != "" {
+			md[mdErrStackKey] = stack
+		}
 	}
 	// HTTP 网关需要跨 gRPC 恢复业务 data，仅发送可编码的快照。
 	if e.httpData != nil {

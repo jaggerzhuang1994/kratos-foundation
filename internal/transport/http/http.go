@@ -10,6 +10,7 @@ import (
 
 	kratosjson "github.com/go-kratos/kratos/v2/encoding/json"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 )
 
@@ -32,7 +33,7 @@ type errResponse struct {
 	Data any `json:"data"`
 	// Reason 保存稳定错误原因标识。
 	Reason string `json:"reason"`
-	// Metadata 保留完整错误元数据，公开出口由网关统一过滤内部字段。
+	// Metadata 保留错误元数据；err_stack 仅在非正式环境返回，其余内部字段由公开网关过滤。
 	Metadata map[string]string `json:"metadata"`
 }
 
@@ -78,14 +79,19 @@ func Encoder() kratoshttp.EncodeErrorFunc {
 const (
 	legacyHTTPDataMetadataKey   = "http_data"
 	legacyHTTPHeaderMetadataKey = "http_header"
+	errStackMetadataKey         = "err_stack"
 )
 
-// compatibilityMetadata 保留完整内部元数据，并为只解析 metadata 的 v1 HTTP 客户端
+// compatibilityMetadata 保留内部元数据（诊断堆栈受运行环境约束），并为只解析 metadata 的 v1 HTTP 客户端
 // 回填 data 和响应头。返回独立副本，避免编码过程修改业务错误。
 func compatibilityMetadata(se *errors.Error, httpData any) map[string]string {
 	metadata := maps.Clone(se.Metadata)
 	if metadata == nil {
 		metadata = make(map[string]string, 2)
+	}
+	// 堆栈含构建路径，仅在 env.ExposeDiagnostics 允许时返回，prod 一律剥离。
+	if !env.ExposeDiagnostics() {
+		delete(metadata, errStackMetadataKey)
 	}
 	if _, exists := metadata[legacyHTTPDataMetadataKey]; !exists && httpData != nil {
 		if encoded, err := json.Marshal(httpData); err == nil {

@@ -37,6 +37,10 @@ switch {
 `AppDebug` 优先读取 `APP_DEBUG`，其次读取 `KRATOS_DEBUG`。变量不存在时返回 `false`；存在时按 `strconv.ParseBool` 解析，非法值会
 panic。
 
+## 诊断出口
+
+`ExposeDiagnostics` 报告是否允许把错误堆栈等内部诊断返回给调用方：`local`、`dev`、`test` 始终允许；`pre` 仅在 `APP_DEBUG`（其次 `KRATOS_DEBUG`）解析为 true 时允许；`prod` 一律拒绝。它用于错误响应路径，非法环境名或调试开关不会 panic，而是按拒绝处理。Foundation 的 HTTP Encoder 与 gRPC 错误状态据此决定是否携带 `err_stack`。
+
 ## 通用读取
 
 ```go

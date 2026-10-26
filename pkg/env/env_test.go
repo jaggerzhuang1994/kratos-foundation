@@ -112,3 +112,41 @@ func TestGetEnvAsBoolRejectsInvalidExplicitValue(t *testing.T) {
 	}()
 	GetEnvAsBool(key)
 }
+
+func TestExposeDiagnostics(t *testing.T) {
+	tests := []struct {
+		name, env, debug string
+		debugSet         bool
+		want             bool
+	}{
+		{name: "default local", want: true},
+		{name: "dev", env: Dev, want: true},
+		{name: "test", env: Test, want: true},
+		{name: "pre without debug", env: Pre, want: false},
+		{name: "pre with debug", env: Pre, debug: "true", debugSet: true, want: true},
+		{name: "pre with invalid debug", env: Pre, debug: "yes", debugSet: true, want: false},
+		{name: "prod", env: Prod, want: false},
+		{name: "prod ignores debug", env: Prod, debug: "true", debugSet: true, want: false},
+		{name: "invalid env never panics", env: "PROD", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// 显式清空所有相关变量，避免宿主环境影响结果。
+			for _, key := range append(append([]string(nil), appEnvKeys...), appDebugKeys...) {
+				t.Setenv(key, "")
+				if err := os.Unsetenv(key); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if test.env != "" {
+				t.Setenv("APP_ENV", test.env)
+			}
+			if test.debugSet {
+				t.Setenv("APP_DEBUG", test.debug)
+			}
+			if got := ExposeDiagnostics(); got != test.want {
+				t.Fatalf("ExposeDiagnostics() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}

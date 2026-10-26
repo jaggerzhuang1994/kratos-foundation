@@ -1,17 +1,19 @@
 package http
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	kratoserrors "github.com/go-kratos/kratos/v2/errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+
+	kratoserrors "github.com/go-kratos/kratos/v2/errors"
 
 	kratosjson "github.com/go-kratos/kratos/v2/encoding/json"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
@@ -111,21 +113,36 @@ func TestEncoderBackfillsV1HTTPErrorMetadata(t *testing.T) {
 	}
 }
 
-func TestEncoderMapsUnknownErrorAndPreservesDiagnosticsForGateway(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), errors.New("sql: password=private"))
-	var response errResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-	if recorder.Code != http.StatusInternalServerError || response.Message != http.StatusText(http.StatusInternalServerError) {
-		t.Fatalf("status=%d response=%+v", recorder.Code, response)
-	}
-	if response.Metadata["err_stack"] == "" {
-		t.Fatalf("diagnostics missing from gateway metadata: %+v", response.Metadata)
-	}
-	if strings.Contains(response.Message, "password=private") {
-		t.Fatalf("private cause leaked in public message: %+v", response)
+func TestEncoderMapsUnknownErrorAndGatesDiagnosticsByEnvironment(t *testing.T) {
+	for _, test := range []struct {
+		env, debug string
+		exposed    bool
+	}{
+		{env: "local", exposed: true},
+		{env: "test", exposed: true},
+		{env: "pre", exposed: false},
+		{env: "pre", debug: "true", exposed: true},
+		{env: "prod", debug: "true", exposed: false},
+	} {
+		t.Run(test.env+"/"+test.debug, func(t *testing.T) {
+			t.Setenv("APP_ENV", test.env)
+			t.Setenv("APP_DEBUG", cmp.Or(test.debug, "false"))
+			recorder := httptest.NewRecorder()
+			Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), errors.New("sql: password=private"))
+			var response errResponse
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if recorder.Code != http.StatusInternalServerError || response.Message != http.StatusText(http.StatusInternalServerError) {
+				t.Fatalf("status=%d response=%+v", recorder.Code, response)
+			}
+			if _, ok := response.Metadata["err_stack"]; ok != test.exposed {
+				t.Fatalf("err_stack present=%v, want %v: %+v", ok, test.exposed, response.Metadata)
+			}
+			if strings.Contains(recorder.Body.String(), "password=private") {
+				t.Fatalf("private cause leaked in response: %s", recorder.Body.String())
+			}
+		})
 	}
 }
 
@@ -229,6 +246,7 @@ func (b *countingErrorBody) Read(p []byte) (int, error) {
 func (b *countingErrorBody) Close() error { b.closed = true; return nil }
 
 func TestEncoderPreservesLegacyExplicitStatuses(t *testing.T) {
+	t.Setenv("APP_ENV", "local")
 	for _, code := range []int{422, 503} {
 		t.Run(strconv.Itoa(code), func(t *testing.T) {
 			// Kratos 状态访问器与旧 cyberkite 错误具有相同契约。
@@ -243,7 +261,8 @@ func TestEncoderPreservesLegacyExplicitStatuses(t *testing.T) {
 	}
 }
 
-func TestEncoderPreservesGRPCDiagnosticsForGateway(t *testing.T) {
+func TestEncoderPreservesGRPCDiagnosticsOutsideProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "local")
 	origin := foundationerrors.New(500, "INTERNAL", "internal error").WithMetadata(map[string]string{"err_stack": "private-origin-frame"}).WithCause(errors.New("private-database-cause"))
 	remote := origin.GRPCStatus().Err()
 	if !strings.Contains(foundationerrors.ErrStack(remote), "private-origin-frame") || !strings.Contains(foundationerrors.ErrStack(remote), "private-database-cause") {
@@ -253,5 +272,13 @@ func TestEncoderPreservesGRPCDiagnosticsForGateway(t *testing.T) {
 	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), remote)
 	if recorder.Code != 500 || !strings.Contains(recorder.Body.String(), "private-origin-frame") || !strings.Contains(recorder.Body.String(), "private-database-cause") || !strings.Contains(recorder.Body.String(), "err_stack") {
 		t.Fatalf("gateway diagnostics missing: %s", recorder.Body.String())
+	}
+
+	// 生产网关即使收到上游（非 prod）携带的堆栈，也不得回写到 HTTP 响应。
+	t.Setenv("APP_ENV", "prod")
+	recorder = httptest.NewRecorder()
+	Encoder()(recorder, httptest.NewRequest(http.MethodGet, "/", nil), remote)
+	if recorder.Code != 500 || strings.Contains(recorder.Body.String(), "err_stack") || strings.Contains(recorder.Body.String(), "private-") {
+		t.Fatalf("production response leaked diagnostics: %s", recorder.Body.String())
 	}
 }

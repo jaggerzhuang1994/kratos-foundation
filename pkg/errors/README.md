@@ -61,7 +61,7 @@ reasonCode := errors.ReasonCode(err)
 
 旧 `cyberkite_pb` 错误无需更换依赖即可在发送端适配：422 直接从本地状态读取，然后由 Foundation 序列化携带 `http_code=422`。
 旧 `http_data` 使用原始 JSON 恢复以保留大整数精度，旧 `http_header` 映射到 HTTP 响应头；metadata 会复制，原错误不被修改。
-旧堆栈和 cause 诊断通过服务间 gRPC details 的 `err_stack` 保留，接收端可继续包装和转发；HTTP Encoder 延续 v1 契约并保留完整 metadata，gRPC 不转发响应头。如果旧发送端已经将 422 丢失成 gRPC Unknown，
+旧堆栈和 cause 诊断通过服务间 gRPC details 的 `err_stack` 保留，接收端可继续包装和转发；HTTP Encoder 延续 v1 契约并保留 metadata，gRPC 不转发响应头。`err_stack` 是否离开进程受[诊断出口环境约束](#诊断出口环境约束)控制，prod 一律不返回。如果旧发送端已经将 422 丢失成 gRPC Unknown，
 且没有携带 `http_code`，接收端无法恢复；不能用独立业务码 `reason_code` 猜测 HTTP 状态。
 
 本包的状态错误使用 HTTP 状态码和 reason 参与 `errors.Is` 匹配。底层 cause 仍可通过 `errors.Is` 和 `errors.As` 访问。
@@ -74,7 +74,7 @@ gRPC code 唯一表示的 HTTP 错误状态，会携带受校验的原始 HTTP �
 以下内部字段不会出现在 `PublicMetadata` 中：错误栈、业务原因码、HTTP 状态恢复字段、HTTP data、HTTP header
 和参数校验详情。不要把秘密、凭据或只供日志使用的内部信息放入普通 metadata。
 
-`PublicMetadata` 只用于公开格式化和构造受限元数据视图；Foundation HTTP Encoder 不使用该视图，而是保留完整 metadata，
+`PublicMetadata` 只用于公开格式化和构造受限元数据视图；Foundation HTTP Encoder 不使用该视图，而是保留 metadata（`err_stack` 按运行环境剥离），
 并从当前错误状态回填 v1 客户端读取的 `http_data`、`http_header`，兼容只解析 metadata 的旧 HTTP Decoder。回填只修改本次编码副本，不修改错误对象；单数 `http_header` 沿用旧 `map[string]string` JSON，只能保存每个响应头的首值，v2 的复数 `http_headers` 继续保存完整多值。公开网关必须在外部响应出口过滤 `err_stack`、HTTP 状态恢复字段、`http_data`、`http_header` 等内部字段；仍需服务 v1 客户端的内部路由须在过滤前完成兼容转换，并保留其识别业务错误所需的 `reason_code`。
 
 `WithHTTPData` 面向可 JSON 编码的数据。读取 `HTTPData` 得到独立副本；调用方不应依赖自定义 Go 类型在 JSON 边界后仍保持原具体类型。
@@ -101,7 +101,7 @@ WithValidationError(validationErrors)
 ## 日志与公开信息
 
 - `Error()`、`%s` 和 `%v` 只输出公开状态与公开 metadata。
-- `%+v` 和 `ErrStack` 会包含调用栈及底层 cause，可用于受控内部日志和服务间 gRPC 诊断，必须在网关公开出口屏蔽。
+- `%+v` 和 `ErrStack` 会包含调用栈及底层 cause，可用于受控内部日志；随响应离开进程时受诊断出口环境约束，prod 不返回。
 - `message`、HTTP data、validation error 和普通 metadata 都可能离开进程，必须在创建错误时完成脱敏。
 - 底层包应返回带 `%w` 的原因错误；决定 HTTP/gRPC 呈现的边界层再创建本包状态错误。
 
@@ -123,13 +123,39 @@ flowchart LR
  D --> H[返回无 data 的错误]
 ```
 
+### 诊断出口环境约束
+
+`err_stack` 含构建路径、调用帧以及 cause 原文（gRPC 方向），只在 `env.ExposeDiagnostics()` 为 true 时随响应离开进程。判断在每次编码时进行，本地 `ErrStack`、`%+v` 与服务端日志不受影响。
+
+| `APP_ENV` | `APP_DEBUG` | HTTP 响应 `metadata.err_stack` | gRPC `ErrorInfo.err_stack` |
+| --- | --- | --- | --- |
+| `local` / `dev` / `test`（含未设置） | 任意 | 返回 | 返回 |
+| `pre` | `true` | 返回 | 返回 |
+| `pre` | 未设置、`false` 或非法值 | 不返回 | 不返回 |
+| `prod` | 任意 | 不返回 | 不返回 |
+| 非法环境名 | 任意 | 不返回 | 不返回 |
+
+prod 网关即使收到上游非 prod 服务带来的 `err_stack`，HTTP Encoder 也会剥离。环境变量读取顺序与 `env.AppEnv`、`env.AppDebug` 一致，但非法值按拒绝处理而不 panic。
+
+```mermaid
+flowchart TD
+ A([错误编码: HTTP Encoder 或 GRPCStatus]) --> B{APP_ENV}
+ B -- local/dev/test --> E[保留 err_stack]
+ B -- pre --> C{APP_DEBUG=true?}
+ C -- 是 --> E
+ C -- 否或非法 --> F[剥离 err_stack]
+ B -- prod 或非法 --> F
+ E --> G([写出响应])
+ F --> G
+```
+
 ### 服务间堆栈与网关出口
 
-`GRPCStatus` 将 `ErrStack()` 的诊断文本写入 `ErrorInfo.Metadata["err_stack"]`；`FromError` 保留收到的堆栈。业务通过 `WithCause(err)` 或 `%w` 包装后，后续发送仍包含远端栈、本地已有栈和 cause 文本。普通转发不主动采集新的调用栈；需要定位新增失败阶段时使用 `WithErrStack`。Go 错误对象及 `errors.Is/As` 身份仅在本进程内有效，网络上传输的是诊断文本。
+允许暴露诊断时，`GRPCStatus` 将 `ErrStack()` 的诊断文本写入 `ErrorInfo.Metadata["err_stack"]`；`FromError` 保留收到的堆栈。业务通过 `WithCause(err)` 或 `%w` 包装后，后续发送仍包含远端栈、本地已有栈和 cause 文本。普通转发不主动采集新的调用栈；需要定位新增失败阶段时使用 `WithErrStack`。Go 错误对象及 `errors.Is/As` 身份仅在本进程内有效，网络上传输的是诊断文本。
 
 v1/v2 gRPC 双向互调共享标准 gRPC status 与 `ErrorInfo`，标准映射状态、reason、`reason_code`、HTTP data 和普通 metadata 均可恢复。v2 额外使用 `http_code` 精确保留 422 等映射为 `Unknown` 的 HTTP 状态；旧 v1 发送端不携带、旧 v1 接收端也不读取该字段，因此只要任一端仍是 v1，非标准 HTTP 状态可能退化为 500，业务判断仍应使用 reason/`reason_code`。响应头不通过 gRPC ErrorInfo 传播。
 
-网关先用 `errors.ErrStack(err)` 或 `%+v` 记录内部诊断；Foundation HTTP Encoder 会保留完整 metadata，并回填 v1 HTTP Decoder 使用的 `http_data`、`http_header`。内部 v1 调用方在过滤前消费兼容字段；公网出口必须过滤 `err_stack`、`http_data`、`http_header` 等内部字段，但按兼容范围保留 `reason_code`。如果网关对外提供 gRPC，也需要在该出口过滤 ErrorInfo 中的内部字段；不能把内部 gRPC status 原样返回公网客户端。本次只修改 Foundation，不代表外部网关已完成改造。
+网关先用 `errors.ErrStack(err)` 或 `%+v` 记录内部诊断；Foundation HTTP Encoder 会保留 metadata（`err_stack` 按运行环境剥离），并回填 v1 HTTP Decoder 使用的 `http_data`、`http_header`。内部 v1 调用方在过滤前消费兼容字段；公网出口必须过滤 `err_stack`、`http_data`、`http_header` 等内部字段，但按兼容范围保留 `reason_code`。如果网关对外提供 gRPC，也需要在该出口过滤 ErrorInfo 中的内部字段；不能把内部 gRPC status 原样返回公网客户端。本次只修改 Foundation，不代表外部网关已完成改造。
 
 ```mermaid
 flowchart LR

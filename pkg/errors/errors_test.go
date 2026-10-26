@@ -49,3 +49,47 @@ func TestErrorMatchingCauseFormattingAndHelpers(t *testing.T) {
 		t.Fatal("nil helper defaults changed")
 	}
 }
+
+//go:noinline
+func createStackError() *Error {
+	return New(500, "INTERNAL", "internal").WithErrStack()
+}
+
+// WithErrStack 的首帧是业务调用点，栈中不含错误包或日志包的内部帧。
+func TestWithErrStackStartsAtCallSiteWithoutInternalFrames(t *testing.T) {
+	stack := createStackError().ErrStack()
+	lines := strings.Split(strings.TrimSpace(stack), "\n")
+	if len(lines) < 2 || !strings.HasSuffix(lines[0], "pkg/errors.createStackError") {
+		t.Fatalf("first frame = %q, want createStackError\n%s", lines[0], stack)
+	}
+	for _, frame := range lines {
+		if strings.Contains(frame, "pkg/errors.callers") || strings.Contains(frame, "(*Error).WithErrStack") || strings.Contains(frame, "pkg/log.") {
+			t.Fatalf("stack contains internal frame %q\n%s", frame, stack)
+		}
+	}
+}
+
+//go:noinline
+func wrapWithOuterStack(cause error) *Error {
+	return New(500, "OUTER", "outer").WithErrStack().WithCause(cause)
+}
+
+// 多层包装只保留各层显式采集的栈，每段栈恰好出现一次；格式化不会追加新的调用栈。
+func TestNestedErrStackContainsEachCaptureOnce(t *testing.T) {
+	t.Setenv("APP_ENV", "local")
+	inner := createStackError()
+	middle := New(503, "DEPENDENCY", "dependency").WithCause(fmt.Errorf("call inner: %w", inner))
+	outer := wrapWithOuterStack(middle)
+	for _, text := range []string{
+		outer.ErrStack(),
+		// 重复格式化与再次包装不重新采集栈。
+		fmt.Sprintf("%+v", New(500, "WRAP", "wrap").WithCause(outer)),
+		FromError(outer.GRPCStatus().Err()).ErrStack(),
+	} {
+		for _, capture := range []string{"pkg/errors.createStackError", "pkg/errors.wrapWithOuterStack"} {
+			if got := strings.Count(text, capture); got != 1 {
+				t.Fatalf("%s appears %d times\n%s", capture, got, text)
+			}
+		}
+	}
+}

@@ -99,8 +99,14 @@ func TestRecoveryDoesNotExposeRequestOrPanicPayload(t *testing.T) {
 	if strings.Contains(logger.entries[0], "secret-panic") || strings.Contains(logger.entries[0], "secret-request") || strings.Contains(err.Error(), "secret-") {
 		t.Fatal("sensitive panic information leaked")
 	}
+	// 非正式环境保留服务间诊断；prod 中 gRPC 响应不得携带 panic 堆栈。
+	t.Setenv("APP_ENV", "local")
 	if foundationerrors.FromError(foundationerrors.FromError(err).GRPCStatus().Err()).ErrStack() == "" {
 		t.Fatal("panic stack lost in gRPC response")
+	}
+	t.Setenv("APP_ENV", "prod")
+	if stack := foundationerrors.FromError(foundationerrors.FromError(err).GRPCStatus().Err()).ErrStack(); stack != "" {
+		t.Fatalf("panic stack leaked in production gRPC response: %q", stack)
 	}
 	if !strings.Contains(logger.entries[0], "panic_type") || !strings.Contains(logger.entries[0], "eventserver.request.panic.recovered") {
 		t.Fatal("panic type or event missing")

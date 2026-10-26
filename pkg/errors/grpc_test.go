@@ -231,6 +231,7 @@ func TestFromErrorIgnoresMalformedHTTPData(t *testing.T) {
 }
 
 func TestStackSurvivesMultipleServicesAndCauseWrapping(t *testing.T) {
+	t.Setenv("APP_ENV", "dev")
 	origin := New(500, "INTERNAL", "internal error").WithMetadata(map[string]string{"err_stack": "origin-frame"}).WithCause(fmt.Errorf("database root cause"))
 	remote := origin.GRPCStatus().Err()
 	middle := New(503, "DEPENDENCY", "dependency unavailable").WithMetadata(map[string]string{"err_stack": "middle-frame"}).WithCause(fmt.Errorf("call account service: %w", remote))
@@ -248,5 +249,18 @@ func TestStackSurvivesMultipleServicesAndCauseWrapping(t *testing.T) {
 	}
 	if strings.Contains(fmt.Sprint(gateway.PublicMetadata()), "origin-frame") || strings.Contains(gateway.Error(), "database root cause") {
 		t.Fatal("diagnostics exposed through public representation")
+	}
+}
+
+func TestGRPCStatusOmitsStackInProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "prod")
+	t.Setenv("APP_DEBUG", "true")
+	origin := New(500, "INTERNAL", "internal error").WithErrStack().WithCause(fmt.Errorf("database root cause"))
+	if origin.ErrStack() == "" {
+		t.Fatal("local diagnostics must stay available for server-side logs")
+	}
+	remote := FromError(origin.GRPCStatus().Err())
+	if remote.ErrStack() != "" || remote.Code != 500 || remote.Reason != "INTERNAL" {
+		t.Fatalf("production status leaked diagnostics or lost identity: code=%d reason=%s stack=%q", remote.Code, remote.Reason, remote.ErrStack())
 	}
 }

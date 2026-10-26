@@ -21,7 +21,7 @@ const (
 
 // AppEnv 返回校验后的应用环境；未配置时默认 local，显式非法值会立即 panic。
 func AppEnv() string {
-	value := getEnv([]string{"APP_ENV", "KRATOS_ENV"}, Local)
+	value := getEnv(appEnvKeys, Local)
 	switch value {
 	case Local, Dev, Test, Pre, Prod:
 		return value
@@ -40,7 +40,32 @@ func AppEnv() string {
 
 // AppDebug 返回应用调试开关；显式非法布尔值会立即 panic，避免错误配置被静默忽略。
 func AppDebug() bool {
-	return getEnvAsBool([]string{"APP_DEBUG", "KRATOS_DEBUG"})
+	return getEnvAsBool(appDebugKeys)
+}
+
+var (
+	// appEnvKeys 按优先级列出应用环境变量。
+	appEnvKeys = []string{"APP_ENV", "KRATOS_ENV"}
+	// appDebugKeys 按优先级列出调试开关变量。
+	appDebugKeys = []string{"APP_DEBUG", "KRATOS_DEBUG"}
+)
+
+// ExposeDiagnostics 报告是否允许把错误堆栈等内部诊断返回给调用方。
+// local、dev、test 始终允许；pre 仅在调试开关为 true 时允许；prod 一律拒绝。
+// 该函数位于错误响应路径，非法环境名或调试开关不 panic，而是按最严格的拒绝处理。
+func ExposeDiagnostics() bool {
+	switch getEnv(appEnvKeys, Local) {
+	case Local, Dev, Test:
+		return true
+	case Pre:
+		for _, key := range appDebugKeys {
+			if value, ok := os.LookupEnv(key); ok {
+				debug, err := strconv.ParseBool(value)
+				return err == nil && debug
+			}
+		}
+	}
+	return false
 }
 
 // IsLocal 判断应用是否处于本地开发环境。
