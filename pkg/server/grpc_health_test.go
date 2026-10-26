@@ -10,6 +10,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/go-kratos/kratos/v2/transport"
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -21,6 +22,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func newTestGRPCHealth(ready *atomic.Bool, check func(context.Context) error) *grpcHealth {
@@ -164,5 +166,111 @@ func TestIntegrationGRPCHealthFollowsApplicationReadiness(t *testing.T) {
 		if err != nil || response.GetStatus() != want {
 			t.Fatalf("Check = %v, %v; want %v", response.GetStatus(), err, want)
 		}
+	}
+}
+
+// 真实 Kratos gRPC 客户端默认启用客户端健康检查（Watch 空服务名）：未就绪时不发流量，就绪后恢复，
+// 停机延迟期间先摘流，且活跃的 Watch 流不阻塞 GracefulStop。
+func TestIntegrationKratosClientHealthCheckFollowsLifecycle(t *testing.T) {
+	const stopDelay = 2 * time.Second
+	runtime, cleanup, err := NewRuntime(testconfig.New(t, "server", &config_pb.Server{
+		Http:      &config_pb.HttpServerOption{Disable: boolp(true)},
+		Grpc:      &config_pb.GrpcServerOption{Disable: boolp(false), Addr: strp("127.0.0.1:0")},
+		StopDelay: durationpb.New(stopDelay),
+	}), newRuntimeTestLogger(t), testMetricsProvider{registry: prometheus.NewRegistry()},
+		runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()}, NewSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	var ready atomic.Bool
+	runtime.SetReadinessSource(ready.Load)
+	_, grpcServer := runtime.Servers()
+	// Kratos 的 Endpoint 与 Start 都会惰性监听，先解析端点再启动，避免并发初始化同一 listener。
+	endpoint, err := grpcServer.(transport.Endpointer).Endpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := make(chan error, 1)
+	go func() { finished <- grpcServer.Start(context.Background()) }()
+	stopped := false
+	t.Cleanup(func() {
+		if !stopped {
+			ctx, cancel := context.WithTimeout(context.Background(), runtimeTestTimeout)
+			defer cancel()
+			_ = grpcServer.Stop(ctx)
+			<-finished
+		}
+	})
+	connection, err := kratosgrpc.DialInsecure(t.Context(), kratosgrpc.WithEndpoint(endpoint.Host))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = connection.Close() })
+	client := healthpb.NewHealthClient(connection)
+	// liveness 恒 SERVING，调用成功与否只取决于客户端是否把该实例视为可用。
+	call := func() error {
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		defer cancel()
+		_, err := client.Check(ctx, &healthpb.HealthCheckRequest{Service: grpcLivenessService})
+		return err
+	}
+	held := func(err error) bool {
+		code := status.Code(err)
+		return code == codes.Unavailable || code == codes.DeadlineExceeded
+	}
+	waitFor := func(what string, done func(error) bool, within time.Duration) {
+		t.Helper()
+		deadline := time.Now().Add(within)
+		for {
+			err := call()
+			if done(err) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%s: last call error = %v", what, err)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	// 端口已监听但应用未就绪：客户端持续拒绝把请求发往该实例。
+	time.Sleep(3 * grpcHealthWatchInterval / 2)
+	for range 3 {
+		if err := call(); !held(err) {
+			t.Fatalf("call before ready = %v, want held", err)
+		}
+	}
+	ready.Store(true)
+	waitFor("traffic after ready", func(err error) bool { return err == nil }, 2*grpcHealthWatchInterval+time.Second)
+
+	// 应用进入停机：就绪先撤销，客户端在停机延迟结束、监听关闭之前摘流。
+	ready.Store(false)
+	stopStarted := time.Now()
+	stopResult := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		stopResult <- grpcServer.Stop(ctx)
+	}()
+	waitFor("drain during stop delay", held, 2*grpcHealthWatchInterval)
+	if elapsed := time.Since(stopStarted); elapsed >= stopDelay {
+		t.Fatalf("client drained after %v, not within stop delay %v", elapsed, stopDelay)
+	}
+	// 客户端连接与 Watch 流仍然存在；GracefulStop 须远早于 10s 强制停止期限完成。
+	select {
+	case err := <-stopResult:
+		stopped = true
+		if err != nil {
+			t.Fatalf("Stop = %v", err)
+		}
+		if elapsed := time.Since(stopStarted); elapsed > stopDelay+2*time.Second {
+			t.Fatalf("Stop took %v; Watch stream blocked GracefulStop", elapsed)
+		}
+	case <-time.After(stopDelay + 5*time.Second):
+		t.Fatal("Stop blocked by active health Watch stream")
+	}
+	if err := <-finished; err != nil {
+		t.Fatalf("Start = %v", err)
 	}
 }

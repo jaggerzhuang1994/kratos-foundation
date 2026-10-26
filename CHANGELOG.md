@@ -10,6 +10,10 @@
 
 - **应用类型由 `*kratos.App` 改为 `*app.App`**：App 自行实现 Run/Stop 生命周期，不再包装 `kratos.App`。`bootstrap.NewKratosApp` 更名为 `bootstrap.NewApp`；业务 injector 的返回类型改为 `*app.App` 后重新执行 `wire`，`main` 中的 `app.Run()` 不变。`*app.App` 实现 `kratos.AppInfo`，`kratos.FromContext` 仍可读取身份。
 - **生产环境不再返回错误堆栈**：HTTP 响应 metadata 与 gRPC `ErrorInfo` 中的 `err_stack` 仅在 `env.ExposeDiagnostics()` 为 true 时携带（local/dev/test 始终、pre 需 `APP_DEBUG=true`、prod 一律不带）。依赖跨服务远端堆栈排障的 prod 场景需改用服务端日志。见 [诊断出口环境约束](pkg/errors/README.md#诊断出口环境约束)。
+- **gRPC 健康检查改为跟随应用就绪**：默认注册的 `grpc.health.v1.Health` 不再在 Server 启动后立即报 `SERVING`。空服务名与已注册业务服务名在应用就绪、未停机且 readiness 依赖检查通过时才返回 `SERVING`（`Watch` 只看就绪与停机，不跑依赖检查）；服务名 `liveness` 恒为 `SERVING`。影响与迁移：
+  - Kratos gRPC 客户端默认开启客户端健康检查（`Watch` 空服务名），启动钩子完成前不再把流量发往新实例，进入停机后 1s 内摘流，随后 `stop_delay` 内完成切换；无需改动。需要旧行为的调用方可用 `kratosgrpc.WithHealthCheck(false)`。
+  - 使用 K8s 原生 gRPC 探针时，liveness 须改为 `grpc: {port: <grpc>, service: liveness}`；仍用空服务名会在依赖检查失败时判定存活失败并反复重启 Pod。readiness 使用空服务名，`timeoutSeconds` 应大于 `server.http.health.timeout`。仓库 `deploy/kubernetes` 模板使用 HTTP 探针，不受影响。
+  - 已通过 `custom_health: true` 或自行注册健康服务的业务保持原实现。
 - **日志事件、文案与字段统一**：全框架日志按 [日志格式约定](AGENTS.md#日志格式约定) 收敛，msg 改为小写“主语+结果”短语（如 `servers assembled`、`client config rejected; keeping previous`），由 `TestFrameworkLogConventions` 持续校验。依赖下列旧名的告警、看板或检索需同步调整：
 
   | 旧 | 新 |
@@ -31,7 +35,7 @@
 
 - `app_ready` 指标（`bootstrap.NewMetricsBootstrap` 注册，签名改为返回 error）与 `/readyz`、gRPC 健康检查共用就绪状态，覆盖没有 HTTP 探针的 Worker、gRPC 服务、常驻进程；新增告警 `FoundationAppNotReady`、`FoundationAppUnavailable`。
 - 监控模板新增 `foundation-records` recording rules（按 env/cluster/namespace/app 预聚合请求、错误、延迟桶、就绪、消费失败、Job 失败与最老就绪任务）、舰队总览面板 `foundation-fleet-overview`，服务总览首行新增 Foundation 应用就绪率；面板检查加载同一份规则文件做合成样本校验。
-- gRPC 默认注册与应用就绪联动的 `grpc.health.v1.Health`（`custom_health` 或业务自行注册时让出），替代 Kratos 启动即报 SERVING 的内置实现。
+- gRPC 默认注册与应用就绪联动的 `grpc.health.v1.Health`（`custom_health` 或业务自行注册时让出），替代 Kratos 启动即报 SERVING 的内置实现；迁移见“升级风险”。
 - App 恢复 Runtime `Start/Stop/AbortStartup` 中的 panic，记录 `app.runtime.panicked` 并统一停机（执行停止钩子与服务注销），不再直接崩溃。
 - `env.ExposeDiagnostics()` 统一判断是否允许向调用方返回内部诊断，非法环境值按拒绝处理且不 panic。
 - `server.middleware.updated` 增加 `changed` 字段，列出实际替换的中间件。
