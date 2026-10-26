@@ -32,7 +32,7 @@ flowchart TD
 
 - `bootstrap.NewAppInfoBootstrap` 登记 AppInfo，并通过 `log.RegisterFields` 加入进程共享的 service ID、name、version 与 env 字段。
 - `bootstrap.NewTracingBootstrap` 通过 `log.RegisterFields` 加入进程共享的 `trace.id` 和 `span.id` 动态字段。
-- `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。
+- `bootstrap.NewMetricsBootstrap` 追加 ContextDecorator，把 Meter 注入由 `NewApp` 基于调用方 Context 组装的 App Context。配置 `metrics.push.url` 时它还登记一个停止后钩子，在全部 Runtime 退出后向 Pushgateway 推送一次；推送失败只记录 WARN、钩子返回 nil，不计入 `Run` 的错误汇总，见 [Metrics 推送](../metrics/README.md#一次性进程推送到-pushgateway)。
 - `bootstrap.NewLogBootstrap` 登记应用 Logger、替换全局 Logger，并返回恢复先前全局 Logger 的 cleanup。
 - `bootstrap.NewServerBootstrap` 登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；`bootstrap.NewJobBootstrap` 仅在 Manager 有任务时登记 Job Runtime。
 - 可选 `registry.Registrar` 由业务/Wire 通过 `NewApp`（或 `bootstrap.NewApp`）的构造参数注入；传入 nil 或调用 Spec.DisableServiceRegistration 表示禁用服务注册，组装层由 `app.NewRegistrar` 从具名 Registry Factory 解析实例；`app.registry` 省略或为空时使用 default，必须配置 `registry.instances.default`，缺失即报错。空名称不表示禁用，驱动禁用时返回 nil。

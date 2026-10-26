@@ -100,6 +100,14 @@ flowchart TD
 
 参考 [Prometheus Operator API](https://prometheus-operator.dev/docs/api-reference/api/)、[node-exporter Chart values](https://github.com/prometheus-community/helm-charts/blob/main/charts/prometheus-node-exporter/values.yaml)。
 
+## 一次性脚本与 CronJob
+
+一次性脚本常在被 Prometheus 抓取前退出，成功/失败以 K8s Job 状态为准。`alerts.yaml` 的 `foundation-kubernetes-jobs` 组读取 kube-state-metrics 的 `kube_job_*` / `kube_cronjob_*`，规则含义与阈值见 [告警说明](../observability/docs/alerts.md#一次性脚本与-cronjob-告警)。前提：
+
+- kube-state-metrics 已部署并被同一 Prometheus 抓取；[kube-prometheus-values.yaml](kube-prometheus-values.yaml) 给出 `metricLabelsAllowlist` 与 env/cluster relabelings 示例，合并到现有 values 而不是覆盖。
+- Job/CronJob 对象自身带 `app.kubernetes.io/name`（CronJob 写在 `spec.jobTemplate.metadata.labels`）。未放开或未打标签时告警仍会触发，只是没有 `app` 标签，按 namespace 路由。
+- 需要框架内 `job_runs_total` 等指标时，可为该进程开启 `metrics.push`，在退出前推送到 Pushgateway，见 [Metrics 推送](../../pkg/metrics/README.md#一次性进程推送到-pushgateway)。
+
 ## 健康探测与共享 Kafka
 
 新增 [blackbox 部署](blackbox.yaml) 与 [health-values.yaml](health-values.yaml)，实际逐Pod探测readyz/healthz；将additionalScrapeConfigs合并而非覆盖现有列表。可选 [Kafka exporter](kafka-exporter.yaml) 提供消费组lag，先修改broker、版本、认证及监控release。完整前提、标签和边界见 [外部采集指南](../observability/docs/external-metrics.md)。这些资源不会随渲染脚本自动部署。

@@ -604,3 +604,12 @@ job:
 #      concurrent_policy: DELAY_IF_RUNNING
 #      run_immediately: false # 只控制启动时立即执行，热更新不补触发。
 #      max_pending_runs: 1
+
+# 指标导出，组装期读取一次。[需重启]
+# push 只建议一次性脚本（job ExitWhenDone）开启：应用结束（成功或失败）后向 Pushgateway 推送一次，
+# 失败只记录 WARN，不改变退出码。省略或 url 为空时关闭。
+#metrics:
+#  push:
+#    url: http://pushgateway.monitoring:9091
+#    job: "" # 分组 job 名，默认应用名；不带 pod 等实例标签
+#    timeout: 5s # 默认 5s

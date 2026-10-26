@@ -27,7 +27,7 @@ func initialize(path configPath, version string) (*app.App, func(), error) {
 		newSpec, app.NewRegistrar, registry.NewFactory, newDemoService, newDataService, newObjectStorage, newMessaging, wire.Bind(new(client.DiscoveryResolver), new(*registry.Factory)), client.NewFactory, database.NewManager, redis.NewManager, kafka.NewClientFactory, boot,
 		log.NewLogger, wire.Bind(new(kratoslog.Logger), new(log.Logger)),
 		bootstrap.NewConfigManager, appinfo.New, app.NewConfig,
-		metrics.NewProvider, metrics.NewMetrics, tracing.NewProvider,
+		metrics.NewProvider, metrics.NewMetrics, metrics.NewPusher, tracing.NewProvider,
 		app.NewSpec, server.NewSpec, job.NewSpec,
 		bootstrap.NewAppInfoBootstrap, bootstrap.NewLogBootstrap,
 		bootstrap.NewMetricsBootstrap, bootstrap.NewTracingBootstrap,

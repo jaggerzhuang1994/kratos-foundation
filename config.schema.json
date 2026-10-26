@@ -300,6 +300,9 @@
         },
         "job": {
           "$ref": "#/definitions/.kratos_foundation_pb.Config.job"
+        },
+        "metrics": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Config.metrics"
         }
       },
       "type": "object",
@@ -328,6 +331,10 @@
     ".kratos_foundation_pb.Config.log": {
       "$ref": "#/definitions/.kratos_foundation_pb.Logging",
       "description": "全局输出日志策略。[热更新]。"
+    },
+    ".kratos_foundation_pb.Config.metrics": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Metrics",
+      "description": "指标导出配置，目前只包含一次性进程的 Pushgateway 推送。[需重启]"
     },
     ".kratos_foundation_pb.Config.oss": {
       "$ref": "#/definitions/.kratos_foundation_pb.OSS",
@@ -1527,6 +1534,19 @@
     ".kratos_foundation_pb.Logging.std": {
       "$ref": "#/definitions/.kratos_foundation_pb.LogPolicy"
     },
+    ".kratos_foundation_pb.Metrics": {
+      "properties": {
+        "push": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Metrics.push"
+        }
+      },
+      "type": "object",
+      "description": "Metrics 配置指标的可选导出方式；全部字段在组装期读取一次。[需重启]"
+    },
+    ".kratos_foundation_pb.Metrics.push": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Push",
+      "description": "应用结束时向 Pushgateway 推送一次实例 Registry；省略或 url 为空时禁用。\n 只建议一次性脚本（job ExitWhenDone）启用，常驻服务继续由 Prometheus 抓取 /metrics。[需重启]"
+    },
     ".kratos_foundation_pb.Middleware.CircuitBreaker": {
       "properties": {
         "enable": {
@@ -1881,6 +1901,34 @@
         "HTTP",
         "HTTPS"
       ]
+    },
+    ".kratos_foundation_pb.Push": {
+      "properties": {
+        "url": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Push.url"
+        },
+        "job": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Push.job"
+        },
+        "timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Push.timeout"
+        }
+      },
+      "type": "object",
+      "description": "Push 在应用结束（成功或失败）后的停止后钩子中执行一次 PUT，替换同一分组的上一次结果。"
+    },
+    ".kratos_foundation_pb.Push.job": {
+      "type": "string",
+      "description": "分组 job 名（默认应用名）。分组键只含 job，不带 pod 或实例，避免 Pushgateway 分组基数膨胀。"
+    },
+    ".kratos_foundation_pb.Push.timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "单次推送超时，须为正数（默认 5s）；超时只记录 WARN，不改变退出结果。"
+    },
+    ".kratos_foundation_pb.Push.url": {
+      "type": "string",
+      "description": "Pushgateway 地址，例如 http://pushgateway.monitoring:9091；省略协议时按 http 处理。\n 不包含 /metrics/job/... 路径；地址中的用户名密码转为 Basic Auth，不出现在日志中。"
     },
     ".kratos_foundation_pb.Redis": {
       "properties": {

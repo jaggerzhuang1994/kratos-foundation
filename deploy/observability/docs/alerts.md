@@ -75,3 +75,52 @@ flowchart TD
 这些是演示告警基线：不对 TryLock 普通竞争、Redis key 不存在、未接入的组件或单纯无流量报警。5m 窗口结束后恢复并不证明业务已自动恢复；任务执行失败是否需要立即通知应由业务等级决定。新 Counter 首次出现时若已经非零，`increase` 无法还原出现前的变化；稀疏的一次性任务需配合业务结果/日志告警。详见 [组件排障](troubleshooting.md#组件告警) 与 [指标边界](components.md)。
 
 新增状态规则：健康探测失败1m、探测结果不可采集2m、Queue统计失败2m、配置watcher停止2m；Queue最老就绪年龄>300s持续5m、Kafka消费组Topic Lag>1000持续10m。后两项为业务需调整的演示阈值。Redis大队列年龄未知时不会触发年龄规则，需要同时查看age_known；缺失的exporter/完全消失的采集目标仍需平台目标存在性规则。
+
+## 一次性脚本与 CronJob 告警
+
+一次性脚本（`job.Spec.ExitWhenDone()`）与 CronJob 进程常在下一次抓取前退出，框架内 `job_runs_total` 可能从未被 Prometheus 看到，上面的 FoundationJobFailure 对它们不可靠。`foundation-kubernetes-jobs` 组改以 kube-state-metrics 的 K8s Job 状态为准，不依赖框架代码：
+
+| 告警 | 条件 | 持续时间 | 处理入口 |
+| --- | --- | --- | --- |
+| FoundationJobFailed | `kube_job_status_failed > 0`，经 `kube_job_owner` 关联 owner；同一 CronJob 之后已有成功运行的失败 Job 不再告警 | 无 | [Job 失败](troubleshooting.md#foundationjobfailed) |
+| FoundationCronJobMissedSchedule | `time() - kube_cronjob_next_schedule_time > 600`，排除 `kube_cronjob_spec_suspend == 1` | 5m | [错过调度](troubleshooting.md#foundationcronjobmissedschedule) |
+| FoundationCronJobNoRecentSuccess | `time() - kube_cronjob_status_last_successful_time > 26h`，排除暂停 | 10m | [长期未成功](troubleshooting.md#foundationcronjobnorecentsuccess) |
+| FoundationJobRunningTooLong | `kube_job_status_active > 0` 且 `time() - kube_job_status_start_time > 1h` | 无 | [运行过久](troubleshooting.md#foundationjobrunningtoolong) |
+
+- **分组与身份**：Job 告警按 `env, cluster, namespace, job_name` 分组，FoundationJobFailed 额外保留 `owner_kind`、`owner_name`（CronJob 名，独立 Job 为 `<none>`），Alertmanager 可按 `owner_name` 合并同一 CronJob 的多次失败；CronJob 告警按 `cronjob` 分组。`job_name` 每次运行不同，但失败 Job 数受 `failedJobsHistoryLimit` 限制，不会无限增长。
+- **app 关联**：规则从 `kube_job_labels` / `kube_cronjob_labels` 的 `label_app_kubernetes_io_name` 补出 `app` 标签。kube-state-metrics 默认不导出资源标签，须用 `metricLabelsAllowlist` 放开 `jobs=[app.kubernetes.io/name]` 与 `cronjobs=[app.kubernetes.io/name]`，示例见 [kube-prometheus-values.yaml](../../kubernetes/kube-prometheus-values.yaml)；标签须写在 Job 对象（CronJob 的 `jobTemplate.metadata.labels`），不是 Pod 模板。未放开时告警照常触发，只是 `app` 为空。
+- **阈值**：600s、26h、1h 都是演示基线。26h 对应每日任务（一天加 2h 余量）；其他周期按“调度周期 × 允许连续失败次数 + 最长运行时间”复制规则并用 `cronjob=~"..."` 过滤，同时在原规则中排除这些 CronJob，避免重复告警。长任务应同时设置 `activeDeadlineSeconds`，让 K8s 主动终止并转为 FoundationJobFailed。
+- **边界**：从未成功的 CronJob 没有 `last_successful_time` 序列，NoRecentSuccess 不会触发，由 FoundationJobFailed 覆盖；Job 被删除（如 `ttlSecondsAfterFinished` 过短）后序列消失，告警随之恢复，不代表问题已处理。规则不检查 `kube_cronjob_status_active`，并发策略为 Forbid 时被长任务挡住的调度表现为 MissedSchedule 与 RunningTooLong 同时触发。
+
+```mermaid
+flowchart TD
+    A([kube-state-metrics 导出 Job/CronJob 状态]) --> B{Job failed > 0?}
+    B -- 是 --> C{属于 CronJob 且之后已有成功运行?}
+    C -- 是 --> D([视为已恢复 不告警])
+    C -- 否 --> E[FoundationJobFailed 带 owner_name 与 app]
+    B -- 否 --> F{仍有 active Pod 且运行超过 1h?}
+    F -- 是 --> G[FoundationJobRunningTooLong]
+    F -- 否 --> H([Job 正常])
+    A --> I{CronJob 已暂停?}
+    I -- 是 --> J([不评估调度与成功时间])
+    I -- 否 --> K{next_schedule_time 已过去 10m 持续 5m?}
+    K -- 是 --> L[FoundationCronJobMissedSchedule]
+    I -- 否 --> M{last_successful_time 超过 26h 持续 10m?}
+    M -- 是 --> N[FoundationCronJobNoRecentSuccess]
+    M -- 否 --> O([调度与成功时间正常])
+    K -- 否 --> O
+```
+
+### 可选：退出时推送框架指标
+
+需要 `job_runs_total`、`job_duration_seconds` 等框架指标时，可为一次性进程开启 `metrics.push`（默认关闭）：应用结束（成功或失败）后的停止后钩子把与 `/metrics` 相同的实例 Registry 推送到 Pushgateway 一次，失败只记录 WARN `metrics.push.failed`，不改变退出码。配置与语义见 [Metrics 推送](../../../pkg/metrics/README.md#一次性进程推送到-pushgateway)。
+
+推送数据只描述**最近一次运行**：分组键只有 `job`（默认应用名），每次 PUT 替换上一次结果，因此 `increase(job_runs_total[...])` 在 Pushgateway 序列上不可靠（两次失败都推送 1 时看不到增长），也不应套用上面的 FoundationJobFailure。按“最近一次” gauge 语义查询：
+
+| 语义 | PromQL（Pushgateway 以 `honorLabels: true` 抓取） |
+| --- | --- |
+| `job_last_run_timestamp_seconds` | `push_time_seconds{job="<app>"}`，Pushgateway 为每个分组自动维护 |
+| `job_last_success_timestamp_seconds` | `push_time_seconds{job="<app>"} unless on (job) (sum by (job) (job_runs_total{job="<app>",status="failure"}) > 0)` 只在最近一次运行成功时有值；跨多次运行的上次成功时间需 `max_over_time` 或继续以 `kube_cronjob_status_last_successful_time` 为准 |
+| `job_last_duration_seconds` | `job_duration_seconds_sum{job="<app>"}`（单个任务单次运行时即为本次耗时） |
+
+框架当前不额外导出这三个 gauge：它们与上表 Pushgateway 自带序列重复，而对常驻进程直接抓取时 `job_runs_total` 的 `increase` 已足够。推送后的任务名标签为 `exported_job`，与 `honorLabels=false` 直接抓取时的改名一致，可复用同一面板变量。K8s Job 状态仍是成功/失败的权威来源，推送指标用于耗时、跳过与业务计数等补充分析。

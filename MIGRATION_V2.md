@@ -51,7 +51,7 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 
 `app.Spec` 的 RegisterRuntime、RegisterAppInfo、RegisterLogger、AddContext、AddMetadata、AddEndpoints、AddSignals 及 Hook 登记方法不再返回 error；删除调用方的错误分支，直接调用即可。冻结后写入会 panic(app.ErrSpecFrozen)，重复登记非 nil AppInfo/Logger 也会 panic。NewApp 的配置、依赖、Context 构造失败及重复冻结仍返回 error。
 `bootstrap.Spec` 的声明和转发方法返回同一 `*bootstrap.Spec`，支持链式调用；RegisterRuntime 立即调用共享 application.RegisterRuntime，移除暂存列表和延后重放。移除 bootstrap 阶段状态和调用顺序检查；配置源在 Spec provider 中声明，业务在返回 Bootstrap 的 provider 中描述蓝图，由 Wire 依赖链保证先声明后构造。自定义 Runtime 的登记顺序现在取决于实际调用顺序，App 的并发启动策略不变。流程见 [app](pkg/app/README.md#runtime-登记)。
-`NewAppInfoBootstrap`、`NewMetricsBootstrap` 只返回完成标记；修改 provider set 的消费代码后通过实际 Wire 入口重新生成。Wire 对 error 返回执行回滚，不保证 panic 时回滚整条依赖链。
+`NewAppInfoBootstrap`、`NewMetricsBootstrap` 只返回完成标记；修改 provider set 的消费代码后通过实际 Wire 入口重新生成。`NewMetricsBootstrap` 签名为 `(spec, meter, pusher *metrics.Pusher, logger log.Logger) (MetricsBootstrap, error)`：使用 `BaseProviderSet` 无需改动；显式列出 provider 的 injector 需加入 `metrics.NewPusher`（未配置 `metrics.push.url` 时返回 nil，不推送）。Wire 对 error 返回执行回滚，不保证 panic 时回滚整条依赖链。
 
 ### 服务器声明入口迁移
 

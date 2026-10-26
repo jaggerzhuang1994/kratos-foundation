@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
@@ -86,7 +87,9 @@ type MetricsBootstrap struct{}
 // NewMetricsBootstrap 把 Meter 注入应用 Context，并注册 app_ready 就绪指标，不启动运行时。
 // app_ready 与 /readyz、gRPC 健康检查读取同一就绪状态：1 表示已就绪，0 表示启动中、停机中或启动失败；
 // 没有 HTTP 探针的队列消费者、自定义常驻进程与一次性任务同样可据此告警。
-func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics) (MetricsBootstrap, error) {
+// pusher 非 nil 时登记停止后钩子，在全部 Runtime 退出后向 Pushgateway 推送一次；
+// 推送失败只记录 WARN，钩子返回 nil，不改变 Run 的结果和进程退出码。
+func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics, pusher *metrics.Pusher, logger log.Logger) (MetricsBootstrap, error) {
 	spec.AddContext(func(ctx context.Context) context.Context {
 		return metrics.WithMetrics(ctx, meter)
 	})
@@ -103,5 +106,21 @@ func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics) (MetricsBootstra
 	if err != nil {
 		return MetricsBootstrap{}, fmt.Errorf("register app_ready metric: %w", err)
 	}
+	if pusher != nil {
+		spec.AfterStop(func(ctx context.Context) error {
+			pushMetrics(ctx, pusher, logger.WithModule("metrics"))
+			return nil
+		})
+	}
 	return MetricsBootstrap{}, nil
+}
+
+// pushMetrics 执行一次推送并记录结果；一次性进程退出后无法再被抓取，推送是指标的最后出口。
+func pushMetrics(ctx context.Context, pusher *metrics.Pusher, logger log.Logger) {
+	started := time.Now()
+	if err := pusher.Push(ctx); err != nil {
+		logger.WithContext(ctx).With("event", "metrics.push.failed", "push_job", pusher.Job(), "duration", time.Since(started), "error", err).Warn("metrics push failed")
+		return
+	}
+	logger.WithContext(ctx).With("event", "metrics.push.completed", "push_job", pusher.Job(), "duration", time.Since(started)).Info("metrics pushed to pushgateway")
 }

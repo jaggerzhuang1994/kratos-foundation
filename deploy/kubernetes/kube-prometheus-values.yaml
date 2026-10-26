@@ -17,3 +17,18 @@ grafana:
       enabled: true
       label: grafana_dashboard
       labelValue: "1"
+# 一次性脚本与 CronJob 告警（alerts.yaml 的 foundation-kubernetes-jobs 组）读取 kube-state-metrics。
+# kube-state-metrics 默认不导出资源标签；放开 app.kubernetes.io/name 后，kube_job_labels/kube_cronjob_labels
+# 才带 label_app_kubernetes_io_name，告警据此补出 app 标签用于路由。只放开这一个低基数标签，不使用 [*]。
+# Job 的标签取自 Job 自身 metadata（CronJob 为 jobTemplate.metadata.labels），只写在 Pod 模板上不会生效。
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - jobs=[app.kubernetes.io/name]
+    - cronjobs=[app.kubernetes.io/name]
+  prometheus:
+    monitor:
+      relabelings:
+        - targetLabel: env
+          replacement: dev
+        - targetLabel: cluster
+          replacement: example-cluster

@@ -39,6 +39,8 @@
 - App 恢复 Runtime `Start/Stop/AbortStartup` 中的 panic，记录 `app.runtime.panicked` 并统一停机（执行停止钩子与服务注销），不再直接崩溃。
 - `env.ExposeDiagnostics()` 统一判断是否允许向调用方返回内部诊断，非法环境值按拒绝处理且不 panic。
 - `server.middleware.updated` 增加 `changed` 字段，列出实际替换的中间件。
+- 可选 `metrics.push`（默认关闭）：一次性进程在应用结束（成功或失败）后的停止后钩子中，把与 `/metrics` 相同的实例 Registry 推送到 Pushgateway 一次；分组键只有 `job`（默认应用名），指标自身的 `job` 标签改为 `exported_job`，失败只记 WARN `metrics.push.failed` 且不改变退出码。新增 `metrics.NewPusher`（已加入 `BaseProviderSet`），`bootstrap.NewMetricsBootstrap` 签名增加 `pusher`、`logger`；显式列出 provider 的 injector 需加入 `metrics.NewPusher` 并重新执行 `wire`。见 [Metrics 推送](pkg/metrics/README.md#一次性进程推送到-pushgateway)。
+- 监控模板新增 `foundation-kubernetes-jobs` 告警组（基于 kube-state-metrics）：`FoundationJobFailed`、`FoundationCronJobMissedSchedule`、`FoundationCronJobNoRecentSuccess`、`FoundationJobRunningTooLong`，及规则测试；`app` 标签需 kube-state-metrics `metricLabelsAllowlist` 放开 `app.kubernetes.io/name`，示例见 `deploy/kubernetes/kube-prometheus-values.yaml`。
 
 ### Changed
 

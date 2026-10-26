@@ -35,7 +35,7 @@ var BaseProviderSet = wire.NewSet(
 	// 观测依赖及其接口绑定供应用和队列复用。
 	log.NewLogger,
 	wire.Bind(new(kratoslog.Logger), new(log.Logger)),
-	metrics.NewProvider, metrics.NewMetrics,
+	metrics.NewProvider, metrics.NewMetrics, metrics.NewPusher,
 	tracing.NewProvider, tracing.NewTracing,
 	queue.NewObservability,
 

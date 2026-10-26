@@ -9,6 +9,7 @@ import "config_pb/app.proto";
 import "config_pb/job.proto";
 import "config_pb/log.proto";
 import "config_pb/tracing.proto";
+import "config_pb/metrics.proto";
 import "config_pb/server.proto";
 import "config_pb/database.proto";
 
@@ -56,4 +57,6 @@ message Config {
   optional Logging log = 10;
   // 已注册 Cron 任务的调度和本进程并发策略。[热更新]
   optional Job job = 11;
+  // 指标导出配置，目前只包含一次性进程的 Pushgateway 推送。[需重启]
+  optional Metrics metrics = 12;
 }

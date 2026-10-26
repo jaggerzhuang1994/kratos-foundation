@@ -586,3 +586,188 @@ tests:
         exp_samples:
           - labels: 'app:queue_oldest_ready_age:max{env="prod",namespace="apps",app="worker"}'
             value: 30
+  - name: FoundationJobFailed 关联 owner 与 app，CronJob 之后成功则恢复
+    interval: 1m
+    input_series:
+      # 独立 Job：owner 为 <none>，app 来自 metricLabelsAllowlist 放开的 app.kubernetes.io/name。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="migrate-1"}
+        values: "1x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="migrate-1",owner_kind="<none>",owner_name="<none>",owner_is_controller="<none>"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="migrate-1",label_app_kubernetes_io_name="orders"}
+        values: "1x15"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="migrate-1"}
+        values: "100x15"
+      # CronJob 失败晚于最近一次成功：继续告警。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="report-100"}
+        values: "1x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="report-100",owner_kind="CronJob",owner_name="report",owner_is_controller="true"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="report-100",label_app_kubernetes_io_name="reports"}
+        values: "1x15"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="report-100"}
+        values: "100x15"
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="report"}
+        values: "50x15"
+      # CronJob 失败后已有新的成功运行：失败 Job 仍保留在历史中，但不再告警。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100"}
+        values: "1x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100",owner_kind="CronJob",owner_name="cleanup",owner_is_controller="true"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100"}
+        values: "1x15"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="cleanup-100"}
+        values: "100x15"
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="cleanup"}
+        values: "500x15"
+      # 成功的 Job 不告警。
+      - series: kube_job_status_failed{env="prod",cluster="c1",namespace="batch",job_name="ok-1"}
+        values: "0x15"
+      - series: kube_job_owner{env="prod",cluster="c1",namespace="batch",job_name="ok-1",owner_kind="<none>",owner_name="<none>",owner_is_controller="<none>"}
+        values: "1x15"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="ok-1"}
+        values: "1x15"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FoundationJobFailed
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              job_name: migrate-1
+              owner_kind: "<none>"
+              owner_name: "<none>"
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: K8s Job 执行失败（owner_name 为所属 CronJob，独立 Job 为 <none>）
+              runbook: deploy/observability/docs/troubleshooting.md#foundationjobfailed
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              job_name: report-100
+              owner_kind: CronJob
+              owner_name: report
+              app: reports
+              severity: warning
+            exp_annotations:
+              summary: K8s Job 执行失败（owner_name 为所属 CronJob，独立 Job 为 <none>）
+              runbook: deploy/observability/docs/troubleshooting.md#foundationjobfailed
+  - name: FoundationCronJobMissedSchedule 排除暂停的 CronJob
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_next_schedule_time{env="prod",cluster="c1",namespace="batch",cronjob="late"}
+        values: "0x30"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="late"}
+        values: "0x30"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="late",label_app_kubernetes_io_name="reports"}
+        values: "1x30"
+      - series: kube_cronjob_next_schedule_time{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "0x30"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x30"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x30"
+      - series: kube_cronjob_next_schedule_time{env="prod",cluster="c1",namespace="batch",cronjob="ontime"}
+        values: "1500x30"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="ontime"}
+        values: "0x30"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="ontime"}
+        values: "1x30"
+    alert_rule_test:
+      # 10m 时仅超出 600s 阈值本身，尚未满足 for 5m。
+      - eval_time: 12m
+        alertname: FoundationCronJobMissedSchedule
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FoundationCronJobMissedSchedule
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              cronjob: late
+              app: reports
+              severity: warning
+            exp_annotations:
+              summary: CronJob 超过预定时间 10 分钟仍未调度
+              runbook: deploy/observability/docs/troubleshooting.md#foundationcronjobmissedschedule
+  - name: FoundationCronJobNoRecentSuccess 超过 26h 未成功且排除暂停
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="stale"}
+        values: "0x1700"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="stale"}
+        values: "0x1700"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="stale",label_app_kubernetes_io_name="reports"}
+        values: "1x1700"
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "0x1700"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x1700"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="paused"}
+        values: "1x1700"
+      # 25h 时成功一次，27h 评估时距今 2h，不告警。
+      - series: kube_cronjob_status_last_successful_time{env="prod",cluster="c1",namespace="batch",cronjob="fresh"}
+        values: "90000x1700"
+      - series: kube_cronjob_spec_suspend{env="prod",cluster="c1",namespace="batch",cronjob="fresh"}
+        values: "0x1700"
+      - series: kube_cronjob_labels{env="prod",cluster="c1",namespace="batch",cronjob="fresh"}
+        values: "1x1700"
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: FoundationCronJobNoRecentSuccess
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: FoundationCronJobNoRecentSuccess
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              cronjob: stale
+              app: reports
+              severity: warning
+            exp_annotations:
+              summary: CronJob 超过 26 小时没有成功运行（阈值按调度周期调整）
+              runbook: deploy/observability/docs/troubleshooting.md#foundationcronjobnorecentsuccess
+  - name: FoundationJobRunningTooLong 只计仍有活跃 Pod 的 Job
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="long-1"}
+        values: "0x80"
+      - series: kube_job_status_active{env="prod",cluster="c1",namespace="batch",job_name="long-1"}
+        values: "1x80"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="long-1",label_app_kubernetes_io_name="orders"}
+        values: "1x80"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="done-1"}
+        values: "0x80"
+      - series: kube_job_status_active{env="prod",cluster="c1",namespace="batch",job_name="done-1"}
+        values: "0x80"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="done-1"}
+        values: "1x80"
+      - series: kube_job_status_start_time{env="prod",cluster="c1",namespace="batch",job_name="short-1"}
+        values: "3000x80"
+      - series: kube_job_status_active{env="prod",cluster="c1",namespace="batch",job_name="short-1"}
+        values: "1x80"
+      - series: kube_job_labels{env="prod",cluster="c1",namespace="batch",job_name="short-1"}
+        values: "1x80"
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: FoundationJobRunningTooLong
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: FoundationJobRunningTooLong
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: batch
+              job_name: long-1
+              app: orders
+              severity: warning
+            exp_annotations:
+              summary: K8s Job 运行超过 1 小时仍未结束
+              runbook: deploy/observability/docs/troubleshooting.md#foundationjobrunningtoolong

@@ -14,10 +14,14 @@ meter := metrics.NewMetrics(provider, appInfo)
 
 `metrics.go` 定义公共契约和默认 Meter 构造，并使用非导出的 `provider` 管理 OpenTelemetry SDK Resource、MeterProvider、Prometheus Registry 与关闭状态；`helpers.go` 提供 Context 指标辅助函数。需要原生 Prometheus collector 时，通过公共 Provider 的 `PrometheusRegisterer` 注册；采集端使用 `PrometheusGatherer`。
 
-组装期调用 `bootstrap.NewMetricsBootstrap(appSpec, meter)`，向 `app.Spec` 追加 ContextDecorator。`app.NewApp` 会在锁外基于调用方 Context 应用它，因此业务 Runtime 可通过 Metrics Context 辅助函数取得同一个 Meter：
+组装期调用 `bootstrap.NewMetricsBootstrap(appSpec, meter, pusher, logger)`，向 `app.Spec` 追加 ContextDecorator。`app.NewApp` 会在锁外基于调用方 Context 应用它，因此业务 Runtime 可通过 Metrics Context 辅助函数取得同一个 Meter：
 
 ```go
-contribution := bootstrap.NewMetricsBootstrap(appSpec, meter)
+// pusher 来自 metrics.NewPusher，未配置 metrics.push.url 时为 nil，表示不推送。
+contribution, err := bootstrap.NewMetricsBootstrap(appSpec, meter, pusher, logger)
+if err != nil {
+	return err
+}
 ```
 
 该 Bootstrap 只返回完成标记，Spec 冻结后调用会 panic(app.ErrSpecFrozen)。它不启动 Runtime，也不拥有 Provider 的关闭；`NewProvider` 返回的 cleanup 仍由调用方/Wire 负责。
@@ -97,6 +101,45 @@ flowchart TD
     H -- 是 --> I[按版本隔离实例或等待窗口稳定]
     I --> J([稳定窗口核对分位数与 sum/count])
     H -- 否 --> J
+```
+
+## 一次性进程推送到 Pushgateway
+
+一次性脚本（`job.Spec.ExitWhenDone()`，此时 `job.Manager.IsOneShot()` 为 true）常在 Prometheus 下一次抓取前退出，`job_runs_total` 等指标随进程丢失。`metrics.push`（默认关闭）在应用结束时把与 `/metrics` 相同的实例 Registry 推送到 Pushgateway 一次：
+
+```yaml
+metrics:
+  push:
+    url: http://pushgateway.monitoring:9091 # 省略协议按 http；不含 /metrics/job/...
+    job: ""     # 分组 job 名，默认应用名
+    timeout: 5s # 默认 5s，须为正数
+```
+
+`metrics.NewPusher(manager, provider, appInfo)` 在组装期读取一次配置（[需重启]）：url 为空返回 nil 表示关闭；地址或超时非法返回 error 阻止启动，错误不回显地址中的凭据。`BaseProviderSet` 已包含它；显式列出 provider 的 injector 需加入 `metrics.NewPusher` 后重新执行 `wire`。`NewMetricsBootstrap` 拿到非 nil Pusher 时登记一个停止后钩子：
+
+- **时机**：成功、Runtime 失败、启动回滚都会执行 AfterStop，因此三种结果都会推送；此时全部 Runtime 已退出、`app_ready=0`，Provider 由 Wire cleanup 在 `Run` 返回后关闭，推送仍能采集完整数据。钩子按登记顺序执行，晚于 MetricsBootstrap 登记的业务 AfterStop 中记录的指标不会包含在本次推送中。
+- **失败边界**：推送受 `timeout` 约束；连接失败、超时或 Pushgateway 非 2xx 只记录 WARN `metrics.push.failed`（字段 `push_job`、`duration`、`error`），钩子返回 nil，不改变 `Run` 结果和退出码。成功记录 INFO `metrics.push.completed`。不重试：一次性进程退出后没有后续机会，重试只会延长退出。
+- **分组与标签**：分组键只有 `job`，不带 pod 或实例 ID，避免每次运行在 Pushgateway 留下一组永不过期的序列；同一 job 的并发进程会互相覆盖，需要区分时为每个脚本配置不同 `job`。PUT 替换同组上一次结果。指标自身的 `job` 标签（如 `job_runs_total` 的任务名）推送时改为 `exported_job`——Pushgateway 分组独占 `job`，`client_golang/push` 会拒绝含 `job` 标签的指标；改名与 Prometheus `honorLabels=false` 抓取时的规则一致，`/metrics` 抓取不受影响。地址中的 `user:password@` 转为 Basic Auth。
+- **适用范围**：建议只对 `IsOneShot()` 的进程开启，按部署（K8s Job/CronJob 的配置）启用即可。常驻服务继续由 Prometheus 抓取，开启只会在每次停机时多一次推送，并留下可能过期的分组。Pushgateway 抓取需 `honorLabels: true`。
+
+推送数据描述**最近一次运行**，查询时按“最近一次” gauge 理解：`push_time_seconds` 即最近运行时间（`job_last_run_timestamp_seconds` 语义），最近一次无失败时它也是最近成功时间（`job_last_success_timestamp_seconds`），单任务进程的 `job_duration_seconds_sum` 即本次耗时（`job_last_duration_seconds`）。对 Pushgateway 序列不要使用 `increase`，查询示例与 K8s Job 告警见 [一次性脚本与 CronJob 告警](../../deploy/observability/docs/alerts.md#一次性脚本与-cronjob-告警)。框架不额外导出这三个 gauge。
+
+```mermaid
+flowchart TD
+    A([组装期 NewPusher]) --> B{metrics.push.url 为空?}
+    B -- 是 --> C([返回 nil 不推送])
+    B -- 否 --> D{地址与 timeout 合法?}
+    D -- 否 --> E([返回 error 阻止启动])
+    D -- 是 --> F[NewMetricsBootstrap 登记 AfterStop 钩子]
+    F --> G[App Run 结束: 成功 失败或启动回滚]
+    G --> H[全部 Runtime 退出后执行 AfterStop]
+    H --> I[采集实例 Registry 并把 job 标签改为 exported_job]
+    I --> J[PUT /metrics/job/应用名 受 timeout 约束]
+    J --> K{2xx?}
+    K -- 是 --> L[INFO metrics.push.completed]
+    K -- 否或超时 --> M[WARN metrics.push.failed]
+    L --> N([钩子返回 nil Run 结果与退出码不变])
+    M --> N
 ```
 
 ## 业务缓存与接入指南

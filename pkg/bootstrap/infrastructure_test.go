@@ -5,8 +5,11 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,6 +26,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
@@ -603,7 +607,12 @@ func TestMetricsBootstrapReportsApplicationReadiness(t *testing.T) {
 	spec.RegisterAppInfo(appinfo.New("ready-metric"))
 	spec.RegisterLogger(kratoslog.NewStdLogger(io.Discard))
 	spec.AddSignals(syscall.SIGUSR2)
-	if _, err := bootstrap.NewMetricsBootstrap(spec, provider.Meter("test")); err != nil {
+	logger, release, err := testlog.New(bootstrapConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release)
+	if _, err := bootstrap.NewMetricsBootstrap(spec, provider.Meter("test"), nil, logger); err != nil {
 		t.Fatal(err)
 	}
 	readyValue := func() int64 {
@@ -625,8 +634,8 @@ func TestMetricsBootstrapReportsApplicationReadiness(t *testing.T) {
 	if got := readyValue(); got != 0 {
 		t.Fatalf("app_ready before run = %d", got)
 	}
-	release := make(chan struct{})
-	spec.RegisterRuntime(blockingTestRuntime{release: release})
+	unblock := make(chan struct{})
+	spec.RegisterRuntime(blockingTestRuntime{release: unblock})
 	config := &config_pb.App{RegistrarTimeout: durationpb.New(time.Second), StopTimeout: durationpb.New(time.Second)}
 	manager := testconfig.New(t, "app", config)
 	policy, cleanup, err := app.NewStopPolicy(config, manager, kratoslog.NewStdLogger(io.Discard))
@@ -656,11 +665,102 @@ func TestMetricsBootstrapReportsApplicationReadiness(t *testing.T) {
 	if got := readyValue(); got != 0 {
 		t.Fatalf("app_ready after Stop = %d", got)
 	}
-	close(release)
+	close(unblock)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
 }
+
+// 推送在全部 Runtime 退出后的停止后钩子中执行；成功或失败的应用都会推送，推送失败只记 WARN，不改变 Run 结果。
+func TestMetricsBootstrapPushesOnFinish(t *testing.T) {
+	runtimeFailure := errors.New("job failed")
+	tests := []struct {
+		name       string
+		status     int
+		runtimeErr error
+		wantRunErr error
+		wantEvent  string
+	}{
+		{"success pushed", http.StatusOK, app.ErrStopRequested, nil, "metrics.push.completed"},
+		{"failure pushed", http.StatusOK, runtimeFailure, runtimeFailure, "metrics.push.completed"},
+		{"push rejected keeps success", http.StatusInternalServerError, app.ErrStopRequested, nil, "metrics.push.failed"},
+		{"push rejected keeps failure", http.StatusInternalServerError, runtimeFailure, runtimeFailure, "metrics.push.failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pushed := make(chan string, 1)
+			gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				pushed <- r.Method + " " + r.URL.Path + " " + string(body)
+				w.WriteHeader(tt.status)
+			}))
+			t.Cleanup(gateway.Close)
+
+			info := appinfo.New("push-test")
+			provider, cleanupProvider, err := metrics.NewProvider(info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanupProvider)
+			pusher, err := metrics.NewPusher(testconfig.New(t, "metrics", &config_pb.Metrics{Push: &config_pb.Push{Url: proto.String(gateway.URL)}}), provider, info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "push.log")
+			logger, release, err := testlog.New(integrationLogConfig(path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(release)
+
+			spec := app.NewSpec()
+			spec.RegisterAppInfo(info)
+			spec.RegisterLogger(logger)
+			spec.AddSignals(syscall.SIGUSR2)
+			if _, err := bootstrap.NewMetricsBootstrap(spec, metrics.NewMetrics(provider, info), pusher, logger); err != nil {
+				t.Fatal(err)
+			}
+			spec.RegisterRuntime(returningTestRuntime{err: tt.runtimeErr})
+			config := &config_pb.App{RegistrarTimeout: durationpb.New(time.Second), StopTimeout: durationpb.New(time.Second)}
+			policy, cleanupPolicy, err := app.NewStopPolicy(config, testconfig.New(t, "app", config), logger)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanupPolicy)
+			application, err := app.NewApp(context.Background(), spec, config, policy, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = application.Run()
+			if tt.wantRunErr == nil && err != nil || tt.wantRunErr != nil && !errors.Is(err, tt.wantRunErr) {
+				t.Fatalf("Run() = %v, want %v", err, tt.wantRunErr)
+			}
+			select {
+			case request := <-pushed:
+				if !strings.HasPrefix(request, "PUT /metrics/job/"+info.Name()+" ") || !strings.Contains(request, "app_ready") {
+					t.Fatalf("unexpected push %.120q", request)
+				}
+			default:
+				t.Fatal("metrics were not pushed before Run returned")
+			}
+			release()
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(content), "event="+tt.wantEvent) || !strings.Contains(string(content), "module=metrics") {
+				t.Fatalf("push log missing %s:\n%s", tt.wantEvent, content)
+			}
+		})
+	}
+}
+
+// returningTestRuntime 的 Start 立即返回给定结果，模拟一次性任务完成或失败。
+type returningTestRuntime struct{ err error }
+
+func (r returningTestRuntime) Start(context.Context) error { return r.err }
+func (returningTestRuntime) Stop(context.Context) error    { return nil }
 
 type blockingTestRuntime struct{ release <-chan struct{} }
 

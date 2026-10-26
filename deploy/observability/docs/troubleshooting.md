@@ -127,6 +127,51 @@ flowchart TD
     K -- 是 --> L([记录原因与恢复验证 不以窗口到期代替验证])
 ```
 
+## FoundationJobFailed
+
+告警来自 kube-state-metrics 的 K8s Job 状态，是一次性脚本与 CronJob 成功/失败的权威来源。`owner_name` 为所属 CronJob（独立 Job 为 `<none>`），`app` 来自 Job 的 `app.kubernetes.io/name` 标签，为空时说明 kube-state-metrics 未放开该标签或 Job 未打标签，见 [告警说明](alerts.md#一次性脚本与-cronjob-告警)。
+
+```sh
+kubectl -n <namespace> describe job <job_name>
+kubectl -n <namespace> logs job/<job_name> --all-containers --since=24h
+kubectl -n <namespace> get pods -l job-name=<job_name> -o wide
+```
+
+先看 Job 条件：`BackoffLimitExceeded` 表示容器多次非零退出，查日志中的 `app.stopped result=failed` 与其 `error`；`DeadlineExceeded` 表示超过 `activeDeadlineSeconds`，按 FoundationJobRunningTooLong 排查；Pod 处于 `OOMKilled`、`Evicted` 或镜像拉取失败时与业务代码无关。重跑前确认脚本幂等：`kubectl -n <namespace> create job --from=cronjob/<owner_name> <新名称>` 只为 CronJob 补跑一次。CronJob 之后成功运行会自动恢复告警；独立 Job 处理完成后删除失败 Job 才会恢复，删除前保留所需日志。
+
+## FoundationCronJobMissedSchedule
+
+预定调度时间已过去 10 分钟仍未刷新，说明控制器没有按时创建 Job。依次检查：`kubectl -n <namespace> describe cronjob <cronjob>` 的事件（`startingDeadlineSeconds` 过小会错过调度，错过超过 100 次后控制器停止补跑）；`concurrencyPolicy: Forbid` 时上一轮仍在运行会跳过本轮，同时应看到 FoundationJobRunningTooLong；时区（`spec.timeZone`）与 schedule 是否符合预期；namespace 的 ResourceQuota 或准入策略是否拒绝创建 Job。暂停（`suspend: true`）的 CronJob 不参与该告警。
+
+## FoundationCronJobNoRecentSuccess
+
+最近一次成功距今超过 26h（每日任务基线）。先确认阈值是否匹配实际调度周期，非每日任务按 [告警说明](alerts.md#一次性脚本与-cronjob-告警) 调整；再看期间是否有 FoundationJobFailed 或 MissedSchedule：失败按 Job 失败处理，没有新 Job 按错过调度处理。长期停用的 CronJob 应设置 `suspend: true`，而不是静默该告警。
+
+## FoundationJobRunningTooLong
+
+Job 仍有 active Pod 且已运行超过 1h。查看 Pod 日志最近的 `job.*` 事件确认进度，`app.stopping` 后迟迟没有 `app.stopped` 说明有 Runtime 不响应停止；检查外部依赖超时、锁等待与数据量变化。确认卡死后删除 Pod 由 Job 按 `backoffLimit` 重试，或删除 Job 终止本次运行；涉及写入的脚本先确认可安全中断。长期任务应设置 `activeDeadlineSeconds`，并按真实耗时调整告警阈值。
+
+```mermaid
+flowchart TD
+    A([Job/CronJob 告警]) --> B{告警类型}
+    B -- JobFailed --> C[describe job 查看失败条件]
+    C --> D{BackoffLimitExceeded?}
+    D -- 是 --> E[日志 app.stopped result=failed 的 error]
+    D -- 否 --> F{DeadlineExceeded?}
+    F -- 是 --> G[按运行过久排查]
+    F -- 否 --> H[OOMKilled 驱逐 镜像拉取等平台原因]
+    B -- RunningTooLong --> G
+    G --> I{日志仍有 job 进度?}
+    I -- 是 --> J[调整阈值或 activeDeadlineSeconds]
+    I -- 否 --> K[确认可安全中断后删除 Pod 或 Job]
+    B -- MissedSchedule --> L[describe cronjob 事件 startingDeadlineSeconds 并发策略 配额]
+    B -- NoRecentSuccess --> M{期间有失败或错过调度?}
+    M -- 失败 --> C
+    M -- 错过调度 --> L
+    M -- 都没有 --> N[核对阈值与调度周期]
+    E & H & J & K & L & N --> O([修复后确认下一次运行成功 告警自动恢复])
+```
+
 ## 健康探测与配置状态
 
 共享资源与健康页展示真实 HTTP 探测，需另行接入 blackbox 并对齐标签；未接入时显示缺失。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。

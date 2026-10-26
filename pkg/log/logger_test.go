@@ -1135,7 +1135,7 @@ func TestLoggerCallbackInterleavesPolicyUpdateAndNestedLog(t *testing.T) {
 // 只检查字面量事件名、消息与字段键；转发 SDK 或动态消息的适配器不在约束范围内。
 func TestFrameworkLogConventions(t *testing.T) {
 	domains := map[string]bool{"app": true, "config": true, "server": true, "client": true, "job": true, "queue": true,
-		"kafka": true, "database": true, "redis": true, "oss": true, "registry": true, "consul": true, "log": true, "lock": true}
+		"kafka": true, "metrics": true, "database": true, "redis": true, "oss": true, "registry": true, "consul": true, "log": true, "lock": true}
 	eventPattern := regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,4}$`)
 	// 这些键与约定的统一字段名冲突：错误用 error，耗时用 duration；config_key 等恒定值可由事件名推出。
 	forbiddenKeys := map[string]string{"cause": "error", "err": "error", "latency": "duration", "elapsed": "duration", "config_key": "event"}

@@ -96,7 +96,17 @@ func initialize(path configPath, version2 string) (*app.App, func(), error) {
 		return nil, nil, err
 	}
 	v2 := metrics.NewMetrics(provider, appInfo)
-	metricsBootstrap, err := bootstrap.NewMetricsBootstrap(spec, v2)
+	pusher, err := metrics.NewPusher(manager, provider, appInfo)
+	if err != nil {
+		cleanup6()
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	metricsBootstrap, err := bootstrap.NewMetricsBootstrap(spec, v2, pusher, logger)
 	if err != nil {
 		cleanup6()
 		cleanup5()
