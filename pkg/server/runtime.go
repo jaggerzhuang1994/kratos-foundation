@@ -87,6 +87,9 @@ func NewRuntime(
 	httpOptions := newHTTPServerOptions(config, middlewares, spec)
 	websockets := newWebSocketHub()
 	health := configuredHealth(config, spec)
+	if err := health.registerReadinessMetric(metricsProvider.Meter("github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server")); err != nil {
+		return fail(err)
+	}
 	httpServer, err = newHTTPServer(
 		config,
 		httpOptions,

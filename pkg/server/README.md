@@ -401,6 +401,8 @@ spec.Health().Checks(server.ReadinessCheck{Name: "database", Check: sqlDB.PingCo
 配置在组装后固定；不得并发修改 Spec 或 SetReadinessSource。普通探针不逐次记录日志，readiness
 HTTP 状态变化记录 `event=server.readiness.changed`：恢复为 INFO，实际依赖失败或探针超时为 WARN，初始化未就绪、主动停机摘流及探针正常取消为 DEBUG。日志绑定探针 Context，并包含 `transport=http`、就绪路径、状态、`reason` 和实际失败检查名，不输出依赖错误原文；应用状态变化不会归因于成功的依赖检查。该服务状态事件使用进程日志绑定，多个监听共享同一份状态。连续 503 即使原因变化也不重复记录，事件用于状态变化诊断，不替代探针状态或逐依赖指标。
 
+最近一次判定（HTTP `/readyz` 或 gRPC 健康检查 `Check`，含依赖检查）同时以 Gauge `server_readiness_status` 上报：1 就绪、0 未就绪；从未被探测前不上报，探测停止后保留最后一次结果。`app_ready` 只反映应用生命周期，二者对照可区分“进程未就绪”与“依赖不可用导致 K8s 摘流量”；监控模板的 `app:readiness:ready` 预聚合据此统计实际可接流量的实例。
+
 ```mermaid
 flowchart TD
     A([并发 HTTP 探针入口]) --> B{保留路径?}

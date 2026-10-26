@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // ReadinessCheck 声明关键依赖的就绪检查。
@@ -44,7 +45,7 @@ type healthState struct {
 	applicationReady func() bool
 	// stopped 是否进入停机阶段，用于拒绝就绪探针。
 	stopped atomic.Bool
-	// lastStatus 最近一次就绪状态码，用于只在变化时记录日志。
+	// lastStatus 最近一次就绪状态码，用于只在变化时记录日志，并作为 server_readiness_status 的取值。
 	lastStatus atomic.Int32
 }
 
@@ -180,6 +181,28 @@ func (h *healthState) ready(ctx context.Context) (ready bool) {
 		return false
 	}
 	return h.applicationReady()
+}
+
+// registerReadinessMetric 上报最近一次就绪判定（/readyz 或 gRPC 健康检查，含依赖检查）。
+// app_ready 只反映应用生命周期；依赖检查失败时本指标为 0，可与 app_ready 对照区分“进程未就绪”与“依赖不可用”。
+// 从未被探测时不上报，避免把未接入探针误判为不可用；结果只在探测时更新，探测停止后保留最后一次结果。
+func (h *healthState) registerReadinessMetric(meter metric.Meter) error {
+	_, err := meter.Int64ObservableGauge("server_readiness_status",
+		metric.WithDescription("Latest readiness probe result including dependency checks: 1 ready, 0 not ready; absent before the first probe."),
+		metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
+			switch h.lastStatus.Load() {
+			case http.StatusOK:
+				observer.Observe(1)
+			case http.StatusServiceUnavailable:
+				observer.Observe(0)
+			}
+			return nil
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("register readiness metric: %w", err)
+	}
+	return nil
 }
 
 // probeFailureReason 区分客户端正常取消与健康检查预算耗尽，不输出取消错误原文。

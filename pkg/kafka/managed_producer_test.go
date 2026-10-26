@@ -100,8 +100,8 @@ func TestProducerFailureLogExcludesPayloadAndHeaderValues(t *testing.T) {
 		Headers: []Header{{Key: "authorization", Value: []byte("header-secret")}},
 	})
 	written := logs.String()
-	if !strings.Contains(written, "kafka.publish.failed") {
-		t.Fatalf("failure event missing from log %q", written)
+	if !strings.Contains(written, "kafka.publish.failed") || !strings.Contains(written, "broker unavailable") {
+		t.Fatalf("failure event or cause missing from log %q", written)
 	}
 	if strings.Contains(written, "body-secret") || strings.Contains(written, "header-secret") {
 		t.Fatalf("sensitive message data leaked to log %q", written)

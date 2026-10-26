@@ -15,6 +15,8 @@ import (
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"github.com/prometheus/client_golang/prometheus"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 func TestHealthEndpointsAndReadiness(t *testing.T) {
@@ -199,5 +201,51 @@ func TestHTTPHealthPrecedesBusinessFiltersAndPrefix(t *testing.T) {
 	health.config.LivenessPath = config.GetHttp().GetMetrics().GetPath()
 	if _, _, err := configureMonitoring(config, srv.HTTPServer, health, testMetricsProvider{registry: prometheus.NewRegistry()}); err == nil {
 		t.Fatal("metrics conflict accepted")
+	}
+}
+
+// server_readiness_status 在首次探测前不上报，之后跟随包含依赖检查的就绪判定。
+func TestReadinessMetricFollowsLastProbe(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	failing := false
+	health := newHealthState(healthConfig{Checks: []ReadinessCheck{{Name: "database", Check: func(context.Context) error {
+		if failing {
+			return errors.New("database down")
+		}
+		return nil
+	}}}})
+	health.applicationReady = func() bool { return true }
+	if err := health.registerReadinessMetric(provider.Meter("test")); err != nil {
+		t.Fatal(err)
+	}
+	value := func() (int64, bool) {
+		t.Helper()
+		var collected metricdata.ResourceMetrics
+		if err := reader.Collect(context.Background(), &collected); err != nil {
+			t.Fatal(err)
+		}
+		for _, scope := range collected.ScopeMetrics {
+			for _, item := range scope.Metrics {
+				if gauge, ok := item.Data.(metricdata.Gauge[int64]); ok && item.Name == "server_readiness_status" && len(gauge.DataPoints) == 1 {
+					return gauge.DataPoints[0].Value, true
+				}
+			}
+		}
+		return 0, false
+	}
+	if _, reported := value(); reported {
+		t.Fatal("readiness reported before the first probe")
+	}
+	for _, step := range []struct {
+		failing bool
+		want    int64
+	}{{false, 1}, {true, 0}, {false, 1}} {
+		failing = step.failing
+		health.ready(context.Background())
+		if got, reported := value(); !reported || got != step.want {
+			t.Fatalf("failing=%v readiness=%d reported=%v, want %d", step.failing, got, reported, step.want)
+		}
 	}
 }

@@ -127,7 +127,7 @@ func (p *managedProducer) publish(
 	if err != nil {
 		result = "error"
 		span.SetStatus(codes.Error, "publish failed")
-		p.failed(spanCtx)
+		p.failed(spanCtx, err)
 	}
 	p.record(ctx, operation, result, count, time.Since(started))
 	if err != nil {
@@ -147,12 +147,15 @@ func (p *managedProducer) rejected(ctx context.Context, operation string, starte
 	}
 }
 
-func (p *managedProducer) failed(ctx context.Context) {
+// failed 记录基础设施错误原文以便定位（如 UNKNOWN_TOPIC_OR_PARTITION、认证失败）；
+// franz-go 错误不含消息正文或 Header，后续重试超时只会呈现为 context deadline exceeded。
+func (p *managedProducer) failed(ctx context.Context, err error) {
 	if p.log != nil {
 		p.log.WithContext(ctx).Errorw(
 			"event", "kafka.publish.failed",
 			"msg", "kafka publish failed",
 			"destination", p.destination,
+			"error", err,
 		)
 	}
 }

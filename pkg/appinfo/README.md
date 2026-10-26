@@ -8,7 +8,7 @@ info := appinfo.New(version)
 
 业务和 Wire 只依赖公开的 `AppInfo` 与 `New`。主机名、可执行文件名及其回退逻辑位于同包的 `appinfo.go`，通过非导出标识符保留启动时快照。
 
-`ID()` 在每次 `New` 时生成，格式为主机名与 UUID 的组合；`Name()` 是可执行文件的 basename，`Version()` 是调用方传入的版本。`Metadata()` 返回含 `env` 和 `hostname` 的独立 map，修改它不影响原对象。环境在构造时按 [env 的优先级](../env/README.md)读取，非法环境会 panic。
+`ID()` 在每次 `New` 时生成，格式为主机名与 UUID 的组合；`Name()` 默认是可执行文件的 basename，设置环境变量 `APP_NAME`（去除首尾空白后非空）时使用其值；同一二进制以多个角色部署、或镜像内二进制统一命名时应设置它，并与 Prometheus 的 `app` 标签保持一致。`Version()` 是调用方传入的版本。`Metadata()` 返回含 `env` 和 `hostname` 的独立 map，修改它不影响原对象。环境在构造时按 [env 的优先级](../env/README.md)读取，非法环境会 panic。
 
 主机名与可执行文件名在包初始化时采集：主机名读取失败使用 `unknown-host`；可执行文件路径读取失败时使用 `os.Args[0]` 的 basename，无参数时使用 `unknown-executable`。后续环境变化不会改变已有 AppInfo；应用应构造一次并共享同一实例。
 

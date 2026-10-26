@@ -29,6 +29,17 @@ func TestNewCreatesStableIdentityAndDefensiveMetadata(t *testing.T) {
 	}
 }
 
+func TestNameUsesAppNameOverride(t *testing.T) {
+	t.Setenv("APP_NAME", "  order-api  ")
+	if got := New("v1").Name(); got != "order-api" {
+		t.Fatalf("Name() with APP_NAME = %q, want order-api", got)
+	}
+	t.Setenv("APP_NAME", "   ")
+	if got := New("v1").Name(); got != processExecutableName {
+		t.Fatalf("Name() with blank APP_NAME = %q, want executable %q", got, processExecutableName)
+	}
+}
+
 func TestSnapshotsAreNonEmpty(t *testing.T) {
 	if processHostname == "" {
 		t.Fatal("Hostname returned empty string")

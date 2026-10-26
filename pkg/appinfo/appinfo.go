@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
@@ -22,7 +23,7 @@ const (
 type AppInfo interface {
 	// ID 返回唯一的进程实例标识。
 	ID() string
-	// Name 返回可执行程序名称。
+	// Name 返回应用名称：APP_NAME 非空时使用其值，否则为可执行程序名称。
 	Name() string
 	// Version 返回构造时提供的版本。
 	Version() string
@@ -33,7 +34,7 @@ type AppInfo interface {
 type info struct {
 	// id 为主机名与 UUID 组成的进程实例标识。
 	id string
-	// name 为进程可执行文件名称。
+	// name 为构造时确定的应用名称。
 	name string
 	// version 保存构造时注入的应用版本。
 	version string
@@ -42,11 +43,16 @@ type info struct {
 }
 
 // New 使用当前运行环境生成进程身份；返回值不会随环境变量后续变化。
+// 同一二进制以多个角色部署，或镜像中统一命名为 app 时，用 APP_NAME 指定稳定的应用名。
 func New(version string) AppInfo {
 	hostname := processHostname
+	name := processExecutableName
+	if value := strings.TrimSpace(os.Getenv(appNameKey)); value != "" {
+		name = value
+	}
 	return &info{
 		id:      fmt.Sprintf("%s-%s", hostname, uuid.New().String()),
-		name:    processExecutableName,
+		name:    name,
 		version: version,
 		metadata: map[string]string{
 			MetadataEnvironment: env.AppEnv(),
@@ -60,7 +66,7 @@ func (i *info) ID() string {
 	return i.id
 }
 
-// Name 返回当前可执行程序名称。
+// Name 返回构造时确定的应用名称。
 func (i *info) Name() string {
 	return i.name
 }
@@ -74,6 +80,9 @@ func (i *info) Version() string {
 func (i *info) Metadata() map[string]string {
 	return maps.Clone(i.metadata)
 }
+
+// appNameKey 覆盖应用名称的环境变量；未设置或为空白时使用可执行文件名。
+const appNameKey = "APP_NAME"
 
 var (
 	processHostname       = resolveHostname()
