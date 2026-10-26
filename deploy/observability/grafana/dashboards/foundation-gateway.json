@@ -1,0 +1,1418 @@
+{
+  "editable": true,
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "version": 1,
+  "uid": "foundation-gateway",
+  "title": "Foundation · 网关详情",
+  "tags": [
+    "Foundation",
+    "10 服务"
+  ],
+  "links": [
+    {
+      "title": "00 平台总览",
+      "type": "link",
+      "url": "/d/foundation-fleet-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "10 服务详情",
+      "type": "link",
+      "url": "/d/ack-service-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "10 网关",
+      "type": "link",
+      "url": "/d/foundation-gateway",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "10 应用组件",
+      "type": "link",
+      "url": "/d/ack-application-components",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 数据库",
+      "type": "link",
+      "url": "/d/foundation-database",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 Redis",
+      "type": "link",
+      "url": "/d/foundation-redis",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 队列与 Kafka",
+      "type": "link",
+      "url": "/d/foundation-messaging",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "30 容器与节点",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "30 健康探测",
+      "type": "link",
+      "url": "/d/foundation-shared-resources",
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
+        "name": "namespace",
+        "label": "命名空间",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(client_requests_code_total, namespace)",
+        "query": {
+          "query": "label_values(client_requests_code_total, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "gateway",
+        "label": "网关应用",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(client_requests_code_total{namespace=~\"${namespace}\"}, app)",
+        "query": {
+          "query": "label_values(client_requests_code_total{namespace=~\"${namespace}\"}, app)",
+          "refId": "gateway"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "description": "有下游调用的应用；选择网关以排除普通服务。"
+      },
+      {
+        "name": "route",
+        "label": "路由",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\"}, operation)",
+        "query": {
+          "query": "label_values(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\"}, operation)",
+          "refId": "route"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "client_operation",
+        "label": "下游接口",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\"}, operation)",
+        "query": {
+          "query": "label_values(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\"}, operation)",
+          "refId": "client_operation"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "01 · 入口与下游概况",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "title": "入口 RPS",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "无入口流量",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "入口 5xx 比例",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\",code=~\"5..\"}[$__rate_interval])) or 0 * sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))) / (sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无入口流量",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "入口 P99",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "无入口流量",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "限流（429）比例",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\",code=\"429\"}[$__rate_interval])) or 0 * sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))) / (sum(rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "入口返回 429 的比例；突增通常是限流生效或上游流量突增。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无入口流量",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "下游 5xx 比例",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\",code=~\"5..\"}[$__rate_interval])) or 0 * sum(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]))) / (sum(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "无下游调用",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "下游 P99",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(client_requests_seconds_bucket{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "无下游调用",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "title": "02 · 按路由 — 哪个路由在报错、变慢或被限流",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 9,
+      "title": "路由诊断（按 5xx 比例排序）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\",code=~\"5..\"}[$__rate_interval])) or 0 * sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))) / (sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "(sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\",code=\"429\"}[$__rate_interval])) or 0 * sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))) / (sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "histogram_quantile(0.99, sum by (namespace,app,operation,le) (rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "路由即网关 server 指标的 operation；无流量时比例与分位数为空。",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "无入口流量",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RPS"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx比例"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "429比例"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P99"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "5xx比例",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Time 8": true,
+              "Time 9": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "namespace": "命名空间",
+              "app": "网关",
+              "operation": "路由",
+              "Value #A": "RPS",
+              "Value #B": "5xx比例",
+              "Value #C": "429比例",
+              "Value #D": "P99"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "路由 5xx 比例",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\",code=~\"5..\"}[$__rate_interval])) or 0 * sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval]))) / (sum by (namespace,app,operation) (rate(server_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "{{app}} / {{operation}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "color": "gray",
+                  "text": "无数据"
+                }
+              }
+            }
+          ],
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "路由 P99",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (namespace,app,operation,le) (rate(server_requests_seconds_bucket{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${route}\"}[$__rate_interval])))",
+          "legendFormat": "{{app}} / {{operation}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "color": "gray",
+                  "text": "无数据"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "03 · 按下游 — 哪个后端拖垮网关",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 13,
+      "title": "下游诊断（按 5xx 比例排序）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\"))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\",code=~\"5..\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) or 0 * sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\"))) / (sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (namespace,app,downstream,le) (label_replace(label_replace(rate(client_requests_seconds_bucket{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "下游由 client operation 推导：gRPC 风格 /pkg.Service/Method 取服务名，其余保留完整 operation。Client.Do 原始调用不经过指标中间件。",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "无下游调用",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RPS"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx比例"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P99"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "5xx比例",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Time 8": true,
+              "Time 9": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "namespace": "命名空间",
+              "app": "网关",
+              "downstream": "下游",
+              "Value #A": "RPS",
+              "Value #B": "5xx比例",
+              "Value #C": "P99"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "下游非 2xx 返回（按状态码与原因）",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace,app,downstream,code,reason) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\",code!~\"2..\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) > 0",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "reason 来自 Kratos 错误原因，可区分超时、熔断、限流等；具体取值取决于下游与中间件顺序。",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "无非 2xx 返回",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "速率"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ops"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "orange",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "速率",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Time 8": true,
+              "Time 9": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "namespace": "命名空间",
+              "app": "网关",
+              "downstream": "下游",
+              "code": "状态码",
+              "reason": "原因",
+              "Value #A": "速率"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "下游 5xx 比例",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\",code=~\"5..\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) or 0 * sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\"))) / (sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_requests_code_total{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) > 0)",
+          "legendFormat": "{{app}} → {{downstream}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "color": "gray",
+                  "text": "无数据"
+                }
+              }
+            }
+          ],
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "下游 P99",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 33,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (namespace,app,downstream,le) (label_replace(label_replace(rate(client_requests_seconds_bucket{namespace=~\"${namespace}\",app=~\"${gateway}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")))",
+          "legendFormat": "{{app}} → {{downstream}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "color": "gray",
+                  "text": "无数据"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "口径",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "入口来自网关自身 `server_requests_*`，下游来自 `client_requests_*`，均为 Foundation 指标中间件上报，按应用汇总，不受节点与视图影响。`code` 是 Kratos 错误码映射的 HTTP 状态；未经过指标中间件的 Client.Do 原始调用、gRPC Stream 不覆盖。实例与资源见服务详情和容器与节点。"
+      }
+    }
+  ]
+}

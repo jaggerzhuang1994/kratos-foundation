@@ -110,5 +110,6 @@ flowchart TD
 1. 已完成：`app_ready` 指标、FoundationAppNotReady / FoundationAppUnavailable 告警及规则测试、gRPC 健康检查与就绪联动、Runtime panic 统一停机。
 2. 已完成：`foundation-records` recording rules 及规则测试、L0 舰队总览面板、L1 首行 `app_ready` 就绪率；[check_dashboards.py](../check_dashboards.py) 加载同一份规则文件，用合成原始样本验证舰队页与 L1 就绪率。
 3. 已完成：一次性任务的 K8s Job/CronJob 告警（`foundation-kubernetes-jobs` 组及规则测试，kube-state-metrics `metricLabelsAllowlist` 示例），以及可选的退出时 Pushgateway 推送 `metrics.push`（默认关闭）。
-4. 下一步：SLO 消耗率告警、网关单下游告警、Alertmanager 分组/抑制配置示例。
-5. 持续：panic 与配置拒绝计数指标（`app_runtime_panics_total`、`server_request_panics_total`、`config_updates_rejected_total`），让目前只有日志的异常也能告警。
+4. 已完成：平台总览扩展（当前告警、K8s、数据库、Redis、队列与 Kafka、网关质量分区及对应预聚合）与按资源类型的模板化详情页（服务、网关、数据库、Redis、队列与 Kafka）；[check_dashboards.py](../check_dashboards.py) 校验统一导航、Folder 映射与链接目标，并为每个新页提供含 exporter 未接入的合成样本断言。
+5. 下一步：SLO 消耗率告警、网关单下游告警（可直接复用 `app_downstream:*` 预聚合）、Alertmanager 分组/抑制配置示例。
+6. 持续：panic 与配置拒绝计数指标（`app_runtime_panics_total`、`server_request_panics_total`、`config_updates_rejected_total`），让目前只有日志的异常也能告警。

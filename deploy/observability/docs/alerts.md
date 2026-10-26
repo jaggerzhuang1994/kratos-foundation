@@ -19,7 +19,7 @@
 
 ## Recording rules
 
-`foundation-records` 组按 env/cluster/namespace/app 预聚合，供 [舰队总览](dashboard.md) 与后续 SLO 告警复用，避免几十个应用时重复计算原始序列。规则不按 foundation 标签过滤，与面板口径一致；现有告警仍直接使用原始指标。
+`foundation-records` 组按 env/cluster/namespace/app 预聚合，供 [平台总览](dashboard.md) 与后续 SLO 告警复用，避免几十个应用时重复计算原始序列。规则不按 foundation 标签过滤，与面板口径一致；现有告警仍直接使用原始指标。
 
 | 规则 | 含义 |
 | --- | --- |
@@ -29,6 +29,15 @@
 | `app:consumer_messages:rate5m` / `app:consumer_failures:rate5m` | 消费速率与失败速率，`consumer_type` 区分 queue 与 kafka；失败含 Queue `failed`/`storage_error`、Kafka `error`/`dead_lettered` |
 | `app:job_failures:increase1h` | 近 1h Job 失败次数 |
 | `app:queue_oldest_ready_age:max` | 采集成功且年龄已知的最老就绪任务年龄 |
+| `namespace:kube_pod_info:count` / `cluster:kube_node_info:count` | 已发现的 Pod / 节点数，用于区分“无异常”（补 0）与“未接入 kube-state-metrics”（无值） |
+| `pod:kube_pod_not_ready:info` / `pod:kube_pod_container_restarts:increase1h` | 非终态未 Ready 的 Pod；近 1h 有重启的 Pod 及次数 |
+| `node:kube_node_not_ready:info` / `node:kube_node_pressure:info` | NotReady 节点；Memory/Disk/PID 压力或网络不可用的节点与条件 |
+| `instance:mysql_up:max`、`instance:mysql_connections:usage`、`instance:mysql_slow_queries:rate5m`、`instance:mysql_connection_errors:rate5m`、`instance:mysql_replication_lag:seconds` | mysqld_exporter 按实例去副本：采集状态、连接使用率、慢查询、连接错误与中止连接、复制延迟 |
+| `app:go_sql_pool_usage:max` | 应用侧逐实例 SQL 连接池利用率的最大值，不依赖 exporter |
+| `instance:redis_up:max`、`instance:redis_memory:usage`、`instance:redis_evicted_keys:rate5m`、`instance:redis_command_latency:avg5m`、`instance:redis_connected_clients:max` | redis_exporter 按实例：采集状态、内存使用率（需 maxmemory）、逐出、平均命令耗时、连接数 |
+| `group:kafka_consumergroup_lag:sum` / `queue:queue_oldest_ready_age:max` | 消费组 Topic Lag（与 KafkaLagHigh 同口径）；按队列的最老就绪任务 |
+| `app:dead_letters:rate5m` | Kafka 死信投递与 Queue 失败任务归档速率，`consumer_type` 区分 |
+| `app_downstream:client_requests:rate5m` / `app_downstream:client_errors:rate5m` / `app_downstream:client_requests_seconds_bucket:rate5m` | 按下游的出站请求、5xx 与延迟桶；`downstream` 由 operation 推导，gRPC 风格取服务名 |
 
 ## 尚不代表的保证
 

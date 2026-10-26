@@ -3,9 +3,8 @@
   "uid": "ack-container-overview",
   "title": "ACK · 容器与节点",
   "tags": [
-    "ACK",
-    "Kubernetes",
-    "Foundation"
+    "Foundation",
+    "30 基础设施"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
@@ -241,35 +240,63 @@
   },
   "links": [
     {
-      "title": "舰队总览",
+      "title": "00 平台总览",
       "type": "link",
       "url": "/d/foundation-fleet-overview",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "服务总览",
+      "title": "10 服务详情",
       "type": "link",
       "url": "/d/ack-service-overview",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "容器与节点",
+      "title": "10 网关",
       "type": "link",
-      "url": "/d/ack-container-overview",
+      "url": "/d/foundation-gateway",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "应用组件",
+      "title": "10 应用组件",
       "type": "link",
       "url": "/d/ack-application-components",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "共享资源与健康",
+      "title": "20 数据库",
+      "type": "link",
+      "url": "/d/foundation-database",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 Redis",
+      "type": "link",
+      "url": "/d/foundation-redis",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 队列与 Kafka",
+      "type": "link",
+      "url": "/d/foundation-messaging",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "30 容器与节点",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "30 健康探测",
       "type": "link",
       "url": "/d/foundation-shared-resources",
       "includeVars": true,

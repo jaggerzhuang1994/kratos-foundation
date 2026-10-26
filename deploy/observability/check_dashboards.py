@@ -8,6 +8,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 VIEWS = ('view_pod', 'view_container', 'view_node', 'view_instance')
+# 顶部导航顺序即 Folder 顺序：00 总览 / 10 服务 / 20 中间件 / 30 基础设施。
+NAV_ORDER = ('foundation-fleet-overview', 'ack-service-overview', 'foundation-gateway', 'ack-application-components',
+             'foundation-database', 'foundation-redis', 'foundation-messaging', 'ack-container-overview', 'foundation-shared-resources')
+EXPECTED_UIDS = set(NAV_ORDER)
+FOLDERS = ('00 总览', '10 服务', '20 中间件', '30 基础设施')
 
 
 def panels(dashboard):
@@ -38,14 +43,24 @@ def input_series(metric, labels, values):
 
 
 def expected_samples(expected):
-    return [{'labels': '{' + ','.join(k + '=' + json.dumps(v) for k, v in labels.items()) + '}', 'value': value}
-            for labels, value in expected]
+    # 直接选择 recording rule 或 ALERTS 的查询保留指标名，期望样本用 __name__ 键表达。
+    return [{'labels': labels.get('__name__', '') + '{' + ','.join(k + '=' + json.dumps(v) for k, v in labels.items() if k != '__name__') + '}',
+             'value': value} for labels, value in expected]
 
 
 def fixture_check(dashboard, panel_id, expected, view='view_pod', target=0, **filters):
     panel = next(p for p in panels(dashboard) if p['id'] == panel_id)
+    if isinstance(target, str):
+        target = next(i for i, t in enumerate(panel['targets']) if t['refId'] == target)
     return {'expr': expression(panel['targets'][target]['expr'], view, **filters),
             'eval_time': '10m', 'exp_samples': expected_samples(expected)}
+
+
+def merged(*dashboards):
+    """组件区块迁到中间件详情页后面板 ID 保持不变，跨页按 ID 定位。"""
+    ids = [p['id'] for d in dashboards for p in panels(d)]
+    assert len(ids) == len(set(ids)), '迁移的组件面板 ID 须跨页唯一'
+    return {'panels': [p for d in dashboards for p in d['panels']]}
 
 
 def fixture_tests(overview):
@@ -322,7 +337,8 @@ def service_fixture_tests(service):
             {'interval': '1m', 'input_series': zero, 'promql_expr_test': [fixture_check(service, 3, []), fixture_check(service, 10, [])]}]
 
 
-def shared_fixture_tests(shared):
+def shared_fixture_tests(messaging, shared):
+    """Queue 库存与 Kafka Lag 已迁到队列与 Kafka 详情（面板 ID +400），健康探测仍在原共享资源 UID。"""
     series = []
     queue = {'env': 'qa', 'cluster': 'ack', 'queue_destination': 'emails'}
     for observer, count, age, known, success in [('a', 12, 40, 1, 1), ('b', 12, 50, 1, 1), ('c', 12, 999, 0, 0)]:
@@ -346,15 +362,16 @@ def shared_fixture_tests(shared):
         series.append(input_series('probe_duration_seconds', labels, '.25+0x10'))
     # 其他环境同名队列不可并入 qa；过滤器须真的约束共享资源。
     series.append(input_series('queue_tasks', dict(queue, env='prod', state='ready', instance='other'), '1000+0x10'))
-    cases = [(2, [(dict(queue, state='ready'), 12)]), (3, [(queue, 50)]), (4, [(queue, 0)]), (5, [(queue, 0)]),
-             (8, [(kafka, 18)]), (10, [(dict(kafka, partition='2'), -1)]),
-             (13, [(probe, 0)]), (14, [(probe, 1)]), (15, [(probe, 503)]), (16, [(probe, .25)])]
-    checks = [fixture_check(shared, panel, expected, env='qa', broker_topic='events') for panel, expected in cases]
+    cases = [(messaging, 402, [(dict(queue, state='ready'), 12)]), (messaging, 403, [(queue, 50)]), (messaging, 404, [(queue, 0)]),
+             (messaging, 405, [(queue, 0)]), (messaging, 408, [(kafka, 18)]), (messaging, 410, [(dict(kafka, partition='2'), -1)]),
+             (messaging, 421, [({}, 18)]), (messaging, 422, [({}, 50)]),
+             (shared, 13, [(probe, 0)]), (shared, 14, [(probe, 1)]), (shared, 15, [(probe, 503)]), (shared, 16, [(probe, .25)])]
+    checks = [fixture_check(page, panel, expected, env='qa', broker_topic='events') for page, panel, expected in cases]
     unknown_labels = dict(queue, namespace='one', app='worker', instance='unknown')
     unknown = [input_series(metric, unknown_labels, f'{value}+0x10') for metric, value in
                [('queue_oldest_ready_age_seconds', 999), ('queue_stats_collection_success', 1), ('queue_stats_oldest_ready_known', 0)]]
     return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks},
-            {'interval': '1m', 'input_series': unknown, 'promql_expr_test': [fixture_check(shared, 3, [])]}]
+            {'interval': '1m', 'input_series': unknown, 'promql_expr_test': [fixture_check(messaging, 403, []), fixture_check(messaging, 422, [])]}]
 
 
 def fleet_fixture_tests(fleet):
@@ -406,20 +423,301 @@ def fleet_fixture_tests(fleet):
             {'interval': '1m', 'input_series': idle[1:], 'promql_expr_test': [fixture_check(fleet, 6, []), fixture_check(fleet, 9, [], target=target['D'])]}]
 
 
+def platform_fixture_tests(fleet):
+    """平台总览新增分区：原始 K8s / exporter / 应用样本经 foundation-records 预聚合后再由面板查询。"""
+    series = []
+
+    def add(metric, labels, values):
+        series.append(input_series(metric, labels, values))
+
+    # 两个 kube-state-metrics 副本；Succeeded 是终态，不算未就绪。
+    for namespace, pod, phase, ready in [('apps', 'api-0', 'Running', 1), ('apps', 'api-1', 'Running', 0),
+                                         ('apps', 'job-0', 'Succeeded', 0), ('other', 'x-0', 'Pending', 0)]:
+        for replica in ['ksm-a', 'ksm-b']:
+            identity = {'namespace': namespace, 'pod': pod, 'instance': replica}
+            add('kube_pod_info', dict(identity, node='node-a'), '1+0x10')
+            add('kube_pod_status_phase', dict(identity, phase=phase), '1+0x10')
+            add('kube_pod_status_ready', dict(identity, condition='true'), f'{ready}+0x10')
+            add('kube_pod_container_status_restarts_total', dict(identity, container='api'), '0+1x10' if pod == 'api-1' else '0+0x10')
+    for node, ready in [('node-a', 'true'), ('node-b', 'false')]:
+        add('kube_node_info', {'node': node}, '1+0x10')
+        add('kube_node_status_condition', {'node': node, 'condition': 'Ready', 'status': ready}, '1+0x10')
+    add('kube_node_status_condition', {'node': 'node-a', 'condition': 'MemoryPressure', 'status': 'true'}, '1+0x10')
+    add('kube_node_status_condition', {'node': 'node-b', 'condition': 'MemoryPressure', 'status': 'true'}, '0+0x10')
+    # mysqld_exporter：db-a 被两个 Prometheus 副本抓取，db-b 是连不上的副本库。
+    for replica in ['a', 'b']:
+        db = {'instance': 'db-a', 'prometheus_replica': replica}
+        add('mysql_up', db, '1+0x10')
+        add('mysql_global_status_threads_connected', db, '80+0x10')
+        add('mysql_global_variables_max_connections', db, '100+0x10')
+        add('mysql_global_status_slow_queries', db, '0+6x10')
+        add('mysql_global_status_connection_errors_total', dict(db, error='internal'), '0+3x10')
+        add('mysql_global_status_aborted_connects', db, '0+3x10')
+    add('mysql_up', {'instance': 'db-b'}, '0+0x10')
+    add('mysql_slave_status_seconds_behind_source', {'instance': 'db-b'}, '12+0x10')
+    for pod, used in [('api-0', 9), ('api-1', 1)]:
+        pool = {'namespace': 'apps', 'app': 'api', 'pod': pod, 'db_name': 'primary'}
+        add('go_sql_in_use_connections', pool, f'{used}+0x10')
+        add('go_sql_max_open_connections', pool, '10+0x10')
+    redis = {'instance': 'redis-a'}
+    add('redis_up', redis, '1+0x10')
+    add('redis_memory_used_bytes', redis, '900+0x10')
+    add('redis_memory_max_bytes', redis, '1000+0x10')
+    add('redis_evicted_keys_total', redis, '0+60x10')
+    add('redis_commands_duration_seconds_total', dict(redis, cmd='get'), '0+3x10')
+    add('redis_commands_total', dict(redis, cmd='get'), '0+60x10')
+    add('redis_connected_clients', redis, '42+0x10')
+    kafka = {'kafka_cluster': 'primary', 'consumergroup': 'worker', 'topic': 'events'}
+    for partition, lag in [('0', 7), ('1', 11), ('2', -1)]:
+        add('kafka_consumergroup_lag', dict(kafka, partition=partition), f'{lag}+0x10')
+    for instance, age, known in [('a', 30, 1), ('b', 999, 0)]:
+        stats = {'namespace': 'apps', 'app': 'worker', 'pod': 'worker-0', 'instance': instance, 'queue_destination': 'emails'}
+        add('queue_oldest_ready_age_seconds', stats, f'{age}+0x10')
+        add('queue_stats_oldest_ready_known', stats, f'{known}+0x10')
+        add('queue_stats_collection_success', stats, '1+0x10')
+    consumer = {'namespace': 'apps', 'app': 'worker', 'pod': 'worker-0', 'kafka_destination': 'events', 'kafka_consumer': 'sync'}
+    add('kafka_consumer_messages_total', dict(consumer, kafka_result='success'), '0+42x10')
+    add('kafka_consumer_messages_total', dict(consumer, kafka_result='error'), '0+18x10')
+    add('kafka_consumer_dead_letters_total', dict(consumer, kafka_result='success'), '0+6x10')
+    gateway = {'namespace': 'apps', 'app': 'gw', 'pod': 'gw-0'}
+    add('server_requests_code_total', dict(gateway, operation='/api/orders', code='200'), '0+54x10')
+    add('server_requests_code_total', dict(gateway, operation='/api/orders', code='500'), '0+6x10')
+    for le in ['0.5', '+Inf']:
+        add('server_requests_seconds_bucket', dict(gateway, operation='/api/orders', le=le), '0+60x10')
+    # gRPC 风格 operation 推导出服务名；没有第二段路径的 operation 原样作为下游。
+    add('client_requests_code_total', dict(gateway, operation='/orders.v1.Orders/Get', code='200'), '0+30x10')
+    add('client_requests_code_total', dict(gateway, operation='/orders.v1.Orders/Get', code='503'), '0+30x10')
+    add('client_requests_code_total', dict(gateway, operation='/healthz', code='200'), '0+60x10')
+    for le in ['1', '+Inf']:
+        add('client_requests_seconds_bucket', dict(gateway, operation='/orders.v1.Orders/Get', le=le), '0+60x10')
+
+    def rule(name, **labels):
+        return dict(labels, __name__=name)
+    checks = [fixture_check(fleet, panel, [({}, value)]) for panel, value in
+              [(21, 4), (22, 2), (23, 10), (24, 2), (25, 1), (26, 1), (31, 2), (32, 1), (33, .8), (34, 12), (35, .9),
+               (41, 1), (42, 0), (43, .9), (44, 1), (45, .05), (51, 18), (52, 30), (53, .1), (54, .3)]]
+    checks.append(fixture_check(fleet, 22, [({}, 1)], namespace='apps'))
+    checks.append(fixture_check(fleet, 27, [(rule('pod:kube_pod_not_ready:info', namespace='apps', pod='api-1', phase='Running'), 1),
+                                            (rule('pod:kube_pod_not_ready:info', namespace='other', pod='x-0', phase='Pending'), 1)]))
+    checks.append(fixture_check(fleet, 28, [(rule('pod:kube_pod_container_restarts:increase1h', namespace='apps', pod='api-1'), 10)]))
+    checks.append(fixture_check(fleet, 29, [(rule('node:kube_node_not_ready:info', node='node-b', condition='NotReady'), 1),
+                                            (rule('node:kube_node_pressure:info', node='node-a', condition='MemoryPressure'), 1)]))
+    for ref, expected in [('A', [(rule('instance:mysql_up:max', instance='db-a'), 1), (rule('instance:mysql_up:max', instance='db-b'), 0)]),
+                          ('B', [(rule('instance:mysql_connections:usage', instance='db-a'), .8)]),
+                          ('C', [(rule('instance:mysql_slow_queries:rate5m', instance='db-a'), .1)]),
+                          ('D', [(rule('instance:mysql_connection_errors:rate5m', instance='db-a'), .1)]),
+                          ('E', [(rule('instance:mysql_replication_lag:seconds', instance='db-b'), 12)])]:
+        checks.append(fixture_check(fleet, 36, expected, target=ref))
+    checks.append(fixture_check(fleet, 37, [(rule('app:go_sql_pool_usage:max', namespace='apps', app='api', db_name='primary'), .9)]))
+    for ref, expected in [('B', [(rule('instance:redis_memory:usage', instance='redis-a'), .9)]),
+                          ('D', [(rule('instance:redis_command_latency:avg5m', instance='redis-a'), .05)]),
+                          ('E', [(rule('instance:redis_connected_clients:max', instance='redis-a'), 42)])]:
+        checks.append(fixture_check(fleet, 46, expected, target=ref))
+    checks.append(fixture_check(fleet, 55, [(rule('group:kafka_consumergroup_lag:sum', **kafka), 18)]))
+    checks.append(fixture_check(fleet, 56, [(rule('queue:queue_oldest_ready_age:max', queue_destination='emails'), 30)]))
+    checks.append(fixture_check(fleet, 57, [(rule('app:dead_letters:rate5m', namespace='apps', app='worker', consumer_type='kafka'), .1)]))
+    gw, orders, health = {'namespace': 'apps', 'app': 'gw'}, 'orders.v1.Orders', '/healthz'
+    for ref, expected in [('A', [(gw, 1)]), ('B', [(gw, .1)]), ('C', [(gw, .495)])]:
+        checks.append(fixture_check(fleet, 61, expected, target=ref))
+    for ref, expected in [('A', [(dict(gw, downstream=orders), 1), (dict(gw, downstream=health), 1)]),
+                          ('B', [(dict(gw, downstream=orders), .5), (dict(gw, downstream=health), 0)]),
+                          ('C', [(dict(gw, downstream=orders), .99)])]:
+        checks.append(fixture_check(fleet, 62, expected, target=ref))
+    # exporter 未接入：数据库 / Redis / Kafka 区为空（显示“未接入”），K8s 与消费者已接入时异常计数补 0。
+    unconnected = [input_series('kube_pod_info', {'namespace': 'apps', 'pod': 'api-0'}, '1+0x10'),
+                   input_series('kube_pod_status_phase', {'namespace': 'apps', 'pod': 'api-0', 'phase': 'Running'}, '1+0x10'),
+                   input_series('kube_pod_status_ready', {'namespace': 'apps', 'pod': 'api-0', 'condition': 'true'}, '1+0x10'),
+                   input_series('kafka_consumer_messages_total', dict(consumer, kafka_result='success'), '0+60x10')]
+    empty = [fixture_check(fleet, panel, []) for panel in [31, 32, 33, 34, 41, 42, 43, 44, 51, 52]]
+    empty += [fixture_check(fleet, 36, [], target='A'), fixture_check(fleet, 46, [], target='A'), fixture_check(fleet, 55, [])]
+    zero = [fixture_check(fleet, panel, [({}, 0)]) for panel in [22, 23, 53, 54]]
+    # ALERTS 由 Prometheus 写入；单独一组输入，避免与其他组的告警评估结果混在一起。
+    firing = {'alertname': 'FoundationAppNotReady', 'severity': 'warning', 'namespace': 'apps', 'app': 'api', 'pod': 'api-1'}
+    alerts = [input_series('ALERTS', dict(firing, alertstate='firing'), '1+0x10'),
+              input_series('ALERTS', dict(firing, alertname='FoundationHighLatency', alertstate='pending'), '1+0x10')]
+    return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks},
+            {'interval': '1m', 'input_series': unconnected, 'promql_expr_test': empty + zero},
+            {'interval': '1m', 'input_series': alerts, 'promql_expr_test': [
+                fixture_check(fleet, 12, [(dict(firing, alertstate='firing', __name__='ALERTS'), 1)]),
+                fixture_check(fleet, 12, [], namespace='other')]}]
+
+
+def service_section_fixture_tests(service):
+    """服务详情的消费者 / Job / Runtime 分区与首行负载识别。"""
+    series = []
+    worker = {'namespace': 'one', 'app': 'worker', 'pod_name': 'worker-0', 'container': 'api'}
+    api = {'namespace': 'one', 'app': 'api', 'pod_name': 'api-0', 'container': 'api'}
+    for labels, values in [(dict(worker, queue_destination='emails', queue_consumer='mailer', queue_result='success'), '0+45x10'),
+                           (dict(worker, queue_destination='emails', queue_consumer='mailer', queue_result='failed'), '0+15x10')]:
+        series.append(input_series('queue_consumer_messages_total', labels, values))
+    series.append(input_series('kafka_consumer_messages_total', dict(worker, kafka_destination='events', kafka_consumer='sync', kafka_result='success'), '0+60x10'))
+    for instance, age, known in [('a', 40, 1), ('b', 999, 0)]:
+        stats = dict(worker, instance=instance, queue_destination='emails')
+        series.append(input_series('queue_oldest_ready_age_seconds', stats, f'{age}+0x10'))
+        series.append(input_series('queue_stats_oldest_ready_known', stats, f'{known}+0x10'))
+        series.append(input_series('queue_stats_collection_success', stats, '1+0x10'))
+    series.append(input_series('job_running', dict(worker, exported_job='sync'), '1+0x10'))
+    series.append(input_series('server_requests_code_total', dict(api, operation='/users', kind='http', code='200'), '0+60x10'))
+    for labels, open_fds in [(worker, 50), (api, 10)]:
+        series.append(input_series('go_goroutines', labels, '10+0x10'))
+        series.append(input_series('process_open_fds', labels, f'{open_fds}+0x10'))
+        series.append(input_series('process_max_fds', labels, '100+0x10'))
+    series.append(input_series('kube_job_status_failed', {'namespace': 'one', 'job_name': 'migrate'}, '1+0x10'))
+    app = {'namespace': 'one', 'app': 'worker'}
+    checks = [fixture_check(service, panel, [({}, value)]) for panel, value in [(31, 1), (32, 2), (33, 1), (34, 2)]]
+    checks += [fixture_check(service, 42, [(app, .25)], target='A'), fixture_check(service, 42, [(app, 0)], target='B'),
+               fixture_check(service, 44, [(dict(app, queue_destination='emails'), 40)]),
+               fixture_check(service, 64, [(app, .5), ({'namespace': 'one', 'app': 'api'}, .1)]),
+               fixture_check(service, 54, [({'namespace': 'one', 'job_name': 'migrate'}, 1)]),
+               fixture_check(service, 32, [], app='api')]
+    return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks}]
+
+
+def database_fixture_tests(database):
+    series = []
+    for replica in ['a', 'b']:
+        db = {'instance': 'db-a', 'prometheus_replica': replica}
+        for metric, values in [('mysql_up', '1+0x10'), ('mysql_global_status_threads_connected', '80+0x10'),
+                               ('mysql_global_variables_max_connections', '100+0x10'), ('mysql_global_status_threads_running', '5+0x10'),
+                               ('mysql_global_status_slow_queries', '0+6x10'), ('mysql_global_status_aborted_connects', '0+3x10')]:
+            series.append(input_series(metric, db, values))
+        series.append(input_series('mysql_global_status_commands_total', dict(db, command='select'), '0+60x10'))
+        series.append(input_series('mysql_global_status_commands_total', dict(db, command='show_status'), '0+60x10'))
+        series.append(input_series('mysql_global_status_connection_errors_total', dict(db, error='internal'), '0+3x10'))
+    series.append(input_series('mysql_up', {'instance': 'db-b'}, '0+0x10'))
+    series.append(input_series('mysql_slave_status_seconds_behind_source', {'instance': 'db-b'}, '12+0x10'))
+    client = []
+    for app, pod, used, limit in [('api', 'api-0', 9, 10), ('api', 'api-1', 1, 10), ('worker', 'worker-0', 2, 0)]:
+        pool = {'namespace': 'one', 'app': app, 'pod_name': pod, 'container': 'api', 'db_name': 'primary'}
+        client.append(input_series('go_sql_in_use_connections', pool, f'{used}+0x10'))
+        client.append(input_series('go_sql_max_open_connections', pool, f'{limit}+0x10'))
+    main = {'namespace': 'one', 'app': 'api', 'pod_name': 'api-0', 'container': 'api', 'db_name': 'primary'}
+    client.append(input_series('go_sql_wait_count_total', main, '0+6x10'))
+    client.append(input_series('database_sql_operations_total', dict(main, operation='select', result='success'), '0+54x10'))
+    client.append(input_series('database_sql_operations_total', dict(main, operation='select', result='error'), '0+6x10'))
+    for le in ['0.1', '+Inf']:
+        client.append(input_series('database_sql_operation_duration_seconds_bucket', dict(main, operation='select', le=le), '0+60x10'))
+    db_a = {'instance': 'db-a'}
+    checks = [fixture_check(database, panel, [({}, value)]) for panel, value in [(201, 2), (202, 1), (203, .8), (204, 5), (205, .1), (206, 12)]]
+    checks += [fixture_check(database, 208, [(db_a, .8)]), fixture_check(database, 209, [(dict(db_a, command='select'), 1)]),
+               fixture_check(database, 211, [(dict(db_a, error='internal'), .05)], target='A'),
+               fixture_check(database, 211, [(db_a, .05)], target='B')]
+    api, worker = {'namespace': 'one', 'app': 'api', 'db_name': 'primary'}, {'namespace': 'one', 'app': 'worker', 'db_name': 'primary'}
+    # 上限 0（无限）的连接池计入使用数，但不参与上限合计与利用率。
+    for ref, expected in [('A', [(api, 10), (worker, 2)]), ('B', [(api, 20)]), ('C', [(api, .9)]), ('D', [(api, .1)]),
+                          ('E', [(api, 1)]), ('F', [(api, .1)]), ('G', [(api, .095)])]:
+        checks.append(fixture_check(database, 216, expected, target=ref))
+    # 未接入 mysqld_exporter：服务端区为空（“未接入”），客户端区照常。
+    unconnected = [fixture_check(database, panel, []) for panel in [201, 202, 203, 205, 206, 208]]
+    unconnected.append(fixture_check(database, 216, [(api, 10), (worker, 2)], target='A'))
+    return [{'interval': '1m', 'input_series': series + client, 'promql_expr_test': checks},
+            {'interval': '1m', 'input_series': client, 'promql_expr_test': unconnected}]
+
+
+def redis_fixture_tests(redis):
+    series = []
+    for instance, used, limit in [('redis-a', 900, 1000), ('redis-b', 100, 0)]:
+        labels = {'instance': instance}
+        series.append(input_series('redis_up', labels, '1+0x10'))
+        series.append(input_series('redis_memory_used_bytes', labels, f'{used}+0x10'))
+        series.append(input_series('redis_memory_max_bytes', labels, f'{limit}+0x10'))
+    a = {'instance': 'redis-a'}
+    for metric, values in [('redis_evicted_keys_total', '0+60x10'), ('redis_connected_clients', '42+0x10'),
+                           ('redis_commands_processed_total', '0+120x10')]:
+        series.append(input_series(metric, a, values))
+    series.append(input_series('redis_commands_duration_seconds_total', dict(a, cmd='get'), '0+3x10'))
+    series.append(input_series('redis_commands_total', dict(a, cmd='get'), '0+60x10'))
+    pool = {'namespace': 'one', 'app': 'api', 'pod_name': 'api-0', 'container': 'api', 'db_system': 'redis',
+            'redis_connection': 'primary', 'pool_name': 'default'}
+    client = [input_series('db_client_connections_usage', dict(pool, state='used'), '3+0x10'),
+              input_series('db_client_connections_waits', pool, '0+60x10'),
+              input_series('db_client_connections_timeouts', pool, '0+0x10'),
+              input_series('db_client_connections_use_time_milliseconds_count', dict(pool, type='command', status='success'), '0+48x10'),
+              input_series('db_client_connections_use_time_milliseconds_count', dict(pool, type='command', status='error'), '0+12x10')]
+    for le in ['100', '+Inf']:
+        client.append(input_series('db_client_connections_use_time_milliseconds_bucket', dict(pool, type='command', status='success', le=le), '0+60x10'))
+    checks = [fixture_check(redis, panel, [({}, value)]) for panel, value in [(301, 2), (302, 0), (303, .9), (304, 1), (305, .05), (306, 42)]]
+    # 未设置 maxmemory 的实例不出使用率，不能显示为 0%。
+    checks += [fixture_check(redis, 308, [(a, .9)]), fixture_check(redis, 312, [(dict(a, cmd='get'), .05)])]
+    app = {'namespace': 'one', 'app': 'api', 'redis_connection': 'primary', 'pool_name': 'default'}
+    for ref, value in [('A', 3), ('B', 1), ('C', 0), ('D', 1), ('E', .2), ('F', 95)]:
+        checks.append(fixture_check(redis, 318, [(app, value)], target=ref))
+    unconnected = [fixture_check(redis, panel, []) for panel in [301, 302, 303, 305, 308]]
+    unconnected.append(fixture_check(redis, 318, [(app, 1)], target='B'))
+    return [{'interval': '1m', 'input_series': series + client, 'promql_expr_test': checks},
+            {'interval': '1m', 'input_series': client, 'promql_expr_test': unconnected}]
+
+
+def messaging_fixture_tests(messaging):
+    main = {'namespace': 'one', 'app': 'worker', 'pod_name': 'worker-0', 'container': 'api'}
+    queue = dict(main, queue_destination='emails', queue_consumer='mailer')
+    kafka = dict(main, kafka_destination='events', kafka_consumer='sync')
+    consumers = [input_series('queue_consumer_messages_total', dict(queue, queue_result='success'), '0+45x10'),
+                 input_series('queue_consumer_messages_total', dict(queue, queue_result='failed'), '0+15x10'),
+                 input_series('kafka_consumer_messages_total', dict(kafka, kafka_result='success'), '0+54x10'),
+                 input_series('kafka_consumer_messages_total', dict(kafka, kafka_result='error'), '0+6x10')]
+    series = consumers + [input_series('kafka_consumer_dead_letters_total', dict(kafka, kafka_result='success'), '0+3x10'),
+                          input_series('queue_consumer_failed_tasks_total', dict(queue, queue_result='success'), '0+3x10'),
+                          input_series('up', {'foundation_kafka': 'true', 'kafka_cluster': 'primary', 'instance': 'exporter-a'}, '1+0x10')]
+    checks = [fixture_check(messaging, panel, [({}, value)]) for panel, value in [(420, 1), (423, .25), (424, .1), (425, .1)]]
+    # 未接入 kafka-exporter、未注册 RegisterStats：Lag 与年龄为空；有消费但没有死信时为 0，而不是“无消费者”。
+    unconnected = [fixture_check(messaging, panel, []) for panel in [420, 421, 422]] + [fixture_check(messaging, 425, [({}, 0)])]
+    return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks},
+            {'interval': '1m', 'input_series': consumers, 'promql_expr_test': unconnected}]
+
+
+def gateway_fixture_tests(gateway):
+    gw = {'namespace': 'apps', 'app': 'gw', 'pod': 'gw-0'}
+    inbound = []
+    for code, step in [('200', 48), ('500', 6), ('429', 6)]:
+        inbound.append(input_series('server_requests_code_total', dict(gw, operation='/api/orders', code=code), f'0+{step}x10'))
+    for le in ['0.5', '+Inf']:
+        inbound.append(input_series('server_requests_seconds_bucket', dict(gw, operation='/api/orders', le=le), '0+60x10'))
+    outbound = [input_series('client_requests_code_total', dict(gw, operation='/orders.v1.Orders/Get', code='200'), '0+30x10'),
+                input_series('client_requests_code_total', dict(gw, operation='/orders.v1.Orders/Get', code='503', reason='SERVICE_UNAVAILABLE'), '0+30x10'),
+                input_series('client_requests_code_total', dict(gw, operation='/healthz', code='200'), '0+60x10')]
+    for le in ['1', '+Inf']:
+        outbound.append(input_series('client_requests_seconds_bucket', dict(gw, operation='/orders.v1.Orders/Get', le=le), '0+60x10'))
+    route = {'namespace': 'apps', 'app': 'gw', 'operation': '/api/orders'}
+    orders, health = {'namespace': 'apps', 'app': 'gw', 'downstream': 'orders.v1.Orders'}, {'namespace': 'apps', 'app': 'gw', 'downstream': '/healthz'}
+    checks = [fixture_check(gateway, panel, [({}, value)]) for panel, value in [(2, 1), (3, .1), (4, .495), (5, .1), (6, .25), (7, .99)]]
+    for ref, value in [('A', 1), ('B', .1), ('C', .1), ('D', .495)]:
+        checks.append(fixture_check(gateway, 9, [(route, value)], target=ref))
+    for ref, expected in [('A', [(orders, 1), (health, 1)]), ('B', [(orders, .5), (health, 0)]), ('C', [(orders, .99)])]:
+        checks.append(fixture_check(gateway, 13, expected, target=ref))
+    checks.append(fixture_check(gateway, 14, [(dict(orders, code='503', reason='SERVICE_UNAVAILABLE'), .5)]))
+    # 只有入口流量的应用：下游区为空，不显示 0% 错误。
+    inbound_only = [fixture_check(gateway, panel, []) for panel in [6, 7, 13]] + [fixture_check(gateway, 2, [({}, 1)])]
+    return [{'interval': '1m', 'input_series': inbound + outbound, 'promql_expr_test': checks},
+            {'interval': '1m', 'input_series': inbound, 'promql_expr_test': inbound_only}]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--container', help='使用现有容器中的 promtool；省略时用固定 Prometheus 镜像启动临时容器')
     args = parser.parse_args()
-    dashboards = [json.loads(p.read_text()) for p in sorted((ROOT / 'grafana/dashboards').glob('*.json'))]
+    paths = sorted((ROOT / 'grafana/dashboards').glob('*.json'))
+    dashboards = [json.loads(p.read_text()) for p in paths]
     uids = [d['uid'] for d in dashboards]
-    expected_uids = {'foundation-fleet-overview', 'ack-service-overview', 'ack-container-overview', 'ack-application-components', 'foundation-shared-resources'}
     assert len(uids) == len(set(uids)), 'Dashboard UID 必须唯一'
-    assert expected_uids <= set(uids), '缺少约定的五份 Dashboard'
-    overview = next(d for d in dashboards if d['uid'] == 'ack-container-overview')
-    components = next(d for d in dashboards if d['uid'] == 'ack-application-components')
-    service = next(d for d in dashboards if d['uid'] == 'ack-service-overview')
-    shared = next(d for d in dashboards if d['uid'] == 'foundation-shared-resources')
-    fleet = next(d for d in dashboards if d['uid'] == 'foundation-fleet-overview')
+    assert EXPECTED_UIDS <= set(uids), f'缺少约定的 Dashboard: {EXPECTED_UIDS - set(uids)}'
+    by_uid = {d['uid']: d for d in dashboards}
+    overview, components, service = by_uid['ack-container-overview'], by_uid['ack-application-components'], by_uid['ack-service-overview']
+    shared, fleet, gateway = by_uid['foundation-shared-resources'], by_uid['foundation-fleet-overview'], by_uid['foundation-gateway']
+    database, redis, messaging = by_uid['foundation-database'], by_uid['foundation-redis'], by_uid['foundation-messaging']
+    # Folder 建议与打包共用 folders.json；业务页（90 业务）不进模板。
+    folders = json.loads((ROOT / 'grafana/folders.json').read_text())
+    listed = {name: f['folder'] for f in folders for name in f['dashboards']}
+    assert sum(len(f['dashboards']) for f in folders) == len(listed), 'folders.json 中面板重复'
+    assert set(listed) == {p.name for p in paths}, f'folders.json 与面板文件不一致: {set(listed) ^ {p.name for p in paths}}'
+    assert {f['folder'] for f in folders} <= set(FOLDERS), f'Folder 须为 {FOLDERS}'
+    for path, d in zip(paths, dashboards):
+        assert listed[path.name] in d['tags'], f'{d["uid"]} 的 tags 须包含 Folder {listed[path.name]}'
+    # 总览只读预聚合与 ALERTS，几十个应用时不扫原始序列。
+    for p in panels(fleet):
+        for t in p.get('targets', []):
+            raw = {m for m in re.findall(r'([a-zA-Z_:][a-zA-Z0-9_:]*)\{', t['expr']) if ':' not in m} - {'ALERTS'}
+            assert not raw, f'平台总览「{p["title"]}」直接查询原始指标: {raw}'
     empty_checks = []
     for d in dashboards:
         names = {v['name'] for v in d['templating']['list']}
@@ -431,13 +729,13 @@ def main():
             choices = [value.strip() for value in pod_label['query'].split(',')]
             assert len(choices) == 2 and set(choices) == {'pod_name', 'pod'}, '应用 Pod 标签仅支持 pod_name/pod'
             assert not pod_label.get('multi') and not pod_label.get('includeAll')
-        linked_uids = set()
+        # 所有页面顶部导航相同，覆盖全部约定页面。
+        assert [link['url'] for link in d['links']] == ['/d/' + uid for uid in NAV_ORDER], f'{d["uid"]} 的顶部导航须与约定顺序一致'
         for link in d['links']:
-            match = re.fullmatch(r'/d/([^/?#]+)', link['url'])
-            assert match and match[1] in set(uids), f'{d["uid"]} 的导航目标不存在: {link["url"]}'
             assert link['includeVars'] is True and link['keepTime'] is True, '跨页导航须保留变量和时间范围'
-            linked_uids.add(match[1])
-        assert expected_uids <= linked_uids, f'{d["uid"]} 缺少五页导航链接'
+        # 面板链接、表格数据链接与 Markdown 中的跳转目标必须存在。
+        targets = set(re.findall(r'/d/([A-Za-z0-9_-]+)', json.dumps([p for p in panels(d)], ensure_ascii=False)))
+        assert targets <= set(uids), f'{d["uid"]} 的面板链接目标不存在: {targets - set(uids)}'
         # Grafana 内置数据链接变量来自当前字段，不属于 dashboard templating。
         referenced = {name for name in re.findall(r'\$\{(\w+)(?::\w+)?\}', json.dumps(d)) if not name.startswith('__')}
         assert referenced <= names, f'{d["uid"]} 未定义变量: {referenced - names}'
@@ -451,8 +749,11 @@ def main():
                 for mode in views:
                     expected = [{'labels': '{}', 'value': 0}] if 'or vector(0)' in t['expr'] else []
                     empty_checks.append({'expr': expression(t['expr'], mode), 'eval_time': '10m', 'exp_samples': expected})
-    fixtures = (fixture_tests(overview) + node_fixture_tests(overview) + resource_state_fixture_tests(overview) + component_fixture_tests(components)
-                + service_fixture_tests(service) + shared_fixture_tests(shared) + fleet_fixture_tests(fleet))
+    fixtures = (fixture_tests(overview) + node_fixture_tests(overview) + resource_state_fixture_tests(overview)
+                + component_fixture_tests(merged(components, database, redis, messaging))
+                + service_fixture_tests(service) + service_section_fixture_tests(service) + shared_fixture_tests(messaging, shared)
+                + fleet_fixture_tests(fleet) + platform_fixture_tests(fleet) + database_fixture_tests(database)
+                + redis_fixture_tests(redis) + messaging_fixture_tests(messaging) + gateway_fixture_tests(gateway))
     # 舰队页依赖 recording rules，测试与生产加载同一份规则文件，避免面板与规则口径漂移。
     rules = ROOT / 'prometheus/alerts.yaml'
     if args.container:
@@ -465,7 +766,8 @@ def main():
     tests = {'rule_files': [rule_path], 'evaluation_interval': '1m', 'tests': [{'interval': '1m', 'promql_expr_test': empty_checks}] + fixtures}
     subprocess.run(cmd + ['test', 'rules', '/dev/stdin'], input=json.dumps(tests), text=True, check=True)
     nonempty_checks = sum(len(test['promql_expr_test']) for test in fixtures)
-    print(f'JSON、变量和 {len(empty_checks)} 条空样本查询检查通过；{nonempty_checks} 条合成样本断言覆盖隔离、去重、Limit、组件单位与分母口径')
+    print(f'{len(dashboards)} 份面板的导航、Folder、链接、变量和 {len(empty_checks)} 条空样本查询检查通过；'
+          f'{nonempty_checks} 条合成样本断言覆盖隔离、去重、Limit、组件单位、分母口径与 exporter 未接入')
 
 
 if __name__ == '__main__':

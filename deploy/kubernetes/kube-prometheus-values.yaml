@@ -17,6 +17,10 @@ grafana:
       enabled: true
       label: grafana_dashboard
       labelValue: "1"
+      # render-kubernetes 为每个 Folder 生成一个带 grafana_folder 注解的 ConfigMap（00 总览 / 10 服务 / 20 中间件 / 30 基础设施）。
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
 # 一次性脚本与 CronJob 告警（alerts.yaml 的 foundation-kubernetes-jobs 组）读取 kube-state-metrics。
 # kube-state-metrics 默认不导出资源标签；放开 app.kubernetes.io/name 后，kube_job_labels/kube_cronjob_labels
 # 才带 label_app_kubernetes_io_name，告警据此补出 app 标签用于路由。只放开这一个低基数标签，不使用 [*]。

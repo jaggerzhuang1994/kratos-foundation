@@ -8,43 +8,71 @@
   },
   "refresh": "30s",
   "uid": "ack-service-overview",
-  "title": "ACK · 服务运行总览",
+  "title": "Foundation · 服务详情",
   "version": 1,
   "tags": [
     "Foundation",
-    "diagnostics"
+    "10 服务"
   ],
   "links": [
     {
-      "title": "舰队总览",
+      "title": "00 平台总览",
       "type": "link",
       "url": "/d/foundation-fleet-overview",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "服务总览",
+      "title": "10 服务详情",
       "type": "link",
       "url": "/d/ack-service-overview",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "容器与节点",
+      "title": "10 网关",
       "type": "link",
-      "url": "/d/ack-container-overview",
+      "url": "/d/foundation-gateway",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "应用组件",
+      "title": "10 应用组件",
       "type": "link",
       "url": "/d/ack-application-components",
       "includeVars": true,
       "keepTime": true
     },
     {
-      "title": "共享资源与健康",
+      "title": "20 数据库",
+      "type": "link",
+      "url": "/d/foundation-database",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 Redis",
+      "type": "link",
+      "url": "/d/foundation-redis",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "20 队列与 Kafka",
+      "type": "link",
+      "url": "/d/foundation-messaging",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "30 容器与节点",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "30 健康探测",
       "type": "link",
       "url": "/d/foundation-shared-resources",
       "includeVars": true,
@@ -53,14 +81,263 @@
   ],
   "panels": [
     {
-      "id": 1,
-      "title": "01 · 服务影响 — 先看流量、错误、延迟与就绪",
+      "id": 30,
+      "title": "01 · 负载识别 — 哪些负载类型有数据",
       "type": "row",
       "collapsed": false,
-      "panels": [],
       "gridPos": {
         "x": 0,
         "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 31,
+      "title": "HTTP / gRPC 端点",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (namespace,app,operation,kind) (server_requests_code_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "有 server_requests 指标的端点数；无值时 02–04 区为空属正常。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "无请求指标",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${__url_time_range}&${datasource:queryparam}&${view:queryparam}&${namespace:queryparam}&${app:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 32,
+      "title": "消费者",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (__name__,namespace,app,queue_destination,queue_consumer,kafka_destination,kafka_consumer) ({__name__=~\"queue_consumer_messages_total|kafka_consumer_messages_total\",namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "Queue 与 Kafka 消费者数；有值时展开“05 · 消费者”。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "无消费者",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "查看队列与 Kafka 详情",
+              "url": "/d/foundation-messaging?${__url_time_range}&${datasource:queryparam}&${view:queryparam}&${namespace:queryparam}&${app:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 33,
+      "title": "Job",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (namespace,app,exported_job) (job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "有值时展开“06 · Job”。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "无 Job",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 34,
+      "title": "Go Runtime 实例",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(go_goroutines{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "上报 Go Runtime 指标的进程数；展开“07 · Runtime”。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "无 Runtime 指标",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 1,
+      "title": "02 · HTTP / gRPC 影响 — 流量、错误、延迟与就绪",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
         "w": 24,
         "h": 1
       }
@@ -75,7 +352,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -129,7 +406,7 @@
       },
       "gridPos": {
         "x": 4,
-        "y": 1,
+        "y": 6,
         "w": 3,
         "h": 4
       },
@@ -183,7 +460,7 @@
       },
       "gridPos": {
         "x": 7,
-        "y": 1,
+        "y": 6,
         "w": 3,
         "h": 4
       },
@@ -237,7 +514,7 @@
       },
       "gridPos": {
         "x": 10,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -304,7 +581,7 @@
       },
       "gridPos": {
         "x": 14,
-        "y": 1,
+        "y": 6,
         "w": 3,
         "h": 4
       },
@@ -371,7 +648,7 @@
       },
       "gridPos": {
         "x": 17,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -425,7 +702,7 @@
       },
       "gridPos": {
         "x": 21,
-        "y": 1,
+        "y": 6,
         "w": 3,
         "h": 4
       },
@@ -484,13 +761,12 @@
     },
     {
       "id": 8,
-      "title": "02 · RED 趋势 — 保留应用身份，按视图下钻",
+      "title": "03 · HTTP / gRPC RED 趋势 — 保留应用身份，按视图下钻",
       "type": "row",
       "collapsed": false,
-      "panels": [],
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 10,
         "w": 24,
         "h": 1
       }
@@ -505,7 +781,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 11,
         "w": 8,
         "h": 8
       },
@@ -567,7 +843,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 6,
+        "y": 11,
         "w": 8,
         "h": 8
       },
@@ -629,7 +905,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 6,
+        "y": 11,
         "w": 8,
         "h": 8
       },
@@ -690,13 +966,12 @@
     },
     {
       "id": 12,
-      "title": "03 · 异常端点 — 点击端点进入组件详情",
+      "title": "04 · 异常端点 — 点击端点进入应用组件",
       "type": "row",
       "collapsed": false,
-      "panels": [],
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 19,
         "w": 24,
         "h": 1
       }
@@ -711,7 +986,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 20,
         "w": 12,
         "h": 9
       },
@@ -808,7 +1083,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 15,
+        "y": 20,
         "w": 12,
         "h": 9
       },
@@ -896,14 +1171,989 @@
       ]
     },
     {
-      "id": 15,
-      "title": "04 · 接入诊断 — 抓取响应与对象关联分别核对",
+      "id": 40,
+      "title": "05 · 消费者 — Queue / Kafka 处理结果（无消费者时保持折叠）",
       "type": "row",
-      "collapsed": false,
-      "panels": [],
+      "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 29,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 41,
+          "title": "消费最终结果速率",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 30,
+            "w": 12,
+            "h": 8
+          },
+          "description": "按应用汇总，不受节点与视图影响；单次尝试、重试细节见队列与 Kafka 详情。",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (namespace,app,queue_destination,queue_result) (rate(queue_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))",
+              "legendFormat": "Queue · {{namespace}} / {{app}} / {{queue_destination}} / {{queue_result}}",
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "sum by (namespace,app,kafka_destination,kafka_result) (rate(kafka_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))",
+              "legendFormat": "Kafka · {{namespace}} / {{app}} / {{kafka_destination}} / {{kafka_result}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "links": [
+            {
+              "title": "查看队列与 Kafka 详情",
+              "url": "/d/foundation-messaging?${__url_time_range}&${datasource:queryparam}&${view:queryparam}&${namespace:queryparam}&${app:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}",
+              "targetBlank": false
+            }
+          ]
+        },
+        {
+          "id": 42,
+          "title": "消费失败比例",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 30,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Queue 失败含 failed/storage_error，Kafka 含 error/dead_lettered；无消费流量时不出值。",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(sum by (namespace,app) (rate(queue_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",queue_result=~\"failed|storage_error\"}[$__rate_interval])) or 0 * sum by (namespace,app) (rate(queue_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))) / (sum by (namespace,app) (rate(queue_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])) > 0)",
+              "legendFormat": "Queue · {{namespace}} / {{app}}",
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "(sum by (namespace,app) (rate(kafka_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",kafka_result=~\"error|dead_lettered\"}[$__rate_interval])) or 0 * sum by (namespace,app) (rate(kafka_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))) / (sum by (namespace,app) (rate(kafka_consumer_messages_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])) > 0)",
+              "legendFormat": "Kafka · {{namespace}} / {{app}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ],
+              "min": 0,
+              "max": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 43,
+          "title": "重试与死信 / 失败归档速率",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 38,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (namespace,app) (rate(queue_consumer_retries_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))",
+              "legendFormat": "Queue 重试 · {{namespace}} / {{app}}",
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "sum by (namespace,app) (rate(kafka_consumer_retries_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))",
+              "legendFormat": "Kafka 重试 · {{namespace}} / {{app}}",
+              "range": true
+            },
+            {
+              "refId": "C",
+              "expr": "sum by (namespace,app) (rate(queue_consumer_failed_tasks_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))",
+              "legendFormat": "Queue 失败归档 · {{namespace}} / {{app}}",
+              "range": true
+            },
+            {
+              "refId": "D",
+              "expr": "sum by (namespace,app) (rate(kafka_consumer_dead_letters_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval]))",
+              "legendFormat": "Kafka 死信 · {{namespace}} / {{app}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 44,
+          "title": "最老就绪任务（应用观察器）",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 38,
+            "w": 12,
+            "h": 8
+          },
+          "description": "只取同一观察器采集成功且年龄已知的样本；需 RegisterStats。共享库存与 Kafka Lag 见队列与 Kafka 详情。",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (namespace,app,queue_destination) (queue_oldest_ready_age_seconds{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"} and (queue_stats_collection_success{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"} == 1) and (queue_stats_oldest_ready_known{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"} == 1))",
+              "legendFormat": "{{namespace}} / {{app}} / {{queue_destination}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "links": [
+            {
+              "title": "查看队列与 Kafka 详情",
+              "url": "/d/foundation-messaging?${__url_time_range}&${datasource:queryparam}&${view:queryparam}&${namespace:queryparam}&${app:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}",
+              "targetBlank": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "title": "06 · Job — 进程内任务与 K8s Job（无 Job 时保持折叠）",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 51,
+          "title": "Job 执行结果（所选时间范围）",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 31,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (namespace,app,exported_job,status) (increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__range]))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "description": "常驻进程内 Job；increase 外推，可能非整数。",
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "无 Job",
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "次数"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "none"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            },
+            "sortBy": [
+              {
+                "displayName": "次数",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "Time 4": true,
+                  "Time 5": true,
+                  "Time 6": true,
+                  "Time 7": true,
+                  "Time 8": true,
+                  "Time 9": true
+                },
+                "indexByName": {},
+                "renameByName": {
+                  "namespace": "命名空间",
+                  "app": "应用",
+                  "exported_job": "任务",
+                  "status": "结果",
+                  "Value #A": "次数"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 52,
+          "title": "Job 正在运行与等待",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 31,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (namespace,app,exported_job) (job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+              "legendFormat": "运行 · {{namespace}} / {{app}} / {{exported_job}}",
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "sum by (namespace,app,exported_job) (job_pending{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+              "legendFormat": "等待 · {{namespace}} / {{app}} / {{exported_job}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${__url_time_range}&${datasource:queryparam}&${view:queryparam}&${namespace:queryparam}&${app:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}",
+              "targetBlank": false
+            }
+          ]
+        },
+        {
+          "id": 53,
+          "title": "Job 执行 P95",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 39,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (namespace,app,exported_job,le) (rate(job_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])))",
+              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 54,
+          "title": "K8s Job 失败（一次性脚本）",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 39,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (namespace,job_name) (kube_job_status_failed{namespace=~\"${namespace}\"}) > 0",
+              "legendFormat": "",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "description": "一次性脚本常在被抓取前退出，以 kube-state-metrics 的 Job 状态为准；只受命名空间筛选。",
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "无失败 Job / 未接入",
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "失败 Pod"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "none"
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "Time 4": true,
+                  "Time 5": true,
+                  "Time 6": true,
+                  "Time 7": true,
+                  "Time 8": true,
+                  "Time 9": true
+                },
+                "indexByName": {},
+                "renameByName": {
+                  "namespace": "命名空间",
+                  "job_name": "K8s Job",
+                  "Value #A": "失败 Pod"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "title": "07 · Runtime — Go 进程资源（详情见应用组件）",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 61,
+          "title": "进程 RSS（每实例）",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 32,
+            "w": 12,
+            "h": 8
+          },
+          "description": "按实例展示；Go 内存分项、GC 与调度见应用组件 Runtime 区。",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (namespace,app,${app_pod_label:raw}) (process_resident_memory_bytes{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+              "legendFormat": "{{namespace}} / {{app}} / {{${app_pod_label:raw}}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${__url_time_range}&${datasource:queryparam}&${view:queryparam}&${namespace:queryparam}&${app:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}",
+              "targetBlank": false
+            }
+          ]
+        },
+        {
+          "id": 62,
+          "title": "Go 协程（每实例）",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 32,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (namespace,app,${app_pod_label:raw}) (go_goroutines{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+              "legendFormat": "{{namespace}} / {{app}} / {{${app_pod_label:raw}}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 63,
+          "title": "GC 平均 STW",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 40,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (namespace,app) (rate(go_gc_duration_seconds_sum{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])) / (sum by (namespace,app) (rate(go_gc_duration_seconds_count{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{namespace}} / {{app}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 64,
+          "title": "FD 最忙进程利用率",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 40,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (namespace,app) (process_open_fds{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"} / (process_max_fds{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"} > 0))",
+              "legendFormat": "{{namespace}} / {{app}}",
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "无数据",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "gray",
+                      "text": "无数据"
+                    }
+                  }
+                }
+              ],
+              "min": 0,
+              "max": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "08 · 接入诊断 — 抓取响应与对象关联分别核对",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
         "w": 24,
         "h": 1
       }
@@ -918,7 +2168,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 33,
         "w": 16,
         "h": 8
       },
@@ -986,7 +2236,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 25,
+        "y": 33,
         "w": 8,
         "h": 8
       },
@@ -1093,7 +2343,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 33,
+        "y": 41,
         "w": 24,
         "h": 4
       },
@@ -1111,7 +2361,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**筛选顺序：** 数据源 → 命名空间 / 应用 → Pod / 容器。先确认“应用 Pod 标签”匹配目标的 `pod_name` 或 `pod`。具体应用筛选需要稳定的 `app` 标签。\n\n**判读：** `up=1` 只代表抓取成功；Pod Ready、实际 `/readyz` 探测、方法请求结果是不同信号。无流量时错误率/分位数为空；未接入或身份错误保留空值。方法指标尚不完整覆盖 panic、前置 Deadline 拒绝、Client.Do、gRPC Stream；完整健康与共享积压请进入“共享资源与健康”。"
+        "content": "**筛选顺序：** 数据源 → 命名空间 / 应用 → Pod / 容器。先确认“应用 Pod 标签”匹配目标的 `pod_name` 或 `pod`。具体应用筛选需要稳定的 `app` 标签。\n\n**判读：** `up=1` 只代表抓取成功；Pod Ready、实际 `/readyz` 探测、方法请求结果是不同信号。无流量时错误率/分位数为空；未接入或身份错误保留空值。方法指标尚不完整覆盖 panic、前置 Deadline 拒绝、Client.Do、gRPC Stream；完整健康与共享积压请进入“健康探测”与“队列与 Kafka 详情”。\n\n**分区：** 02–04 为 HTTP/gRPC RED，05 消费者、06 Job、07 Runtime 默认折叠；Grafana 无法按数据自动折叠，先看首行“负载识别”卡片，有值的分区再展开。05–07 按应用汇总，不受节点与视图影响。"
       }
     }
   ],

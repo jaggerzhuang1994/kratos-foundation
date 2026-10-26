@@ -1,0 +1,6 @@
+[
+  {"folder": "00 总览", "configMap": "foundation-dashboards-overview", "dashboards": ["foundation-fleet.json"]},
+  {"folder": "10 服务", "configMap": "foundation-dashboards-services", "dashboards": ["foundation-service.json", "foundation-gateway.json", "foundation-components.json"]},
+  {"folder": "20 中间件", "configMap": "foundation-dashboards-middleware", "dashboards": ["foundation-database.json", "foundation-redis.json", "foundation-messaging.json"]},
+  {"folder": "30 基础设施", "configMap": "foundation-dashboards-infrastructure", "dashboards": ["foundation.json", "foundation-shared.json"]}
+]

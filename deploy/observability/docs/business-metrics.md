@@ -70,7 +70,7 @@ Provider cleanup 由原有 Wire 组装层负责；本例 instruments 没有独�
 
 ## 4. 展示到 Grafana
 
-[服务运行总览](../grafana/dashboards/foundation-service.json)、[组件详情](../grafana/dashboards/foundation-components.json)、[容器与节点资源](../grafana/dashboards/foundation.json)和[共享资源](../grafana/dashboards/foundation-shared.json)分别对应运行状态、调用细节、实例资源及共享库存。共享面板自动发现已有变量候选，但不会推断任意业务指标的含义和图表类型。业务可复制适合的 JSON、更换 `uid` 和标题后导入自己的 Folder；保留 datasource、namespace、app、app_pod_label 与对象身份变量，再新增图表。不要复用原 UID 覆盖公共模板，文件 provisioning 的面板修改应回写源 JSON。
+[服务详情](../grafana/dashboards/foundation-service.json)、[应用组件](../grafana/dashboards/foundation-components.json)、[容器与节点资源](../grafana/dashboards/foundation.json)和[队列与 Kafka 详情](../grafana/dashboards/foundation-messaging.json)分别对应运行状态、调用细节、实例资源及共享库存。公共模板自动发现已有变量候选，但不会推断任意业务指标的含义和图表类型。业务自定义指标页放 90 业务 Folder，不进公共模板：可复制适合的 JSON、更换 `uid` 和标题后导入；保留 datasource、namespace、app、app_pod_label 与对象身份变量，再新增图表。不要复用原 UID 覆盖公共模板，文件 provisioning 的面板修改应回写源 JSON。
 
 下面是独立业务图表的固定容器明细示例，前提是指标具有 namespace/app/container 和所选 Pod 标签。使用现有 namespace、app、pod、container、app_pod_label 变量；这两个片段不随 view 切换，也不关联 node。需要完整四视图时，复制当前请求速率/P95 的 Pod 元数据关联和视图表达式，再替换指标名与业务标签；即使切换 Node 视图，也要保留 namespace/app 分组。
 

@@ -1,10 +1,10 @@
-# 健康状态、Kafka Lag 与 MySQL 的外部采集
+# 健康状态、Kafka Lag、MySQL 与 Redis 的外部采集
 
-容器与节点页使用 ACK 的 kube-state-metrics、cAdvisor 和 node-exporter。本文的 blackbox 与 Kafka Lag 属于额外采集，已集中在 [共享资源与健康](../grafana/dashboards/foundation-shared.json)；MySQL 服务端仍使用平台自己的 exporter 面板。共享页不要求 kube_pod_info，使用 env/cluster 等共享资源身份，不受 App/Node/Pod/Container 视图筛选。
+容器与节点页使用 ACK 的 kube-state-metrics、cAdvisor 和 node-exporter。本文的采集均为额外可选：blackbox 展示在 [健康探测](../grafana/dashboards/foundation-shared.json)，Queue 库存与 Kafka Lag 在 [队列与 Kafka 详情](../grafana/dashboards/foundation-messaging.json)，mysqld_exporter 与 redis_exporter 在 [数据库详情](../grafana/dashboards/foundation-database.json)、[Redis 详情](../grafana/dashboards/foundation-redis.json)，并汇总到平台总览。这些区块不要求 kube_pod_info，使用 env/cluster、exporter instance 等共享资源身份，不受 App/Node/Pod/Container 视图筛选；未接入时显示“未接入”。
 
 ## Queue 库存
 
-共享页使用 `queue_tasks` 展示各状态任务数、`queue_oldest_ready_age_seconds` 展示最老 ready 任务年龄，同时显示统计成功/年龄已知时间线及统计采集者清单。各队列与状态独立画线，不跨队列或环境堆叠。需要业务显式调用 `queue.RegisterStats`，并为采集目标附加 env/cluster；接入方式与限流要求见 [Queue 文档](../../../pkg/queue/README.md)。这些是共享 Store 的库存，不能把多个 Worker 的统计结果相加。面板按 env/cluster/queue_destination 取 max 去重，统计状态取最差值；同一范围内不同 Store 必须使用不同逻辑目的地名称，现有指标没有独立 Store 身份，无法辨别同名但不同的 Store。
+队列与 Kafka 详情使用 `queue_tasks` 展示各状态任务数、`queue_oldest_ready_age_seconds` 展示最老 ready 任务年龄，同时显示统计成功/年龄已知时间线及统计采集者清单。各队列与状态独立画线，不跨队列或环境堆叠。需要业务显式调用 `queue.RegisterStats`，并为采集目标附加 env/cluster；接入方式与限流要求见 [Queue 文档](../../../pkg/queue/README.md)。这些是共享 Store 的库存，不能把多个 Worker 的统计结果相加。面板按 env/cluster/queue_destination 取 max 去重，统计状态取最差值；同一范围内不同 Store 必须使用不同逻辑目的地名称，现有指标没有独立 Store 身份，无法辨别同名但不同的 Store。
 
 年龄图只使用同一 observer 中统计成功且 `queue_stats_oldest_ready_known=1` 的样本，未知与失败不会画成零，也不会使用旧年龄。统计状态仍须同时检查：部分 observer 成功只证明存在可用快照，不能证明所有采集者健康。未接入或目标消失显示缺失，不等于没有积压。
 
@@ -41,6 +41,12 @@ flowchart TD
     F --> I([面板分别解释服务端容量与应用连接池])
 ```
 
+数据库详情服务端区读取 `mysql_up`、`mysql_global_status_threads_connected/threads_running/slow_queries/commands_total/aborted_connects/connection_errors_total/innodb_row_lock_waits`、`mysql_global_variables_max_connections` 与 `mysql_slave_status_seconds_behind_master`（新版为 `_source`），按 exporter `instance` 选择；平台总览读取 `foundation-records` 中的 `instance:mysql_*` 预聚合。使用云厂商监控（如 RDS 云监控导出）时须重命名为上述指标与 `instance` 标签，否则区块显示“未接入”。
+
+## Redis 服务端指标
+
+应用侧 redisotel 指标只描述本进程连接池与调用耗时。内存、逐出、服务端命令耗时和总连接数由平台部署 [redis_exporter](https://github.com/oliver006/redis_exporter)（推荐多目标 `/scrape` 模式，`instance` 为 Redis 地址），读取 `redis_up`、`redis_memory_used_bytes/max_bytes`、`redis_evicted_keys_total`、`redis_commands_duration_seconds_total/commands_total`、`redis_connected_clients`、`redis_config_maxclients` 等。未设置 maxmemory 时内存使用率无值，不能当作 0%；集群模式按节点采集，面板不自动合并分片。Redis 密码通过 Secret 注入 exporter，不写入仓库。
+
 ## Ready 与 Health
 
 `up` 表示 Prometheus 是否取得一次合法指标响应，不能表示应用就绪。模板用 [blackbox-exporter](https://github.com/prometheus/blackbox_exporter) 实际 GET 每个实例的 `/readyz` 和 `/healthz`，仅 HTTP 200 成功，不跟随重定向，单次探测超时2s、抓取超时5s。
@@ -49,7 +55,7 @@ flowchart TD
 
 Kubernetes 可复用既有 blackbox，或审阅 [blackbox.yaml](../../kubernetes/blackbox.yaml) 后部署；将 [health-values.yaml](../../kubernetes/health-values.yaml) 的两个 additionalScrapeConfigs 合并到现有 kube-prometheus-stack。示例只发现 foundation-demo 的 minimal-api Service management 端口，探测各 Pod 地址；按实际修改 namespace、服务标签、端口和集群名。Prometheus 需有发现 Endpoints/Pod/Service 的权限，blackbox 需能访问管理端口；探测接口不能暴露给不可信网络任意访问内部地址。
 
-共享页将 readyz/healthz 的 probe_success、探测采集 up 时间线，以及 HTTP 状态码与探测耗时分开；同一实例的重复采集取最差成功状态。探测器故障时 `up=0`，不会伪造应用健康。页面“探测应用”使用独立 probe_app 变量，避免传入应用组件的筛选值。应用健康不等于完整外部用户链路健康；readiness依赖哪些组件取决于业务注册的 spec.Health().Checks(...)。
+健康探测页将 readyz/healthz 的 probe_success、探测采集 up 时间线，以及 HTTP 状态码与探测耗时分开；同一实例的重复采集取最差成功状态。探测器故障时 `up=0`，不会伪造应用健康。页面“探测应用”使用独立 probe_app 变量，避免传入应用组件的筛选值。应用健康不等于完整外部用户链路健康；readiness依赖哪些组件取决于业务注册的 spec.Health().Checks(...)。
 
 ```mermaid
 flowchart TD
@@ -81,7 +87,7 @@ KAFKA_BROKER=host.docker.internal:19092 KAFKA_VERSION=4.1.2 \
 
 Kubernetes 复用已有 exporter 时只对齐 foundation_kafka/env/cluster/kafka_cluster 标签；否则使用 [kafka-exporter.yaml](../../kubernetes/kafka-exporter.yaml) 示例，先修改 broker、版本、Topic/Group过滤、release标签及认证。TLS/SASL参数和证书按部署环境配置，密码通过部署系统Secret管理，不写入仓库。本例启用offset.show-all以包括未连接消费组；结果仍受权限、组/Topic过滤和已提交位点是否存在影响。Exporter读取元数据与消费组位点，不作为业务消费者，不创建Topic。
 
-共享页 Lag 按 env、cluster、kafka_cluster、consumergroup、topic 筛选，包含 Topic 合计、分区 Top 20、负值未知清单与 exporter 采集状态。实际 Topic 变量为 broker_topic，与组件页的逻辑 kafka_destination 分开，跨页导航不会误传同名筛选。Kafka exporter 目标需带 `foundation_kafka=true`，采集状态不受消费组/Topic 筛选，因为 exporter 是共享目标。不按 App/Node/Pod 筛选：没有可靠的一对一归属。若业务确需按App过滤，需自己维护消费组到App的明确映射，不能按名字猜测。负值可列为未知，但整个分区未返回时无法仅凭这张表识别缺失。此例没有部署生产Kafka，也不验证业务SASL/ACL；请检查Exporter日志与原生命令的已提交位点后再使用告警阈值。
+队列与 Kafka 详情的 Lag 区按 env、cluster、kafka_cluster、consumergroup、topic 筛选，包含 Topic 合计、分区 Top 20、负值未知清单与 exporter 采集状态。实际 Topic 变量为 broker_topic，与组件页的逻辑 kafka_destination 分开，跨页导航不会误传同名筛选。Kafka exporter 目标需带 `foundation_kafka=true`，采集状态不受消费组/Topic 筛选，因为 exporter 是共享目标。不按 App/Node/Pod 筛选：没有可靠的一对一归属。若业务确需按App过滤，需自己维护消费组到App的明确映射，不能按名字猜测。负值可列为未知，但整个分区未返回时无法仅凭这张表识别缺失。此例没有部署生产Kafka，也不验证业务SASL/ACL；请检查Exporter日志与原生命令的已提交位点后再使用告警阈值。
 
 ```mermaid
 flowchart TD

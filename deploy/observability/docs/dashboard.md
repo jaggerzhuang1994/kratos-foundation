@@ -1,31 +1,41 @@
 # 服务、资源与组件面板
 
-五份 JSON 分别承担舰队总览、服务入口、资源排障、组件下钻和共享资源检查。导入时保留各自 UID；顶部导航保留时间窗口与已有变量，目标页只使用自己声明的变量。
+九份 JSON 组成“一个平台总览 + 按资源类型的模板化详情页”：总览只放症状，详情页用变量切换对象，不为每个服务复制 JSON。导入时保留各自 UID；所有页面顶部导航相同（按 Folder 排序），跳转保留时间窗口与已有变量，目标页只使用自己声明的变量。页面清单、每页回答的问题和所需 exporter 见 [多项目监控与告警规划](fleet-monitoring.md#页面清单)。
 
-| 页面 | 文件与 UID | 适用问题 |
-| --- | --- | --- |
-| 舰队总览 | [foundation-fleet.json](../grafana/dashboards/foundation-fleet.json)，`foundation-fleet-overview` | 不可用与未全部就绪应用数、总流量与 5xx、Job 失败；每个应用一行的就绪、RED、消费与积压 |
-| 服务运行总览 | [foundation-service.json](../grafana/dashboards/foundation-service.json)，`ack-service-overview` | 流量、5xx、尾延迟、Foundation 应用就绪率（`app_ready`）、已发现应用 Pod 就绪率、异常端点与采集关联 |
-| 容器与节点 | [foundation.json](../grafana/dashboards/foundation.json)，`ack-container-overview` | 对象状态、重启、Deployment 副本缺口、容器资源与节点容量 |
-| 应用组件 | [foundation-components.json](../grafana/dashboards/foundation-components.json)，`ack-application-components` | Server、Client、Database、Redis、Cache、Queue、Kafka、Job、Lock、OSS、Runtime |
-| 共享资源与健康 | [foundation-shared.json](../grafana/dashboards/foundation-shared.json)，`foundation-shared-resources` | 逻辑 Queue 库存、Kafka 消费组 Lag、实际 `/readyz` 与 `/healthz` HTTP 探测 |
+| Folder | 页面 | 文件与 UID | 内容 |
+| --- | --- | --- | --- |
+| 00 总览 | 平台总览 | [foundation-fleet.json](../grafana/dashboards/foundation-fleet.json)，`foundation-fleet-overview` | 当前告警、应用症状与健康表、K8s（未就绪 Pod、近 1h 重启、节点 NotReady/压力）、数据库、Redis、队列与 Kafka、网关质量 |
+| 10 服务 | 服务详情 | [foundation-service.json](../grafana/dashboards/foundation-service.json)，`ack-service-overview` | 负载识别；HTTP/gRPC RED、就绪、异常端点；消费者、Job、Runtime 分区；接入诊断 |
+| 10 服务 | 网关详情 | [foundation-gateway.json](../grafana/dashboards/foundation-gateway.json)，`foundation-gateway` | 入口 RED 与 429 比例、按路由诊断、按下游（client_requests）错误率/延迟与非 2xx 原因 |
+| 10 服务 | 应用组件 | [foundation-components.json](../grafana/dashboards/foundation-components.json)，`ack-application-components` | Server、Client、Cache、Job、Lock、OSS、Runtime |
+| 20 中间件 | 数据库详情 | [foundation-database.json](../grafana/dashboards/foundation-database.json)，`foundation-database` | mysqld_exporter 服务端；各应用客户端汇总；连接池与 SQL 操作（原组件页 Database 区块） |
+| 20 中间件 | Redis 详情 | [foundation-redis.json](../grafana/dashboards/foundation-redis.json)，`foundation-redis` | redis_exporter 服务端；各应用客户端汇总；连接池与调用（原组件页 Redis 区块） |
+| 20 中间件 | 队列与 Kafka 详情 | [foundation-messaging.json](../grafana/dashboards/foundation-messaging.json)，`foundation-messaging` | 症状卡片；共享 Queue 库存与 Kafka Lag（原共享页）；Queue/Kafka 应用处理（原组件页区块） |
+| 30 基础设施 | 容器与节点 | [foundation.json](../grafana/dashboards/foundation.json)，`ack-container-overview` | 对象状态、重启、Deployment 副本缺口、容器资源与节点容量 |
+| 30 基础设施 | 健康探测 | [foundation-shared.json](../grafana/dashboards/foundation-shared.json)，`foundation-shared-resources` | 实际 `/readyz` 与 `/healthz` HTTP 探测、探测器抓取状态 |
+
+Folder 与文件的对应关系保存在 [folders.json](../grafana/folders.json)，`render-kubernetes` 据此为每个 Folder 生成一个带 `grafana_folder` 注解的 ConfigMap；本地 Compose 仍全部放在 Foundation Folder。业务自定义指标页放 90 业务，复制模板时更换 UID 与标题，不覆盖公共模板。
 
 ## 页面判读与导航
 
-舰队总览面向整套项目都使用本框架的场景：顶部卡片回答“现在有没有应用不可用或在报错”，应用健康表每个应用一行，按就绪实例升序排列，就绪实例、5xx 比例、消费失败比例和 Job 失败按阈值着色；点击应用名进入服务总览并带上命名空间与应用。全部查询只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)），未加载该规则组时整页无数据。空单元格表示该应用没有对应负载，不等于零；无流量时比例不出值，避免把空闲服务显示成 0% 错误。
+平台总览面向整套项目都使用本框架的场景，只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)）与 Prometheus 内置 `ALERTS`，未加载该规则组时整页无数据。自上而下：当前触发中的告警；有没有应用不可用或在报错；应用健康表每个应用一行，按就绪实例升序着色，点击应用名进入服务详情；K8s、数据库、Redis、队列与 Kafka、网关质量各一行，表格中的 Pod、节点、实例、消费组、队列、应用链接到对应详情页。空单元格表示该应用没有对应负载，不等于零；无流量时比例不出值。exporter 未部署时对应卡片显示“未接入”；kube-state-metrics 或消费者已接入但没有异常时，异常计数显示 0 而不是“未接入”。
 
-从服务总览开始，首屏卡片汇总当前筛选范围，趋势保留应用身份。异常端点表只列当前有错误或请求样本的对象，可点击端点进入组件页；空表须结合流量与接入诊断判断。卡片不设置业务 SLO 阈值；抓取失败数大于零用红色，应用自报就绪（`app_ready`）或已发现 Pod 未全部就绪用橙色，流量、错误率和耗时用中性色。
+单个服务从服务详情开始：首行“负载识别”卡片显示该服务有哪些负载类型（HTTP/gRPC 端点、消费者、Job、Go Runtime）。Grafana 不能按是否有数据自动折叠分区，因此 HTTP/gRPC RED 默认展开，消费者、Job、Runtime 默认折叠，卡片有值时再展开；这三个分区按应用汇总，不受节点与视图影响，Job 分区另列 kube-state-metrics 的 K8s Job 失败（一次性脚本）。RED 首屏卡片汇总当前筛选范围，趋势保留应用身份。异常端点表只列当前有错误或请求样本的对象，可点击端点进入组件页；空表须结合流量与接入诊断判断。卡片不设置业务 SLO 阈值；抓取失败数大于零用红色，应用自报就绪（`app_ready`）或已发现 Pod 未全部就绪用橙色，流量、错误率和耗时用中性色。
 
 容器与节点页按六区组织：全数据源样本检查、存活与异常、工作负载资源、节点资源、对象清单、应用指标简表。工作负载、对象清单和应用简表默认折叠；异常区优先展示未 Ready 对象、等待原因、最近 OOM 终止记录、状态时间线、窗口重启表和 Deployment 副本缺口。节点最满文件系统趋势下方保留 Top 10 表，定位节点、设备、挂载点、文件系统类型和可用空间。
 
-组件页默认展开 Server，其他领域按需展开。端点表合并请求速率、窗口增量、5xx 比例和延迟；数据库连接池容量与最忙实例利用率组合判断局部耗尽；Queue/Kafka 单次尝试与较完整处理耗时并排观察；Runtime 结合内存、GC、调度等待和最忙进程 FD 利用率排障。Redis 建连延迟单独展示，业务缓存命中率与 Redis 连接池复用分开。
+组件页默认展开 Server，其他领域按需展开。端点表合并请求速率、窗口增量、5xx 比例和延迟；Runtime 结合内存、GC、调度等待和最忙进程 FD 利用率排障。Database、Redis、Queue、Kafka 区块已整体迁到中间件详情页，查询与面板 ID 不变，避免两处维护。
 
-共享资源页不需要 Kubernetes 元数据，也不依赖 ACK 或四种视图。Queue 按逻辑目的地展示，Kafka 按真实集群、消费组、Topic、分区展示；HTTP 探测结果与探测器抓取状态分别展示。它与应用页的 Queue/Kafka 处理结果互为补充，处理成功不能证明没有积压或已提交位点。
+数据库与 Redis 详情分三区：exporter 服务端（按 `db_instance` / `redis_instance` 选择）、各应用客户端汇总表（每行一个应用的一个连接名，定位哪个应用占满连接或拖慢查询）、按视图下钻的连接池与操作明细。数据库连接池容量与最忙实例利用率组合判断局部耗尽；Redis 建连延迟单独展示，业务缓存命中率、Redis 连接池复用与服务端键空间命中率三者不同。服务端与客户端之间没有自动映射，建议平台约定 `db_name`、`redis_connection` 与实例别名一致。
+
+网关详情按路由（网关 server operation）和下游展示；下游由 `client_requests_*` 的 operation 推导，gRPC 风格 `/pkg.Service/Method` 取服务名，其余保留完整 operation。非 2xx 表按状态码与 Kratos reason 拆分，用于区分超时、熔断与限流。
+
+队列与 Kafka 详情的共享库存与 Lag 区不需要 Kubernetes 元数据，也不依赖四种视图：Queue 按逻辑目的地展示，Kafka 按真实集群、消费组、Topic、分区展示；下方 Queue/Kafka 应用处理区（默认折叠）保留四种视图。两者互为补充，处理成功不能证明没有积压或已提交位点。健康探测页把 HTTP 探测结果与探测器抓取状态分别展示。
 
 ```mermaid
 flowchart TD
     A([选择 Prometheus 数据源与时间窗口]) --> B{检查什么?}
-    B -- 服务影响 --> C[服务总览 流量错误延迟及就绪]
+    B -- 服务影响 --> C[服务详情 负载识别 RED 与就绪]
     C --> D{方法指标和目标关联有样本?}
     D -- 否 --> E[接入诊断 原始 up 与缺失 Pod 关联]
     E --> F([核对发现配置 标签 元数据与采集器日志])
@@ -35,7 +45,9 @@ flowchart TD
     I --> J{基础指标存在且身份匹配?}
     J -- 否 --> F
     J -- 是 --> K[展开工作负载或清单 检查节点与文件系统]
-    G -- 积压或实际健康 --> L[共享资源与健康 独立筛选逻辑资源]
+    G -- 积压或实际健康 --> L[队列与 Kafka 详情或健康探测 独立筛选共享资源]
+    G -- 数据库或Redis --> P[中间件详情 服务端与各应用客户端]
+    P --> O
     B -- 共享资源或HTTP探测 --> L
     L --> M{exporter或探测目标已接入?}
     M -- 否 --> F
@@ -49,7 +61,7 @@ flowchart TD
 
 ## 变量与聚合范围
 
-前三页先选择数据源、命名空间和应用，再选择节点、Pod、容器及视图。可见变量“应用 Pod 标签”`app_pod_label` 提供固定白名单 `pod_name`、`pod`，默认 `pod_name`；按真实采集目标标签选择，无需编辑 JSON。ACK 常见 `pod_name`，仓库 ServiceMonitor 示例使用 `pod`。基础设施区直接使用标准 `pod`。
+带视图的页面（服务详情、应用组件、容器与节点、中间件详情的应用区块）先选择数据源、命名空间和应用，再选择节点、Pod、容器及视图。可见变量“应用 Pod 标签”`app_pod_label` 提供固定白名单 `pod_name`、`pod`，默认 `pod_name`；按真实采集目标标签选择，无需编辑 JSON。ACK 常见 `pod_name`，仓库 ServiceMonitor 示例使用 `pod`。基础设施区直接使用标准 `pod`。
 
 具体应用筛选要求目标带稳定 `app` 标签；All 允许缺少该标签的旧指标显示。应用曲线和端点表保留 `namespace`、`app`，Node 视图也不会把同节点不同应用混成一条曲线。多个服务缺少应用身份时仍无法可靠区分，变量不能弥补采集标签缺失。服务首屏卡片汇总所选范围，不是逐应用卡片。
 
@@ -66,11 +78,11 @@ flowchart TD
 
 服务页原始应用目标抓取时间线和无法关联 Kubernetes 的目标表不按节点筛选：关联失败时节点本来就未知，先过滤节点会隐藏故障。它们仍受命名空间、应用、Pod、容器和所选 Pod 标签影响。缺少所选 Pod 标签的目标及完全未发现的目标没有完整入口，需核对发现配置与控制器期望副本。
 
-共享页使用独立 `env`、`cluster`、`queue_name`、`kafka_cluster`、`consumer_group`、`broker_topic` 和 `probe_app` 筛选，不使用应用页的 `app/node/pod/container/view`。`broker_topic` 是 Broker 真实 Topic；组件页 `kafka_topic` 对应应用指标的逻辑目的地，二者不能自动映射。共享 Queue 与组件页均使用 `queue_name`，前者查询逻辑 Store 库存，后者还查询生产与处理行为。
+队列与 Kafka 详情的共享区使用 `env`、`cluster`、`queue_name`、`kafka_cluster`、`consumer_group`、`broker_topic` 筛选，不使用 `app/node/pod/container/view`；应用处理区使用应用变量与 `queue_name`、`queue_consumer`、`kafka_topic`、`kafka_consumer`。`broker_topic` 是 Broker 真实 Topic，`kafka_topic` 是应用指标的逻辑目的地，二者不能自动映射。健康探测页使用 `env`、`cluster`、`probe_app`。数据库与 Redis 详情的服务端区只受 `db_instance` / `redis_instance` 筛选，客户端区受应用变量与 `db_name` / `redis_connection` 筛选。网关详情使用 `namespace`、`gateway`、`route`、`client_operation`，按应用汇总，不受节点与视图影响。平台总览只有 `namespace` 与 `gateway`；节点、exporter 实例与 Kafka 区不受命名空间筛选，当前告警表选择具体命名空间时会隐藏不带 namespace 的告警。
 
 ## 接入契约
 
-前三页要求一个 Prometheus 数据源对应一个 Kubernetes 集群。聚合多个集群时须先隔离，否则同名 namespace/pod/node 可能被合并或产生多对多匹配。共享页通过可靠的 `env/cluster` 区分采集范围；Kafka 另需稳定 `kafka_cluster`。变量是筛选工具，不是权限隔离。
+带视图的页面要求一个 Prometheus 数据源对应一个 Kubernetes 集群。聚合多个集群时须先隔离，否则同名 namespace/pod/node 可能被合并或产生多对多匹配。共享库存、Lag、exporter 与探测通过可靠的 `env/cluster` 区分采集范围；Kafka 另需稳定 `kafka_cluster`。变量是筛选工具，不是权限隔离。
 
 | 来源 | 必要指标/标签 | 用途 |
 | --- | --- | --- |
@@ -85,8 +97,11 @@ flowchart TD
 | Queue 观察器 | 显式 `RegisterStats`，逻辑目的地 `queue_destination` | 库存、统计成功与年龄可用性 |
 | Kafka exporter | Lag：kafka_cluster/consumergroup/topic/partition；目标带 `foundation_kafka=true` | 已提交位点 Lag 与 exporter 抓取状态 |
 | blackbox exporter | 目标带 `foundation_probe=true`、app、probe；请求 readyz/healthz | `probe_success`、HTTP 状态码、耗时与抓取状态 |
+| mysqld_exporter，可选 | `mysql_up`、`mysql_global_status_*`、`mysql_global_variables_max_connections`、`mysql_slave_status_seconds_behind_*`；instance | 数据库详情服务端区、平台总览数据库行 |
+| redis_exporter，可选 | `redis_up`、`redis_memory_*`、`redis_evicted_keys_total`、`redis_commands_*`、`redis_connected_clients`；instance | Redis 详情服务端区、平台总览 Redis 行 |
+| Prometheus 规则 | `foundation-records` 预聚合、`ALERTS` | 平台总览全部查询 |
 
-RSS、CFS 限流、OOM、Deployment 和部分节点指标可能未在当前平台启用，缺失时留空。ECI/虚拟节点可能没有 node-exporter，不能伪造物理机数据。共享页接入见 [外部指标](external-metrics.md)；页面导航不会自动创建 exporter、探测目标或业务上报。
+RSS、CFS 限流、OOM、Deployment 和部分节点指标可能未在当前平台启用，缺失时留空。ECI/虚拟节点可能没有 node-exporter，不能伪造物理机数据。exporter 接入见 [外部指标](external-metrics.md)；页面导航不会自动创建 exporter、探测目标或业务上报。
 
 ## 计算与状态边界
 
@@ -113,7 +128,7 @@ Pod 元数据需在查询时刻仍存在。短任务结束并删除后，较长�
 
 ## 验证与验收
 
-仓库根目录执行 `make -C deploy/observability check-dashboards`。固定 Prometheus 镜像中的 promtool 校验 JSON、变量、四种视图查询，并以合成样本检查身份隔离、去重、Limit、窗口增量、状态、节点关联与共享计算。覆盖范围以 [check_dashboards.py](../check_dashboards.py) 的实际断言为准；空查询通过不能证明非空数据计算正确。
+仓库根目录执行 `make -C deploy/observability check-dashboards`。固定 Prometheus 镜像中的 promtool 校验 JSON、九页统一顶部导航（`includeVars`/`keepTime`）、面板与数据链接目标、Folder 映射、变量引用、平台总览只读预聚合、四种视图查询，并以合成样本检查身份隔离、去重、Limit、窗口增量、状态、节点关联、共享计算、下游推导，以及每个新页在 exporter 未接入时的空数据表现（“未接入”与补 0 的区别）。覆盖范围以 [check_dashboards.py](../check_dashboards.py) 的实际断言为准；空查询通过不能证明非空数据计算正确。
 
 离线校验不访问真实 ACK、Broker 或健康接口，不替代浏览器的变量插值、状态颜色、表格合并、默认折叠与导航验收。真实联调使用 `make -C deploy/observability smoke PROMETHEUS_URL=...`；可选 `GRAFANA_URL=...` 核对已加载 JSON。它验证查询与配置版本，不保证指标覆盖完整或每张图呈现正确。接入、工具与命令前置条件见 [入口文档](../README.md)。
 

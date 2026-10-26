@@ -50,7 +50,7 @@ ACK 容器概览已展示 cAdvisor CPU/内存、容器重启与节点资源，�
 
 ## 4. 导入 Dashboard 和告警
 
-可以直接在 Grafana 导入 [服务总览](../observability/grafana/dashboards/foundation-service.json)、[容器与节点](../observability/grafana/dashboards/foundation.json)、[组件明细](../observability/grafana/dashboards/foundation-components.json) 和 [共享资源与健康](../observability/grafana/dashboards/foundation-shared.json)，选择已有 Prometheus 数据源。也可以使用 sidecar；生成的 ConfigMap 同时包含这四份面板：
+可以直接在 Grafana 导入 [面板目录](../observability/grafana/dashboards/) 下的九份 JSON（清单见 [面板入口](../observability/README.md)），选择已有 Prometheus 数据源。也可以使用 sidecar；生成的 `dashboard.json` 按 [folders.json](../observability/grafana/folders.json) 拆成四个 ConfigMap，注解 `grafana_folder` 为 00 总览 / 10 服务 / 20 中间件 / 30 基础设施，示例 values 已开启 sidecar 的 `folderAnnotation`：
 
 ```sh
 # 将 namespace/release 改成现有监控栈的真实值；仅生成本地文件。
@@ -59,7 +59,8 @@ python3 deploy/observability/render-kubernetes.py \
   --output /tmp/foundation-monitoring
 
 # 核对生成文件和选择器之后，按部署流程应用。
-kubectl apply -f /tmp/foundation-monitoring/dashboard.json
+# 面板 JSON 较大，使用 server-side apply 避免 last-applied 注解超过 256KiB。
+kubectl apply --server-side -f /tmp/foundation-monitoring/dashboard.json
 kubectl apply -f /tmp/foundation-monitoring/rules.yaml
 ```
 

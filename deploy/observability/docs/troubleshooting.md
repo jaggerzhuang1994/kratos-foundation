@@ -30,7 +30,7 @@ curl --fail --get http://127.0.0.1:19090/api/v1/query \
   --data-urlencode 'query=up'
 ```
 
-不要通过 `or vector(0)` 全面填零掩盖缺失数据。服务总览的“抓取目标缺少 Pod 关联”表保留无法关联的目标，不受节点筛选；可用于区分标签/元数据缺失与真正无流量。容器与节点页包含 ACK 资源；健康探测、Queue 库存与 Kafka Lag 使用 [共享资源与健康](../grafana/dashboards/foundation-shared.json)。节点图为空时检查 node_uname_info 的 node/nodename 是否匹配 kube_node_info.node；多集群同名对象须隔离数据源。
+不要通过 `or vector(0)` 全面填零掩盖缺失数据。服务总览的“抓取目标缺少 Pod 关联”表保留无法关联的目标，不受节点筛选；可用于区分标签/元数据缺失与真正无流量。容器与节点页包含 ACK 资源；健康探测使用 [健康探测](../grafana/dashboards/foundation-shared.json)，Queue 库存与 Kafka Lag 使用 [队列与 Kafka 详情](../grafana/dashboards/foundation-messaging.json)；数据库与 Redis 服务端指标未接入时，中间件详情与平台总览对应区块显示“未接入”。节点图为空时检查 node_uname_info 的 node/nodename 是否匹配 kube_node_info.node；多集群同名对象须隔离数据源。
 
 ## FoundationTargetDown
 
@@ -174,7 +174,7 @@ flowchart TD
 
 ## 健康探测与配置状态
 
-共享资源与健康页展示真实 HTTP 探测，需另行接入 blackbox 并对齐标签；未接入时显示缺失。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。
+健康探测页展示真实 HTTP 探测，需另行接入 blackbox 并对齐标签；未接入时显示缺失。`probe_success=0` 时按probe标签检查readyz或healthz，查看probe_http_status_code、probe_duration_seconds及blackbox日志；readyz依赖检查失败可能只影响就绪，不影响healthz。`up{foundation_probe="true"}=0` 表示无法取得探测结果，先检查blackbox、模块配置与网络，不把它解释成服务返回503。消失的目标可能不再有up序列，还需部署平台的副本与目标存在性告警。
 
 当前没有可用的 Config watcher、版本或最近成功指标；配置状态按应用配置日志、发布记录及组件实际行为排查，不通过不存在的指标推断多 Pod 配置一致性。
 

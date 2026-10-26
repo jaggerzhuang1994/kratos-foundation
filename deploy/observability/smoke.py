@@ -12,18 +12,21 @@ from check_dashboards import dashboard_views, expression, panels
 COMPONENTS = {
     'server': ('ack-application-components', [('server_requests_code_total', 3)]),
     'client': ('ack-application-components', [('client_requests_code_total', 12)]),
-    'sql': ('ack-application-components', [('go_sql_in_use_connections', 26)]),
-    'redis': ('ack-application-components', [('db_client_connections_usage', 33)]),
+    'sql': ('foundation-database', [('go_sql_in_use_connections', 26)]),
+    'redis': ('foundation-redis', [('db_client_connections_usage', 33)]),
     'cache': ('ack-application-components', [('business_cache_lookups_total', 42)]),
-    'queue': ('ack-application-components', [('queue_producer_messages_total', 51), ('queue_consumer_attempts_total', 55)]),
-    'kafka': ('ack-application-components', [('kafka_producer_messages_total', 60), ('kafka_consumer_attempts_total', 64)]),
+    'queue': ('foundation-messaging', [('queue_producer_messages_total', 51), ('queue_consumer_attempts_total', 55)]),
+    'kafka': ('foundation-messaging', [('kafka_producer_messages_total', 60), ('kafka_consumer_attempts_total', 64)]),
     'job': ('ack-application-components', [('job_running', 69)]),
     'lock': ('ack-application-components', [('lock_operations_total', 74)]),
     'oss': ('ack-application-components', [('oss_requests_total', 79)]),
     'go': ('ack-application-components', [('go_goroutines', 85)]),
-    'queue-stats': ('foundation-shared-resources', [('queue_tasks', None)]),
-    'kafka-lag': ('foundation-shared-resources', [('kafka_consumergroup_lag', None)]),
+    'queue-stats': ('foundation-messaging', [('queue_tasks', 402)]),
+    'kafka-lag': ('foundation-messaging', [('kafka_consumergroup_lag', 408)]),
     'probe': ('foundation-shared-resources', [('probe_success', None)]),
+    'gateway': ('foundation-gateway', [('client_requests_code_total', 13)]),
+    'mysql-exporter': ('foundation-database', [('mysql_up', 201)]),
+    'redis-exporter': ('foundation-redis', [('redis_up', 301)]),
 }
 
 
