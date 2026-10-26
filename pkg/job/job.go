@@ -3,6 +3,8 @@ package job
 import (
 	"context"
 	"errors"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
 )
 
 // Task 表示可由运行时执行的任务。实现必须响应 ctx 取消，避免 Daemon 阻塞应用退出。
@@ -30,32 +32,8 @@ func (f TaskFunc) Run(ctx context.Context) error { return f(ctx) }
 
 // stoppedByContext 判断任务结果是否只是管理器主动取消产生的正常退出。
 func stoppedByContext(ctx context.Context, err error) bool {
-	if ctx.Err() == nil {
-		return false
-	}
-	if err == nil {
-		return true
-	}
-	// 聚合错误可能同时包含取消和业务失败；只有所有叶子都是取消才能忽略。
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		hasChild := false
-		for _, child := range joined.Unwrap() {
-			if child == nil {
-				continue
-			}
-			hasChild = true
-			if !stoppedByContext(ctx, child) {
-				return false
-			}
-		}
-		if hasChild {
-			return true
-		}
-	}
-	if child := errors.Unwrap(err); child != nil {
-		return stoppedByContext(ctx, child)
-	}
-	return errors.Is(err, ctx.Err())
+	// 聚合错误可能同时包含取消和业务失败；只有每个分支都是本次取消才能忽略。
+	return ctx.Err() != nil && (err == nil || errtree.Only(err, ctx.Err()))
 }
 
 type managedJob struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/reconnect"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -26,32 +27,16 @@ func recoverableConsumerOperation(err error, allowFirstRead bool) bool {
 // transientKafkaError 保留 SDK 的错误分类；失去组代次后通过新客户端重新入组。
 // 聚合错误中只要有一个永久失败，就不能用重连掩盖它。
 func transientKafkaError(err error, allowFirstRead bool) bool {
-	if err == nil {
-		return false
-	}
-	for cause := err; cause != nil; cause = errors.Unwrap(cause) {
-		if joined, ok := cause.(interface{ Unwrap() []error }); ok {
-			hasError := false
-			for _, child := range joined.Unwrap() {
-				if child == nil {
-					continue
-				}
-				hasError = true
-				if !transientKafkaError(child, allowFirstRead) {
-					return false
-				}
-			}
-			return hasError
+	return errtree.Every(err, func(err error) bool {
+		var firstRead *kgo.ErrFirstReadEOF
+		if errors.Is(err, context.Canceled) || errors.Is(err, kgo.ErrClientClosed) {
+			return false
 		}
-	}
-	var firstRead *kgo.ErrFirstReadEOF
-	if errors.Is(err, context.Canceled) || errors.Is(err, kgo.ErrClientClosed) {
-		return false
-	}
-	if errors.As(err, &firstRead) {
-		return allowFirstRead
-	}
-	return kgo.IsRetryableBrokerErr(err) || kerr.IsRetriable(err) || reconnect.Transient(err) ||
-		errors.Is(err, kerr.IllegalGeneration) || errors.Is(err, kerr.UnknownMemberID) ||
-		errors.Is(err, kerr.RebalanceInProgress) || errors.Is(err, kerr.FencedMemberEpoch)
+		if errors.As(err, &firstRead) {
+			return allowFirstRead
+		}
+		return kgo.IsRetryableBrokerErr(err) || kerr.IsRetriable(err) || reconnect.Transient(err) ||
+			errors.Is(err, kerr.IllegalGeneration) || errors.Is(err, kerr.UnknownMemberID) ||
+			errors.Is(err, kerr.RebalanceInProgress) || errors.Is(err, kerr.FencedMemberEpoch)
+	})
 }
