@@ -33,7 +33,7 @@ func newClient() (Client, bool, error) {
 	}
 	// 将域名交给 SDK 和 transport，不在初始化时固定其解析结果。
 	// env 地址可能含 URL 用户信息；初始化日志只记录安全的探测预算。
-	log.WithModule("consul").With("event", "consul.client.probing", "timeout", probeTimeout).Info("checking consul cluster leader")
+	log.WithModule("consul").With("event", "consul.client.probing", "timeout", probeTimeout).Debug("consul leader probing")
 	client, err := api.NewClient(config)
 	if err != nil {
 		return nil, false, fmt.Errorf("create Consul client: %w", err)

@@ -97,7 +97,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		}
 		w.telemetry.RecordFailure(spanCtx, span, w.config.Queue, w.config.Name, failureResult)
 		if err == nil {
-			w.log.WithContext(spanCtx).Errorw("event", "queue.task.failed", "msg", "task failed", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "reason", reason, "cause", cause, "task.message_version", task.MessageVersion, "attempts", reservation.Attempts)
+			w.log.WithContext(spanCtx).Errorw("event", "queue.task.failed", "msg", "task failed", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "reason", reason, "error", cause, "task.message_version", task.MessageVersion, "attempts", reservation.Attempts)
 			w.notifyFailure(spanCtx, FailureEvent{Queue: w.config.Queue, FailedTask: FailedTask{Task: task.Clone(), Attempts: reservation.Attempts, Reason: reason, FailedAt: failedAt}, Cause: cause, MaxAttempts: w.retry.MaxAttempts})
 		}
 	default:
@@ -109,7 +109,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		err = w.store.Release(operationCtx, reservation, time.Now().UTC().Add(delay))
 		if err == nil {
 			w.telemetry.RecordRetry(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts)
-			w.log.WithContext(spanCtx).Warnw("event", "queue.retry.scheduled", "msg", "task retry scheduled", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "task.message_version", task.MessageVersion, "cause", cause, "attempts", reservation.Attempts, "retry_after", delay)
+			w.log.WithContext(spanCtx).Warnw("event", "queue.task.retry_scheduled", "msg", "task retry scheduled", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "task.message_version", task.MessageVersion, "error", cause, "attempts", reservation.Attempts, "retry_after", delay)
 		}
 	}
 	if err != nil {
@@ -167,7 +167,7 @@ func (w *Worker[T]) notifyFailure(ctx context.Context, event FailureEvent) {
 		case errors.Is(err, context.DeadlineExceeded):
 			reason = "timeout"
 		}
-		w.log.WithContext(ctx).Errorw("event", "queue.failure.callback_failed", "msg", "failure callback failed", "queue", event.Queue, "worker", w.config.Name, "task.id", event.Task.ID, "reason", reason)
+		w.log.WithContext(ctx).Errorw("event", "queue.failure.callback_failed", "msg", "task failure callback failed", "queue", event.Queue, "worker", w.config.Name, "task.id", event.Task.ID, "reason", reason)
 	}
 }
 

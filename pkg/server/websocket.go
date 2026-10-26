@@ -69,7 +69,7 @@ func (s *websocketServer) Handle(
 	optionalUpgrader ...Upgrader,
 ) {
 	if s.router == nil {
-		s.log.With("event", "server.websocket.endpoint.skipped", "path", path).Warn("skipped websocket endpoint because HTTP is disabled")
+		s.log.With("event", "server.websocket.endpoint.skipped", "path", path, "reason", "http_disabled").Warn("websocket endpoint skipped")
 		return
 	}
 
@@ -112,7 +112,7 @@ func (s *websocketServer) Handle(
 				if closeErr := client.Close(); closeErr != nil {
 					clog.With("event", "server.websocket.close.failed", "error", closeErr).Error("websocket connection close failed")
 				}
-				clog.With("event", "server.websocket.connection.rejected", "reason", "server_stopping").Debug("rejected websocket connection during shutdown")
+				clog.With("event", "server.websocket.connection.rejected", "reason", "server_stopping").Debug("websocket connection rejected")
 			}
 			return nil, nil
 		})

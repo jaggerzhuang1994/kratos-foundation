@@ -227,7 +227,7 @@ func TestRuntimeCleanupLogsListenerFailureOnceWithContext(t *testing.T) {
 	}
 	failure := failures[0]
 	loggedError, _ := failure.fields["error"].(error)
-	if failure.level != "error" || failure.fields["transport"] != "http" || !errors.Is(loggedError, closeFailure) || !strings.Contains(loggedError.Error(), "business HTTP listener tcp4://127.0.0.1:19090") {
+	if failure.level != "error" || len(failure.fields) != 2 || !errors.Is(loggedError, closeFailure) || !strings.Contains(loggedError.Error(), "business HTTP listener tcp4://127.0.0.1:19090") {
 		t.Fatalf("listener cleanup context missing: %#v", failure)
 	}
 }

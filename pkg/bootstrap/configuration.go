@@ -68,7 +68,7 @@ func (sources ConfigSources) loader() config.SourceLoader {
 			}
 		}
 		if len(loaded) == 0 {
-			log.WithModule("bootstrap").With("event", "config.sources.empty", "env", environment, "name", sources.AppInfo.Name()).Warn("no default config sources; using env and additional sources")
+			log.WithModule("bootstrap").With("event", "config.sources.empty", "env", environment, "name", sources.AppInfo.Name()).Warn("default config sources not found")
 		}
 		return loaded, nil
 	}

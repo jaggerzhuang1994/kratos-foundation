@@ -154,7 +154,7 @@ flowchart TD
     C & L & M & N -- 应用Context取消 --> U([停止 未确认租约到期恢复])
     L & M & N -- 旧token --> Q[Worker WARN queue.lease.lost]
     L -- 成功 --> R[Worker DEBUG queue.task.execution.finished result=success duration]
-    M -- 成功 --> S[Worker WARN queue.retry.scheduled]
+    M -- 成功 --> S[Worker WARN queue.task.retry_scheduled]
     N -- 成功 --> T[Worker ERROR queue.task.failed]
     P & Q & R & S & T --> Z([本次操作结束])
 ```

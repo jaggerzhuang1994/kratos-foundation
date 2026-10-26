@@ -27,7 +27,7 @@ func (r *registrar) heartbeat(ctx context.Context, payload *api.AgentServiceRegi
 			err = r.client.Agent().ServiceRegisterOpts(payload, api.ServiceRegisterOpts{}.WithContext(requestCtx))
 			cancel()
 			if err == nil {
-				r.logger.WithContext(ctx).With("event", "registry.consul.registration.restored", "service.id", payload.ID, "attempt", attempt+1).Info("consul registration restored after missing TTL check")
+				r.logger.WithContext(ctx).With("event", "registry.consul.registration.restored", "service.id", payload.ID, "attempt", attempt+1).Info("consul registration restored")
 				// Consul 新建 TTL check 为 critical；下一轮优先续报，只等待失败退避而非完整健康间隔。
 				if err = backoff.Wait(ctx, attempt); err != nil {
 					return
@@ -41,10 +41,10 @@ func (r *registrar) heartbeat(ctx context.Context, payload *api.AgentServiceRegi
 		}
 		if err != nil {
 			if !retryable(err) {
-				r.logger.WithContext(ctx).With("event", "registry.consul.heartbeat.stopped", "service.id", payload.ID, "attempt", attempt+1, "error", err).Error("consul heartbeat stopped after a non-retryable failure")
+				r.logger.WithContext(ctx).With("event", "registry.consul.heartbeat.stopped", "service.id", payload.ID, "attempt", attempt+1, "error", err).Error("consul heartbeat stopped")
 				return
 			}
-			r.logger.WithContext(ctx).With("event", "registry.consul.heartbeat.retry", "service.id", payload.ID, "attempt", attempt+1, "error", err).Warn("consul heartbeat failed; retrying")
+			r.logger.WithContext(ctx).With("event", "registry.consul.heartbeat.retrying", "service.id", payload.ID, "attempt", attempt+1, "error", err).Warn("consul heartbeat failed; retrying")
 			if err = backoff.Wait(ctx, attempt); err != nil {
 				return
 			}

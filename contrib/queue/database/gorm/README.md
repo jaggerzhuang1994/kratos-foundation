@@ -157,7 +157,7 @@ flowchart TD
     KR --> B
     KB & KC & KD & KE --> KU[数据库单行短锁 语句提交后释放]
     KU -- 确认成功 --> KL[Worker DEBUG queue.task.execution.finished result=success duration]
-    KU -- 重试排期成功 --> KM[Worker WARN queue.retry.scheduled]
+    KU -- 重试排期成功 --> KM[Worker WARN queue.task.retry_scheduled]
     KU -- 失败保存成功 --> KN[Worker ERROR queue.task.failed]
     KM --> KMF[Worker DEBUG queue.task.execution.finished result=retry duration]
     KN --> KNF[Worker DEBUG queue.task.execution.finished result=failed duration]

@@ -259,7 +259,7 @@ flowchart TD
     K --> C
     H -- Permanent --> L[进入最终失败处理]
     H -- 普通错误 --> M{达到 MaxAttempts?}
-    M -- 否 --> N[WARN kafka.consume.retry]
+    M -- 否 --> N[WARN kafka.message.retry_scheduled]
     N --> O[可取消指数退避]
     O --> P{Context 已取消?}
     P -- 是 --> Q([正常停止，不死信])
@@ -267,12 +267,12 @@ flowchart TD
     M -- 是 --> L
     F --> L
     L --> R{配置 DeadLetter?}
-    R -- 否 --> S[ERROR kafka.consume.failed]
+    R -- 否 --> S[ERROR kafka.message.failed]
     S --> T([返回错误；不 ACK；应用停机])
     R -- 是 --> U[构造脱敏死信副本]
     U --> V[外部调用: DeadLetter Producer]
     V --> W{发布成功?}
-    W -- 是 --> X[WARN kafka.consume.dead_lettered]
+    W -- 是 --> X[WARN kafka.message.dead_lettered]
     X --> J
     W -- 否 --> Y[ERROR kafka.dead_letter.failed]
     Y --> T

@@ -121,8 +121,8 @@ func TestNewFactoryObserverRejectsInvalidUpdates(t *testing.T) {
 	protocol := config_pb.Protocol(99)
 	invalid.Clients["orders"].Protocol = &protocol
 	source.Update(t, invalid)
-	recorder.requireRecord(t, "client config update rejected", map[string]any{"event": "client.config.rejected", "level": kratoslog.LevelWarn})
-	if got := countLogRecords(recorder, "client config update rejected", map[string]any{
+	recorder.requireRecord(t, "client config rejected; keeping previous", map[string]any{"event": "client.config.rejected", "level": kratoslog.LevelWarn})
+	if got := countLogRecords(recorder, "client config rejected; keeping previous", map[string]any{
 		"error": ErrInvalidProtocol,
 	}); got != 1 {
 		t.Fatalf("invalid-protocol rejection log count = %d, want 1", got)
@@ -205,21 +205,21 @@ func TestNewFactoryObserverRejectsWrongTypeAndIgnoresClosedFactory(t *testing.T)
 	}
 
 	manager.notify("not a client config", nil)
-	recorder.requireRecord(t, "client config update rejected", map[string]any{"event": "client.config.rejected", "level": kratoslog.LevelWarn})
-	errorsRecorded := recordedLogErrors(recorder, "client config update rejected")
+	recorder.requireRecord(t, "client config rejected; keeping previous", map[string]any{"event": "client.config.rejected", "level": kratoslog.LevelWarn})
+	errorsRecorded := recordedLogErrors(recorder, "client config rejected; keeping previous")
 	if len(errorsRecorded) != 1 || errorsRecorded[0] == nil {
 		t.Fatalf("wrong-type rejection errors = %v, want one non-nil error", errorsRecorded)
 	}
 	deliveryErr := errors.New("config delivery failed")
 	manager.notify(new(config_pb.Client), deliveryErr)
-	recorder.requireRecord(t, "client config update rejected", map[string]any{
+	recorder.requireRecord(t, "client config rejected; keeping previous", map[string]any{
 		"error": deliveryErr,
 	})
-	before := countLogRecords(recorder, "client config update rejected", nil)
+	before := countLogRecords(recorder, "client config rejected; keeping previous", nil)
 	cleanup()
 	manager.notify(new(config_pb.Client), nil)
 	manager.notify(nil, ErrFactoryClosed)
-	if after := countLogRecords(recorder, "client config update rejected", nil); after != before {
+	if after := countLogRecords(recorder, "client config rejected; keeping previous", nil); after != before {
 		t.Fatalf("closed-factory observer rejection logs = %d, want %d", after, before)
 	}
 	if got := manager.canceled.Load(); got != 1 {

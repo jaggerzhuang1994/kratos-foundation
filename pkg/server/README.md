@@ -142,7 +142,7 @@ flowchart TD
     A2 -- 读取失败 --> C
     A2 -- 成功 --> B{完整配置校验通过?}
     A3 --> B
-    B -- 否 --> C[构造返回错误 或 WARN server.middleware.update.rejected]
+    B -- 否 --> C[构造返回错误 或 WARN server.middleware.rejected]
     C --> D([保留旧策略 结束])
     B -- 是 --> R{热更新且策略内容未变?}
     R -- 是 --> D
@@ -510,7 +510,7 @@ flowchart TD
 ```
 
 中间件配置订阅在下一轮成功扫描异步回放当前值，内容相同的回放或重复通知不会打印 `server middleware config updated`；
-只有配置实际变化且成功应用后才记录 `INFO event=server.middleware.updated`；非法更新记录 `WARN event=server.middleware.update.rejected, config_key=server, error` 并保留旧配置。
+只有配置实际变化且成功应用后才记录 `INFO event=server.middleware.updated`；非法更新记录 `WARN event=server.middleware.rejected, error` 并保留旧配置；成功更新的 `changed` 字段列出实际替换的中间件。
 
 ## 集成测试与边界用法
 

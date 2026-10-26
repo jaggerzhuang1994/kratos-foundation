@@ -10,6 +10,21 @@
 
 - **应用类型由 `*kratos.App` 改为 `*app.App`**：App 自行实现 Run/Stop 生命周期，不再包装 `kratos.App`。`bootstrap.NewKratosApp` 更名为 `bootstrap.NewApp`；业务 injector 的返回类型改为 `*app.App` 后重新执行 `wire`，`main` 中的 `app.Run()` 不变。`*app.App` 实现 `kratos.AppInfo`，`kratos.FromContext` 仍可读取身份。
 - **生产环境不再返回错误堆栈**：HTTP 响应 metadata 与 gRPC `ErrorInfo` 中的 `err_stack` 仅在 `env.ExposeDiagnostics()` 为 true 时携带（local/dev/test 始终、pre 需 `APP_DEBUG=true`、prod 一律不带）。依赖跨服务远端堆栈排障的 prod 场景需改用服务端日志。见 [诊断出口环境约束](pkg/errors/README.md#诊断出口环境约束)。
+- **日志事件、文案与字段统一**：全框架日志按 [日志格式约定](AGENTS.md#日志格式约定) 收敛，msg 改为小写“主语+结果”短语（如 `servers assembled`、`client config rejected; keeping previous`），由 `TestFrameworkLogConventions` 持续校验。依赖下列旧名的告警、看板或检索需同步调整：
+
+  | 旧 | 新 |
+  | --- | --- |
+  | `kafka.consume.retry` / `kafka.consume.failed` / `kafka.consume.dead_lettered` | `kafka.message.retry_scheduled` / `kafka.message.failed` / `kafka.message.dead_lettered` |
+  | `queue.retry.scheduled` | `queue.task.retry_scheduled` |
+  | `queue.consumer.disabled` | `queue.worker.disabled` |
+  | `server.middleware.update.rejected` | `server.middleware.rejected` |
+  | `registry.consul.discovery.retry` / `registry.consul.heartbeat.retry` | `registry.consul.discovery.retrying` / `registry.consul.heartbeat.retrying` |
+  | Kafka 日志字段 `kafka.destination` / `kafka.consumer` / `kafka.dead_letter_destination` / `kafka.error` | `destination` / `consumer` / `dead_letter_destination` / `reason` |
+  | Queue 日志字段 `cause` | `error` |
+  | 访问日志 `kind` / `latency`（字符串） | `transport` / `duration`（Duration） |
+  | 移除恒定或冗余字段 | `server.middleware.*` 的 `config_key`、`server.readiness.changed` 的 `transport`、错误边界日志的 `endpoint`、`server.listener.cleanup.failed` 的 `transport`/`management_listeners` |
+
+  `consul.client.probing` 由 INFO 降为 DEBUG；Kafka 指标标签不变。
 - **配置热更新日志事件更名**：`config.watch` / `config.change`（每个订阅一条 INFO）改为每轮一条 INFO `config.snapshot.changed`（字段 `changed`，点分路径）及逐订阅 DEBUG `config.subscription.replayed` / `config.subscription.notified`；`config.loaded` 去掉冗余的 `source_count`。依赖旧事件名或 `changed_paths` 的告警与看板需同步调整。
 
 ### Added

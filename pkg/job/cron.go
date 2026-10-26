@@ -65,7 +65,7 @@ func newCron(
 		errorHandler = func(ctx context.Context, name string, err error) {
 			log.WithContext(ctx).
 				With("event", "job.failed", "job", name, "error", err).
-				Error("cron job failed")
+				Error("job failed")
 		}
 	}
 	return &cron_{

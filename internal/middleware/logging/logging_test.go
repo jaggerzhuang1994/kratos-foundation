@@ -216,4 +216,10 @@ func TestAccessLogsOmitBodiesAndErrorDetails(t *testing.T) {
 	if strings.Count(string(data), "event=server.request.completed") != 1 || strings.Count(string(data), "event=client.request.completed") != 1 {
 		t.Fatalf("access event missing: %s", data)
 	}
+	// 访问日志与错误边界日志共用 transport/duration 字段名，不再输出 kind/latency；无传输上下文时 transport 为空被过滤。
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if !strings.Contains(line, " duration=") || strings.Contains(line, " kind=") || strings.Contains(line, " latency=") || !strings.Contains(line, "msg=request completed") {
+			t.Fatalf("access log fields = %s", line)
+		}
+	}
 }

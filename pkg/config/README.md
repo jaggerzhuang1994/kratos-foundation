@@ -132,7 +132,7 @@ cancel 幂等移除订阅，首次回放前取消会跳过该次回放；不等�
 例如（省略时间戳与 caller）：
 
 ```text
-INFO  module=config event=config.snapshot.changed changed=[job.cron.refresh.disabled server.http.timeout] msg=configuration changed
+INFO  module=config event=config.snapshot.changed changed=[job.cron.refresh.disabled server.http.timeout] msg=config changed
 DEBUG module=config key=job subscription=job/config_reload.go:37 event=config.subscription.notified msg=config subscription notified
 ```
 

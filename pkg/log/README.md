@@ -272,7 +272,7 @@ debugLogger.Info("request failed") // 请求级 debug：计算并输出 error.st
 ```go
 log.WithModule("config/file").
     With("files", matches).
-    Info("configuration files selected")
+    Info("config files selected")
 ```
 
 以上片段中的 `matches` 是已经匹配到的文件列表。`WithModule` 返回借用当前全局输出的 Logger，不创建文件或 cleanup；已有视图持续应用共享日志设置，但后续 `SetLogger` 不会替换它借用的输出。因此应在调用处获取，避免在包初始化时长期保存启动 fallback 的视图；输出仍由原所有者释放。

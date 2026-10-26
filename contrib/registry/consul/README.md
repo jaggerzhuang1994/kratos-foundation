@@ -29,7 +29,7 @@ flowchart TD
  Z -- 否 --> D[创建 Registrar 和 Discovery]
  D --> E[App 注册；客户端启动发现 watcher]
  E --> F{查询或心跳失败?}
- F -- 临时错误 --> G[WARN registry.consul.heartbeat.retry 或 registry.consul.discovery.retry 后按退避重试]
+ F -- 临时错误 --> G[WARN registry.consul.heartbeat.retrying 或 registry.consul.discovery.retrying 后按退避重试]
  G --> E
  F -- 权限错误 --> H[心跳 ERROR registry.consul.heartbeat.stopped；发现错误通过 Next 返回]
  F -- TTL 缺失 --> T[重新登记同一服务快照]

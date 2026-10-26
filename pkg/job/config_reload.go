@@ -39,7 +39,7 @@ func (m *Manager) subscribeConfig() error {
 			err = m.applyConfig(value.(*config_pb.Job))
 		}
 		if err != nil {
-			m.log.With("event", "job.config.rejected", "error", err).Warn("job configuration rejected; keeping previous rules")
+			m.log.With("event", "job.config.rejected", "error", err).Warn("job config rejected; keeping previous")
 		}
 	}, &config_pb.Job{})
 	if err != nil {
@@ -112,7 +112,7 @@ func (m *Manager) applyConfig(config *config_pb.Job) error {
 	}
 	m.mu.Unlock()
 	if changed {
-		m.log.With("event", "job.config.applied").Info("job configuration applied")
+		m.log.With("event", "job.config.applied").Info("job config applied")
 	}
 	return nil
 }

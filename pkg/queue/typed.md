@@ -188,7 +188,7 @@ flowchart TD
     D --> Z
     C -- 成功 --> E([返回 ID 事务仍需提交])
     F([Worker Start]) --> G{禁用?}
-    G -- 是 --> H[DEBUG queue.consumer.disabled 等待取消或 Stop]
+    G -- 是 --> H[DEBUG queue.worker.disabled 等待取消或 Stop]
     H --> END([退出])
     G -- 否 --> I[并发入口 Store 原子领取 竞争租约]
     I -- 空 --> W[可取消轮询]
@@ -206,7 +206,7 @@ flowchart TD
     M -- 错误或超时 --> N{永久失败或耗尽?}
     N -- 是 --> FAIL
     N -- 否 --> R[按 token Release 保存重试排期]
-    R -- 成功 --> RL[WARN queue.retry.scheduled]
+    R -- 成功 --> RL[WARN queue.task.retry_scheduled]
     ACK -- 成功 --> AL[DEBUG queue.task.execution.finished result=success duration]
     FAIL -- 成功 --> FL[ERROR queue.task.failed]
     FL --> CB{配置 OnFailed?}
@@ -252,6 +252,6 @@ flowchart TD
 | ConsumerConfig / Config | WorkerConfig |
 | Queue.Start / Queue.Stop / RegisterQueueWorker | 将 Worker 登记到 Spec.RegisterRuntime |
 
-`DisableProcessing` 仅停用 Worker，不影响 Post。停用时记录 `DEBUG queue.consumer.disabled`（v2.3.x 及更早为 `consumer.disabled`）；`queue_consumer_*` 指标名称保持不变，避免监控漂移。
+`DisableProcessing` 仅停用 Worker，不影响 Post。停用时记录 `DEBUG queue.worker.disabled`（此前为 `queue.consumer.disabled`，v2.3.x 及更早为 `consumer.disabled`）；`queue_consumer_*` 指标名称保持不变，避免监控漂移。
 
 实现与测试按队列投递、Worker 生命周期、处理适配、单次执行、重试、存储契约和观测七项职责归并，见[文件组织](README.md#文件组织)。Queue 和 Worker 均不拥有底层连接。

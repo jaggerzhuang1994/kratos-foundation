@@ -58,7 +58,7 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 			}
 			if tc.name != "success" {
 				cause := map[string]string{"retry": "handler_error", "exhausted": "handler_error", "crashed repeatedly": "attempts_exhausted", "permanent": "handler_error", "unknown type": "handler_missing", "panic": "panic"}[tc.name]
-				if !strings.Contains(logs, "cause"+cause) || !strings.Contains(logs, "task.message_versionemail") || strings.Contains(logs, "private panic data") {
+				if !strings.Contains(logs, "error"+cause) || !strings.Contains(logs, "task.message_versionemail") || strings.Contains(logs, "private panic data") {
 					t.Fatalf("unsafe or incomplete failure log: %s", logs)
 				}
 			}

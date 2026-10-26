@@ -142,7 +142,7 @@ func (p *managedProducer) rejected(ctx context.Context, operation string, starte
 		p.log.WithContext(ctx).Warnw(
 			"event", "kafka.publish.rejected",
 			"msg", "kafka publish rejected",
-			"kafka.destination", p.destination,
+			"destination", p.destination,
 		)
 	}
 }
@@ -152,7 +152,7 @@ func (p *managedProducer) failed(ctx context.Context) {
 		p.log.WithContext(ctx).Errorw(
 			"event", "kafka.publish.failed",
 			"msg", "kafka publish failed",
-			"kafka.destination", p.destination,
+			"destination", p.destination,
 		)
 	}
 }

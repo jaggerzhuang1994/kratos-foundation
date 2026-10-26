@@ -34,14 +34,14 @@ func (w *kvWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 		cancel()
 		if err == nil {
 			if attempt > 0 {
-				logger.With("event", "config.consul.recovered", "attempts", attempt).Info("Consul config recovered")
+				logger.With("event", "config.consul.recovered", "attempts", attempt).Info("consul config recovered")
 			}
 			// Consul 要求零索引提升到1，避免空前缀查询形成忙循环。
 			index = max(index, 1)
 			if index < w.index {
 				// Consul 重建或回滚后不沿用旧索引，避免阻塞等待一个已不存在的版本。
 				logger.With("event", "config.consul.index.reset", "previous_index", w.index,
-					"index", index).Warn("Consul config index rolled back; resetting cursor")
+					"index", index).Warn("consul config index reset")
 				w.index = 0
 			} else {
 				w.index = index
@@ -57,7 +57,7 @@ func (w *kvWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 		// 恢复必须重读完整前缀，包含断线期间的删除和空快照。
 		w.index = 0
 		if attempt == 0 {
-			logger.With("event", "config.consul.retrying", "error", err).Warn("Consul config unavailable; retrying")
+			logger.With("event", "config.consul.retrying", "error", err).Warn("consul config unavailable; retrying")
 		}
 		if err := (reconnect.Backoff{}).Wait(w.ctx, attempt); err != nil {
 			return nil, err

@@ -42,7 +42,7 @@ func NewHotReloadValue[T any](config Manager, key string, optionalDefault ...*T)
 				"event", "config.value.rejected",
 				"key", displayKey(key),
 				"error", err,
-			).Warn("config update rejected; keeping previous")
+			).Warn("config value rejected; keeping previous")
 			return
 		}
 		// Manager 串行回调同一订阅，回调是构造完成后的唯一写入方，无需比较并交换。

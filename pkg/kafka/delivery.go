@@ -219,8 +219,8 @@ func (r *ConsumerRuntime) logEvent(ctx context.Context, level logLevel, event, m
 	fields := []any{
 		"event", event,
 		"msg", message,
-		"kafka.destination", r.config.Destination,
-		"kafka.consumer", r.config.Name,
+		"destination", r.config.Destination,
+		"consumer", r.config.Name,
 	}
 	if level == logError {
 		logger.Errorw(fields...)
@@ -234,13 +234,13 @@ func (r *ConsumerRuntime) logRetry(ctx context.Context, message *Message, attemp
 		return
 	}
 	r.log.WithContext(ctx).Warnw(
-		"event", "kafka.consume.retry",
+		"event", "kafka.message.retry_scheduled",
 		"msg", "kafka message retry scheduled",
-		"kafka.destination", r.config.Destination,
-		"kafka.consumer", r.config.Name,
+		"destination", r.config.Destination,
+		"consumer", r.config.Name,
 		"message.id", messageID(message),
 		"attempt", attempt,
-		"kafka.error", "retryable",
+		"reason", "retryable",
 	)
 }
 
@@ -249,13 +249,13 @@ func (r *ConsumerRuntime) logConsumeFailed(ctx context.Context, message *Message
 		return
 	}
 	r.log.WithContext(ctx).Errorw(
-		"event", "kafka.consume.failed",
+		"event", "kafka.message.failed",
 		"msg", "kafka message failed",
-		"kafka.destination", r.config.Destination,
-		"kafka.consumer", r.config.Name,
+		"destination", r.config.Destination,
+		"consumer", r.config.Name,
 		"message.id", messageID(message),
 		"attempts", attempts,
-		"kafka.error", failureReason(err),
+		"reason", failureReason(err),
 	)
 }
 
@@ -264,11 +264,11 @@ func (r *ConsumerRuntime) logDeadLettered(ctx context.Context, message *Message,
 		return
 	}
 	r.log.WithContext(ctx).Warnw(
-		"event", "kafka.consume.dead_lettered",
-		"msg", "kafka message sent to dead letter",
-		"kafka.destination", r.config.Destination,
-		"kafka.consumer", r.config.Name,
-		"kafka.dead_letter_destination", r.config.DeadLetterDestination,
+		"event", "kafka.message.dead_lettered",
+		"msg", "kafka message dead-lettered",
+		"destination", r.config.Destination,
+		"consumer", r.config.Name,
+		"dead_letter_destination", r.config.DeadLetterDestination,
 		"message.id", messageID(message),
 		"attempts", attempts,
 	)
@@ -281,9 +281,9 @@ func (r *ConsumerRuntime) logDeadLetterFailed(ctx context.Context, message *Mess
 	r.log.WithContext(ctx).Errorw(
 		"event", "kafka.dead_letter.failed",
 		"msg", "kafka dead letter publish failed",
-		"kafka.destination", r.config.Destination,
-		"kafka.consumer", r.config.Name,
-		"kafka.dead_letter_destination", r.config.DeadLetterDestination,
+		"destination", r.config.Destination,
+		"consumer", r.config.Name,
+		"dead_letter_destination", r.config.DeadLetterDestination,
 		"message.id", messageID(message),
 		"attempts", attempts,
 	)

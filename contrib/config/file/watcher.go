@@ -37,7 +37,7 @@ func (s *fileSource) Load() ([]*kratosconfig.KeyValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.WithModule("config/file").With("event", "config.file.loaded", "path", s.path).Debug("loaded configuration file")
+	log.WithModule("config/file").With("event", "config.file.loaded", "path", s.path).Debug("config file loaded")
 	return values, nil
 }
 
@@ -100,7 +100,7 @@ func (w *fileWatcher) Next() ([]*kratosconfig.KeyValue, error) {
 			if errors.Is(err, fsnotify.ErrEventOverflow) {
 				// 丢事件时重新取完整快照，避免等待一个永远不会补发的变更。
 				log.WithModule("config/file").WithContext(w.ctx).With("event", "config.file.events_lost",
-					"path", w.source.path, "error", err).Warn("config events lost; reloading snapshot")
+					"path", w.source.path, "error", err).Warn("config file events lost; reloading")
 				return w.reload()
 			}
 			return nil, err

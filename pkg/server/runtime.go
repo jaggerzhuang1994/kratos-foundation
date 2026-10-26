@@ -127,7 +127,7 @@ func NewRuntime(
 		managementAddresses[index] = server.listener.address
 	}
 	logger.With("event", "server.assembled", "http", httpAddress, "grpc", grpcAddress,
-		"management", managementAddresses, "stop_delay", config.GetStopDelay().AsDuration()).Info("assembled servers")
+		"management", managementAddresses, "stop_delay", config.GetStopDelay().AsDuration()).Info("servers assembled")
 	stopDelay := config.GetStopDelay().AsDuration()
 	runtime := &Runtime{health: health, http: httpServer, grpc: grpcServer, management: management, stopDelay: stopDelay}
 	if httpServer != nil {
@@ -142,7 +142,7 @@ func NewRuntime(
 	return runtime, sync.OnceFunc(func() {
 			health.stopped.Store(true)
 			if err := closeListeners(); err != nil {
-				logger.With("event", "server.listener.cleanup.failed", "transport", "http", "management_listeners", len(management), "error", err).Error("failed to release HTTP listeners")
+				logger.With("event", "server.listener.cleanup.failed", "error", err).Error("listener cleanup failed")
 			}
 			cleanup()
 		}), nil
@@ -202,7 +202,7 @@ func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer
 			"path", endpoint.path,
 			"service", endpoint.service,
 			"listener", endpoint.listener,
-		).Debug("registered endpoint")
+		).Debug("endpoint registered")
 	}
 	return nil
 }

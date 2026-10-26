@@ -5,12 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1125,5 +1131,129 @@ func TestLoggerCallbackInterleavesPolicyUpdateAndNestedLog(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "outer") || !strings.Contains(string(body), "nested") || strings.Contains(string(body), "hidden") {
 		t.Fatalf("event did not use current output and filter policy: %s", body)
+	}
+}
+
+// TestFrameworkLogConventions 扫描框架源码中的结构化日志，校验 AGENTS.md“日志格式约定”。
+// 只检查字面量事件名、消息与字段键；转发 SDK 或动态消息的适配器不在约束范围内。
+func TestFrameworkLogConventions(t *testing.T) {
+	domains := map[string]bool{"app": true, "config": true, "server": true, "client": true, "job": true, "queue": true,
+		"kafka": true, "database": true, "redis": true, "oss": true, "registry": true, "consul": true, "log": true, "lock": true}
+	eventPattern := regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,4}$`)
+	// 这些键与约定的统一字段名冲突：错误用 error，耗时用 duration；config_key 等恒定值可由事件名推出。
+	forbiddenKeys := map[string]string{"cause": "error", "err": "error", "latency": "duration", "elapsed": "duration", "config_key": "event"}
+	levels := map[string]bool{"Debug": true, "Info": true, "Warn": true, "Error": true, "Fatal": true, "Debugw": true, "Infow": true, "Warnw": true, "Errorw": true}
+	literal := func(expr ast.Expr) (string, bool) {
+		value, ok := expr.(*ast.BasicLit)
+		if !ok || value.Kind != token.STRING {
+			return "", false
+		}
+		text, err := strconv.Unquote(value.Value)
+		return text, err == nil
+	}
+	checked := 0
+	fileSet := token.NewFileSet()
+	for _, root := range []string{"../../pkg", "../../internal", "../../contrib"} {
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || strings.Contains(path, "testdata") || strings.Contains(path, ".pb.") {
+				return err
+			}
+			file, err := parser.ParseFile(fileSet, path, nil, 0)
+			if err != nil {
+				return err
+			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				var event, message string
+				var keys []string
+				collect := func(args []ast.Expr) {
+					for i := 0; i+1 < len(args); i += 2 {
+						key, ok := literal(args[i])
+						if !ok {
+							continue
+						}
+						switch key {
+						case "event":
+							event, _ = literal(args[i+1])
+						case "msg":
+							message, _ = literal(args[i+1])
+						default:
+							keys = append(keys, key)
+						}
+					}
+				}
+				switch {
+				case selector.Sel.Name == "logEvent" && len(call.Args) >= 4:
+					event, _ = literal(call.Args[2])
+					message, _ = literal(call.Args[3])
+					collect(call.Args[4:])
+				case levels[selector.Sel.Name]:
+					if strings.HasSuffix(selector.Sel.Name, "w") {
+						collect(call.Args)
+					} else if len(call.Args) == 1 {
+						message, _ = literal(call.Args[0])
+					}
+					for receiver := selector.X; ; {
+						chained, ok := receiver.(*ast.CallExpr)
+						if !ok {
+							break
+						}
+						step, ok := chained.Fun.(*ast.SelectorExpr)
+						if !ok {
+							break
+						}
+						if step.Sel.Name == "With" {
+							collect(chained.Args)
+						}
+						receiver = step.X
+					}
+				default:
+					return true
+				}
+				if event == "" {
+					return true
+				}
+				checked++
+				position := fileSet.Position(call.Pos())
+				domain, _, _ := strings.Cut(event, ".")
+				switch {
+				case !eventPattern.MatchString(event) || !domains[domain]:
+					t.Errorf("%s: event %q must be <domain>.<object>.<action> with a known domain", position, event)
+				case strings.HasSuffix(event, ".retry"):
+					t.Errorf("%s: event %q must use retrying or retry_scheduled", position, event)
+				}
+				if message != "" {
+					if strings.ToLower(message) != message || strings.HasSuffix(message, ".") || len(strings.Fields(message)) > 8 {
+						t.Errorf("%s: msg %q must be a lowercase phrase of at most 8 words without trailing period", position, message)
+					}
+				}
+				for _, key := range keys {
+					if replacement, forbidden := forbiddenKeys[key]; forbidden {
+						t.Errorf("%s: field %q in %s should be %q", position, key, event, replacement)
+					}
+					if strings.HasPrefix(key, domain+".") {
+						t.Errorf("%s: field %q repeats the %s domain prefix", position, key, domain)
+					}
+				}
+				if len(keys) > 7 {
+					t.Errorf("%s: %s carries %d fields, keep only what is needed for diagnosis", position, event, len(keys))
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if checked < 100 {
+		t.Fatalf("checked only %d log calls; scanner no longer matches the logging style", checked)
 	}
 }

@@ -53,7 +53,7 @@ func TestConsumerRuntimeRetriesThenDeadLettersAndAcknowledges(t *testing.T) {
 		t.Fatalf("dead-letter headers = %#v", got.Headers)
 	}
 	written := logs.String()
-	if !strings.Contains(written, "kafka.consume.dead_lettered") || strings.Contains(written, "dead-letter-secret") {
+	if !strings.Contains(written, "kafka.message.dead_lettered") || strings.Contains(written, "dead-letter-secret") {
 		t.Fatalf("dead-letter log = %q", written)
 	}
 	if sample := findQueueMetricSample(t, observability.Metrics, "kafka_consumer_messages_total", map[string]string{"kafka_result": "dead_lettered"}); sample.counter != 1 {
@@ -418,7 +418,7 @@ func TestConsumerRuntimeRetryObservabilityUsesStableNonSensitiveFields(t *testin
 		t.Fatal(err)
 	}
 	written := logs.String()
-	if !strings.Contains(written, "kafka.consume.retry") || strings.Contains(written, "body-secret") || strings.Contains(written, "header-secret") || strings.Contains(written, "trace-secret") {
+	if !strings.Contains(written, "kafka.message.retry_scheduled") || strings.Contains(written, "body-secret") || strings.Contains(written, "header-secret") || strings.Contains(written, "trace-secret") {
 		t.Fatalf("retry log = %q", written)
 	}
 	labels := gatheredQueueMetricLabels(t, observability.Metrics, "kafka_consumer_attempts_total")
@@ -446,7 +446,7 @@ func TestConsumerRuntimePermanentFailureLogsOnlyControlledFieldsAndRunsOnce(t *t
 		t.Fatalf("Start error=%v handler calls=%d acknowledged=%v", err, handlerCalls, raw.acknowledged())
 	}
 	written := logs.String()
-	if !strings.Contains(written, "kafka.consume.failed") || strings.Contains(written, "body-secret") || strings.Contains(written, "header-secret") || strings.Contains(written, "trace-secret") {
+	if !strings.Contains(written, "kafka.message.failed") || strings.Contains(written, "body-secret") || strings.Contains(written, "header-secret") || strings.Contains(written, "trace-secret") {
 		t.Fatalf("failure log = %q", written)
 	}
 	if !strings.Contains(written, "kafka.consumer.failed") {

@@ -58,7 +58,7 @@ func TestWatchRecoversAfterEstablishedOutage(t *testing.T) {
 	}
 	stage.Store(2)
 	got, err := watcher.Next()
-	recorder.requireEvent(t, "registry.consul.discovery.retry", kratoslog.LevelWarn, "service", "app", "context.marker", "watch-context")
+	recorder.requireEvent(t, "registry.consul.discovery.retrying", kratoslog.LevelWarn, "service", "app", "context.marker", "watch-context")
 	recorder.requireEvent(t, "registry.consul.discovery.recovered", kratoslog.LevelInfo, "service", "app", "context.marker", "watch-context")
 	if err != nil || len(got) != 0 {
 		t.Fatalf("recovery=%v,%v", got, err)

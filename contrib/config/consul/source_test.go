@@ -362,7 +362,7 @@ func TestInitialLoadLogsEachFileOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := output.String()
-	if strings.Count(logs, "loaded configuration file") != 1 ||
+	if strings.Count(logs, "consul config loaded") != 1 ||
 		strings.Count(logs, "path=configs/common.yaml") != 1 {
 		t.Fatalf("unexpected initial load and watch logs: %s", logs)
 	}

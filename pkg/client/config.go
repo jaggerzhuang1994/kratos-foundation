@@ -96,10 +96,10 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 	f.mu.Unlock()
 
 	if timeoutChanged {
-		f.logger.With("event", "client.config.restart_required", "setting", "cleanup_timeout").Warn("client cleanup timeout change requires restart")
+		f.logger.With("event", "client.config.restart_required", "setting", "cleanup_timeout").Warn("client config change requires restart")
 	}
 	if changedClients > 0 {
-		f.logger.With("event", "client.config.applied", "clients", changedClients).Info("client configuration applied")
+		f.logger.With("event", "client.config.applied", "clients", changedClients).Info("client config applied")
 	}
 	for _, cancel := range cancels {
 		cancel()

@@ -208,7 +208,12 @@ func TestNewClientLogsSafeLifecycleEvents(t *testing.T) {
 		t.Fatal("unsupported address scheme accepted")
 	}
 	for _, record := range records {
-		if record.level != kratoslog.LevelInfo || record.fields["module"] != "consul" || record.fields["address"] != nil {
+		// 探测过程是 DEBUG 明细，探测结果与禁用为 INFO。
+		wantLevel := kratoslog.LevelInfo
+		if record.fields["event"] == "consul.client.probing" {
+			wantLevel = kratoslog.LevelDebug
+		}
+		if record.level != wantLevel || record.fields["module"] != "consul" || record.fields["address"] != nil {
 			t.Fatalf("unsafe lifecycle fields=%+v", record)
 		}
 		text := fmt.Sprint(record.fields)

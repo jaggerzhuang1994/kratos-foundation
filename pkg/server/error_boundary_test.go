@@ -79,7 +79,7 @@ func TestNormalizeErrorsRecordsOnlyServerFailure(t *testing.T) {
 				if strings.Contains(logger.entries[0], "secret-request") {
 					t.Fatal("request leaked")
 				}
-				for _, field := range []string{"eventserver.request.failed", "transportgrpc", "endpointgrpc://localhost:9000", "operation/test/Call"} {
+				for _, field := range []string{"eventserver.request.failed", "transportgrpc", "operation/test/Call"} {
 					if !strings.Contains(logger.entries[0], field) {
 						t.Fatalf("request diagnostic missing %s: %s", field, logger.entries[0])
 					}

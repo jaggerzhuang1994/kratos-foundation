@@ -111,7 +111,7 @@ func (m *manager) poll() {
 		if truncated {
 			changed = changed.With("changed_truncated", true)
 		}
-		changed.Info("configuration changed")
+		changed.Info("config changed")
 	}
 	for _, sub := range subs {
 		before, existed := lookup(sub.previous, sub.key)

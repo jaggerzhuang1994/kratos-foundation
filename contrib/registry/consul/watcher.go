@@ -56,7 +56,7 @@ func (w *watcher) run(ctx context.Context, d *discovery, name string, indices ma
 				w.err = err
 				return
 			}
-			d.logger.WithContext(ctx).With("event", "registry.consul.discovery.retry", "service", name, "attempt", attempt+1, "error", err).Warn("consul discovery query failed; retrying")
+			d.logger.WithContext(ctx).With("event", "registry.consul.discovery.retrying", "service", name, "attempt", attempt+1, "error", err).Warn("consul discovery failed; retrying")
 			if err = backoff.Wait(ctx, attempt); err != nil {
 				w.err = err
 				return

@@ -128,11 +128,10 @@ func (h *healthState) ready(ctx context.Context) (ready bool) {
 		// 仅记录探针结果变化，不在每次请求上写日志；检查名由组装层提供，不记录原始错误。
 		if h.lastStatus.Swap(status) != status {
 			if ready {
-				log.WithContext(ctx).WithModule("server/health").With("event", "server.readiness.changed", "transport", "http", "path", h.config.ReadinessPath, "status", status).Info("service is ready to accept requests")
+				log.WithContext(ctx).WithModule("server/health").With("event", "server.readiness.changed", "path", h.config.ReadinessPath, "status", status).Info("service ready")
 			} else {
 				logger := log.WithContext(ctx).WithModule("server/health").With(
 					"event", "server.readiness.changed",
-					"transport", "http",
 					"path", h.config.ReadinessPath,
 					"status", status,
 					"check", failedCheck,
@@ -140,9 +139,9 @@ func (h *healthState) ready(ctx context.Context) (ready bool) {
 				)
 				// 初始化、主动摘流和普通探针取消不告警；真实依赖故障与探针超时仍可排障。
 				if reason == "dependency_failed" || reason == "probe_timeout" {
-					logger.Warn("service is not ready to accept requests")
+					logger.Warn("service not ready")
 				} else {
-					logger.Debug("service is not ready to accept requests")
+					logger.Debug("service not ready")
 				}
 			}
 		}

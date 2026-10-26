@@ -33,18 +33,18 @@ type Sources []config.Source
 func newSources(client baseconsul.Client, paths PathList) (Sources, error) {
 	logger := log.WithModule("config/consul")
 	if len(paths) == 0 {
-		logger.With("event", "config.consul.disabled", "reason", "empty paths").Debug("remote config disabled")
+		logger.With("event", "config.consul.disabled", "reason", "empty paths").Debug("consul config disabled")
 		return nil, nil
 	}
 	if client == nil {
-		logger.With("event", "config.consul.disabled", "reason", "consul client not initialized").Debug("remote config disabled")
+		logger.With("event", "config.consul.disabled", "reason", "consul client not initialized").Debug("consul config disabled")
 		return nil, nil
 	}
 	if err := validatePaths(paths); err != nil {
 		return nil, err
 	}
 
-	logger.With("event", "config.consul.selected", "paths", paths).Info("Consul config sources selected")
+	logger.With("event", "config.consul.selected", "paths", paths).Info("consul config selected")
 	sources := make(Sources, 0, len(paths))
 	for _, p := range paths {
 		sources = append(sources, &kvSource{client: client, path: p})
@@ -121,7 +121,7 @@ func (s *kvSource) Load() ([]*kratosconfig.KeyValue, error) {
 		values, _, err := s.query(ctx, 0, 0, loadPhase)
 		if err == nil {
 			if attempt > 0 {
-				logger.With("event", "config.consul.recovered", "attempts", attempt).Info("Consul config recovered")
+				logger.With("event", "config.consul.recovered", "attempts", attempt).Info("consul config recovered")
 			}
 			return values, nil
 		}
@@ -130,7 +130,7 @@ func (s *kvSource) Load() ([]*kratosconfig.KeyValue, error) {
 		}
 		// 一次故障只记录首次重试及最终恢复，避免退避循环重复刷屏。
 		if attempt == 0 {
-			logger.With("event", "config.consul.retrying", "error", err).Warn("Consul config unavailable; retrying")
+			logger.With("event", "config.consul.retrying", "error", err).Warn("consul config unavailable; retrying")
 		}
 		if err := (reconnect.Backoff{}).Wait(ctx, attempt); err != nil {
 			return nil, err
@@ -184,7 +184,7 @@ func (s *kvSource) query(ctx context.Context, index uint64, wait time.Duration, 
 		}
 		// Watch 每次返回完整快照，同一键可能未变化；逐文件成功日志只在初次 Load 输出。
 		if phase == loadPhase {
-			log.WithModule("config/consul").WithContext(ctx).With("event", "config.consul.loaded", "path", pair.Key).Debug("loaded configuration file")
+			log.WithModule("config/consul").WithContext(ctx).With("event", "config.consul.loaded", "path", pair.Key).Debug("consul config loaded")
 		}
 		key := strings.TrimPrefix(pair.Key, directory)
 

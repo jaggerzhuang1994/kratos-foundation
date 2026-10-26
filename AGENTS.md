@@ -172,6 +172,15 @@ contrib/config/consul
 - Trace、日志和指标中的请求上下文应通过 `context.Context` 传播。
 - 流程图中的日志节点应使用简洁的事件名称和级别标识，使设计、执行路径与线上排障可以对应。
 
+### 日志格式约定
+
+每条框架日志由固定的 `module`、`event`、`msg` 与少量上下文字段组成；`ts`、`caller`、`module`、服务身份和 trace 字段由 Logger 自动附加，调用方不要重复写入。`TestFrameworkLogConventions` 会扫描源码校验下列规则。
+
+- **event**：`<领域>.<对象>.<动作>`，全部小写，段内用下划线，例如 `client.config.rejected`、`kafka.message.retry_scheduled`。领域与 `module` 一致；动作用过去分词或状态词，常用 `started`、`stopped`、`ready`、`closed`、`created`、`updated`、`applied`、`rejected`、`failed`、`retrying`、`recovered`、`restart_required`。重试一律用 `retrying`（或已安排的 `retry_scheduled`），恢复用 `recovered`。
+- **msg**：小写英文短语，以主语开头描述结果，例如 `client config applied`、`database pool updated`；不超过 8 个词，不以句号结尾，不重复字段中的取值。专有名词同样小写（`consul`、`kafka`、`http`）。拒绝更新并保留旧值统一写作 `<对象> rejected; keeping previous`，需要重启统一写作 `<对象> change requires restart`，可自动重试统一写作 `<对象> failed; retrying` 或 `<对象> unavailable; retrying`。
+- **字段**：只带排障必需的标识、结果与度量，通常不超过 5 个。错误统一用 `error`，分类原因用 `reason`，耗时用 `duration`（`time.Duration`），超时预算用 `timeout`，次数用 `attempt`（本次序号）或 `attempts`（累计），数量用复数名词（如 `connections`）。领域内字段不加领域前缀（`module` 已表达领域），对象标识用 `<对象>.id` 或对象名（`task.id`、`consumer`）。不写取值恒定、可由事件名推出或每条请求都相同的字段（如 `config_key=server`、`transport=http`、监听地址）。
+- **级别**：生命周期与成功的配置变更为 INFO；可自动恢复的异常、降级、拒绝与重试为 WARN；需要人工介入或已造成失败的结果为 ERROR；逐次执行、逐条通知等高频明细为 DEBUG。同一操作只在结果处记录一次，不在“开始检查”与“检查完成”上各记一条 INFO。
+
 ## 流程图与文档
 
 - 所有涉及业务流程、系统设计、架构方案、接口调用链、状态流转、任务执行步骤或代码执行节点的文档，必须提供对应流程图。

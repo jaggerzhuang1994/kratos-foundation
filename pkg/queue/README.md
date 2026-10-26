@@ -123,7 +123,7 @@ flowchart TD
     M -- 应用取消 --> PS[DEBUG queue.task.execution.finished result=stopped duration]
     PS --> Z
     N -- 成功 --> P[DEBUG queue.task.execution.finished result=success duration]
-    O -- 成功 --> Q[WARN Worker queue.retry.scheduled]
+    O -- 成功 --> Q[WARN Worker queue.task.retry_scheduled]
     R -- 成功 --> S[ERROR Worker queue.task.failed]
     Q --> Q1[DEBUG queue.task.execution.finished result=retry duration]
     S --> S1[DEBUG queue.task.execution.finished result=failed duration]

@@ -151,7 +151,7 @@ func TestRealConfigSubscriptionReschedulesAndStops(t *testing.T) {
 	}
 	for _, line := range strings.Split(string(written), "\n") {
 		if strings.Contains(line, "event=job.config.rejected") {
-			if !strings.HasPrefix(line, "WARN ") || !strings.Contains(line, "keeping previous rules") {
+			if !strings.HasPrefix(line, "WARN ") || !strings.Contains(line, "job config rejected; keeping previous") {
 				t.Fatalf("config fallback log = %s, want Warn with retained rules", line)
 			}
 			return

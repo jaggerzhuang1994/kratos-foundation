@@ -89,7 +89,7 @@ func (f *factory) cleanup(cancelSubscription func()) func() {
 		if pending == 0 {
 			return
 		}
-		f.logger.With("event", "client.cleanup.timeout", "timeout", f.cleanupTimeout, "pending", pending, "connections", len(retired)).Warn("client lease drain timed out; force-closing connections")
+		f.logger.With("event", "client.cleanup.timeout", "timeout", f.cleanupTimeout, "pending", pending, "connections", len(retired)).Warn("client drain timed out; closing connections")
 		for _, client := range retired {
 			f.closeAndLog(client)
 		}

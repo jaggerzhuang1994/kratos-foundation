@@ -280,7 +280,7 @@ func TestFileSourceLoadLogsSuccessfulPath(t *testing.T) {
 	if _, err := source.Load(); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"DEBUG", "caller=", "path=" + filename, "loaded configuration file"} {
+	for _, field := range []string{"DEBUG", "caller=", "path=" + filename, "config file loaded"} {
 		if !strings.Contains(output.String(), field) {
 			t.Fatalf("missing %q in log: %s", field, output.String())
 		}
@@ -295,7 +295,7 @@ func TestFileSourceLoadLogsSuccessfulPath(t *testing.T) {
 	if _, err := source.Load(); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	}
-	if strings.Contains(output.String(), "loaded configuration file") {
+	if strings.Contains(output.String(), "config file loaded") {
 		t.Fatal("failed read logged as successful")
 	}
 }

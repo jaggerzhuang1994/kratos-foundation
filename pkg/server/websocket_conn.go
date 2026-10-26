@@ -161,7 +161,7 @@ func (c *websocketClient) resolve() {
 	defer func() {
 		if r := recover(); r != nil {
 			if c.Logger != nil {
-				c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "resolve", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("recovered websocket handler panic")
+				c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "resolve", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("websocket handler panic recovered")
 			}
 		}
 	}()
@@ -194,7 +194,7 @@ func (c *websocketClient) resolve() {
 				<-c.messageSlots
 			}
 			if errors.Is(err, websocket.ErrReadLimit) && c.Logger != nil {
-				c.WithContext(c.request.Context()).With("event", "server.websocket.message.rejected", "reason", "size_limit", "error", err, "max_message_bytes", c.maxMessageBytes).Warn("rejected oversized websocket message")
+				c.WithContext(c.request.Context()).With("event", "server.websocket.message.rejected", "reason", "size_limit", "error", err, "max_message_bytes", c.maxMessageBytes).Warn("websocket message rejected")
 			}
 			if c.onErrorHandler != nil {
 				c.onErrorHandler.OnError(c, err)
@@ -209,7 +209,7 @@ func (c *websocketClient) resolve() {
 				defer func() {
 					if r := recover(); r != nil {
 						if c.Logger != nil {
-							c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_message", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("recovered websocket handler panic")
+							c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_message", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("websocket handler panic recovered")
 						}
 					}
 				}()

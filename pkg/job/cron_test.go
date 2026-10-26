@@ -175,7 +175,7 @@ func TestCronSchedulerDefaultErrorHandlerLogsJobFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := string(written)
-	for _, fragment := range []string{"event=job.failed", "cron job failed", "job=cleanup", "cleanup failed"} {
+	for _, fragment := range []string{"event=job.failed", "msg=job failed", "job=cleanup", "cleanup failed"} {
 		if !strings.Contains(logs, fragment) {
 			t.Errorf("default cron error log lacks %q: %s", fragment, logs)
 		}

@@ -197,7 +197,7 @@ func TestHeartbeatRequestTimeoutRecovers(t *testing.T) {
 	case <-time.After(2500 * time.Millisecond):
 		t.Fatalf("heartbeat stopped after request timeout: updates=%d deregisters=%d", updates.Load(), deregisters.Load())
 	}
-	recorder.requireEvent(t, "registry.consul.heartbeat.retry", kratoslog.LevelWarn, "service.id", "node")
+	recorder.requireEvent(t, "registry.consul.heartbeat.retrying", kratoslog.LevelWarn, "service.id", "node")
 	recorder.requireEvent(t, "registry.consul.heartbeat.recovered", kratoslog.LevelInfo, "service.id", "node")
 	if deregisters.Load() != 0 {
 		t.Fatal("request timeout must not deregister a live service")

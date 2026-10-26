@@ -127,7 +127,7 @@ func TestReadinessTransitionLogsProbeContextWithoutDependencyDetails(t *testing.
 	if strings.Count(line, "check=database") != 1 {
 		t.Fatalf("application readiness change was attributed to a successful dependency: %s", line)
 	}
-	for _, field := range []string{"transport=http", "path=/readyz", "probe=probe-a", "check=database", "status=503", "status=200", "reason=dependency_failed", "reason=application_not_ready", "DEBUG ", "WARN ", "INFO "} {
+	for _, field := range []string{"path=/readyz", "probe=probe-a", "check=database", "status=503", "status=200", "reason=dependency_failed", "reason=application_not_ready", "DEBUG ", "WARN ", "INFO "} {
 		if !strings.Contains(line, field) {
 			t.Fatalf("readiness diagnostic missing %s: %s", field, line)
 		}

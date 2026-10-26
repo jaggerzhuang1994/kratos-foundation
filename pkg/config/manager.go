@@ -158,7 +158,7 @@ func newManager(sources Sources) (*manager, error) {
 	}
 	// 记录来源和加载完成状态，不扫描或输出配置值及进程环境变量。
 	log.WithModule("config").With("event", "config.loaded", "sources", kinds,
-		"poll_interval", interval).Info("configuration loaded")
+		"poll_interval", interval).Info("config loaded")
 	go m.run(ctx, interval)
 	return m, nil
 }

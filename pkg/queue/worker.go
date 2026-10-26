@@ -172,7 +172,7 @@ func (w *Worker[T]) Start(ctx context.Context) error {
 		defer w.log.WithContext(ctx).Infow("event", "queue.worker.stopped", "msg", "queue worker stopped", "queue", w.config.Queue, "worker", w.config.Name)
 		if w.disabled {
 			// 复用 Runner 的停止信号，禁用消费不构造伪 Store，也不进入领取循环。
-			w.log.WithContext(ctx).Debugw("event", "queue.consumer.disabled", "msg", "queue processing disabled", "queue", w.config.Queue, "worker", w.config.Name)
+			w.log.WithContext(ctx).Debugw("event", "queue.worker.disabled", "msg", "queue worker processing disabled", "queue", w.config.Queue, "worker", w.config.Name)
 			<-runCtx.Done()
 			return nil
 		}

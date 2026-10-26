@@ -233,7 +233,7 @@ func newConfiguredFactory(
 
 		if deliveryErr != nil {
 			if !errors.Is(deliveryErr, ErrFactoryClosed) {
-				f.logger.With("event", "client.config.rejected", "error", deliveryErr).Warn("client config update rejected")
+				f.logger.With("event", "client.config.rejected", "error", deliveryErr).Warn("client config rejected; keeping previous")
 			}
 			return
 		}
@@ -244,7 +244,7 @@ func newConfiguredFactory(
 			deliveryErr = f.updateConfigActive(next)
 		}
 		if deliveryErr != nil && !errors.Is(deliveryErr, ErrFactoryClosed) {
-			f.logger.With("event", "client.config.rejected", "error", deliveryErr).Warn("client config update rejected")
+			f.logger.With("event", "client.config.rejected", "error", deliveryErr).Warn("client config rejected; keeping previous")
 		}
 	}
 	cancelSubscription, err := manager.Subscribe(

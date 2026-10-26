@@ -427,7 +427,7 @@ func TestCleanupUsesStartupBudgetAndReportsForcedClose(t *testing.T) {
 		if closes.Load() != 1 {
 			t.Fatalf("closes=%d", closes.Load())
 		}
-		if !recorder.hasRecord("client lease drain timed out; force-closing connections", map[string]any{"event": "client.cleanup.timeout", "level": kratoslog.LevelWarn, "connections": 1, "timeout": time.Second}) {
+		if !recorder.hasRecord("client drain timed out; closing connections", map[string]any{"event": "client.cleanup.timeout", "level": kratoslog.LevelWarn, "connections": 1, "timeout": time.Second}) {
 			t.Fatal("missing forced-close diagnostic")
 		}
 		release()

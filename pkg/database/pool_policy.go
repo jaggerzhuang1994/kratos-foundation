@@ -56,12 +56,12 @@ func subscribeConnectionPools(
 				updateErr = validateDatabaseConfig(next, drivers)
 			}
 			if updateErr != nil {
-				logger.With("event", "database.config.rejected", "error", updateErr).Warn("database configuration rejected; keeping previous settings")
+				logger.With("event", "database.config.rejected", "error", updateErr).Warn("database config rejected; keeping previous")
 				return
 			}
 			if !poolOnlyChange(startupConfig, next) {
 				// 连接身份变化后不可把新池参数写回启动时的另一份资源。
-				logger.With("event", "database.config.restart_required").Warn("database topology or plugin change requires restart")
+				logger.With("event", "database.config.restart_required").Warn("database config change requires restart")
 				return
 			}
 			if proto.Equal(appliedConfig, next) {
@@ -71,7 +71,7 @@ func subscribeConnectionPools(
 			appliedConfig = proto.CloneOf(next)
 			if applied > 0 {
 				logger.With("event", "database.pool.updated", "connections", applied).Info(
-					"updated database connection pool settings",
+					"database pool updated",
 				)
 			}
 		},

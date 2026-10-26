@@ -35,13 +35,13 @@ func NewSources(paths PathList) (Sources, error) {
 		return nil, fmt.Errorf("load file source: %w", err)
 	}
 	for _, pattern := range unmatched {
-		logger.With("event", "config.file.empty", "pattern", pattern).Warn("no configuration files matched")
+		logger.With("event", "config.file.empty", "pattern", pattern).Warn("config pattern matched no files")
 	}
 	if len(matches) == 0 {
 		return nil, nil
 	}
 
-	logger.With("event", "config.file.selected", "files", matches).Info("configuration files selected")
+	logger.With("event", "config.file.selected", "files", matches).Info("config files selected")
 	sources := make(Sources, len(matches))
 	for index, filename := range matches {
 		source, err := newFileSource(filename)

@@ -170,7 +170,7 @@ func TestMiddlewareSnapshotReplayDoesNotLogUpdate(t *testing.T) {
 		t.Fatalf("rejected config logs = %#v", *logger.entries)
 	}
 	rejected := (*logger.entries)[1]
-	if rejected.level != "warn" || rejected.fields["event"] != "server.middleware.update.rejected" || rejected.fields["config_key"] != "server" || rejected.fields["error"] == nil {
+	if rejected.level != "warn" || rejected.fields["event"] != "server.middleware.rejected" || rejected.fields["config_key"] != nil || rejected.fields["error"] == nil {
 		t.Fatalf("rejected config log = %#v", rejected)
 	}
 }
