@@ -35,8 +35,11 @@ type assembly struct {
 }
 
 // 业务阶段显式依赖基础设施完成标记，阶段内部不规定额外顺序。
-func newBootstrap(_ bootstrap.InfrastructureBootstrap, routes *businessServer, spec *bootstrap.Spec, servers *server.Spec, decorate app.ContextDecorator) (bootstrap.Bootstrap, error) {
+func newBootstrap(_ bootstrap.InfrastructureBootstrap, routes *businessServer, spec *bootstrap.Spec, servers *server.Spec, jobs *job.Spec, application *app.Spec, decorate app.ContextDecorator) (bootstrap.Bootstrap, error) {
 	servers.HTTP().Register(routes.register)
+	jobs.RegisterDaemon("compose-daemon", job.TaskFunc(func(ctx context.Context) error {
+		return routes.runDaemon(ctx, application.Ready)
+	}))
 	if decorate != nil {
 		spec.AddContext(decorate)
 	}

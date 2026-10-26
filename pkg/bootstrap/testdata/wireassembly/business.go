@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync/atomic"
 
+	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	_ "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/database/sqlite"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
 )
 
@@ -22,6 +25,17 @@ var errInvalidAmount = errors.New("order amount must be positive")
 type businessServer struct {
 	manager database.Manager
 	http    server.HTTPServer
+	// daemonStartedReady 记录常驻任务启动时应用是否已经 Ready；daemonStopped 记录其收到取消。
+	daemonStarted, daemonStartedReady, daemonStopped atomic.Bool
+}
+
+// runDaemon 是组合场景中的常驻任务：启动时记录 Ready 状态，阻塞到停机取消。
+func (b *businessServer) runDaemon(ctx context.Context, ready func() bool) error {
+	b.daemonStartedReady.Store(ready())
+	b.daemonStarted.Store(true)
+	<-ctx.Done()
+	b.daemonStopped.Store(true)
+	return ctx.Err()
 }
 
 func newBusinessServer(manager database.Manager) *businessServer {
@@ -31,6 +45,10 @@ func newBusinessServer(manager database.Manager) *businessServer {
 func (b *businessServer) register(srv server.HTTPServer) error {
 	b.http = srv
 	manager := b.manager
+	// /fail 经 Kratos 路由返回未知错误，由 Foundation Encoder 归一化为 500，用于验证诊断出口。
+	srv.Route("/").GET("/fail", func(kratoshttp.Context) error {
+		return errors.New("query failed: password=private-cause")
+	})
 	srv.HandleFunc("/orders", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -67,6 +85,7 @@ func (b *businessServer) register(srv server.HTTPServer) error {
 			http.Error(w, "order failed", http.StatusInternalServerError)
 			return
 		}
+		log.WithContext(ctx).With("event", "demo.order.created", "order.id", request.ID).Info("order created") // compose:caller
 		w.WriteHeader(http.StatusCreated)
 	})
 	return nil

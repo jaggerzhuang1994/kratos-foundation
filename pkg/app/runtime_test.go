@@ -262,3 +262,35 @@ func TestAbortStartupUsesOneUncanceledBudgetAndContinuesAfterTimeout(t *testing.
 		}
 	})
 }
+
+// 启动阶段收到信号同样进入统一停止：不启动 Runtime，执行一次停止前钩子与启动前回滚，Run 正常返回。
+func TestRunHandlesSignalDuringStartup(t *testing.T) {
+	initializeRuntimeSignals(t)
+	spec := newApplicationTestSpec(t)
+	spec.AddSignals(syscall.SIGUSR2)
+	var events []string
+	rollback := &startupRollbackTestRuntime{name: "listener", events: &events}
+	spec.RegisterRuntime(rollback)
+	spec.BeforeStart(func(context.Context) error {
+		if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
+			return err
+		}
+		// 等待信号被 Run 接收并转为停止请求，模拟启动尚未完成时到达的 SIGTERM。
+		return spec.WaitReady(context.Background())
+	})
+	beforeStops := 0
+	spec.BeforeStop(func(context.Context) error { beforeStops++; return nil })
+	application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() { result <- application.Run() }()
+	// BeforeStart 的等待以 context.Canceled 结束，属于启动前钩子失败的取消，按原语义计入结果。
+	if err := receiveError(t, result, "Run after startup signal"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run = %v, want canceled startup", err)
+	}
+	if rollback.starts != 0 || rollback.aborts != 1 || beforeStops != 1 || spec.Ready() {
+		t.Fatalf("starts=%d aborts=%d beforeStops=%d ready=%v", rollback.starts, rollback.aborts, beforeStops, spec.Ready())
+	}
+}
