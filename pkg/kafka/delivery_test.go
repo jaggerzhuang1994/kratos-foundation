@@ -382,7 +382,7 @@ func TestConsumerRuntimeRecordsControlledFinalClassificationEvents(t *testing.T)
 							t.Fatalf("classification attempts = %d, want %d", field.Value.AsInt64(), test.wantAttempts)
 						}
 					}
-					if strings.Contains(field.Value.Emit(), test.secret) {
+					if strings.Contains(field.Value.String(), test.secret) {
 						t.Fatalf("classification event leaked %q: %#v", test.secret, event)
 					}
 				}

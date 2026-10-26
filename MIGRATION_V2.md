@@ -20,7 +20,7 @@ OSS 的不同逻辑 bucket 现在可以并发调用 factory；自定义驱动必
 
 | 检查 | main 用法 | v2 操作与验收 |
 |---|---|---|
-| [ ] 工具链 | Go 1.24.12 | 使用根 go.mod 要求的 Go 1.25+；SQLite 验证需要 CGO 和 C 编译器 |
+| [ ] 工具链 | Go 1.24.12 | 使用根 go.mod 要求的 Go 1.26+（构建建议 go1.26.10+）；SQLite 验证需要 CGO 和 C 编译器 |
 | [ ] 模块路径 | `github.com/jaggerzhuang1994/kratos-foundation` | 改为 `github.com/jaggerzhuang1994/kratos-foundation/v2`，执行 `go mod tidy` |
 | [ ] 组装入口 | 领域包中的 Wire/Bootstrap、根 provider set | 使用 `pkg/bootstrap` 和公开构造函数；不得导入领域 internal；重新运行业务 Wire |
 | [ ] 组装顺序 | App 直接依赖多个领域 Bootstrap | `InfrastructureBootstrap → Bootstrap → StartupReady → bootstrap.NewApp`；业务 provider 显式依赖基础设施标记 |

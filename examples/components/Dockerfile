@@ -1,5 +1,5 @@
 # SQLite 驱动需要 CGO；构建及运行镜像均为 Debian 12。
-FROM golang:1.26.4-bookworm AS build
+FROM golang:1.26.10-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

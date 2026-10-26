@@ -4,7 +4,7 @@
 
 ## 优先使用 Go 标准库
 
-模块要求 Go 1.25。原 `Max/Min` 已删除：固定参数使用 Go 1.21 起的内置 `max/min`；切片使用 `slices.Max/Min`。内置函数不接受 `values...` 展开；切片版本对空切片 panic。标准库版本会传播 NaN，且有明确的正负零规则，与旧循环比较不完全相同。
+模块要求 Go 1.26。原 `Max/Min` 已删除：固定参数使用 Go 1.21 起的内置 `max/min`；切片使用 `slices.Max/Min`。内置函数不接受 `values...` 展开；切片版本对空切片 panic。标准库版本会传播 NaN，且有明确的正负零规则，与旧循环比较不完全相同。
 
 | 已标记 Deprecated 的函数 | 替代方案 | 差异 |
 | --- | --- | --- |
@@ -13,7 +13,7 @@
 | `Includes` | `slices.Contains` | 相同查找语义 |
 | `Find` | `slices.IndexFunc` | 相同首个索引和 -1 语义 |
 
-弃用函数暂时保留实现和测试，避免修改原有返回值。Map、GroupBy、Intersect 等没有 Go 1.25 的直接等价函数。
+弃用函数暂时保留实现和测试，避免修改原有返回值。Map、GroupBy、Intersect 等没有标准库的直接等价函数。
 `slices.Compact` 只去除相邻重复项，不能替代保序的 Unique；`slices.DeleteFunc` 与 `maps.DeleteFunc` 原地修改容器，不能直接替代返回新容器的 Filter/MFilter。
 
 标准库参考：[min/max](https://go.dev/ref/spec#Min_and_max)、[maps](https://pkg.go.dev/maps@go1.25.0)、[slices](https://pkg.go.dev/slices@go1.25.0)。

@@ -1,5 +1,5 @@
 # 构建上下文是仓库根目录；消费项目复制后调整最后一个 go build 路径。
-FROM golang:1.26.4-bookworm AS build
+FROM golang:1.26.10-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

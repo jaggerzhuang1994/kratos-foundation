@@ -68,7 +68,8 @@ func Encrypt(data []byte, publicKey *stdrsa.PublicKey) ([]byte, error) {
 		return nil, errors.New("RSA public key is nil")
 	}
 	return transformBlocks(data, publicKey.Size()-11, func(block []byte) ([]byte, error) {
-		return stdrsa.EncryptPKCS1v15(rand.Reader, publicKey, block)
+		// PKCS#1 v1.5 是本包对既有密文与调用方的兼容契约；新场景应改用 OAEP。
+		return stdrsa.EncryptPKCS1v15(rand.Reader, publicKey, block) //nolint:staticcheck // SA1019：保留兼容格式
 	})
 }
 
@@ -90,7 +91,8 @@ func Decrypt(data []byte, privateKey *stdrsa.PrivateKey) ([]byte, error) {
 		return nil, fmt.Errorf("invalid RSA ciphertext length %d", len(data))
 	}
 	return transformBlocks(data, privateKey.Size(), func(block []byte) ([]byte, error) {
-		return stdrsa.DecryptPKCS1v15(rand.Reader, privateKey, block)
+		// 解密错误可能形成填充预言，调用方不得把失败细节逐次回显给不可信请求方。
+		return stdrsa.DecryptPKCS1v15(rand.Reader, privateKey, block) //nolint:staticcheck // SA1019：保留兼容格式
 	})
 }
 

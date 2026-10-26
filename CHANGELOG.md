@@ -8,6 +8,7 @@
 
 ### 升级风险
 
+- **最低 Go 版本升至 1.26**：根模块改为 `go 1.26.0`（Go 1.25 已停止安全更新，且修复 HTTP/2 服务端漏洞的 `golang.org/x/net` v0.60+ 要求 Go 1.26），依赖本框架的服务需使用 Go 1.26+ 构建。标准库漏洞只能由工具链修复，构建镜像与 CI 应使用 go1.26.10+ 或 go1.27.3+；仓库自身通过 `toolchain go1.26.10` 固定开发工具链。
 - **应用类型由 `*kratos.App` 改为 `*app.App`**：App 自行实现 Run/Stop 生命周期，不再包装 `kratos.App`。`bootstrap.NewKratosApp` 更名为 `bootstrap.NewApp`；业务 injector 的返回类型改为 `*app.App` 后重新执行 `wire`，`main` 中的 `app.Run()` 不变。`*app.App` 实现 `kratos.AppInfo`，`kratos.FromContext` 仍可读取身份。
 - **生产环境不再返回错误堆栈**：HTTP 响应 metadata 与 gRPC `ErrorInfo` 中的 `err_stack` 仅在 `env.ExposeDiagnostics()` 为 true 时携带（local/dev/test 始终、pre 需 `APP_DEBUG=true`、prod 一律不带）。依赖跨服务远端堆栈排障的 prod 场景需改用服务端日志。见 [诊断出口环境约束](pkg/errors/README.md#诊断出口环境约束)。
 - **gRPC 健康检查改为跟随应用就绪**：默认注册的 `grpc.health.v1.Health` 不再在 Server 启动后立即报 `SERVING`。空服务名与已注册业务服务名在应用就绪、未停机且 readiness 依赖检查通过时才返回 `SERVING`（`Watch` 只看就绪与停机，不跑依赖检查）；服务名 `liveness` 恒为 `SERVING`。影响与迁移：
@@ -51,6 +52,7 @@
 - 日志热路径：caller 按调用地址缓存帧解析结果，字段过滤、module 归一化、格式化、去空与去重合并为一遍处理，输出内容不变；启用级别下单条日志开销约降低 6 倍。
 - Client：已构建版本的 `AcquireClient` / release 走无锁分片计数快速路径，16 并发下约 6 倍吞吐，租约与退役语义不变。
 - HTTP 监听、Queue Worker、Kafka ConsumerRuntime 与错误树判断改为共享的精简实现，外部行为不变。
+- 依赖安全升级：grpc 1.84、OpenTelemetry 1.47（Prometheus exporter 0.69，导出的指标名与标签经比对不变）、golang.org/x/net 0.61、x/crypto 0.58、x/text、x/sys、pgx 5.11、ch-go 等升级到不受已知漏洞影响的版本，`govulncheck` 在 go1.26.10 下无可达漏洞。go-redis（9.23 在建连时新增 DNS 解析）、franz-go（1.22 改变主题重建与缓冲默认值）、fsnotify（1.10 在 macOS 下热重载偶发 bad file descriptor）均无已知漏洞，为避免行为变化暂保持原版本。剩余未修复公告：Kratos GO-2026-5471（`transport/http`，无上游修复，代码未调用受影响符号）与 x/crypto `openpgp` 包弃用公告（未导入）。
 - WebSocket 停机关闭与 HTTP `Shutdown` 并行执行、共享同一预算，卡住的 WebSocket 回调不再推迟 HTTP 停止接收新连接或挤占在途请求的优雅完成时间；停机关闭帧由 1000 改为 1001 Going Away（业务主动 `Close()` 仍为 1000），依赖关闭码判断是否重连的客户端需同步调整。
 
 ## v2.4.1
