@@ -257,14 +257,32 @@ func TestExternalConsulSnapshotUpdateDeletionAndStop(t *testing.T) {
 	put(`{"feature":{"value":2}}`)
 	wait(2)
 	t.Logf("update visible=%s", time.Since(start))
+	// 删除整个前缀会产生空快照；官方 merge 不撤销旧缓存，也不恢复低优先级值（见 README“KV 监听”）。
 	if _, err := client.KV().DeleteTree(prefix, new(consulapi.WriteOptions).WithContext(ctx)); err != nil {
 		t.Fatal(err)
 	}
-	wait(0)
+	// 等待超过一个扫描周期，确认空快照已被处理且旧值保持不变。
+	retain := time.NewTimer(3 * time.Second)
+	defer retain.Stop()
+	for kept := false; !kept; {
+		select {
+		case <-ctx.Done():
+			t.Fatal("context expired while checking retained value")
+		case <-retain.C:
+			kept = true
+		case <-time.After(50 * time.Millisecond):
+		}
+		if current, _ := hot.GetCurrent(); current.Value != 2 {
+			t.Fatalf("value after prefix deletion=%d want retained 2", current.Value)
+		}
+	}
+	// 空快照之后监听仍然有效，重新写入的值继续生效。
+	put(`{"feature":{"value":3}}`)
+	wait(3)
 	stop()
 	start = time.Now()
 	cleanup()
-	t.Logf("deleted override restored base; cleanup=%s", time.Since(start))
+	t.Logf("deletion kept cached value; later update applied; cleanup=%s", time.Since(start))
 }
 
 func TestYAMLPatternFiltersAndSortsEverySnapshot(t *testing.T) {

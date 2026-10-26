@@ -9,12 +9,22 @@ import (
 
 	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
+	"gorm.io/gorm"
 )
 
 func TestRepoLifecycle(t *testing.T) {
+	// SQLite 精确到毫秒：亚毫秒到期时间在当前时刻尚不可领取，推进 1ms 后可领取。
+	start := time.Unix(1700000000, 123456)
+	runRepoLifecycle(t, testRepo, start, start, time.Millisecond)
+}
+
+// runRepoLifecycle 覆盖入队、提前领取、租约过期重领、释放、失败、人工重试与完成保留。
+// early 为任务尚不可领取的时刻，start+tick 为首个可领取时刻，用于适配各数据库的时间精度。
+func runRepoLifecycle(t *testing.T, open func(*testing.T) (*Repo[*testTask], *gorm.DB), start, early time.Time, tick time.Duration) {
+	t.Helper()
 	for _, retain := range []bool{false, true} {
 		t.Run(fmt.Sprintf("retain=%v", retain), func(t *testing.T) {
-			repo, db := testRepo(t)
+			repo, db := open(t)
 			repo, err := NewRepo(context.Background(), repo.provider, repo.factory, Config{RetainCompleted: retain})
 			if err != nil {
 				t.Fatal(err)
@@ -35,7 +45,7 @@ func TestRepoLifecycle(t *testing.T) {
 			var _ databasequeue.Repo = repo
 			store := databasequeue.NewStore(repo)
 			ctx := context.Background()
-			now := time.Unix(1700000000, 123456)
+			now := start
 			task := &queue.Task{ID: "任务A ", MessageVersion: "email", Payload: []byte{0, 255}, Headers: map[string]string{"k": "v"}, AvailableAt: now}
 			if err := store.Enqueue(ctx, task); err != nil {
 				t.Fatal(err)
@@ -44,10 +54,10 @@ func TestRepoLifecycle(t *testing.T) {
 			if err := store.Enqueue(ctx, task); !errors.Is(err, queue.ErrDuplicate) {
 				t.Fatalf("duplicate: %v", err)
 			}
-			if r, err := store.Reserve(ctx, now, time.Second); err != nil || r != nil {
+			if r, err := store.Reserve(ctx, early, time.Second); err != nil || r != nil {
 				t.Fatalf("early claim: %v %v", r, err)
 			}
-			now = now.Add(time.Millisecond)
+			now = now.Add(tick)
 			first, err := store.Reserve(ctx, now, time.Second)
 			if err != nil || first == nil {
 				t.Fatalf("claim: %v %v", first, err)

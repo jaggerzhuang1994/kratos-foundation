@@ -16,7 +16,7 @@ MySQL 的固定密码仅是本地临时测试 fixture，不得用于生产。所
 | Kafka 批量 | 1/32/128，单分区，1KiB 固定种子伪随机内容，预先填充积压，真实同步提交 | Handler 无业务 I/O，不能直接替业务选择最优参数；不修改默认值 |
 | MySQL | Foundation 驱动真实建连、事务回滚、截止时间取消慢查询 | 不覆盖业务 schema、复杂 SQL、数据库主从切换 |
 | Redis | 任务队列 Lua 延迟/重试/租约回收和旧 token 拒绝；两客户端互斥、跨原始 TTL 续租与释放；连接 kill/重连/关闭 | 不是 Redis 节点故障、主从切换或网络分区测试 |
-| Consul | 公共配置源与 Manager，热更新、删除高优先级值后恢复低优先级值，取消 blocking query 停机 | 单开发节点，无 ACL/TLS 或多节点一致性故障 |
+| Consul | 公共配置源与 Manager，热更新；删除前缀后按官方 merge 保留旧值、后续写入继续生效；取消 blocking query 停机 | 单开发节点，无 ACL/TLS 或多节点一致性故障 |
 | 资源 | 20 次 Kafka 客户端创建/ping/关闭后的 goroutine/GC 堆快照；CPU/分配剖析；容器运行结束时资源快照 | 短样本可识别明显累积，不能证明长期无泄漏，容器快照不是峰值 |
 
 OSS、Cron 队列上限、WebSocket 超限与压缩池的并发/释放检查仍由已有确定性测试及竞态测试覆盖。真实云 OSS 的 IAM、服务端限流、网络延迟和签名行为不能用 MySQL/Redis 或 MinIO 替代；需要对应测试 bucket 和云侧观测。当前没有所需云端环境，不能声称已经验证。

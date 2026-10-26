@@ -35,12 +35,15 @@ type connectionFunc func(context.Context) *gorm.DB
 
 func (f connectionFunc) Connection(ctx context.Context) *gorm.DB { return f(ctx) }
 
+// testRepo 固定使用独立 SQLite 文件：用例依赖其毫秒精度且无 TIMESTAMP 范围限制。
+// MySQL 的秒级精度与范围校验由 TestExternalRepoMySQL 单独覆盖。
 func testRepo(t *testing.T) (*Repo[*testTask], *gorm.DB) {
 	t.Helper()
-	dialector := sqlite.Open(filepath.Join(t.TempDir(), "queue.db") + "?_journal_mode=WAL&_busy_timeout=5000")
-	if dsn := os.Getenv("FOUNDATION_TEST_QUEUE_MYSQL_DSN"); dsn != "" {
-		dialector = mysql.Open(dsn)
-	}
+	return openTestRepo(t, sqlite.Open(filepath.Join(t.TempDir(), "queue.db")+"?_journal_mode=WAL&_busy_timeout=5000"))
+}
+
+func openTestRepo(t *testing.T, dialector gorm.Dialector) (*Repo[*testTask], *gorm.DB) {
+	t.Helper()
 	db, err := gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +272,7 @@ func TestRepoValidatesMySQLTimestampRange(t *testing.T) {
 			t.Fatalf("valid timestamp %s rejected: %v", value, err)
 		}
 	}
-	for _, value := range []time.Time{time.Time{}, repo.timestampMin.Add(-time.Second), repo.timestampMax.Add(time.Second)} {
+	for _, value := range []time.Time{{}, repo.timestampMin.Add(-time.Second), repo.timestampMax.Add(time.Second)} {
 		if err := repo.validateTimestamp("available_at", value); err == nil {
 			t.Fatalf("invalid timestamp %s accepted", value)
 		}
@@ -352,8 +355,6 @@ func TestIntegrationQueuePersistentWorker(t *testing.T) {
 		{name: "unknown_type", wantRuns: 0, reason: "permanent"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// 独立 SQLite 文件避免借用开发机器的 MySQL，测试不依赖外部基础设施。
-			t.Setenv("FOUNDATION_TEST_QUEUE_MYSQL_DSN", "")
 			repo, db := testRepo(t)
 			repo, err := NewRepo(context.Background(), repo.provider, repo.factory, Config{RetainCompleted: tc.retain})
 			if err != nil {
@@ -495,3 +496,49 @@ type payloadCodec struct{}
 
 func (payloadCodec) Encode(value []byte) ([]byte, error) { return value, nil }
 func (payloadCodec) Decode(value []byte) ([]byte, error) { return value, nil }
+
+// TestExternalRepoMySQL 在真实 MySQL 上验证秒级 TIMESTAMP 取整、范围校验、统计读取与完整租约生命周期。
+func TestExternalRepoMySQL(t *testing.T) {
+	dsn := os.Getenv("FOUNDATION_TEST_QUEUE_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("set FOUNDATION_TEST_QUEUE_MYSQL_DSN for Docker integration tests")
+	}
+	open := func(t *testing.T) (*Repo[*testTask], *gorm.DB) { return openTestRepo(t, mysql.Open(dsn)) }
+	t.Run("lifecycle", func(t *testing.T) {
+		// 秒级精度下，任务时刻之前一秒不可领取，之后需以整秒推进。
+		start := time.Unix(1700000000, 0)
+		runRepoLifecycle(t, open, start, start.Add(-time.Second), time.Second)
+	})
+	t.Run("timestamp", func(t *testing.T) {
+		repo, db := open(t)
+		ctx := context.Background()
+		for _, at := range []time.Time{{}, time.Unix(0, 0), time.Date(2038, time.January, 19, 3, 14, 8, 0, time.UTC)} {
+			err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "range", MessageVersion: "job", AvailableAt: at}})
+			if err == nil || !strings.Contains(err.Error(), "outside the MySQL timestamp range") {
+				t.Fatalf("available_at %s: %v", at, err)
+			}
+		}
+		// 不足一秒的到期时间向上取整，避免任务早于业务指定时刻被领取。
+		at := time.Unix(1700000000, 1)
+		if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "ceil", MessageVersion: "job", AvailableAt: at}}); err != nil {
+			t.Fatal(err)
+		}
+		var row testTask
+		if err := db.Take(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		if !row.AvailableAt.Equal(time.Unix(1700000001, 0)) {
+			t.Fatalf("available_at = %s", row.AvailableAt)
+		}
+		if record, err := repo.Claim(ctx, at, at.Add(time.Minute), "early"); err != nil || record != nil {
+			t.Fatalf("claim before ceiling: %+v %v", record, err)
+		}
+		stats, err := repo.Stats(ctx, time.Unix(1700000060, 0))
+		if err != nil || stats.Ready != 1 || !stats.OldestReadyKnown || !stats.OldestReadyAt.Equal(time.Unix(1700000001, 0)) {
+			t.Fatalf("stats: %+v %v", stats, err)
+		}
+		if record, err := repo.Claim(ctx, time.Unix(1700000001, 0), time.Unix(1700000061, 0), "owner"); err != nil || record == nil {
+			t.Fatalf("claim at ceiling: %+v %v", record, err)
+		}
+	})
+}
