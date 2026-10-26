@@ -88,3 +88,58 @@ func TestFilterPreservesModule(t *testing.T) {
 		})
 	}
 }
+
+type logCall struct {
+	level   kratoslog.Level
+	keyvals []any
+}
+
+type recordingLogger struct {
+	calls []logCall
+	err   error
+}
+
+func (l *recordingLogger) Log(level kratoslog.Level, keyvals ...any) error {
+	l.calls = append(l.calls, logCall{
+		level:   level,
+		keyvals: append([]any(nil), keyvals...),
+	})
+	return l.err
+}
+
+type discardLogger struct{}
+
+func (discardLogger) Log(kratoslog.Level, ...any) error { return nil }
+
+func BenchmarkFilterLogger(b *testing.B) {
+	logger := NewFilter(discardLogger{}, true, map[string]struct{}{
+		"password": {},
+		"secret.*": {},
+	})
+	keyvals := []any{
+		"request.id", "request-1",
+		"password", "hidden",
+		"secret.token", "hidden",
+		"empty", "",
+		"status", 200,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if err := logger.Log(kratoslog.LevelInfo, keyvals...); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStackLogger(b *testing.B) {
+	logger := NewStack(discardLogger{}, discardLogger{})
+	keyvals := []any{"message", "benchmark", "request.id", "request-1"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if err := logger.Log(kratoslog.LevelInfo, keyvals...); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

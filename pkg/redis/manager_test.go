@@ -1,10 +1,12 @@
 package redis
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,12 +21,16 @@ import (
 	"github.com/google/uuid"
 	textconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/text"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
+	"github.com/prometheus/client_golang/prometheus"
 	goredis "github.com/redis/go-redis/v9"
-	otelmetric "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/protobuf/proto"
@@ -508,25 +514,25 @@ type failingRedisMetricsProvider struct {
 	err error
 }
 
-func (p failingRedisMetricsProvider) MeterProvider() otelmetric.MeterProvider {
+func (p failingRedisMetricsProvider) MeterProvider() metric.MeterProvider {
 	return failingRedisMeterProvider{MeterProvider: p.Provider.MeterProvider(), err: p.err}
 }
 
 type failingRedisMeterProvider struct {
-	otelmetric.MeterProvider
+	metric.MeterProvider
 	err error
 }
 
-func (p failingRedisMeterProvider) Meter(name string, options ...otelmetric.MeterOption) otelmetric.Meter {
+func (p failingRedisMeterProvider) Meter(name string, options ...metric.MeterOption) metric.Meter {
 	return failingRedisMeter{Meter: p.MeterProvider.Meter(name, options...), err: p.err}
 }
 
 type failingRedisMeter struct {
-	otelmetric.Meter
+	metric.Meter
 	err error
 }
 
-func (m failingRedisMeter) Float64Histogram(string, ...otelmetric.Float64HistogramOption) (otelmetric.Float64Histogram, error) {
+func (m failingRedisMeter) Float64Histogram(string, ...metric.Float64HistogramOption) (metric.Float64Histogram, error) {
 	return nil, m.err
 }
 
@@ -724,5 +730,491 @@ func TestExternalIntegrationRedisCommands(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestManagedClientReconnectsThroughRealPoolAfterServerRestart(t *testing.T) {
+	server := newRESPReconnectServer(t, "127.0.0.1:0")
+	address := server.listener.Addr().String()
+	manager := newLocalTestManager(map[string]connectionOption{"cache": {
+		Addr: proto.String(address), Protocol: proto.Int32(2), DisableIdentity: proto.Bool(true),
+		PoolSize: proto.Int32(1), MaxRetries: proto.Int32(-1), DialerRetries: proto.Int32(1),
+		DialTimeout: durationpb.New(50 * time.Millisecond), DialerRetryTimeout: durationpb.New(time.Millisecond),
+		ReadTimeout: durationpb.New(100 * time.Millisecond), WriteTimeout: durationpb.New(100 * time.Millisecond),
+		ContextTimeoutEnabled: proto.Bool(true),
+	}})
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	client, err := manager.Connection("cache")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if result, err := client.Ping(ctx).Result(); err != nil || result != "PONG" {
+		t.Fatalf("initial PING = %q, %v", result, err)
+	}
+
+	// 断开已有连接，在容量为一的真实连接池中触发拨号失败与恢复探测。
+	server.stop()
+	for range 2 {
+		if err := client.Ping(ctx).Err(); err == nil {
+			t.Fatal("PING succeeded while server was down")
+		}
+	}
+	if cached, err := manager.Connection("cache"); err != nil || cached != client {
+		t.Fatalf("client changed during outage: %p != %p, %v", cached, client, err)
+	}
+	canceled, cancelNow := context.WithCancel(context.Background())
+	cancelNow()
+	if err := client.Ping(canceled).Err(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled PING = %v", err)
+	}
+
+	restored := newRESPReconnectServer(t, address)
+	// 保持原 Client，通过带截止时间的轮询观察 SDK 后台探测恢复。
+	for {
+		if result, err := client.Ping(ctx).Result(); err == nil && result == "PONG" {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("original client did not recover: %v", ctx.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if cached, err := manager.Connection("cache"); err != nil || cached != client {
+		t.Fatalf("client changed after recovery: %p != %p, %v", cached, client, err)
+	}
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Ping(ctx).Err(); !errors.Is(err, goredis.ErrClosed) {
+		t.Fatalf("PING after manager cleanup = %v", err)
+	}
+	if _, err := manager.Connection("cache"); !errors.Is(err, ErrManagerClosed) {
+		t.Fatalf("Connection after manager cleanup = %v", err)
+	}
+	restored.stop()
+}
+
+// respReconnectServer 仅实现 RESP2 命令帧、HELLO 回退与 PING，
+// 足以覆盖真实 go-redis 初始化、连接断开和连接池恢复路径。
+type respReconnectServer struct {
+	listener net.Listener
+	accepted chan struct{}
+	mu       sync.Mutex
+	clients  map[net.Conn]struct{}
+	workers  sync.WaitGroup
+	stopOnce sync.Once
+}
+
+func newRESPReconnectServer(t *testing.T, address string) *respReconnectServer {
+	t.Helper()
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &respReconnectServer{listener: listener, accepted: make(chan struct{}), clients: make(map[net.Conn]struct{})}
+	t.Cleanup(server.stop)
+	go func() {
+		defer close(server.accepted)
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			server.mu.Lock()
+			server.clients[conn] = struct{}{}
+			server.mu.Unlock()
+			server.workers.Add(1)
+			go server.serve(conn)
+		}
+	}()
+	return server
+}
+
+func (s *respReconnectServer) serve(conn net.Conn) {
+	defer s.workers.Done()
+	defer func() {
+		_ = conn.Close()
+		s.mu.Lock()
+		delete(s.clients, conn)
+		s.mu.Unlock()
+	}()
+	reader := bufio.NewReader(conn)
+	for {
+		command, err := readRESPReconnectCommand(reader)
+		if err != nil {
+			return
+		}
+		response := "-ERR unknown command\r\n"
+		if command == "ping" {
+			response = "+PONG\r\n"
+		}
+		if _, err := io.WriteString(conn, response); err != nil {
+			return
+		}
+	}
+}
+
+func (s *respReconnectServer) stop() {
+	s.stopOnce.Do(func() {
+		_ = s.listener.Close()
+		<-s.accepted
+		s.mu.Lock()
+		for conn := range s.clients {
+			_ = conn.Close()
+		}
+		s.mu.Unlock()
+		s.workers.Wait()
+	})
+}
+
+func readRESPReconnectCommand(reader *bufio.Reader) (string, error) {
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(line, "*") {
+		return "", fmt.Errorf("expected RESP array, got %q", line)
+	}
+	count, err := strconv.Atoi(strings.TrimSpace(line[1:]))
+	if err != nil {
+		return "", err
+	}
+	var command string
+	for index := 0; index < count; index++ {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		if !strings.HasPrefix(line, "$") {
+			return "", fmt.Errorf("expected RESP string, got %q", line)
+		}
+		length, err := strconv.Atoi(strings.TrimSpace(line[1:]))
+		if err != nil || length < 0 {
+			return "", fmt.Errorf("invalid RESP length %q", line)
+		}
+		value := make([]byte, length+2)
+		if _, err := io.ReadFull(reader, value); err != nil {
+			return "", err
+		}
+		if index == 0 {
+			command = strings.ToLower(string(value[:length]))
+		}
+	}
+	return command, nil
+}
+
+type localTracingProvider struct {
+	provider trace.TracerProvider
+	disabled bool
+}
+
+func (p localTracingProvider) Disabled() bool { return p.disabled }
+
+func (p localTracingProvider) TracerProvider() trace.TracerProvider {
+	return p.provider
+}
+
+func (p localTracingProvider) Tracer(
+	name string,
+	options ...trace.TracerOption,
+) trace.Tracer {
+	return p.provider.Tracer(name, options...)
+}
+
+type localMetricsProvider struct {
+	provider metric.MeterProvider
+	registry *prometheus.Registry
+}
+
+func newLocalMetricsProvider() metrics.Provider {
+	return &localMetricsProvider{
+		provider: metricnoop.NewMeterProvider(),
+		registry: prometheus.NewRegistry(),
+	}
+}
+
+func (p *localMetricsProvider) Meter(
+	name string,
+	options ...metric.MeterOption,
+) metric.Meter {
+	return p.provider.Meter(name, options...)
+}
+
+func (p *localMetricsProvider) MeterProvider() metric.MeterProvider {
+	return p.provider
+}
+
+func (p *localMetricsProvider) PrometheusGatherer() prometheus.Gatherer {
+	return p.registry
+}
+
+func (p *localMetricsProvider) PrometheusRegisterer() prometheus.Registerer {
+	return p.registry
+}
+
+func newRedisTestLogger(t testing.TB) foundationlog.Logger {
+	t.Helper()
+	shared, cleanup, err := testlog.New(testlog.Config{
+		Level:      kratoslog.LevelInfo,
+		TimeFormat: time.RFC3339,
+		Std: testlog.OutputConfig{
+			Disable: true,
+			Level:   kratoslog.LevelInfo,
+		},
+		File: testlog.FileConfig{OutputConfig: testlog.OutputConfig{
+			Disable: true,
+			Level:   kratoslog.LevelInfo,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create test logger: %v", err)
+	}
+	t.Cleanup(cleanup)
+	return shared
+}
+
+func validRedisConfig() *config_pb.Redis {
+	disabled := true
+	return &config_pb.Redis{
+		Default: proto.String("default"),
+		Connections: map[string]*config_pb.RedisOption{
+			"default": {Addr: proto.String("127.0.0.1:6379")},
+		},
+		Tracing: &config_pb.RedisTracing{Disable: &disabled},
+		Metrics: &config_pb.RedisMetrics{Disable: &disabled},
+	}
+}
+
+func localRedisDependencies(t testing.TB) (
+	foundationlog.Logger,
+	localTracingProvider,
+	metrics.Provider,
+) {
+	t.Helper()
+	return newRedisTestLogger(t),
+		localTracingProvider{
+			provider: noop.NewTracerProvider(),
+			disabled: true,
+		},
+		newLocalMetricsProvider()
+}
+
+func TestNewBuildsCachedClientsAndCleanupOwnsTheirLifecycle(t *testing.T) {
+	config := validRedisConfig()
+	config.Connections["cache"] = &config_pb.RedisOption{
+		Addr:       proto.String("127.0.0.1:6380"),
+		ClientName: proto.String("cache-client"),
+	}
+	configManager := testconfig.New(t, "redis", config)
+	logger, tracingProvider, metricsProvider := localRedisDependencies(t)
+
+	manager, cleanup, err := NewManager(
+		logger,
+		configManager,
+		tracingProvider,
+		metricsProvider,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultClient := manager.Default()
+	if defaultClient == nil || defaultClient.Options().Addr != "127.0.0.1:6379" {
+		t.Fatalf("default client = %#v", defaultClient)
+	}
+	cacheClient, err := manager.Connection("cache")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := manager.Connection("cache")
+	if err != nil || again != cacheClient {
+		t.Fatalf("cached Connection = (%p, %v), want %p", again, err, cacheClient)
+	}
+	if cacheClient.Options().Addr != "127.0.0.1:6380" ||
+		cacheClient.Options().ClientName != "cache-client" {
+		t.Fatalf("cache client options = %#v", cacheClient.Options())
+	}
+	if _, err := manager.Connection("unknown"); err == nil ||
+		!strings.Contains(err.Error(), `connection "unknown" option is nil`) {
+		t.Fatalf("unknown Connection error = %v", err)
+	}
+
+	cleanup()
+	cleanup()
+	if manager.Default() != nil {
+		t.Fatal("cleanup left default client visible")
+	}
+	if _, err := manager.Connection("cache"); !errors.Is(err, ErrManagerClosed) {
+		t.Fatalf("Connection after cleanup error = %v, want ErrManagerClosed", err)
+	}
+	assertRedisClientClosed(t, defaultClient)
+	assertRedisClientClosed(t, cacheClient)
+}
+
+func TestNewKeepsRestartOnlyStartupSnapshotAcrossConfigUpdates(t *testing.T) {
+	initial := validRedisConfig()
+	initial.Connections["cache"] = &config_pb.RedisOption{
+		Addr: proto.String("127.0.0.1:6380"),
+	}
+	source := testconfig.NewMutableSource(t, "redis", initial)
+	configManager, releaseConfig, err := foundationconfig.NewManager(
+		foundationconfig.Sources{source},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(releaseConfig)
+
+	updates := make(chan *config_pb.Redis, 2)
+	cancelObserver, err := configManager.Subscribe(
+		"redis",
+		new(config_pb.Redis),
+		func(_ string, value any, updateErr error) {
+			if updateErr == nil {
+				updates <- value.(*config_pb.Redis)
+			}
+		},
+		defaultConfig(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancelObserver)
+	logger, tracingProvider, metricsProvider := localRedisDependencies(t)
+	manager, cleanup, err := NewManager(
+		logger,
+		configManager,
+		tracingProvider,
+		metricsProvider,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+
+	next := proto.CloneOf(initial)
+	next.Connections["cache"].Addr = proto.String("127.0.0.1:6381")
+	source.Update(t, next)
+	if updated := receiveRedisConfig(t, updates); updated.GetConnections()["cache"].GetAddr() != "127.0.0.1:6381" {
+		t.Fatalf("config manager update = %#v", updated)
+	}
+
+	cacheClient, err := manager.Connection("cache")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cacheClient.Options().Addr != "127.0.0.1:6380" {
+		t.Fatalf(
+			"restart-only manager used updated address %q, want startup address",
+			cacheClient.Options().Addr,
+		)
+	}
+}
+
+func TestNewPreservesConfigLoadFailureWithoutReturningResources(t *testing.T) {
+	cause := errors.New("redis config source failed")
+	logger, tracingProvider, metricsProvider := localRedisDependencies(t)
+
+	manager, cleanup, err := NewManager(
+		logger,
+		loadErrorConfigManager{Manager: testconfig.Empty(t), key: "redis", err: cause},
+		tracingProvider,
+		metricsProvider,
+	)
+	if !errors.Is(err, cause) {
+		t.Fatalf("New error = %v, want config source cause", err)
+	}
+	if manager != nil || cleanup != nil {
+		t.Fatalf(
+			"New returned resources after config load failure: manager=%v cleanupPresent=%t",
+			manager,
+			cleanup != nil,
+		)
+	}
+}
+
+func TestNewInstallsEnabledTelemetryWithoutDialing(t *testing.T) {
+	config := validRedisConfig()
+	config.Tracing.Disable = proto.Bool(false)
+	config.Metrics.Disable = proto.Bool(false)
+	configManager := testconfig.New(t, "redis", config)
+	logger, _, metricsProvider := localRedisDependencies(t)
+	tracingProvider := localTracingProvider{
+		provider: noop.NewTracerProvider(),
+		disabled: false,
+	}
+
+	manager, cleanup, err := NewManager(
+		logger,
+		configManager,
+		tracingProvider,
+		metricsProvider,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
+	if manager.Default() != nil {
+		t.Fatal("cleanup left instrumented default client visible")
+	}
+}
+
+func TestNewCleanupToleratesClientAlreadyClosedByCaller(t *testing.T) {
+	configManager := testconfig.New(t, "redis", validRedisConfig())
+	logger, tracingProvider, metricsProvider := localRedisDependencies(t)
+	manager, cleanup, err := NewManager(
+		logger,
+		configManager,
+		tracingProvider,
+		metricsProvider,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Default().Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup()
+	cleanup()
+	if manager.Default() != nil {
+		t.Fatal("cleanup with a preclosed client left the manager open")
+	}
+	if _, err := manager.Connection("default"); !errors.Is(err, ErrManagerClosed) {
+		t.Fatalf("Connection after cleanup error = %v, want ErrManagerClosed", err)
+	}
+}
+
+func receiveRedisConfig(
+	t testing.TB,
+	updates <-chan *config_pb.Redis,
+) *config_pb.Redis {
+	t.Helper()
+	select {
+	case value := <-updates:
+		return value
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Redis config update")
+		return nil
+	}
+}
+
+func assertRedisClientClosed(t testing.TB, client interface {
+	Ping(context.Context) *goredis.StatusCmd
+}) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err == nil || !strings.Contains(err.Error(), "closed") {
+		t.Fatalf("managed Redis client remained usable after cleanup: %v", err)
 	}
 }

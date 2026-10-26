@@ -14,8 +14,12 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func TestHTTPDialRetryBoundsAndCancellation(t *testing.T) {
@@ -210,4 +214,143 @@ func TestHTTPTransportPreservesExplicitIdleLimits(t *testing.T) {
 	if base.MaxIdleConnsPerHost != 7 {
 		t.Fatal("source transport modified")
 	}
+}
+
+// 旧连接断开后，第二个 POST 在建连阶段恢复，业务请求只发送一次。
+func TestHTTPClientReconnectsWithoutReplayingRequest(t *testing.T) {
+	var requests, dials atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Connection", "close")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(server.Close)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		attempt := dials.Add(1)
+		if attempt == 2 || attempt == 3 {
+			return nil, &net.OpError{Op: "dial", Net: network, Err: syscall.ECONNREFUSED}
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, address)
+	}
+	previous := http.DefaultTransport
+	http.DefaultTransport = transport
+	t.Cleanup(func() { http.DefaultTransport = previous; transport.CloseIdleConnections() })
+	protocol := config_pb.Protocol_HTTP
+	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
+		Protocol: &protocol, Target: server.URL,
+	}, nil, observability.Defaults{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = result.close() })
+	for request := range 2 {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL, nil)
+		if err != nil {
+			cancel()
+			t.Fatal(err)
+		}
+		resp, err := result.httpClient.Do(req)
+		if err != nil {
+			cancel()
+			t.Fatalf("request %d: %v", request, err)
+		}
+		_, readErr := io.Copy(io.Discard, resp.Body)
+		closeErr := resp.Body.Close()
+		cancel()
+		if readErr != nil || closeErr != nil {
+			t.Fatalf("read/close: %v / %v", readErr, closeErr)
+		}
+		server.CloseClientConnections()
+	}
+	if requests.Load() != 2 || dials.Load() != 4 {
+		t.Fatalf("requests=%d dials=%d, want 2 requests over 4 dial attempts", requests.Load(), dials.Load())
+	}
+}
+
+func TestHTTPDoesNotReplayAfterServerReceivesRequest(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(server.Close)
+	protocol := config_pb.Protocol_HTTP
+	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("orders", &config_pb.ClientOption{
+		Protocol: &protocol, Target: server.URL,
+	}, nil, observability.Defaults{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = result.close() })
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := result.httpClient.Do(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if !errors.Is(err, io.EOF) || requests.Load() != 1 {
+		t.Fatalf("error=%v requests=%d, want EOF after one request", err, requests.Load())
+	}
+}
+
+func TestGRPCClientSurvivesServerRestart(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	start := func(listener net.Listener) *grpc.Server {
+		server := grpc.NewServer()
+		healthpb.RegisterHealthServer(server, health.NewServer())
+		go func() { _ = server.Serve(listener) }()
+		t.Cleanup(server.Stop)
+		return server
+	}
+	first := start(listener)
+	result, err := newTestRealBuilder(t, nil).build(context.Background(), newClientSpec("health", &config_pb.ClientOption{
+		Target: "passthrough:///" + address,
+	}, nil, observability.Defaults{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = result.close() })
+	client := healthpb.NewHealthClient(result.grpcClient)
+	check := func() {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		response, err := client.Check(ctx, &healthpb.HealthCheckRequest{}, grpc.WaitForReady(true))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.GetStatus() != healthpb.HealthCheckResponse_SERVING {
+			t.Fatalf("health = %v", response)
+		}
+	}
+	check()
+	first.Stop()
+	offlineCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	_, err = client.Check(offlineCtx, &healthpb.HealthCheckRequest{})
+	cancel()
+	if err == nil {
+		t.Fatal("RPC unexpectedly succeeded while server was stopped")
+	}
+	listener, err = net.Listen("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start(listener)
+	// 同一个已借出的 ClientConn 恢复；调用方不重建 Factory 或业务客户端。
+	check()
 }

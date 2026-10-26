@@ -2,6 +2,7 @@ package password_test
 
 import (
 	"encoding/base64"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -201,4 +202,39 @@ func assertPHCFieldLength(t testing.TB, encoded string, field, want int) {
 	if len(decoded) != want {
 		t.Fatalf("PHC field %d length = %d, want %d", field, len(decoded), want)
 	}
+}
+
+func BenchmarkHashPasswordDefault(b *testing.B) {
+	secret := []byte("correct horse battery staple")
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var encoded string
+	for i := 0; i < b.N; i++ {
+		var err error
+		encoded, err = password.HashPassword(secret)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	runtime.KeepAlive(encoded)
+}
+
+func BenchmarkVerifyPasswordDefault(b *testing.B) {
+	secret := []byte("correct horse battery staple")
+	encoded, err := password.HashPassword(secret)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	var matched bool
+	for i := 0; i < b.N; i++ {
+		matched, err = password.VerifyPassword(secret, encoded)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	runtime.KeepAlive(matched)
 }
