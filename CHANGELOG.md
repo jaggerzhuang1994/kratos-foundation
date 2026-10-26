@@ -2,6 +2,31 @@
 
 本文件记录面向调用方的版本变化。版本是否已经发布以 Git tag 和对应提交为准；“计划中”内容不能作为已发布能力依赖。
 
+## 计划中
+
+本节尚未发布。包含不兼容变更，升级前逐项确认“升级风险”。
+
+### 升级风险
+
+- **应用类型由 `*kratos.App` 改为 `*app.App`**：App 自行实现 Run/Stop 生命周期，不再包装 `kratos.App`。`bootstrap.NewKratosApp` 更名为 `bootstrap.NewApp`；业务 injector 的返回类型改为 `*app.App` 后重新执行 `wire`，`main` 中的 `app.Run()` 不变。`*app.App` 实现 `kratos.AppInfo`，`kratos.FromContext` 仍可读取身份。
+- **生产环境不再返回错误堆栈**：HTTP 响应 metadata 与 gRPC `ErrorInfo` 中的 `err_stack` 仅在 `env.ExposeDiagnostics()` 为 true 时携带（local/dev/test 始终、pre 需 `APP_DEBUG=true`、prod 一律不带）。依赖跨服务远端堆栈排障的 prod 场景需改用服务端日志。见 [诊断出口环境约束](pkg/errors/README.md#诊断出口环境约束)。
+- **配置热更新日志事件更名**：`config.watch` / `config.change`（每个订阅一条 INFO）改为每轮一条 INFO `config.snapshot.changed`（字段 `changed`，点分路径）及逐订阅 DEBUG `config.subscription.replayed` / `config.subscription.notified`；`config.loaded` 去掉冗余的 `source_count`。依赖旧事件名或 `changed_paths` 的告警与看板需同步调整。
+
+### Added
+
+- `env.ExposeDiagnostics()` 统一判断是否允许向调用方返回内部诊断，非法环境值按拒绝处理且不 panic。
+- `server.middleware.updated` 增加 `changed` 字段，列出实际替换的中间件。
+
+### Changed
+
+- 系统信号与父 Context 取消从 `Run` 开始即转为统一停止，启动阶段收到 SIGTERM 也会执行停止钩子与启动前回滚。Runtime 的真实故障全部按发生顺序汇总返回（根因在前）。
+- `app.StopPolicy` 在订阅通知时即时校验并记录 `app.stop_policy.updated`（新增 `previous`）/ `app.stop_policy.rejected`，解码失败也记为后者；不再输出 `version`。
+- `config.NewHotReloadValue` 改为先加载初值再登记订阅，依赖 Manager 下一轮回放覆盖期间的更新。
+- `database.WithSQLTxOptions(nil)` 表示驱动默认选项，嵌套事务可接受；`Transaction` 不再为 nil 回调或 nil 选项返回错误（编程错误直接 panic）。
+- 日志热路径：caller 按调用地址缓存帧解析结果，字段过滤、module 归一化、格式化、去空与去重合并为一遍处理，输出内容不变；启用级别下单条日志开销约降低 6 倍。
+- Client：已构建版本的 `AcquireClient` / release 走无锁分片计数快速路径，16 并发下约 6 倍吞吐，租约与退役语义不变。
+- HTTP 监听、Queue Worker、Kafka ConsumerRuntime 与错误树判断改为共享的精简实现，外部行为不变。
+
 ## v2.4.1
 
 ### Added
