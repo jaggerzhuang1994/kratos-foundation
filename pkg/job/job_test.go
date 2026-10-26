@@ -65,7 +65,7 @@ func TestManagedJobRecoversEntireExecutionChain(t *testing.T) {
 				}
 			}
 			// 外围中间件和它的 defer 均由同一个最外层 recovery 捕获。
-			gate := newExecutionGate(testModuleLog(t), "test", cronConfig{policy: DelayIfRunning, pending: 0}, nil)
+			gate := newExecutionGate(testModuleLog(t), "test", cronConfig{policy: DelayIfRunning, pending: 0}, nil, disabledAdmissionMetrics)
 			task := newManagedJob("test", TaskFunc(func(context.Context) error { return nil }), []Middleware{gate.middleware, panicMiddleware})
 			var reported error
 			trigger := cronJob{ctx: context.Background(), name: "test", job: task.job, errorHandler: func(_ context.Context, _ string, err error) { reported = err }}

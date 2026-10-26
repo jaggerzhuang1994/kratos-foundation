@@ -135,7 +135,7 @@ func newManager(
 	cron cronScheduler,
 	parser scheduleParserContract,
 	configuration *config_pb.Job,
-	optionalAdmissionMetrics ...jobAdmissionMetrics,
+	admissionMetrics jobAdmissionMetrics,
 ) (*Manager, error) {
 	if options.ErrorHandler == nil {
 		options.ErrorHandler = func(ctx context.Context, name string, err error) {
@@ -149,10 +149,6 @@ func newManager(
 		options:      options,
 		cron:         cron,
 		done:         make(chan struct{}),
-	}
-	admissionMetrics := jobAdmissionMetrics(&jobMetricsProvider{disabled: true})
-	if len(optionalAdmissionMetrics) > 0 && optionalAdmissionMetrics[0] != nil {
-		admissionMetrics = optionalAdmissionMetrics[0]
 	}
 
 	baseMiddlewares := append(middlewareChain(nil), middlewares...)

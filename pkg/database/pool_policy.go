@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"sync"
 
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
@@ -81,8 +80,8 @@ func subscribeConnectionPools(
 	if err != nil {
 		return nil, err
 	}
-	var once sync.Once
-	return func() { once.Do(cancel) }, nil
+	// Manager 的取消函数本身幂等。
+	return cancel, nil
 }
 
 // applyConnectionPools 把最新的连接池参数写入已经建立的连接，返回实际更新的数量。

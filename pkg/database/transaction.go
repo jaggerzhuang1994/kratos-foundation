@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -15,51 +14,33 @@ type TransactionManager interface {
 }
 
 type txOptions struct {
-	// sqlOptions 本次事务的 SQL 选项副本；仅外层事务可显式设置，嵌套事务会拒绝。
+	// sqlOptions 本次事务的 SQL 选项；nil 使用驱动默认值，仅外层事务可显式设置，嵌套事务会拒绝。
 	sqlOptions *sql.TxOptions
-	// sqlOptionsSet 区分未传选项与显式传入 nil，后者会被拒绝。
-	sqlOptionsSet bool
 }
 
 // TransactionOption 配置单次事务调用。
 type TransactionOption func(o *txOptions)
 
-// WithSQLTxOptions 指定底层 database/sql 事务选项；重复指定时以后一次为准。
+// WithSQLTxOptions 指定底层 database/sql 事务选项；重复指定时以后一次为准，nil 表示使用驱动默认值。
 func WithSQLTxOptions(opts *sql.TxOptions) TransactionOption {
-	if opts == nil {
-		return func(o *txOptions) {
-			o.sqlOptionsSet = true
-			o.sqlOptions = nil
-		}
+	// 在创建 Option 时取值副本，避免调用方之后改动指针改变已组装的选项。
+	var captured *sql.TxOptions
+	if opts != nil {
+		copied := *opts
+		captured = &copied
 	}
-	// 在创建 Option 时就取值副本，避免调用方之后改动指针改变已组装的选项。
-	captured := *opts
-	return func(o *txOptions) {
-		o.sqlOptionsSet = true
-		copied := captured
-		o.sqlOptions = &copied
-	}
+	return func(o *txOptions) { o.sqlOptions = captured }
 }
 
 // Transaction 在事务中执行 fc；使用回调 Context 的 Connection 会复用当前
 // Manager 最内层的事务。事务 Context 仅在回调期间有效，不应逃逸到回调外。
 func (mgr *manager) Transaction(ctx context.Context, fc func(context.Context) error, opts ...TransactionOption) error {
-	if fc == nil {
-		return errors.New("database transaction callback is nil")
-	}
 	opt := &txOptions{}
-	for index, fn := range opts {
-		if fn == nil {
-			return fmt.Errorf("database transaction option %d is nil", index)
-		}
-		fn(opt)
+	for _, apply := range opts {
+		apply(opt)
 	}
-	if opt.sqlOptionsSet && opt.sqlOptions == nil {
-		return errors.New("database SQL transaction options are nil")
-	}
-
 	_, nested := getTx(ctx, mgr)
-	if nested && opt.sqlOptionsSet {
+	if nested && opt.sqlOptions != nil {
 		// GORM 用 savepoint 实现嵌套事务，database/sql 选项不会被应用。
 		// 显式拒绝可避免调用方误以为隔离级别已生效。
 		return errors.New("database SQL transaction options cannot be applied to a nested transaction")

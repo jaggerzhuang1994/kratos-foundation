@@ -47,11 +47,7 @@ type executionGate struct {
 	metrics jobAdmissionMetrics
 }
 
-func newExecutionGate(log moduleLog, name string, config cronConfig, overflow func(context.Context, DelayOverflow) error, optionalMetrics ...jobAdmissionMetrics) *executionGate {
-	metrics := jobAdmissionMetrics(&jobMetricsProvider{disabled: true})
-	if len(optionalMetrics) > 0 && optionalMetrics[0] != nil {
-		metrics = optionalMetrics[0]
-	}
+func newExecutionGate(log moduleLog, name string, config cronConfig, overflow func(context.Context, DelayOverflow) error, metrics jobAdmissionMetrics) *executionGate {
 	return &executionGate{disabled: config.disabled, policy: config.policy, limit: config.pending, changed: make(chan struct{}), name: name, log: log, overflow: overflow, metrics: metrics}
 }
 

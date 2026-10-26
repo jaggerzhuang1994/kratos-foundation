@@ -21,7 +21,7 @@ func TestNewManagerClassifiesAndSchedulesJobs(t *testing.T) {
 	spec := NewSpec().RegisterCron("cron", "@hourly", TaskFunc(func(context.Context) error { return nil })).RegisterOnce("once", TaskFunc(func(context.Context) error { return nil })).RegisterDaemon("daemon", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
 	parser := &testParser{schedule: testSchedule{next: time.Now().Add(time.Hour)}}
 	scheduler := &testScheduler{}
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, parser, nil)
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, parser, nil, disabledAdmissionMetrics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestManagerExitWhenDoneRequestsApplicationStopAndClosesDone(t *testing.T) {
 			spec := NewSpec().Option(WithErrorHandler(func(context.Context, string, error) {
 				t.Error("result consumed by Start was also sent to ErrorHandler")
 			})).RegisterOnce("migrate", TaskFunc(func(context.Context) error { run++; return tt.result })).ExitWhenDone().(*Spec)
-			manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}}, nil)
+			manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{schedule: testSchedule{}}, nil, disabledAdmissionMetrics)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +91,7 @@ func TestManagerDaemonFailureStopsApplication(t *testing.T) {
 		}
 		observed = err
 	}))
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil)
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil, disabledAdmissionMetrics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestManagerDaemonFailureStopsApplication(t *testing.T) {
 
 func TestManagerStartRejectsDuplicateStart(t *testing.T) {
 	spec := NewSpec().RegisterDaemon("wait", TaskFunc(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() })).(*Spec)
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil)
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil, disabledAdmissionMetrics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +141,7 @@ func TestManagerParentCancellationBeforeStartClosesRuntime(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -170,6 +171,7 @@ func TestManagerStopUnblocksStart(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -205,6 +207,7 @@ func TestManagerParentCancellationStopsRunningDaemon(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +249,7 @@ func TestManagerParentCancellationStopsOneShotWait(t *testing.T) {
 				<-release
 				return tt.result(ctx)
 			})).ExitWhenDone().(*Spec)
-			manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil)
+			manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), &testScheduler{}, &testParser{}, nil, disabledAdmissionMetrics)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -297,6 +300,7 @@ func TestManagerStopBeforeStartPreventsLaterLaunch(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -322,6 +326,7 @@ func TestManagerStartJobsRefusesWorkAfterShutdownBegins(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -350,6 +355,7 @@ func TestManagerStopHonorsContextWhileUncooperativeTaskFinishes(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -394,6 +400,7 @@ func TestManagerReportsOnceFailuresWithoutStoppingApplication(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -425,6 +432,7 @@ func TestManagerDefaultErrorHandlerLogsOnceFailure(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -469,6 +477,7 @@ func TestManagerTreatsUnexpectedSuccessfulDaemonExitAsFailure(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -494,9 +503,10 @@ func TestNewManagerReturnsCronParseFailureWithoutStartingScheduler(t *testing.T)
 		scheduler,
 		&testParser{err: wantErr},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if manager != nil || !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "report") {
-		t.Fatalf("newManager() = (%v, %v)", manager, err)
+		t.Fatalf("newManager(, disabledAdmissionMetrics) = (%v, %v)", manager, err)
 	}
 	if calls, starts, stops := scheduler.snapshot(); len(calls) != 0 || starts != 0 || stops != 0 {
 		t.Fatalf("scheduler changed after parse failure: calls=%v starts=%d stops=%d", calls, starts, stops)
@@ -513,6 +523,7 @@ func TestManagerWithNoJobsStartsAndStopsCleanly(t *testing.T) {
 		&testScheduler{},
 		&testParser{},
 		nil,
+		disabledAdmissionMetrics,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -528,6 +539,9 @@ func TestManagerWithNoJobsStartsAndStopsCleanly(t *testing.T) {
 }
 
 const runtimeTestWait = 5 * time.Second
+
+// disabledAdmissionMetrics 是不记录准入指标的测试依赖，与关闭指标时的生产实现一致。
+var disabledAdmissionMetrics jobAdmissionMetrics = &jobMetricsProvider{disabled: true}
 
 func testModuleLog(t *testing.T) moduleLog {
 	t.Helper()

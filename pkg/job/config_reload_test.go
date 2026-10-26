@@ -22,7 +22,7 @@ func TestConfigReloadIsAtomicAndDoesNotRepeatImmediateRun(t *testing.T) {
 	spec.RegisterCron("first", "@hourly", defaultsTask{})
 	spec.RegisterCron("second", "@daily", defaultsTask{})
 	scheduler := &testScheduler{}
-	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, newScheduleParser(testModuleLog(t)), nil)
+	manager, err := newManager(testModuleLog(t), nil, spec, newManagerOptions(spec), scheduler, newScheduleParser(testModuleLog(t)), nil, disabledAdmissionMetrics)
 	if err != nil {
 		t.Fatal(err)
 	}

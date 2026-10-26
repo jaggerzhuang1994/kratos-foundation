@@ -58,7 +58,7 @@ flowchart TD
     F --> L
 ```
 
-`Transaction` 使用 GORM 事务：顶层回调成功时提交，返回错误或 panic 时回滚。默认情况下，嵌套事务使用 GORM savepoint，内层失败只回滚到该保存点。若所选连接的有效 `gorm.disable_nested_transaction` 为 `true`，内层直接复用外层事务，不建立保存点，也不独立回滚；外层若捕获内层错误后返回 `nil`，内层已执行的写入也会提交。需要整体回滚时，应把错误继续返回给顶层回调。显式 SQL 选项始终不能用于嵌套事务。连接选择或事务失败由调用层处理，底层不重复记录错误。
+`Transaction` 使用 GORM 事务：顶层回调成功时提交，返回错误或 panic 时回滚。默认情况下，嵌套事务使用 GORM savepoint，内层失败只回滚到该保存点。若所选连接的有效 `gorm.disable_nested_transaction` 为 `true`，内层直接复用外层事务，不建立保存点，也不独立回滚；外层若捕获内层错误后返回 `nil`，内层已执行的写入也会提交。需要整体回滚时，应把错误继续返回给顶层回调。显式 SQL 选项始终不能用于嵌套事务；`WithSQLTxOptions(nil)` 表示使用驱动默认选项，不视为显式设置。回调与选项须非 nil，属于调用方保证的编程约束。连接选择或事务失败由调用层处理，底层不重复记录错误。
 
 ```mermaid
 flowchart TD

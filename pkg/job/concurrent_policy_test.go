@@ -307,7 +307,7 @@ func TestDelayOverflowHandlerThroughManager(t *testing.T) {
 func TestPolicyReloadPreservesRunningAndPendingCalls(t *testing.T) {
 	log := testModuleLog(t)
 	synctest.Test(t, func(t *testing.T) {
-		gate := newExecutionGate(log, "reload", cronConfig{policy: AllowOverlap, pending: 2}, nil)
+		gate := newExecutionGate(log, "reload", cronConfig{policy: AllowOverlap, pending: 2}, nil, disabledAdmissionMetrics)
 		release := make(chan struct{})
 		var runs atomic.Int32
 		run := gate.middleware(func(context.Context) error { runs.Add(1); <-release; return nil })
@@ -367,7 +367,7 @@ func TestPolicyReloadPreservesRunningAndPendingCalls(t *testing.T) {
 }
 
 func TestGateReleasesExecutionAfterPanic(t *testing.T) {
-	gate := newExecutionGate(testModuleLog(t), "panic", cronConfig{policy: DelayIfRunning, pending: 0}, nil)
+	gate := newExecutionGate(testModuleLog(t), "panic", cronConfig{policy: DelayIfRunning, pending: 0}, nil, disabledAdmissionMetrics)
 	calls := 0
 	run := gate.middleware(func(context.Context) error {
 		calls++

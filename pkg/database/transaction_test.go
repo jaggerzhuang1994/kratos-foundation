@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,9 +51,6 @@ func TestTransactionCommitsRollsBackAndRejectsInvalidNestedOptions(t *testing.T)
 		t.Fatal(err)
 	}
 	mgr := &manager{db: db}
-	if err := mgr.Transaction(context.Background(), nil); err == nil {
-		t.Fatal("nil callback accepted")
-	}
 	if err := mgr.Transaction(context.Background(), func(ctx context.Context) error {
 		if _, ok := getTx(ctx, mgr); !ok {
 			t.Fatal("transaction missing from context")
@@ -75,8 +73,12 @@ func TestTransactionCommitsRollsBackAndRejectsInvalidNestedOptions(t *testing.T)
 		t.Fatalf("count=%d err=%v", count, err)
 	}
 	nested := useTx(context.Background(), mgr, db)
-	if err := mgr.Transaction(nested, func(context.Context) error { return nil }, WithSQLTxOptions(nil)); err == nil {
-		t.Fatal("nil SQL options accepted")
+	// nil 表示驱动默认选项，嵌套事务可以接受；显式选项仍被拒绝。
+	if err := mgr.Transaction(nested, func(context.Context) error { return nil }, WithSQLTxOptions(nil)); err != nil {
+		t.Fatalf("default SQL options rejected in nested transaction: %v", err)
+	}
+	if err := mgr.Transaction(nested, func(context.Context) error { return nil }, WithSQLTxOptions(&sql.TxOptions{ReadOnly: true})); err == nil {
+		t.Fatal("explicit SQL options accepted in nested transaction")
 	}
 }
 

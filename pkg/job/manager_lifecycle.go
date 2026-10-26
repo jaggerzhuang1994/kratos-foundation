@@ -161,7 +161,6 @@ func (m *Manager) startOnceJobs(ctx context.Context) <-chan error {
 	var mu sync.Mutex
 	var errs []error
 	for _, managed := range m.onceJobs {
-		managed := managed
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
@@ -201,7 +200,6 @@ func (m *Manager) startOnceJobs(ctx context.Context) <-chan error {
 func (m *Manager) startDaemonJobs(ctx context.Context) <-chan error {
 	errorsCh := make(chan error, max(1, len(m.daemonJobs)))
 	for _, managed := range m.daemonJobs {
-		managed := managed
 		go func() {
 			defer m.workers.Done()
 			jobCtx := withJobName(ctx, managed.name)
