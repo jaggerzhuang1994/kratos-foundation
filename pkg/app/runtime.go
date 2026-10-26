@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // Run 按以下顺序执行一次完整生命周期并返回汇总结果：
@@ -106,7 +108,7 @@ func (a *App) startRuntimes() *sync.WaitGroup {
 	var starts sync.WaitGroup
 	for _, runtime := range a.runtimes {
 		starts.Go(func() {
-			err := runtime.Start(a.base)
+			err := a.guard("start", func() error { return runtime.Start(a.base) })
 			// ErrStopRequested 按精确值识别，包装或合并了它的错误仍视为故障。
 			switch err {
 			case nil:
@@ -141,7 +143,7 @@ func (a *App) shutdown(starts *sync.WaitGroup, bounded bool) error {
 		stops.Go(func() {
 			ctx, cancel := a.budgetContext(timeout)
 			defer cancel()
-			if err := runtime.Stop(ctx); err != nil && !errtree.Only(err, context.Canceled) {
+			if err := a.guard("stop", func() error { return runtime.Stop(ctx) }); err != nil && !errtree.Only(err, context.Canceled) {
 				a.recordFailure(err)
 			}
 		})
@@ -181,7 +183,7 @@ func (a *App) abortStartup(cause error) error {
 		if runtime, ok := a.runtimes[index].(startupAborter); ok {
 			aborted++
 			// 一个回滚失败或预算耗尽后仍继续回滚其余资源。
-			errs = append(errs, runtime.AbortStartup(ctx))
+			errs = append(errs, a.guard("abort", func() error { return runtime.AbortStartup(ctx) }))
 		}
 	}
 	err := errors.Join(errs...)
@@ -218,4 +220,17 @@ func (a *App) budgetContext(timeout time.Duration) (context.Context, context.Can
 		return context.WithTimeout(a.base, timeout)
 	}
 	return context.WithCancel(a.base)
+}
+
+// guard 把 Runtime 回调中的 panic 转为错误并记录 ERROR，使应用按真实故障统一停机，
+// 而不是跳过停止钩子与服务注销直接崩溃。错误与日志只带 panic 类型，堆栈仅在 Debug 下输出。
+func (a *App) guard(phase string, call func() error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			a.logEvent(a.base, kratoslog.LevelError, "app.runtime.panicked", "runtime panic recovered",
+				"phase", phase, "panic_type", fmt.Sprintf("%T", recovered), "stack", foundationlog.DebugOnly(string(debug.Stack())))
+			err = fmt.Errorf("runtime %s panicked with %T", phase, recovered)
+		}
+	}()
+	return call()
 }

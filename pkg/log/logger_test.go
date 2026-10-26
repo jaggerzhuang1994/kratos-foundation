@@ -188,10 +188,9 @@ func TestDerivedLoggerAppliesContextModulePolicyAndFilters(t *testing.T) {
 	base.timeFormat = "2006"
 	base.msgKey = "message"
 	ctx := WithKv(context.Background(), "request.id", "r1")
-	contextCopy := kvFromCtx(ctx)
-	contextCopy[1] = "mutated"
-	if kvFromCtx(ctx)[1] != "r1" {
-		t.Fatal("kvFromCtx returned aliased state")
+	// 父 Context 的字段在派生后保持不变；Logger 只读取、不修改 Context 字段。
+	if child := WithKv(ctx, "extra", "x"); kvFromContext(ctx)[1] != "r1" || len(kvFromContext(ctx)) != 2 || len(kvFromContext(child)) != 4 {
+		t.Fatal("WithKv mutated parent context fields")
 	}
 	derived := (&logger{shared: shared, config: base}).WithModule("orders")
 	if err := shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: []string{"global.secret"}, Modules: []ModulePolicy{{Module: "orders", Level: proto.String("debug"), FilterKeys: []string{"module.secret"}}}}); err != nil {
@@ -303,10 +302,8 @@ func TestPublicLoggerAppliesContextModulesAndRuntimeUpdate(t *testing.T) {
 
 	ctx := WithKv(context.Background(), "request.id", "r1")
 	ctx = WithKv(ctx, "tenant", "acme")
-	contextFields := kvFromCtx(ctx)
-	contextFields[1] = "mutated"
-	if got := kvFromCtx(ctx); len(got) != 4 || got[1] != "r1" || got[3] != "acme" {
-		t.Fatalf("context fields were not appended and copied: %#v", got)
+	if got := kvFromContext(ctx); len(got) != 4 || got[1] != "r1" || got[3] != "acme" {
+		t.Fatalf("context fields were not appended: %#v", got)
 	}
 	rootLogger.(*logger).config.level = kratoslog.LevelDebug
 	rootLogger.(*logger).config.filterEmpty = true
@@ -1256,4 +1253,55 @@ func TestFrameworkLogConventions(t *testing.T) {
 	if checked < 100 {
 		t.Fatalf("checked only %d log calls; scanner no longer matches the logging style", checked)
 	}
+}
+
+// 请求级 WithContext 复用父缓存：缓存不含 Context 字段，输出仍带当次 Context 字段，策略更新后按版本重建。
+func TestWithContextReusesCacheAndKeepsContextFields(t *testing.T) {
+	shared := &sharedState{}
+	shared.custom.Store(&customState{})
+	var lines [][]any
+	root := &logger{shared: shared, config: &configState{msgKey: defaultMsgKey, output: &outputLogger{preparedOutput: &preparedOutput{output: loggerFunc(func(_ kratoslog.Level, kv ...any) error {
+		lines = append(lines, append([]any(nil), kv...))
+		return nil
+	})}}}}
+	base := root.WithModule("orders").With("component", "api").(*logger)
+	base.Info("warm")
+	cached := base.cache.Load()
+	for _, id := range []string{"r1", "r2"} {
+		derived := base.WithContext(WithKv(context.Background(), "request.id", id)).(*logger)
+		if derived.cache.Load() != cached {
+			t.Fatal("request-scoped logger rebuilt the cache")
+		}
+		derived.Infow("msg", "handled")
+		if got := fmt.Sprint(lines[len(lines)-1]); !strings.Contains(got, "request.id "+id) || !strings.Contains(got, "component api") || !strings.Contains(got, "module orders") {
+			t.Fatalf("request log = %s", got)
+		}
+	}
+	// 策略更新后版本变化，派生 Logger 重建缓存且仍附加 Context 字段与新过滤规则。
+	if err := shared.applyRuntimeConfig(&RuntimeConfig{FilterKeys: []string{"component"}}); err != nil {
+		t.Fatal(err)
+	}
+	derived := base.WithContext(WithKv(context.Background(), "request.id", "r3"))
+	derived.Infow("msg", "after update")
+	if got := fmt.Sprint(lines[len(lines)-1]); !strings.Contains(got, "request.id r3") || strings.Contains(got, "component") {
+		t.Fatalf("log after policy update = %s", got)
+	}
+}
+
+// BenchmarkRequestScopedLogger 覆盖每个请求派生一次 WithContext 的典型用法。
+func BenchmarkRequestScopedLogger(b *testing.B) {
+	b.Setenv(EnvStdDisable, "true")
+	instance, cleanup, err := NewLogger()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer cleanup()
+	base := instance.WithModule("server")
+	ctx := WithKv(context.Background(), "request.id", "r1")
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			base.WithContext(ctx).Infow("event", "server.request.completed", "code", 200, "msg", "request completed")
+		}
+	})
 }

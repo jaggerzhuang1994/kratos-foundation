@@ -89,7 +89,7 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 				operation = info.Operation()
 				kind = info.Kind().String()
 			}
-			logger.WithContext(ctx).With(
+			logger.WithContext(ctx).Infow(
 				// 事件名带 server/client 前缀，与各领域事件一样可按前缀归类。
 				"event", component+".request.completed",
 				"transport", kind, // grpc/http，与错误边界日志的字段名一致
@@ -97,7 +97,8 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 				"code", foundationerrors.Code(foundationerrors.Normalize(err)),
 				"reason", foundationerrors.Reason(err),
 				"duration", time.Since(started),
-			).Info("request completed")
+				"msg", "request completed",
+			)
 			return reply, err
 		}
 	}

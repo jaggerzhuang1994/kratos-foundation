@@ -6,16 +6,19 @@ import (
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // GRPCServer 是 Foundation service 使用的 Kratos gRPC Server。
 type GRPCServer = *grpc.Server
 
 // newGRPCServer 在启动期完成服务注册，避免运行后才暴露不完整服务。
+// 未配置 custom_health 且业务未注册健康服务时，注册与 HTTP 探针共享就绪状态的健康服务。
 func newGRPCServer(
 	config componentConfig,
 	opts grpcServerOptions,
 	spec *Spec,
+	health *healthState,
 ) (GRPCServer, error) {
 	// 显式配置优先；省略开关时仅有效的业务服务注册触发默认启用。
 	conf := config.GetGrpc()
@@ -23,11 +26,16 @@ func newGRPCServer(
 		return nil, nil
 	}
 
-	srv := grpc.NewServer(opts...)
+	// Kratos 内置健康服务在 Start 后即报 SERVING，与应用就绪脱钩；一律关闭，由 Foundation 或业务（custom_health）提供。
+	srv := grpc.NewServer(append(append(grpcServerOptions(nil), opts...), grpc.CustomHealth())...)
 	for _, service := range spec.grpc.services {
 		if err := service(srv); err != nil {
 			return nil, fmt.Errorf("register gRPC service: %w", err)
 		}
+	}
+	// 配置 custom_health 或业务已自行注册健康服务（例如经原生 CustomHealth option）时交由业务处理。
+	if _, registered := srv.GetServiceInfo()[healthpb.Health_ServiceDesc.ServiceName]; !conf.GetCustomHealth() && !registered {
+		healthpb.RegisterHealthServer(srv, &grpcHealth{state: health, services: srv.GetServiceInfo})
 	}
 	return srv, nil
 }
@@ -56,9 +64,6 @@ func newGRPCServerOptions(
 		}))
 	}
 	opts = append(opts, grpc.Timeout(0))
-	if conf.GetCustomHealth() {
-		opts = append(opts, grpc.CustomHealth())
-	}
 	if conf.GetDisableReflection() {
 		opts = append(opts, grpc.DisableReflection())
 	}

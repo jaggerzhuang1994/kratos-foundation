@@ -10,6 +10,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // AppInfoBootstrap 标记 appinfo 的组装贡献已完成。
@@ -82,10 +83,25 @@ func NewTracingBootstrap() (TracingBootstrap, error) {
 // MetricsBootstrap 标记 metrics 的组装贡献已完成。
 type MetricsBootstrap struct{}
 
-// NewMetricsBootstrap 将已有组件接入应用组装，不启动运行时。
-func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics) MetricsBootstrap {
+// NewMetricsBootstrap 把 Meter 注入应用 Context，并注册 app_ready 就绪指标，不启动运行时。
+// app_ready 与 /readyz、gRPC 健康检查读取同一就绪状态：1 表示已就绪，0 表示启动中、停机中或启动失败；
+// 没有 HTTP 探针的队列消费者、自定义常驻进程与一次性任务同样可据此告警。
+func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics) (MetricsBootstrap, error) {
 	spec.AddContext(func(ctx context.Context) context.Context {
 		return metrics.WithMetrics(ctx, meter)
 	})
-	return MetricsBootstrap{}
+	_, err := meter.Int64ObservableGauge("app_ready",
+		metric.WithDescription("Whether the application is ready to serve: 1 ready, 0 starting, stopping or failed."),
+		metric.WithInt64Callback(func(_ context.Context, observer metric.Int64Observer) error {
+			ready := int64(0)
+			if spec.Ready() {
+				ready = 1
+			}
+			observer.Observe(ready)
+			return nil
+		}))
+	if err != nil {
+		return MetricsBootstrap{}, fmt.Errorf("register app_ready metric: %w", err)
+	}
+	return MetricsBootstrap{}, nil
 }

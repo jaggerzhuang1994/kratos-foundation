@@ -149,6 +149,8 @@ func (l *logger) WithModule(module string) Logger {
 func (l *logger) WithContext(ctx context.Context) Logger {
 	next := l.clone()
 	next.ctx = ctx
+	// 缓存不依赖 Context，请求级派生直接复用父缓存，避免每个请求重建；版本失效规则不变。
+	next.cache.Store(l.cache.Load())
 	return next
 }
 
@@ -220,8 +222,14 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	fields := make([]any, len(cache.fields), len(cache.fields)+len(keyvals)+1)
+	var contextFields []any
+	if l.ctx != nil {
+		contextFields = kvFromContext(l.ctx)
+	}
+	fields := make([]any, len(cache.fields), len(cache.fields)+len(contextFields)+len(keyvals)+1)
 	copy(fields, cache.fields)
+	// Context 字段排在实例字段之后，与此前合并顺序一致，并同样展开其中的 Valuer。
+	fields = appendNonModuleFields(fields, contextFields)
 	for i := 1; i < len(fields); i += 2 {
 		switch value := fields[i].(type) {
 		case levelValue:

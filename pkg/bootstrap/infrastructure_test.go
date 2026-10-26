@@ -1,6 +1,9 @@
 package bootstrap_test
 
 import (
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
 	"context"
 	"fmt"
 	"io"
@@ -8,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -15,13 +19,14 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
-	"go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type bootstrapAppInfo struct {
@@ -589,15 +594,75 @@ func integrationLogConfig(path string) testlog.Config {
 	}
 }
 
-func TestBootstrapAllowsRepeatedMetricsContextContributions(t *testing.T) {
+// app_ready 跟随应用就绪：构造后为 0，启动后钩子完成后为 1，停止请求后立即回到 0。
+func TestMetricsBootstrapReportsApplicationReadiness(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
 	spec := app.NewSpec()
-	meter := noop.NewMeterProvider().Meter("test")
-	got := bootstrap.NewMetricsBootstrap(spec, meter)
-	if got != (bootstrap.MetricsBootstrap{}) {
-		t.Fatalf("bootstrap = %#v, want zero value", got)
+	spec.RegisterAppInfo(appinfo.New("ready-metric"))
+	spec.RegisterLogger(kratoslog.NewStdLogger(io.Discard))
+	spec.AddSignals(syscall.SIGUSR2)
+	if _, err := bootstrap.NewMetricsBootstrap(spec, provider.Meter("test")); err != nil {
+		t.Fatal(err)
 	}
-	got = bootstrap.NewMetricsBootstrap(spec, meter)
-	if got != (bootstrap.MetricsBootstrap{}) {
-		t.Fatalf("bootstrap = %#v, want zero value", got)
+	readyValue := func() int64 {
+		t.Helper()
+		var collected metricdata.ResourceMetrics
+		if err := reader.Collect(context.Background(), &collected); err != nil {
+			t.Fatal(err)
+		}
+		for _, scope := range collected.ScopeMetrics {
+			for _, item := range scope.Metrics {
+				if gauge, ok := item.Data.(metricdata.Gauge[int64]); ok && item.Name == "app_ready" && len(gauge.DataPoints) == 1 {
+					return gauge.DataPoints[0].Value
+				}
+			}
+		}
+		t.Fatal("app_ready not reported")
+		return -1
+	}
+	if got := readyValue(); got != 0 {
+		t.Fatalf("app_ready before run = %d", got)
+	}
+	release := make(chan struct{})
+	spec.RegisterRuntime(blockingTestRuntime{release: release})
+	config := &config_pb.App{RegistrarTimeout: durationpb.New(time.Second), StopTimeout: durationpb.New(time.Second)}
+	manager := testconfig.New(t, "app", config)
+	policy, cleanup, err := app.NewStopPolicy(config, manager, kratoslog.NewStdLogger(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	application, err := app.NewApp(context.Background(), spec, config, policy, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- application.Run() }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !spec.Ready() {
+		if time.Now().After(deadline) {
+			t.Fatal("application never became ready")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if got := readyValue(); got != 1 {
+		t.Fatalf("app_ready while running = %d", got)
+	}
+	if err := application.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if got := readyValue(); got != 0 {
+		t.Fatalf("app_ready after Stop = %d", got)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
+
+type blockingTestRuntime struct{ release <-chan struct{} }
+
+func (r blockingTestRuntime) Start(context.Context) error { <-r.release; return nil }
+func (blockingTestRuntime) Stop(context.Context) error    { return nil }

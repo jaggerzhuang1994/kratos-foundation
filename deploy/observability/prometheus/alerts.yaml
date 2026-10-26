@@ -9,6 +9,22 @@ groups:
         annotations:
           summary: "应用指标采集失败"
           runbook: "deploy/observability/docs/troubleshooting.md#foundationtargetdown"
+      - alert: FoundationAppNotReady
+        expr: max by (env, cluster, namespace, app, pod) (app_ready{foundation="true"}) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用实例持续未就绪（启动未完成、依赖不可用或停机卡住）"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationappnotready"
+      - alert: FoundationAppUnavailable
+        expr: max by (env, cluster, namespace, app) (app_ready{foundation="true"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "应用全部实例未就绪，服务不可用"
+          runbook: "deploy/observability/docs/troubleshooting.md#foundationappnotready"
       - alert: FoundationHighServerErrorRate
         expr: |
           (

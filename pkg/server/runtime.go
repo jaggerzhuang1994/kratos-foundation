@@ -98,7 +98,7 @@ func NewRuntime(
 		return fail(err)
 	}
 	grpcOptions := newGRPCServerOptions(config, middlewares, spec)
-	grpcServer, err := newGRPCServer(config, grpcOptions, spec)
+	grpcServer, err := newGRPCServer(config, grpcOptions, spec, health)
 	if err != nil {
 		return fail(err)
 	}

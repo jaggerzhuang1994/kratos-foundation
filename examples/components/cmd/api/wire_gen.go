@@ -102,7 +102,16 @@ func initialize(path configPath, version2 string) (*app.App, func(), error) {
 		return nil, nil, err
 	}
 	v2 := metrics.NewMetrics(provider, appInfo)
-	metricsBootstrap := bootstrap.NewMetricsBootstrap(spec, v2)
+	metricsBootstrap, err := bootstrap.NewMetricsBootstrap(spec, v2)
+	if err != nil {
+		cleanup6()
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	infrastructureBootstrap := bootstrap.NewInfrastructureBootstrap(appInfoBootstrap, logBootstrap, tracingBootstrap, metricsBootstrap)
 	tracingProvider, cleanup7, err := tracing.NewProvider(manager, appInfo)
 	if err != nil {

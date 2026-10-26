@@ -127,7 +127,7 @@ flowchart TD
 | `NewAppInfoBootstrap(spec, info)` | `AppInfoBootstrap` | 登记身份并设置日志服务字段 |
 | `NewLogBootstrap(spec, manager, logger)` | `LogBootstrap` | 订阅 log 配置、登记 Logger，安装全局 Logger；cleanup 取消订阅并恢复绑定 |
 | `NewTracingBootstrap()` | `TracingBootstrap` | 设置日志中的 trace/span 动态字段 |
-| `NewMetricsBootstrap(spec, meter)` | `MetricsBootstrap` | 将默认 Meter 注入 App Context |
+| `NewMetricsBootstrap(spec, meter)` | `MetricsBootstrap, error` | 将默认 Meter 注入 App Context，并注册 `app_ready` 就绪指标（1 就绪，0 启动中、停机中或启动失败） |
 | `NewServerBootstrap(application, servers, manager, logger, metrics, tracing, boot)` | `ServerBootstrap` | 按统一 Spec 构造和登记服务器，返回 cleanup |
 | `NewJobBootstrap(application, jobs, configManager, logger, metrics, tracing, boot)` | `JobBootstrap` | 按统一 Spec 构造、登记任务管理器并适配任务完成结果 |
 

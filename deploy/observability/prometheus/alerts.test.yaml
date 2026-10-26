@@ -2,6 +2,53 @@ rule_files:
   - alerts.yaml
 evaluation_interval: 1m
 tests:
+  - name: 单实例持续未就绪告警，其他实例就绪时整体不告警
+    interval: 1m
+    input_series:
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-1"}
+        values: "0x10"
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-2"}
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationAppNotReady
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: FoundationAppNotReady
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: worker
+              pod: worker-1
+              severity: warning
+            exp_annotations:
+              summary: 应用实例持续未就绪（启动未完成、依赖不可用或停机卡住）
+              runbook: deploy/observability/docs/troubleshooting.md#foundationappnotready
+      - eval_time: 6m
+        alertname: FoundationAppUnavailable
+        exp_alerts: []
+  - name: 全部实例未就绪触发服务不可用
+    interval: 1m
+    input_series:
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-1"}
+        values: "0x10"
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod="worker-2"}
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FoundationAppUnavailable
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: worker
+              severity: critical
+            exp_annotations:
+              summary: 应用全部实例未就绪，服务不可用
+              runbook: deploy/observability/docs/troubleshooting.md#foundationappnotready
   - name: 持续高错误率只影响 prod orders，不混合 env
     interval: 1m
     input_series:

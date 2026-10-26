@@ -40,6 +40,10 @@ K8s 使用 `kubectl -n <namespace> get pods -o wide`、`describe pod <pod>` 和 
 
 若整个目标消失，up 序列会消失而非始终保持 0。转查 Deployment 期望/可用副本、采集选择器、发布过程，以及已有平台缺失目标告警。
 
+## FoundationAppNotReady
+
+`app_ready` 与 HTTP `/readyz`、gRPC 健康检查读取同一应用就绪状态，因此对没有 HTTP 探针的队列消费者、gRPC 服务和自定义常驻进程同样有效。值为 0 说明实例尚未完成启动后钩子、已经进入停机，或启动失败后仍在退出。先按 pod 查看 `app.ready`、`app.stopping`、`app.stopped` 日志：长时间没有 `app.ready` 时检查启动钩子与依赖连接；有 `app.stopping` 但没有 `app.stopped` 时检查哪个 Runtime 不响应 Stop。`/readyz` 返回 503 而 `app_ready=1` 时，是 readiness 依赖检查失败，查看 `server.readiness.changed` 的 check 与 reason。FoundationAppUnavailable 表示全部实例未就绪，可在 Alertmanager 中用它抑制同 app 的 FoundationAppNotReady。
+
 ## FoundationHighServerErrorRate
 
 先确认流量和 5xx 是否集中在某个 operation/Pod。按 App 和实例对照最近发布、配置和外部依赖错误。通过相同时间窗口、应用日志中的 trace ID 查询已接入的链路后端。模板禁用 trace 导出，因此本地演示没有可查询的链路存储。

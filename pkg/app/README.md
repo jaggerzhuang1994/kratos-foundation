@@ -311,6 +311,10 @@ Context，使用支持取消的数据库/网络 API，为连接和读写配置�
 
 应用通过 `spec.Configuration` 声明额外来源，由 `bootstrap.NewConfigManager` 构造默认包含官方 env source 的配置源链，使用 `registry.NewFactory` 管理具名注册与发现实例，由 `bootstrap.BaseProviderSet` 完成组装。注册与发现仅提供驱动入口。详见[驱动组装与迁移](../registry/README.md)。
 
+## Runtime panic 防护
+
+App 对 Runtime 的 `Start`、`Stop` 与 `AbortStartup` 统一恢复 panic：记录 ERROR `app.runtime.panicked`（字段 phase、panic_type，堆栈仅在 Debug 下输出），并把它转为真实故障走统一停机，仍执行 BeforeStop、服务注销和其余 Runtime 的 Stop，Run 返回 `runtime <phase> panicked with <type>`。错误与日志只带 panic 的类型而不带取值，避免泄漏请求或凭据内容。启动与停止钩子运行在 Run 所在 goroutine，panic 仍向调用方传播。
+
 ## 应用日志
 
 `NewApp` 完成、`Run` 解析 Endpoint 和执行 BeforeStart 之前记录 INFO `app.assembled`。字段为 service.id/name/version、env、hostname、pid、executable、go_version、runtimes、service_registration，`msg=application assembled`；生命周期事件（assembled/ready/stopping/stopped/startup.aborted）均带固定 msg，便于在混合日志中直接阅读；env 优先使用最终 App metadata，否则读取 env.AppEnv，hostname 缺失时不推测。executable 只保留 argv[0] 的 basename，不展开 argv、任意 metadata 或配置内容。日志使用本应用登记的 Logger；输出级别和过滤仍由日志策略决定，不保证被过滤的字段可见。

@@ -3,12 +3,16 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
 )
 
 type testServer struct {
@@ -292,5 +296,96 @@ func TestRunHandlesSignalDuringStartup(t *testing.T) {
 	}
 	if rollback.starts != 0 || rollback.aborts != 1 || beforeStops != 1 || spec.Ready() {
 		t.Fatalf("starts=%d aborts=%d beforeStops=%d ready=%v", rollback.starts, rollback.aborts, beforeStops, spec.Ready())
+	}
+}
+
+type panickingRuntime struct {
+	release     <-chan struct{}
+	startPanics bool
+	stopPanics  bool
+}
+
+func (r *panickingRuntime) Start(context.Context) error {
+	<-r.release
+	if r.startPanics {
+		panic("secret-panic-value")
+	}
+	return nil
+}
+
+func (r *panickingRuntime) Stop(context.Context) error {
+	if r.stopPanics {
+		panic("secret-stop-value")
+	}
+	return nil
+}
+
+// Runtime panic 转为真实故障：执行停止前钩子与注销、停止其他 Runtime，Run 返回错误而不是进程崩溃。
+func TestRunRecoversRuntimePanicsAndStopsGracefully(t *testing.T) {
+	initializeRuntimeSignals(t)
+	for _, test := range []struct {
+		name       string
+		start      bool
+		stop       bool
+		wantPhases []string
+	}{
+		{name: "start panic", start: true, wantPhases: []string{"start"}},
+		{name: "stop panic", stop: true, wantPhases: []string{"stop"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				logger, events := captureAppEvents()
+				spec := NewSpec()
+				spec.RegisterAppInfo(applicationTestInfo())
+				spec.RegisterLogger(logger)
+				spec.AddSignals(syscall.SIGUSR2)
+				release := make(chan struct{})
+				spec.RegisterRuntime(&panickingRuntime{release: release, startPanics: test.start, stopPanics: test.stop})
+				healthy := newApplicationRuntime()
+				spec.RegisterRuntime(healthy)
+				beforeStops := 0
+				spec.BeforeStop(func(context.Context) error { beforeStops++; return nil })
+				registrar := new(registrarCallFake)
+				application, err := NewApp(context.Background(), spec, applicationTestConfig(), newStaticStopPolicy(time.Second), registrar)
+				if err != nil {
+					t.Fatal(err)
+				}
+				result := make(chan error, 1)
+				go func() { result <- application.Run() }()
+				synctest.Wait()
+				if test.stop {
+					close(release)
+					synctest.Wait()
+					if err := application.Stop(); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					close(release)
+				}
+				err = <-result
+				if err == nil || !strings.Contains(err.Error(), "panicked with string") || strings.Contains(err.Error(), "secret") {
+					t.Fatalf("Run = %v", err)
+				}
+				if _, deregistered := registrar.calls(); deregistered != 1 || beforeStops != 1 {
+					t.Fatalf("deregister=%d beforeStop=%d", deregistered, beforeStops)
+				}
+				if starts, stops := healthy.counts(); starts != 1 || stops != 1 {
+					t.Fatalf("healthy runtime = %d/%d", starts, stops)
+				}
+				var phases []string
+				for len(events) > 0 {
+					event := <-events
+					if event["event"] == "app.runtime.panicked" {
+						if event["level"] != kratoslog.LevelError || strings.Contains(fmt.Sprint(event), "secret") {
+							t.Fatalf("panic event = %v", event)
+						}
+						phases = append(phases, event["phase"].(string))
+					}
+				}
+				if !reflect.DeepEqual(phases, test.wantPhases) {
+					t.Fatalf("panic phases = %v, want %v", phases, test.wantPhases)
+				}
+			})
+		})
 	}
 }

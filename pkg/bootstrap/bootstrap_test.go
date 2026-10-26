@@ -86,8 +86,8 @@ func TestContributionsRejectFrozenSpec(t *testing.T) {
 			return err
 		}},
 		{"metrics", func(spec *app.Spec) error {
-			bootstrap.NewMetricsBootstrap(spec, noop.NewMeterProvider().Meter("test"))
-			return nil
+			_, err := bootstrap.NewMetricsBootstrap(spec, noop.NewMeterProvider().Meter("test"))
+			return err
 		}},
 	}
 	for _, tt := range cases {

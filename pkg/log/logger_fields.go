@@ -15,7 +15,7 @@ type loggerCache struct {
 	customVersion uint64
 	// msgKey 消息正文的字段名。
 	msgKey string
-	// fields 已合并的预置及上下文字段；保留原始值和 Valuer，不是已格式化文本。
+	// fields 已合并的预置、共享与实例字段；不含 Context 字段，保留原始值和 Valuer，不是已格式化文本。
 	fields []any
 	// filter 当前版本预编译的字段过滤规则。
 	filter keyFilter
@@ -36,7 +36,7 @@ func (l *logger) currentCache(custom *customState) *loggerCache {
 	return cache
 }
 
-// buildCache 按共享快照合并预置字段、共享字段、实例字段与上下文字段，并编译过滤规则。
+// buildCache 按共享快照合并预置字段、共享字段与实例字段，并编译过滤规则。
 func (l *logger) buildCache(custom *customState) *loggerCache {
 	config := l.config
 	filterKeys := make([]string, 0, len(config.filterKeys)+len(custom.filterKeys)+len(l.filterKeys))
@@ -62,9 +62,7 @@ func (l *logger) buildCache(custom *customState) *loggerCache {
 	}
 	kvs = appendNonModuleFields(kvs, custom.kv)
 	kvs = append(kvs, l.kv...)
-	if l.ctx != nil {
-		kvs = appendNonModuleFields(kvs, kvFromCtx(l.ctx))
-	}
+	// Context 字段在每次写入时追加，不进入缓存，使 WithContext 派生的请求级 Logger 能复用父缓存。
 	cache := &loggerCache{
 		customVersion: custom.version,
 		fields:        kvs,

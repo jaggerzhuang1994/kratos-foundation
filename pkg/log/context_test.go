@@ -12,7 +12,7 @@ func TestDebugContextPreservesParentAndFields(t *testing.T) {
 	if request.IsDebug(parent) || !request.IsDebug(child) {
 		t.Fatal("debug context leaked or missing")
 	}
-	if kvFromCtx(child)[1] != "one" {
+	if kvFromContext(child)[1] != "one" {
 		t.Fatal("debug lost request fields")
 	}
 }

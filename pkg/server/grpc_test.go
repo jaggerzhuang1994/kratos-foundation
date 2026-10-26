@@ -212,7 +212,7 @@ func TestGRPCNullConfigUsesServiceRegistration(t *testing.T) {
 		if registered {
 			spec.GRPC().Register(func(GRPCServer) error { return nil })
 		}
-		srv, err := newGRPCServer(&config_pb.Server{}, nil, spec)
+		srv, err := newGRPCServer(&config_pb.Server{}, nil, spec, newHealthState(healthConfig{}))
 		if err != nil || (srv != nil) != registered {
 			t.Fatalf("registered=%t server=%v err=%v", registered, srv, err)
 		}

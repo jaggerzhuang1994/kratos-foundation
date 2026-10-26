@@ -7,6 +7,8 @@
 | 告警 | 条件 | 持续时间 | 处理入口 |
 | --- | --- | --- | --- |
 | FoundationTargetDown | 已发现应用目标 up=0 | 2m | 抓取端口、进程、网络、Targets 错误 |
+| FoundationAppNotReady | 单个实例 `app_ready=0` | 5m | 启动钩子、依赖检查、停机是否卡住 |
+| FoundationAppUnavailable（critical） | 同一 App 全部实例 `app_ready=0` | 2m | 服务整体不可用，优先处理 |
 | FoundationHighServerErrorRate | App 5xx >5%，5m 请求至少 100 | 5m | 发布变更、错误分布、依赖 |
 | FoundationHighLatency | App P95 >500ms，5m 请求至少 100 | 10m | 慢接口、资源、外部调用 |
 | FoundationNodeCPUHigh | 应用所在机器 CPU >90% | 15m | 机器进程分布、竞争 |

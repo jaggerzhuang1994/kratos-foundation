@@ -13,7 +13,7 @@
 
 服务总览先展示 RED（速率、错误、耗时）和已发现应用 Pod 的就绪情况，再定位异常端点、采集失败与 Pod 关联缺失。容器与节点页优先显示采集条件及异常对象，资源详情折叠展示。组件页将使用量/容量、平均/P95/P99 等相关指标并列，减少重复图；共享页展示库存、位点差和真实探测结果。
 
-前三页支持 Pod、Node、Instance（Pod IP）、Container 四种视图；应用指标按命名空间和应用隔离，切换 Node 视图仍保留应用身份。资源区不按 app 猜测 Kubernetes 对象归属：整机图只受节点筛选，Deployment 表只受命名空间和 Deployment 筛选。共享页使用自己的 env/cluster、逻辑队列、Kafka 集群/消费组/真实 Topic、探测应用筛选，不套用 Pod/Node 视图。导航保留时间和同名筛选。完整口径见 [面板说明](docs/dashboard.md)。
+前三页支持 Pod、Node、Instance（Pod IP）、Container 四种视图；应用指标按命名空间和应用隔离，切换 Node 视图仍保留应用身份。资源区不按 app 猜测 Kubernetes 对象归属：整机图只受节点筛选，Deployment 表只受命名空间和 Deployment 筛选。共享页使用自己的 env/cluster、逻辑队列、Kafka 集群/消费组/真实 Topic、探测应用筛选，不套用 Pod/Node 视图。导航保留时间和同名筛选。完整口径见 [面板说明](docs/dashboard.md)。整套项目共用本框架时的面板分层、各类负载的观测重点与告警分级见 [多项目监控与告警规划](docs/fleet-monitoring.md)。
 
 ## ACK 接入
 
