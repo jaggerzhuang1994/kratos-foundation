@@ -64,7 +64,7 @@ flowchart LR
  B -- 冻结后登记等契约违规 --> P([panic 编程错误])
  J -- 冻结后登记等契约违规 --> P
  G --> E[NewApplicationBootstrap 返回 StartupReady]
- E --> F([NewKratosApp 构造应用])
+ E --> F([bootstrap.NewApp 构造应用])
 ```
 
 手工调用 `server.NewRuntime` 时，调用方负责 `SetReadinessSource`，将 `Servers()` 中的非 nil 业务 Runtime 和 `ManagementServers()` 登记到应用 Spec；冻结后登记会 panic；Runtime 的 Start/Stop 由 App 监督，构造 cleanup 由调用方在应用停止后释放。
@@ -84,7 +84,7 @@ spec.HTTP().Listener(listener).Register(registerHTTP)
 
 SDK Endpoint 自身解析失败、后续 Endpoint 失败或 BeforeStart 失败时，应用通过可选 `AbortStartup(ctx)` 逆序回滚已准备的监听，再执行 AfterStop；回滚绕过 stop_delay，原始错误和回收错误均保留。正常 Stop 先执行原有 HTTP Shutdown 排空，再确保监听释放；TLS 等 Serve 前置失败也会关闭监听。此保证针对 Foundation 管理的 HTTP，原生或自定义 Runtime 的资源由其自身生命周期契约负责。
 
-每个监听的互斥锁只保护创建状态、监听发布和关闭状态；绑定、Accept、底层 Close 及回调在锁外执行。并发准备共享同一次结果；回收开始后先标记关闭并取消未完成的绑定，准备调用方负责回收未发布的监听。Start 准备与回收等待支持传入 Context 取消；Kratos 的 Endpoint 接口不接收 Context，自动端点准备使用 Background，父 Context 取消须待该查询返回后进入启动前回滚。`net.Listener.Close` 没有 Context 参数，业务提供的阻塞 Close 无法被强制中断。请求处理不获取这些状态锁。provider cleanup 无法返回错误时，仅一次记录 `ERROR server.listener.cleanup.failed`；其他错误交由调用方处理。
+每个监听用一把互斥锁串行化准备、发布与关闭：首次准备在锁内执行 Listen（本地 bind 不阻塞，地址解析受调用方 Context 约束），成功或失败结果被共享且失败不重试；Accept 只在锁内读取状态，阻塞的底层 Accept 在锁外执行。关闭先取消进行中的 Listen 再加锁，因此不会被地址解析长时间阻塞；被关闭打断的准备返回 `net.ErrClosed`，Start 据此正常退出而非报告启动故障。关闭在锁内释放调用方转交或已绑定的底层 Listener，重复关闭共享第一次的结果；`net.Listener.Close` 没有 Context 参数，业务提供的阻塞 Close 无法被强制中断。Kratos 的 Endpoint 接口不接收 Context，自动端点准备使用 Background。请求处理不获取这些状态锁。provider cleanup 无法返回错误时，仅一次记录 `ERROR server.listener.cleanup.failed`；其他错误交由调用方处理。
 
 ```mermaid
 flowchart TD

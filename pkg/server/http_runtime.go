@@ -41,7 +41,7 @@ func (s *httpRuntime) prepare(ctx context.Context) error {
 		s.endpoint, s.prepareErr = s.HTTPServer.Endpoint()
 		if s.prepareErr != nil {
 			// SDK 地址解析失败时尚未进入 Serve，必须由监听所有者立即回滚。
-			s.prepareErr = errors.Join(s.prepareErr, s.listener.close(context.WithoutCancel(ctx)))
+			s.prepareErr = errors.Join(s.prepareErr, s.listener.Close())
 		}
 	})
 	return s.prepareErr
@@ -59,7 +59,7 @@ func (s *httpRuntime) Endpoint() (*url.URL, error) {
 // Start 把已准备的监听交给 Kratos Serve；任何启动返回路径都回收监听。
 func (s *httpRuntime) Start(ctx context.Context) (err error) {
 	// 调用方监听在构造时已转交所有权，准备阶段因取消退出时也需要释放。
-	defer func() { err = errors.Join(err, s.listener.close(context.WithoutCancel(ctx))) }()
+	defer func() { err = errors.Join(err, s.listener.Close()) }()
 	if err = s.prepare(ctx); err != nil {
 		// Stop 先于 Start 时没有业务故障，不重新打开已关闭的运行时。
 		if err == net.ErrClosed {
@@ -73,10 +73,10 @@ func (s *httpRuntime) Start(ctx context.Context) (err error) {
 // Stop 先保留 SDK 排空行为，再回收尚未进入 Serve 的监听。
 func (s *httpRuntime) Stop(ctx context.Context) error {
 	err := s.HTTPServer.Stop(ctx)
-	return errors.Join(err, s.listener.close(ctx))
+	return errors.Join(err, s.listener.Close())
 }
 
 // AbortStartup 仅供应用在服务器尚未启动时回滚，不等待 stop_delay 或调用业务回调。
-func (s *httpRuntime) AbortStartup(ctx context.Context) error {
-	return s.listener.close(ctx)
+func (s *httpRuntime) AbortStartup(context.Context) error {
+	return s.listener.Close()
 }

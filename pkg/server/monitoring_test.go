@@ -192,8 +192,8 @@ func TestManagementBindFailureIsReturned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime := &Runtime{management: extras, health: configuredHealth(config, NewSpec())}
-	if err := runtime.ManagementServers()[0].Start(context.Background()); err == nil || !errors.Is(err, syscall.EADDRINUSE) {
+	management := &managementRuntime{Server: withStopLifecycle(extras[0], 0, nil, configuredHealth(config, NewSpec()))}
+	if err := management.Start(context.Background()); err == nil || !errors.Is(err, syscall.EADDRINUSE) {
 		t.Fatalf("bind error=%v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -21,14 +22,16 @@ import (
 type Runtime struct {
 	// health 业务和管理端口共享的健康状态。
 	health *healthState
-	// management 独立管理 HTTP 服务，由应用统一启停。
-	management []*httpRuntime
 	// http 业务 HTTP 服务；禁用时为 nil。
 	http *httpRuntime
 	// grpc 业务 gRPC 服务；禁用时为 nil。
 	grpc GRPCServer
-	// websockets 跟踪 WebSocket 连接并协调停机的连接集合。
-	websockets *websocketHub
+	// management 独立管理 HTTP 服务，由应用统一启停。
+	management []*httpRuntime
+	// httpServer、grpcServer 是附加停机策略后的业务服务；禁用的协议为 nil。
+	httpServer, grpcServer transport.Server
+	// managementServers 是附加停机策略、且不暴露 Endpointer 的独立管理监听。
+	managementServers []transport.Server
 	// stopDelay 撤销就绪状态后等待流量退出的时长。
 	stopDelay time.Duration
 }
@@ -125,14 +128,18 @@ func NewRuntime(
 	}
 	logger.With("event", "server.assembled", "http", httpAddress, "grpc", grpcAddress,
 		"management", managementAddresses, "stop_delay", config.GetStopDelay().AsDuration()).Info("assembled servers")
-	return &Runtime{
-			health:     health,
-			management: management,
-			http:       httpServer,
-			grpc:       grpcServer,
-			websockets: websockets,
-			stopDelay:  config.GetStopDelay().AsDuration(),
-		}, sync.OnceFunc(func() {
+	stopDelay := config.GetStopDelay().AsDuration()
+	runtime := &Runtime{health: health, http: httpServer, grpc: grpcServer, management: management, stopDelay: stopDelay}
+	if httpServer != nil {
+		runtime.httpServer = withStopLifecycle(httpServer, stopDelay, websockets.stop, health)
+	}
+	if grpcServer != nil {
+		runtime.grpcServer = withStopLifecycle(grpcServer, stopDelay, nil, nil)
+	}
+	for _, srv := range management {
+		runtime.managementServers = append(runtime.managementServers, &managementRuntime{Server: withStopLifecycle(srv, stopDelay, nil, health)})
+	}
+	return runtime, sync.OnceFunc(func() {
 			health.stopped.Store(true)
 			if err := closeListeners(); err != nil {
 				logger.With("event", "server.listener.cleanup.failed", "transport", "http", "management_listeners", len(management), "error", err).Error("failed to release HTTP listeners")
@@ -205,21 +212,9 @@ func (r *Runtime) StopDelay() time.Duration {
 	return r.stopDelay
 }
 
-// Servers 返回已经附加停机策略的 HTTP 和 gRPC Server；禁用的协议对应 nil。
+// Servers 返回已经附加停机策略的 HTTP 和 gRPC Server；禁用的协议对应 nil，重复调用返回同一实例。
 func (r *Runtime) Servers() (transport.Server, transport.Server) {
-	var stopWebSockets func(context.Context) error
-	if r.websockets != nil {
-		stopWebSockets = r.websockets.stop
-	}
-	var httpRuntime transport.Server
-	if r.http != nil {
-		httpRuntime = withStopLifecycle(r.http, r.stopDelay, stopWebSockets, r.health)
-	}
-	var grpcRuntime transport.Server
-	if r.grpc != nil {
-		grpcRuntime = withStopLifecycle(r.grpc, r.stopDelay, nil, nil)
-	}
-	return httpRuntime, grpcRuntime
+	return r.httpServer, r.grpcServer
 }
 
 // withStopLifecycle 仅在需要停机前置动作或延迟时包装 Server，并保留 Endpointer 能力。
@@ -229,9 +224,6 @@ func withStopLifecycle(
 	beforeStop func(context.Context) error,
 	health *healthState,
 ) transport.Server {
-	if server == nil {
-		return nil
-	}
 	if delay <= 0 && beforeStop == nil && health == nil {
 		return server
 	}
@@ -303,13 +295,9 @@ func (s *stopRuntime) AbortStartup(ctx context.Context) error {
 }
 
 // ManagementServers 返回独立监控监听的运行时；不实现 Endpointer，避免注册成业务发现地址。
-// 使用 NewServerBootstrap 时内部自动登记；手工组装须与 Servers 返回值一起登记。
+// 使用 NewServerBootstrap 时内部自动登记；手工组装须与 Servers 返回值一起登记。重复调用返回同一实例。
 func (r *Runtime) ManagementServers() []transport.Server {
-	result := make([]transport.Server, 0, len(r.management))
-	for _, srv := range r.management {
-		result = append(result, &managementRuntime{Server: withStopLifecycle(srv, r.stopDelay, nil, r.health)})
-	}
-	return result
+	return slices.Clone(r.managementServers)
 }
 
 // managementRuntime 仅公开启停能力，阻止管理端口进入服务注册的 endpoint 列表。

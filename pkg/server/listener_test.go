@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"sync/atomic"
 	"testing"
-	"testing/synctest"
 	"time"
 )
 
@@ -128,36 +126,27 @@ func TestManagedListenerPrepareFailure(t *testing.T) {
 	}
 }
 
-func TestManagedListenerConcurrentClose(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		failure := errors.New("close listener failed")
-		entered, release := make(chan struct{}), make(chan struct{})
-		unblock := sync.OnceFunc(func() { close(release) })
-		t.Cleanup(unblock)
-		stub := &managedListenerStub{close: func() error { close(entered); <-release; return failure }}
-		listener := newManagedListener("tcp", "127.0.0.1:0", stub)
-		first, second := make(chan error, 1), make(chan error, 1)
-		go func() { first <- listener.Close() }()
-		<-entered
-		go func() { second <- listener.Close() }()
-		synctest.Wait()
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		if err := listener.close(ctx); err != context.Canceled {
-			t.Fatalf("canceled close wait = %v", err)
-		}
-		if _, err := listener.Accept(); err != net.ErrClosed {
-			t.Fatalf("Accept during close = %v", err)
-		}
-		unblock()
-		if <-first != failure || <-second != failure || listener.close(ctx) != failure {
-			t.Fatal("concurrent or repeated close did not share final error")
-		}
-		if stub.closeCalls.Load() != 1 {
-			t.Fatal("underlying listener closed more than once")
-		}
-	})
-	failure := errors.New("release listener failed")
+func TestManagedListenerCloseSharesResult(t *testing.T) {
+	// 第二次 Close 阻塞在互斥锁上（synctest 不视其为持久阻塞），因此这里用真实 goroutine 协调。
+	failure := errors.New("close listener failed")
+	entered, release := make(chan struct{}), make(chan struct{})
+	stub := &managedListenerStub{close: func() error { close(entered); <-release; return failure }}
+	listener := newManagedListener("tcp", "127.0.0.1:0", stub)
+	first, second := make(chan error, 1), make(chan error, 1)
+	go func() { first <- listener.Close() }()
+	<-entered
+	go func() { second <- listener.Close() }()
+	close(release)
+	if <-first != failure || <-second != failure || listener.Close() != failure {
+		t.Fatal("concurrent or repeated close did not share final error")
+	}
+	if _, err := listener.Accept(); err != net.ErrClosed {
+		t.Fatalf("Accept after close = %v", err)
+	}
+	if stub.closeCalls.Load() != 1 {
+		t.Fatal("underlying listener closed more than once")
+	}
+	failure = errors.New("release listener failed")
 	joinedFailure := errors.Join(net.ErrClosed, failure)
 	for _, test := range []struct {
 		name string
@@ -183,106 +172,30 @@ func TestManagedListenerConcurrentClose(t *testing.T) {
 	}
 }
 
-func TestManagedListenerCloseDuringPreparation(t *testing.T) {
-	for _, failed := range []bool{false, true} {
-		name := "unpublished listener"
-		if failed {
-			name = "failed listen"
-		}
-		t.Run(name, func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) {
-				listener := newManagedListener("tcp", "127.0.0.1:0", nil)
-				openingCtx, cancel := context.WithCancel(context.Background())
-				t.Cleanup(cancel)
-				opening := &listenerOpening{done: make(chan struct{}), cancel: cancel}
-				// 在生产发布边界构造正在 Listen 的状态，不为测试引入监听 factory。
-				listener.opening = opening
-				prepareResult, closeResult := make(chan error, 1), make(chan error, 1)
-				go func() { prepareResult <- listener.prepare(context.Background()) }()
-				synctest.Wait()
-				waitCtx, waitCancel := context.WithCancel(context.Background())
-				waitResult := make(chan error, 1)
-				go func() { waitResult <- listener.prepare(waitCtx) }()
-				synctest.Wait()
-				waitCancel()
-				if err := <-waitResult; err != context.Canceled {
-					t.Fatalf("canceled prepare waiter = %v", err)
-				}
-				if openingCtx.Err() != nil {
-					t.Fatal("prepare waiter canceled shared Listen")
-				}
-				go func() { closeResult <- listener.Close() }()
-				<-openingCtx.Done()
-				synctest.Wait()
-				var created net.Listener
-				var prepareErr, closeErr error
-				var stub *managedListenerStub
-				if failed {
-					prepareErr = context.Canceled
-				} else {
-					closeErr = errors.New("unpublished close failed")
-					stub = &managedListenerStub{close: func() error { return closeErr }}
-					created = stub
-				}
-				if err := listener.finishOpening(opening, created, prepareErr); err != net.ErrClosed {
-					t.Fatalf("closed opening result = %v", err)
-				}
-				prepared, closed := <-prepareResult, <-closeResult
-				if prepared != net.ErrClosed || !errors.Is(closed, closeErr) || listener.Close() != closed {
-					t.Fatalf("preparation and close results were not shared: prepare=%v close=%v", prepared, closed)
-				}
-				if stub != nil && stub.closeCalls.Load() != 1 {
-					t.Fatal("unpublished listener was not closed once")
-				}
-				if _, ok := listener.Addr().(*net.TCPAddr); ok {
-					t.Fatal("closing preparation published a listener")
-				}
-			})
-		})
-	}
-}
-
-func TestManagedListenerPreparationRollbackAfterBudget(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
+// 准备与关闭并发时，准备要么成功并由关闭回收，要么被关闭打断返回 net.ErrClosed；不能遗漏端口。
+func TestManagedListenerConcurrentPrepareAndClose(t *testing.T) {
+	for range 200 {
 		listener := newManagedListener("tcp", "127.0.0.1:0", nil)
-		openingCtx, cancel := context.WithCancel(context.Background())
-		t.Cleanup(cancel)
-		opening := &listenerOpening{done: make(chan struct{}), cancel: cancel}
-		listener.opening = opening
-		ctx, stop := context.WithTimeout(context.Background(), time.Second)
-		defer stop()
-		if err := listener.close(ctx); err != context.DeadlineExceeded {
-			t.Fatalf("close budget result = %v", err)
+		prepared, closed := make(chan error, 1), make(chan error, 1)
+		go func() { prepared <- listener.prepare(context.Background()) }()
+		go func() { closed <- listener.Close() }()
+		if err := <-closed; err != nil {
+			t.Fatalf("Close = %v", err)
 		}
-		if openingCtx.Err() != context.Canceled {
-			t.Fatal("close did not cancel pending Listen")
+		if err := <-prepared; err != nil && err != net.ErrClosed {
+			t.Fatalf("prepare = %v, want nil or net.ErrClosed", err)
 		}
-		stub := &managedListenerStub{}
-		if err := listener.finishOpening(opening, stub, nil); err != net.ErrClosed {
-			t.Fatalf("late prepare result = %v", err)
+		if err := listener.prepare(context.Background()); err != net.ErrClosed {
+			t.Fatalf("prepare after close = %v", err)
 		}
-		if err := listener.Close(); err != nil || stub.closeCalls.Load() != 1 {
-			t.Fatalf("late cleanup = %v, closes=%d", err, stub.closeCalls.Load())
+		listener.mu.Lock()
+		bound := listener.listener
+		listener.mu.Unlock()
+		if bound != nil {
+			if _, err := bound.Accept(); !errors.Is(err, net.ErrClosed) {
+				t.Fatalf("bound listener left open: %v", err)
+			}
 		}
-	})
-}
-
-func TestManagedListenerRejectsCanceledListenResult(t *testing.T) {
-	listener := newManagedListener("tcp", "127.0.0.1:0", nil)
-	_, cancel := context.WithCancel(context.Background())
-	opening := &listenerOpening{done: make(chan struct{}), cancel: cancel}
-	listener.opening = opening
-	closeErr := errors.New("close canceled bind failed")
-	stub := &managedListenerStub{close: func() error { return closeErr }}
-	result := listener.finishOpening(opening, stub, context.Canceled)
-	if !errors.Is(result, context.Canceled) || !errors.Is(result, closeErr) {
-		t.Fatalf("canceled bind result = %v", result)
-	}
-	if stub.closeCalls.Load() != 1 || listener.prepare(context.Background()) != result {
-		t.Fatal("canceled bind was published or preparation error was not retained")
-	}
-	if err := listener.Close(); err != nil {
-		t.Fatal(err)
 	}
 }
 
