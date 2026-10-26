@@ -104,7 +104,7 @@ func (r *ConsumerRuntime) processDelivery(
 		if err == nil {
 			return "success", nil
 		}
-		if err := consumerContextErr(ctx); err != nil {
+		if err := ctx.Err(); err != nil {
 			return "canceled", err
 		}
 		if IsPermanent(err) || attempt == r.retry.MaxAttempts {
@@ -129,7 +129,7 @@ func (r *ConsumerRuntime) exhausted(
 	handlerErr error,
 	attempts int,
 ) (string, error) {
-	if err := consumerContextErr(ctx); err != nil {
+	if err := ctx.Err(); err != nil {
 		return "canceled", err
 	}
 	r.telemetry.RecordFinalClassification(span, failureReason(handlerErr), attempts)
@@ -159,7 +159,7 @@ func (r *ConsumerRuntime) exhausted(
 	if err != nil {
 		return "error", fmt.Errorf("prepare queue dead-letter message: %w", err)
 	}
-	if err := consumerContextErr(ctx); err != nil {
+	if err := ctx.Err(); err != nil {
 		return "canceled", err
 	}
 	if err := r.config.DeadLetter.Publish(ctx, prepared); err != nil {

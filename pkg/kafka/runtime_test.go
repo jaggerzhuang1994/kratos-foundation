@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -83,7 +82,7 @@ func TestConsumerRuntimeStopPreservesJoinedNonCancellationError(t *testing.T) {
 	}
 }
 
-func TestConsumerRuntimePanicDefersCoordinatorCleanup(t *testing.T) {
+func TestConsumerRuntimePanicCancelsContextAndCompletesStop(t *testing.T) {
 	raw := &panickingConsumer{captured: make(chan context.Context, 1)}
 	runtime := newTestConsumerRuntime(t, raw, nil, func(context.Context, *Message) error { return nil })
 	t.Cleanup(func() {
@@ -159,30 +158,6 @@ func TestConsumerRuntimeStopHonorsDeadline(t *testing.T) {
 	raw.waitExited(t)
 	if err := <-result; err != nil {
 		t.Fatalf("Start after release = %v", err)
-	}
-}
-
-func TestConsumerRunStatePreservesWrappedCanceledWhenConsumerWinsRace(t *testing.T) {
-	var state consumerRunState
-	canceledByRuntime := state.consumerReturned()
-	if state.cancellationInitiated() {
-		t.Fatal("late runtime cancellation won after Consumer returned")
-	}
-	wantErr := errors.New("spontaneous")
-	err := normalizeConsumerError(fmt.Errorf("consumer: %w: %w", context.Canceled, wantErr), canceledByRuntime)
-	if !errors.Is(err, context.Canceled) || !errors.Is(err, wantErr) {
-		t.Fatalf("normalized error = %v", err)
-	}
-}
-
-func TestConsumerRunStateNormalizesCanceledWhenRuntimeWinsRace(t *testing.T) {
-	var state consumerRunState
-	if !state.cancellationInitiated() {
-		t.Fatal("runtime cancellation was not recorded")
-	}
-	canceledByRuntime := state.consumerReturned()
-	if err := normalizeConsumerError(fmt.Errorf("consumer: %w", context.Canceled), canceledByRuntime); err != nil {
-		t.Fatalf("normalized error = %v", err)
 	}
 }
 

@@ -155,7 +155,4 @@ func TestWorkerConfigurationAndErrorClassification(t *testing.T) {
 			t.Fatal("accepted handlers")
 		}
 	}
-	if !errorOnly(fmt.Errorf("wrapped: %w", errors.Join(context.Canceled, context.Canceled)), context.Canceled) || errorOnly(errors.Join(context.Canceled, errors.New("failure")), context.Canceled) {
-		t.Fatal("wrong classification")
-	}
 }

@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/lifecycle"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	internaltelemetry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue/internal/telemetry"
 	"golang.org/x/sync/errgroup"
@@ -52,19 +51,6 @@ func (c WorkerConfig) workerConfig(queue string) (workerConfig, error) {
 	if c.Name == "" {
 		c.Name = queue
 	}
-	if c.Timeout == 0 {
-		c.Timeout = 30 * time.Second
-	}
-	if c.StorageTimeout == 0 {
-		c.StorageTimeout = 5 * time.Second
-	}
-	if c.Lease == 0 {
-		// 先验证加法边界，避免极大时长溢出后生成过短租约。
-		if c.Timeout < 0 || c.StorageTimeout < 0 || c.StorageTimeout > math.MaxInt64-time.Second || c.Timeout > math.MaxInt64-time.Second-c.StorageTimeout {
-			return workerConfig{}, errors.New("invalid queue processing execution window")
-		}
-		c.Lease = max(60*time.Second, c.Timeout+c.StorageTimeout+time.Second)
-	}
 	if c.Retry != nil && c.MaxAttempts != 0 {
 		return workerConfig{}, errors.New("queue processing max attempts conflicts with retry policy")
 	}
@@ -74,6 +60,7 @@ func (c WorkerConfig) workerConfig(queue string) (workerConfig, error) {
 		}
 		c.Retry = &RetryPolicy{MaxAttempts: c.MaxAttempts, MinBackoff: defaultMinBackoff, MaxBackoff: defaultMaxBackoff}
 	}
+	// 时长默认值与执行窗口校验统一由 resolve 完成。
 	return workerConfig{Name: c.Name, Queue: queue, Concurrency: c.Concurrency, PollInterval: c.PollInterval, Timeout: c.Timeout, StorageTimeout: c.StorageTimeout, Lease: c.Lease, Retry: c.Retry}, nil
 }
 
@@ -89,7 +76,7 @@ type workerConfig struct {
 	PollInterval time.Duration
 	// Timeout 为从领取开始计算的协作执行窗口，默认 30s。
 	Timeout time.Duration
-	// Lease 为领取租约时长，默认 60s，须大于 Timeout + StorageTimeout。
+	// Lease 为领取租约时长，默认 max(60s, Timeout + StorageTimeout + 1s)，须大于 Timeout + StorageTimeout。
 	Lease time.Duration
 	// StorageTimeout 为单次存储操作及失败通知的协作超时，零值默认 5s，负值无效。
 	StorageTimeout time.Duration
@@ -111,11 +98,12 @@ func (config workerConfig) resolve() (workerConfig, error) {
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second
 	}
-	if config.Lease == 0 {
-		config.Lease = 60 * time.Second
-	}
 	if config.StorageTimeout == 0 {
 		config.StorageTimeout = 5 * time.Second
+	}
+	if config.Lease == 0 {
+		// 极大时长相加溢出时得到的租约无法覆盖执行窗口，会被下面的校验拒绝。
+		config.Lease = max(60*time.Second, config.Timeout+config.StorageTimeout+time.Second)
 	}
 	if config.Concurrency < 1 || config.Concurrency > 1024 || config.PollInterval < 0 || config.Timeout < 0 || config.StorageTimeout < 0 || config.Lease < time.Millisecond || config.Lease <= config.Timeout || config.Lease-config.Timeout <= config.StorageTimeout {
 		return workerConfig{}, errors.New("invalid queue worker concurrency or timing configuration")
@@ -142,14 +130,8 @@ type Worker[T any] struct {
 	log log.Logger
 	// telemetry 记录处理、重试和归档的追踪及指标。
 	telemetry *internaltelemetry.Telemetry
-	// started 原子标记是否已启动，阻止重复调用 Start。
-	started atomic.Bool
-	// stop 关闭后通知协调循环取消运行上下文。
-	stop chan struct{}
-	// done 在 Start 退出时关闭，供 Stop 等待运行结束。
-	done chan struct{}
-	// stopOnce 保证停止信号只关闭一次。
-	stopOnce sync.Once
+	// runner 协调单次启动、停止信号和等待 Start 返回。
+	runner *lifecycle.Runner
 	// disabled 在构造期固化；为 true 时不领取任务。
 	disabled bool
 	// onFailed 为归档成功后的可选通知回调，不保证可靠投递。
@@ -178,72 +160,42 @@ func newWorker[T any](config workerConfig, store Store, handlers map[string]task
 	if err != nil {
 		return nil, fmt.Errorf("create queue worker telemetry: %w", err)
 	}
-	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, stop: make(chan struct{}), done: make(chan struct{})}, nil
+	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner()}, nil
 }
 
 // Start 阻塞运行所有领取循环；存储故障取消同实例其他循环，等待全部退出后返回错误。
+// 同一实例只能启动一次；Stop 先于 Start 时直接返回 nil。
 func (w *Worker[T]) Start(ctx context.Context) error {
-	if !w.started.CompareAndSwap(false, true) {
+	err := w.runner.Run(ctx, func(runCtx context.Context) error {
+		// 生命周期事件每个实例只输出一次，不能依赖高频任务日志判断 Worker 是否启动。
+		w.log.WithContext(ctx).Infow("event", "queue.worker.started", "msg", "queue worker started", "queue", w.config.Queue, "worker", w.config.Name, "concurrency", w.config.Concurrency, "processing_enabled", !w.disabled)
+		defer w.log.WithContext(ctx).Infow("event", "queue.worker.stopped", "msg", "queue worker stopped", "queue", w.config.Queue, "worker", w.config.Name)
+		if w.disabled {
+			// 复用 Runner 的停止信号，禁用消费不构造伪 Store，也不进入领取循环。
+			w.log.WithContext(ctx).Debugw("event", "queue.consumer.disabled", "msg", "queue processing disabled", "queue", w.config.Queue, "worker", w.config.Name)
+			<-runCtx.Done()
+			return nil
+		}
+		group, groupCtx := errgroup.WithContext(runCtx)
+		for range w.config.Concurrency {
+			group.Go(func() error { return w.run(groupCtx) })
+		}
+		if err := group.Wait(); err != nil {
+			w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
+			w.log.WithContext(ctx).Errorw("event", "queue.storage.failed", "msg", "queue storage failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
+			return err
+		}
+		return nil
+	})
+	if errors.Is(err, lifecycle.ErrAlreadyStarted) {
 		return errors.New("queue worker already started")
 	}
-	defer close(w.done)
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	coordinatorDone := make(chan struct{})
-	// 唯一协调 goroutine 合并 Stop 与父 Context；退出前始终等待它结束。
-	go func() {
-		defer close(coordinatorDone)
-		select {
-		case <-w.stop:
-			cancel()
-		case <-runCtx.Done():
-		}
-	}()
-	defer func() { cancel(); <-coordinatorDone }()
-	select {
-	case <-w.stop:
-		return nil
-	default:
-	}
-	// 生命周期事件每个实例只输出一次，不能依赖高频任务日志判断 Worker 是否启动。
-	w.log.WithContext(ctx).Infow("event", "queue.worker.started", "msg", "queue worker started", "queue", w.config.Queue, "worker", w.config.Name, "concurrency", w.config.Concurrency, "processing_enabled", !w.disabled)
-	defer w.log.WithContext(ctx).Infow("event", "queue.worker.stopped", "msg", "queue worker stopped", "queue", w.config.Queue, "worker", w.config.Name)
-	if w.disabled {
-		// 复用已有停止信号和协调 goroutine，禁用消费不构造伪 Store，也不进入领取循环。
-		w.log.WithContext(ctx).Debugw("event", "queue.consumer.disabled", "msg", "queue processing disabled", "queue", w.config.Queue, "worker", w.config.Name)
-		<-runCtx.Done()
-		return nil
-	}
-	group, groupCtx := errgroup.WithContext(runCtx)
-	for range w.config.Concurrency {
-		group.Go(func() error { return w.run(groupCtx) })
-	}
-	err := group.Wait()
-	if err != nil {
-		w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
-		w.log.WithContext(ctx).Errorw("event", "queue.storage.failed", "msg", "queue storage failed", "queue", w.config.Queue, "worker", w.config.Name, "error", err)
-		return err
-	}
-	return nil
+	return err
 }
 
 // Stop 幂等发出停止信号并等待 Handler 与存储操作退出；等待受 ctx 控制。
 func (w *Worker[T]) Stop(ctx context.Context) error {
-	w.stopOnce.Do(func() { close(w.stop) })
-	if !w.started.Load() {
-		return nil
-	}
-	select {
-	case <-w.done:
-		return nil
-	default:
-	}
-	select {
-	case <-w.done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return w.runner.Stop(ctx)
 }
 
 func (w *Worker[T]) run(ctx context.Context) error {
@@ -256,7 +208,7 @@ func (w *Worker[T]) run(ctx context.Context) error {
 		reservation, err := w.store.Reserve(operationCtx, now.UTC(), w.config.Lease)
 		cancel()
 		if err != nil {
-			if ctx.Err() != nil && errorOnly(err, ctx.Err()) {
+			if ctx.Err() != nil && errtree.Only(err, ctx.Err()) {
 				return nil
 			}
 			return fmt.Errorf("reserve task: %w", err)
@@ -268,34 +220,14 @@ func (w *Worker[T]) run(ctx context.Context) error {
 			continue
 		}
 		if err := w.execute(ctx, reservation, now); err != nil {
-			if errorOnly(err, ErrLeaseLost) {
+			if errtree.Only(err, ErrLeaseLost) {
 				w.log.WithContext(ctx).Warnw("event", "queue.lease.lost", "msg", "task lease lost", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID)
 				continue
 			}
-			if ctx.Err() != nil && errorOnly(err, ctx.Err()) {
+			if ctx.Err() != nil && errtree.Only(err, ctx.Err()) {
 				return nil
 			}
 			return err
 		}
 	}
-}
-
-// errorOnly 仅当每个错误叶子均表示指定原因时才允许恢复，避免吞掉聚合存储故障。
-func errorOnly(err, target error) bool {
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		found := false
-		for _, child := range joined.Unwrap() {
-			if child != nil {
-				found = true
-				if !errorOnly(child, target) {
-					return false
-				}
-			}
-		}
-		return found
-	}
-	if child := errors.Unwrap(err); child != nil {
-		return errorOnly(child, target)
-	}
-	return errors.Is(err, target)
 }
