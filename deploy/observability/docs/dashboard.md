@@ -1,17 +1,20 @@
 # 服务、资源与组件面板
 
-四份 JSON 分别承担服务入口、资源排障、组件下钻和共享资源检查。导入时保留各自 UID；顶部导航保留时间窗口与已有变量，目标页只使用自己声明的变量。
+五份 JSON 分别承担舰队总览、服务入口、资源排障、组件下钻和共享资源检查。导入时保留各自 UID；顶部导航保留时间窗口与已有变量，目标页只使用自己声明的变量。
 
 | 页面 | 文件与 UID | 适用问题 |
 | --- | --- | --- |
-| 服务运行总览 | [foundation-service.json](../grafana/dashboards/foundation-service.json)，`ack-service-overview` | 流量、5xx、尾延迟、已发现应用 Pod 就绪率、异常端点与采集关联 |
+| 舰队总览 | [foundation-fleet.json](../grafana/dashboards/foundation-fleet.json)，`foundation-fleet-overview` | 不可用与未全部就绪应用数、总流量与 5xx、Job 失败；每个应用一行的就绪、RED、消费与积压 |
+| 服务运行总览 | [foundation-service.json](../grafana/dashboards/foundation-service.json)，`ack-service-overview` | 流量、5xx、尾延迟、Foundation 应用就绪率（`app_ready`）、已发现应用 Pod 就绪率、异常端点与采集关联 |
 | 容器与节点 | [foundation.json](../grafana/dashboards/foundation.json)，`ack-container-overview` | 对象状态、重启、Deployment 副本缺口、容器资源与节点容量 |
 | 应用组件 | [foundation-components.json](../grafana/dashboards/foundation-components.json)，`ack-application-components` | Server、Client、Database、Redis、Cache、Queue、Kafka、Job、Lock、OSS、Runtime |
 | 共享资源与健康 | [foundation-shared.json](../grafana/dashboards/foundation-shared.json)，`foundation-shared-resources` | 逻辑 Queue 库存、Kafka 消费组 Lag、实际 `/readyz` 与 `/healthz` HTTP 探测 |
 
 ## 页面判读与导航
 
-从服务总览开始，首屏卡片汇总当前筛选范围，趋势保留应用身份。异常端点表只列当前有错误或请求样本的对象，可点击端点进入组件页；空表须结合流量与接入诊断判断。卡片不设置业务 SLO 阈值；抓取失败数大于零用红色，已发现 Pod 未全部就绪用橙色，流量、错误率和耗时用中性色。
+舰队总览面向整套项目都使用本框架的场景：顶部卡片回答“现在有没有应用不可用或在报错”，应用健康表每个应用一行，按就绪实例升序排列，就绪实例、5xx 比例、消费失败比例和 Job 失败按阈值着色；点击应用名进入服务总览并带上命名空间与应用。全部查询只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)），未加载该规则组时整页无数据。空单元格表示该应用没有对应负载，不等于零；无流量时比例不出值，避免把空闲服务显示成 0% 错误。
+
+从服务总览开始，首屏卡片汇总当前筛选范围，趋势保留应用身份。异常端点表只列当前有错误或请求样本的对象，可点击端点进入组件页；空表须结合流量与接入诊断判断。卡片不设置业务 SLO 阈值；抓取失败数大于零用红色，应用自报就绪（`app_ready`）或已发现 Pod 未全部就绪用橙色，流量、错误率和耗时用中性色。
 
 容器与节点页按六区组织：全数据源样本检查、存活与异常、工作负载资源、节点资源、对象清单、应用指标简表。工作负载、对象清单和应用简表默认折叠；异常区优先展示未 Ready 对象、等待原因、最近 OOM 终止记录、状态时间线、窗口重启表和 Deployment 副本缺口。节点最满文件系统趋势下方保留 Top 10 表，定位节点、设备、挂载点、文件系统类型和可用空间。
 

@@ -168,3 +168,35 @@ groups:
         annotations:
           summary: "Kafka 消费组 Topic Lag 持续超过 1000"
           runbook: "deploy/observability/docs/troubleshooting.md#积压与传输指标"
+  # 舰队总览与 SLO 使用的预聚合，按 env/cluster/namespace/app 汇总，避免几十个应用时重复计算原始序列。
+  # 不按 foundation 标签过滤，与面板查询口径一致；告警规则仍使用原始指标。
+  - name: foundation-records
+    rules:
+      - record: app:server_requests:rate5m
+        expr: sum by (env, cluster, namespace, app) (rate(server_requests_code_total[5m]))
+      - record: app:server_errors:rate5m
+        expr: sum by (env, cluster, namespace, app) (rate(server_requests_code_total{code=~"5.."}[5m]))
+      - record: app:server_requests_seconds_bucket:rate5m
+        expr: sum by (env, cluster, namespace, app, le) (rate(server_requests_seconds_bucket[5m]))
+      - record: app:app_ready:ready
+        expr: sum by (env, cluster, namespace, app) (app_ready)
+      - record: app:app_ready:instances
+        expr: count by (env, cluster, namespace, app) (app_ready)
+      - record: app:consumer_messages:rate5m
+        expr: |
+          label_replace(sum by (env, cluster, namespace, app) (rate(queue_consumer_messages_total[5m])), "consumer_type", "queue", "", "")
+          or label_replace(sum by (env, cluster, namespace, app) (rate(kafka_consumer_messages_total[5m])), "consumer_type", "kafka", "", "")
+      - record: app:consumer_failures:rate5m
+        expr: |
+          label_replace(sum by (env, cluster, namespace, app) (rate(queue_consumer_messages_total{queue_result=~"failed|storage_error"}[5m])), "consumer_type", "queue", "", "")
+          or label_replace(sum by (env, cluster, namespace, app) (rate(kafka_consumer_messages_total{kafka_result=~"error|dead_lettered"}[5m])), "consumer_type", "kafka", "", "")
+      - record: app:job_failures:increase1h
+        expr: sum by (env, cluster, namespace, app) (increase(job_runs_total{status="failure"}[1h]))
+      - record: app:queue_oldest_ready_age:max
+        # 只取采集成功且最老年龄已知的观察者，与组件面板屏蔽失效样本的口径一致。
+        expr: |
+          max by (env, cluster, namespace, app) (
+            queue_oldest_ready_age_seconds
+            and on (env, cluster, namespace, app, pod, instance, queue_destination) (queue_stats_oldest_ready_known == 1)
+            and on (env, cluster, namespace, app, pod, instance, queue_destination) (queue_stats_collection_success == 1)
+          )

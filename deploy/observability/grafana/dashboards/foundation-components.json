@@ -8038,6 +8038,13 @@
   "description": "ACK/Kubernetes应用组件详情。先按namespace/app筛选，再以Pod/Node/Instance/Container定位对象；端点诊断表合并速率、窗口增量、5xx与延迟，资源容量及处理阶段并排对照。同一Node保留namespace/app身份，不混合不同应用；Queue快照仅代表观察器视角，全局库存与Kafka Lag见共享资源页。缺失数据保持无数据，不由此推断健康。依赖kube_pod_info映射，缺少映射的目标不会进入组件图。",
   "links": [
     {
+      "title": "舰队总览",
+      "type": "link",
+      "url": "/d/foundation-fleet-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
       "title": "服务总览",
       "type": "link",
       "url": "/d/ack-service-overview",

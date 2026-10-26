@@ -14,12 +14,12 @@
 
 | 层级 | 面板 | 回答的问题 | 状态 |
 | --- | --- | --- | --- |
-| L0 舰队总览 | 每个 app 一行，列出就绪实例/总实例、RPS、5xx 比例、P95、消费积压、近 1h Job 失败、近 1h 重启，按“最差”排序并着色 | 现在哪些服务有问题 | 规划 |
-| L1 服务总览 | [foundation-service.json](../grafana/dashboards/foundation-service.json)：按 app 看流量、错误、延迟、就绪 | 这个服务哪里不好 | 已有，需补 `app_ready` 与按负载类型分区 |
+| L0 舰队总览 | [foundation-fleet.json](../grafana/dashboards/foundation-fleet.json)：每个 app 一行，列出就绪实例/总实例、RPS、5xx 比例、P95、消费速率与失败比例、最老就绪任务、近 1h Job 失败，按就绪实例升序并着色 | 现在哪些服务有问题 | 已有；近 1h 重启仍在容器与节点页 |
+| L1 服务总览 | [foundation-service.json](../grafana/dashboards/foundation-service.json)：按 app 看流量、错误、延迟、就绪 | 这个服务哪里不好 | 已有，首行含 `app_ready` 就绪率；按负载类型分区待补 |
 | L2 组件详情 | [foundation-components.json](../grafana/dashboards/foundation-components.json)：Server/Client/DB/Redis/Queue/Kafka/Job/Lock/OSS/Runtime | 是哪个依赖或组件引起的 | 已有 |
 | L3 基础设施 | [foundation.json](../grafana/dashboards/foundation.json)、[foundation-shared.json](../grafana/dashboards/foundation-shared.json)：容器、节点、共享队列与 Kafka lag | 是不是资源或共享设施的问题 | 已有 |
 
-L0 是多项目场景下最关键、目前缺失的一层。它应只依赖下文的 recording rules，保证几十个 app 时依然秒开；每行的 app 名链接到 L1 并带上 `var-env`、`var-namespace`、`var-app`。
+L0 是多项目场景下最关键的一层。它只依赖下文的 recording rules，保证几十个 app 时依然秒开；每行的 app 名链接到 L1 并带上 `var-namespace`、`var-app`。
 
 ```mermaid
 flowchart TD
@@ -76,23 +76,17 @@ flowchart TD
     I & J --> K([按 runbook 进入 L0 → L1 下钻])
 ```
 
-## SLO 与 recording rules（规划）
+## SLO 与 recording rules
 
-每个 app 按负载类型定义一个可用性 SLO（例如 99.9%）和一个延迟 SLO（例如 P99 < 1s 的请求占比 99%）。为避免 L0 面板和告警在几十个 app 上重复计算原始直方图，先用 recording rules 预聚合：
+每个 app 按负载类型定义一个可用性 SLO（例如 99.9%）和一个延迟 SLO（例如 P99 < 1s 的请求占比 99%）。为避免 L0 面板和告警在几十个 app 上重复计算原始直方图，已用 `foundation-records` 组预聚合 5m 速率、延迟桶、就绪实例、消费失败、Job 失败与最老就绪任务，规则清单见 [alerts.md](alerts.md#recording-rules)。比例与分位数在查询时由计数求得，不预存比值，避免跨应用再聚合时出错。
 
-| Recording rule | 含义 |
-| --- | --- |
-| `app:server_requests:rate5m` | 按 env/cluster/namespace/app 的请求速率 |
-| `app:server_errors:ratio_rate5m` / `ratio_rate1h` / `ratio_rate6h` | 5xx 比例，多窗口用于消耗率告警 |
-| `app:server_latency:p95_5m` | P95 延迟 |
-| `app:app_ready:ratio` | 就绪实例占比 |
-| `app:consumer_failures:ratio_rate5m` | 消费失败比例（Queue 与 Kafka 合并） |
+规划：为消耗率告警补 `app:server_requests:rate1h` / `rate6h` 及对应错误速率等多窗口规则。
 
 消耗率告警采用多窗口：1h 与 5m 同时超过 14.4 倍预算消耗为 critical，6h 与 30m 同时超过 6 倍为 warning。低流量服务配合端到端探测或业务成功事件，避免少量请求导致误报。
 
 ## 落地顺序
 
 1. 已完成：`app_ready` 指标、FoundationAppNotReady / FoundationAppUnavailable 告警及规则测试、gRPC 健康检查与就绪联动、Runtime panic 统一停机。
-2. 下一步：recording rules + L0 舰队总览面板 + L1 补 `app_ready`，并在 [check_dashboards.py](../check_dashboards.py) 中补对应合成数据校验。
-3. 随后：SLO 消耗率告警、网关单下游告警、一次性任务的 K8s Job/CronJob 告警、Alertmanager 分组/抑制配置示例。
+2. 已完成：`foundation-records` recording rules 及规则测试、L0 舰队总览面板、L1 首行 `app_ready` 就绪率；[check_dashboards.py](../check_dashboards.py) 加载同一份规则文件，用合成原始样本验证舰队页与 L1 就绪率。
+3. 下一步：SLO 消耗率告警、网关单下游告警、一次性任务的 K8s Job/CronJob 告警、Alertmanager 分组/抑制配置示例。
 4. 持续：panic 与配置拒绝计数指标（`app_runtime_panics_total`、`server_request_panics_total`、`config_updates_rejected_total`），让目前只有日志的异常也能告警。

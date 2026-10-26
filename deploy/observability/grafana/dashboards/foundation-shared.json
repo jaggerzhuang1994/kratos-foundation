@@ -16,6 +16,13 @@
   ],
   "links": [
     {
+      "title": "舰队总览",
+      "type": "link",
+      "url": "/d/foundation-fleet-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
       "title": "服务总览",
       "type": "link",
       "url": "/d/ack-service-overview",

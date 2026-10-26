@@ -7,7 +7,7 @@ APP_POD_LABEL ?= pod_name
 .PHONY: help check up down render-kubernetes smoke check-dashboards
 help:
 	@echo 'check: 校验 Compose、Prometheus 及告警测试，需要 Docker'
-	@echo 'check-dashboards: 验证四页面板、四种对象视图和合成组件数据的 PromQL，需要 Docker'
+	@echo 'check-dashboards: 验证五页面板、recording rules、四种对象视图和合成组件数据的 PromQL，需要 Docker'
 	@echo 'smoke: 验证真实 ACK 指标；可选 COMPONENTS、APP_POD_LABEL 和 GRAFANA_URL'
 	@echo 'up: 构建并启动本地应用、Prometheus 和 Grafana'
 	@echo 'down: 停止本示例，保留历史指标和 Grafana 数据卷'

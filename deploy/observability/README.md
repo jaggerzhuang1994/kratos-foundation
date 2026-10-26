@@ -1,9 +1,10 @@
 # Foundation 指标面板
 
-导入下面四份 JSON 并选择 Prometheus 数据源。ACK 应用从“服务运行总览”进入，沿页面导航下钻；共享资源页可独立使用。
+导入下面五份 JSON 并选择 Prometheus 数据源。多个应用时从“舰队总览”定位异常应用，单个应用从“服务运行总览”进入，沿页面导航下钻；共享资源页可独立使用。舰队总览只读 [alerts.yaml](prometheus/alerts.yaml) 中 `foundation-records` 组的预聚合，须同时加载该规则文件。
 
 | 页面 | 回答的问题 | UID |
 | --- | --- | --- |
+| [舰队总览](grafana/dashboards/foundation-fleet.json) | 哪些应用不可用、在报错、消费失败或任务失败？ | `foundation-fleet-overview` |
 | [服务运行总览](grafana/dashboards/foundation-service.json) | 流量、错误、延迟是否异常，哪些接口受影响？ | `ack-service-overview` |
 | [容器与节点](grafana/dashboards/foundation.json) | Pod、部署副本或机器资源是否异常？ | `ack-container-overview` |
 | [应用组件](grafana/dashboards/foundation-components.json) | 是连接池、缓存、消息、任务还是 Go 进程的问题？ | `ack-application-components` |
@@ -21,7 +22,7 @@
 
 应用指标另外需要 namespace/app/container 和 pod_name 采集标签；若采集使用 pod，在可见的“应用 Pod 标签”选择 pod。All 可展示尚未附加 app 的旧指标，具体应用筛选需要真实 app 标签。基础设施区不依赖应用 target_info 或 foundation 标签。node-exporter 的 node 或 nodename 需与 Kubernetes 节点名匹配；虚拟节点可能没有整机指标。
 
-导入四份 JSON 并选择真实数据源。应用入口示例：
+导入五份 JSON 并选择真实数据源。应用入口示例：
 
 ```text
 /d/ack-service-overview?var-namespace=orders&var-app=orders-api&var-view=view_pod&var-app_pod_label=pod
@@ -44,7 +45,7 @@ make -C deploy/observability check-dashboards PROMTOOL_CONTAINER=foundation-obse
 make -C deploy/observability render-kubernetes
 ```
 
-打包产物位于 `/tmp/foundation-monitoring/dashboard.json` 和 `rules.yaml`；ConfigMap 包含四份面板。JSON 是面板源文件，不手改打包产物。`rules.yaml` 仍是原有示例应用告警，不是面板的完整告警策略；部署前须按实际平台调整，不应因导入面板就直接启用告警。
+打包产物位于 `/tmp/foundation-monitoring/dashboard.json` 和 `rules.yaml`；ConfigMap 包含五份面板。JSON 是面板源文件，不手改打包产物。`rules.yaml` 包含原有示例应用告警与舰队页依赖的 `foundation-records` 预聚合，不是面板的完整告警策略；部署前须按实际平台调整，不应因导入面板就直接启用告警。
 
 真实联调需使用能直接访问 Prometheus HTTP API 的地址，可选传入能读取面板 API 的 Grafana 地址；认证按平台正常流程处理，不在仓库写入凭据：
 
@@ -63,7 +64,7 @@ flowchart TD
     A([核对 ACK 数据源与采集标签]) --> B[check-dashboards 合成数据验证]
     B --> C{验证通过?}
     C -- 否 --> D([按失败查询修正 不部署])
-    C -- 是 --> E[导入四份 JSON 或生成 ConfigMap]
+    C -- 是 --> E[导入五份 JSON 或生成 ConfigMap]
     E --> F[选择真实单集群数据源和筛选范围]
     F --> G[运行 smoke 并检查 Grafana 视图]
     G --> H{指标存在且标签关联成功?}

@@ -30,6 +30,7 @@
 ### Added
 
 - `app_ready` 指标（`bootstrap.NewMetricsBootstrap` 注册，签名改为返回 error）与 `/readyz`、gRPC 健康检查共用就绪状态，覆盖没有 HTTP 探针的 Worker、gRPC 服务、常驻进程；新增告警 `FoundationAppNotReady`、`FoundationAppUnavailable`。
+- 监控模板新增 `foundation-records` recording rules（按 env/cluster/namespace/app 预聚合请求、错误、延迟桶、就绪、消费失败、Job 失败与最老就绪任务）、舰队总览面板 `foundation-fleet-overview`，服务总览首行新增 Foundation 应用就绪率；面板检查加载同一份规则文件做合成样本校验。
 - gRPC 默认注册与应用就绪联动的 `grpc.health.v1.Health`（`custom_health` 或业务自行注册时让出），替代 Kratos 启动即报 SERVING 的内置实现。
 - App 恢复 Runtime `Start/Stop/AbortStartup` 中的 panic，记录 `app.runtime.panicked` 并统一停机（执行停止钩子与服务注销），不再直接崩溃。
 - `env.ExposeDiagnostics()` 统一判断是否允许向调用方返回内部诊断，非法环境值按拒绝处理且不 panic。

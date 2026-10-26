@@ -16,6 +16,13 @@
   ],
   "links": [
     {
+      "title": "舰队总览",
+      "type": "link",
+      "url": "/d/foundation-fleet-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
       "title": "服务总览",
       "type": "link",
       "url": "/d/ack-service-overview",
@@ -123,7 +130,7 @@
       "gridPos": {
         "x": 4,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 4
       },
       "targets": [
@@ -175,9 +182,9 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 8,
+        "x": 7,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 4
       },
       "targets": [
@@ -221,6 +228,73 @@
       }
     },
     {
+      "id": 19,
+      "title": "Foundation 应用就绪率",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (namespace,pod) ((label_replace(app_ready{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))) / count(max by (namespace,pod) ((label_replace(app_ready{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",${app_pod_label:raw}!=\"\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "应用自报的 app_ready（与 /readyz、gRPC 健康检查同一状态）按 Pod 去重后的就绪占比；与右侧 K8s Pod 就绪不一致时，优先看应用日志 app.ready / server.readiness.changed。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "links": [
+            {
+              "title": "查看应用组件",
+              "url": "/d/ack-application-components?${datasource:queryparam}&${namespace:queryparam}&${app:queryparam}&${view:queryparam}&${node:queryparam}&${pod:queryparam}&${container:queryparam}&${app_pod_label:queryparam}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
       "id": 5,
       "title": "已发现应用 Pod 就绪率",
       "type": "stat",
@@ -229,9 +303,9 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 12,
+        "x": 14,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 4
       },
       "targets": [
@@ -296,7 +370,7 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 16,
+        "x": 17,
         "y": 1,
         "w": 4,
         "h": 4
@@ -350,9 +424,9 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "x": 20,
+        "x": 21,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 4
       },
       "targets": [

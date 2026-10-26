@@ -515,3 +515,74 @@ tests:
       - eval_time: 12m
         alertname: FoundationKafkaLagHigh
         exp_alerts: []
+  - name: 舰队预聚合按应用汇总并区分消费类型
+    interval: 1m
+    input_series:
+      - series: server_requests_code_total{env="prod",namespace="apps",app="api",pod="api-0",code="200"}
+        values: 0+54x15
+      - series: server_requests_code_total{env="prod",namespace="apps",app="api",pod="api-1",code="500"}
+        values: 0+6x15
+      - series: server_requests_seconds_bucket{env="prod",namespace="apps",app="api",pod="api-0",le="+Inf"}
+        values: 0+60x15
+      - series: app_ready{env="prod",namespace="apps",app="api",pod="api-0"}
+        values: 1x15
+      - series: app_ready{env="prod",namespace="apps",app="api",pod="api-1"}
+        values: 0x15
+      - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="success"}
+        values: 0+48x15
+      - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="failed"}
+        values: 0+12x15
+      - series: kafka_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",kafka_destination="events",kafka_consumer="sync",kafka_result="dead_lettered"}
+        values: 0+6x15
+      - series: job_runs_total{env="prod",namespace="apps",app="cron",pod="c-0",exported_job="cleanup",status="failure"}
+        values: 0+1x15
+      - series: queue_oldest_ready_age_seconds{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
+        values: 30x15
+      - series: queue_stats_oldest_ready_known{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
+        values: 1x15
+      - series: queue_stats_collection_success{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
+        values: 1x15
+      - series: queue_oldest_ready_age_seconds{env="prod",namespace="apps",app="worker",pod="w-0",instance="b",queue_destination="emails"}
+        values: 999x15
+      - series: queue_stats_oldest_ready_known{env="prod",namespace="apps",app="worker",pod="w-0",instance="b",queue_destination="emails"}
+        values: 0x15
+      - series: queue_stats_collection_success{env="prod",namespace="apps",app="worker",pod="w-0",instance="b",queue_destination="emails"}
+        values: 1x15
+    promql_expr_test:
+      - expr: app:server_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:server_requests:rate5m{env="prod",namespace="apps",app="api"}'
+            value: 1
+      - expr: app:server_errors:rate5m / app:server_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",namespace="apps",app="api"}'
+            value: 0.1
+      - expr: app:app_ready:ready
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:app_ready:ready{env="prod",namespace="apps",app="api"}'
+            value: 1
+      - expr: app:app_ready:instances
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:app_ready:instances{env="prod",namespace="apps",app="api"}'
+            value: 2
+      - expr: app:consumer_failures:rate5m / app:consumer_messages:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",namespace="apps",app="worker",consumer_type="queue"}'
+            value: 0.2
+          - labels: '{env="prod",namespace="apps",app="worker",consumer_type="kafka"}'
+            value: 1
+      - expr: app:job_failures:increase1h
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:job_failures:increase1h{env="prod",namespace="apps",app="cron"}'
+            value: 10
+      - expr: app:queue_oldest_ready_age:max
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:queue_oldest_ready_age:max{env="prod",namespace="apps",app="worker"}'
+            value: 30

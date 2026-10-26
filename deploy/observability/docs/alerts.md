@@ -17,6 +17,19 @@
 
 应用错误率和延迟按 env/cluster/namespace/app 聚合，先聚合计数或桶再求比值或分位数。低流量抑制减少少量请求造成的噪声，也意味着低流量关键业务需要自己的成功事件/端到端探测告警。机器告警按 env/cluster/node 聚合且只匹配应用目标所在的机器；不重复为同机每个 App 发一条告警。
 
+## Recording rules
+
+`foundation-records` 组按 env/cluster/namespace/app 预聚合，供 [舰队总览](dashboard.md) 与后续 SLO 告警复用，避免几十个应用时重复计算原始序列。规则不按 foundation 标签过滤，与面板口径一致；现有告警仍直接使用原始指标。
+
+| 规则 | 含义 |
+| --- | --- |
+| `app:server_requests:rate5m` / `app:server_errors:rate5m` | 请求与 5xx 速率 |
+| `app:server_requests_seconds_bucket:rate5m` | 保留 `le` 的延迟桶速率，用于求 P95 |
+| `app:app_ready:ready` / `app:app_ready:instances` | 就绪实例数与上报实例数 |
+| `app:consumer_messages:rate5m` / `app:consumer_failures:rate5m` | 消费速率与失败速率，`consumer_type` 区分 queue 与 kafka；失败含 Queue `failed`/`storage_error`、Kafka `error`/`dead_lettered` |
+| `app:job_failures:increase1h` | 近 1h Job 失败次数 |
+| `app:queue_oldest_ready_age:max` | 采集成功且年龄已知的最老就绪任务年龄 |
+
 ## 尚不代表的保证
 
 - up=0 只覆盖仍在服务发现中的失败目标。所有 Pod 被删除、Deployment 缩为零或采集配置误删时，不能靠它发现服务整体消失。K8s 应保留 kube-prometheus-stack 的 Deployment 副本不可用等告警；普通环境针对已知必需 App 配置独立 absent/心跳规则。

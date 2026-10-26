@@ -294,6 +294,9 @@ def service_fixture_tests(service):
             series.append(input_series('server_requests_code_total', dict(request, code='500'), '0+30x10'))
         for le in ['1', '+Inf']:
             series.append(input_series('server_requests_seconds_bucket', dict(request, le=le), '0+60x10'))
+        # app_ready 由两个 Prometheus 副本重复抓取，面板须按 Pod 去重后再求就绪占比。
+        for replica in ['prometheus-a', 'prometheus-b']:
+            series.append(input_series('app_ready', dict(main, prometheus_replica=replica), f'{ready}+0x10'))
     orphan = {'namespace': 'one', 'app': 'api', 'pod_name': 'orphan-0', 'container': 'api', 'instance': '10.0.0.3:9000', 'job': 'application'}
     series.append(input_series('up', orphan, '1+0x10'))
     for panel, value in [(2, 2), (3, .25), (4, .95), (5, .5), (6, 2), (7, 1)]:
@@ -306,6 +309,8 @@ def service_fixture_tests(service):
         expected = [identity('api', 'api-0', '10.0.0.1'), identity('worker', 'worker-0', '10.0.0.2')]
         for panel, values in [(9, [1, 1]), (10, [0, .5]), (11, [.95, .95])]:
             checks.append(fixture_check(service, panel, list(zip(expected, values)), view))
+    checks.append(fixture_check(service, 19, [({}, .5)]))
+    checks.append(fixture_check(service, 19, [({}, 1)], app='api'))
     checks.append(fixture_check(service, 3, [({}, 0)], app='api'))
     checks.append(fixture_check(service, 13, [({'namespace': 'one', 'app': 'worker', 'operation': '/users', 'kind': 'http'}, .5)]))
     checks.append(fixture_check(service, 17, [({'namespace': 'one', 'app': 'api', 'pod': 'orphan-0', 'container': 'api',
@@ -352,19 +357,69 @@ def shared_fixture_tests(shared):
             {'interval': '1m', 'input_series': unknown, 'promql_expr_test': [fixture_check(shared, 3, [])]}]
 
 
+def fleet_fixture_tests(fleet):
+    """舰队页只读 recording rules，样本从原始指标经 alerts.yaml 的 foundation-records 预聚合得到。"""
+    series = []
+
+    def add(metric, labels, values):
+        series.append(input_series(metric, dict({'namespace': 'apps'}, **labels), values))
+
+    add('app_ready', {'app': 'api', 'pod': 'api-0'}, '1+0x10')
+    add('app_ready', {'app': 'api', 'pod': 'api-1'}, '0+0x10')
+    add('app_ready', {'app': 'worker', 'pod': 'worker-0'}, '1+0x10')
+    add('app_ready', {'app': 'cron', 'pod': 'cron-0'}, '0+0x10')
+    add('server_requests_code_total', {'app': 'api', 'pod': 'api-0', 'code': '200'}, '0+54x10')
+    add('server_requests_code_total', {'app': 'api', 'pod': 'api-1', 'code': '500'}, '0+6x10')
+    for le in ['0.5', '+Inf']:
+        add('server_requests_seconds_bucket', {'app': 'api', 'pod': 'api-0', 'le': le}, '0+60x10')
+    queue = {'app': 'worker', 'pod': 'worker-0', 'queue_destination': 'emails', 'queue_consumer': 'mailer'}
+    add('queue_consumer_messages_total', dict(queue, queue_result='success'), '0+48x10')
+    add('queue_consumer_messages_total', dict(queue, queue_result='failed'), '0+12x10')
+    kafka = {'app': 'worker', 'pod': 'worker-0', 'kafka_destination': 'events', 'kafka_consumer': 'sync'}
+    add('kafka_consumer_messages_total', dict(kafka, kafka_result='success'), '0+42x10')
+    add('kafka_consumer_messages_total', dict(kafka, kafka_result='error'), '0+18x10')
+    add('job_runs_total', {'app': 'cron', 'pod': 'cron-0', 'exported_job': 'cleanup', 'status': 'failure'}, '0+1x10')
+    # 采集失败或年龄未知的观察者不得把旧值带进舰队页。
+    for instance, age, known in [('a', 30, 1), ('b', 999, 0)]:
+        stats = {'app': 'worker', 'pod': 'worker-0', 'instance': instance, 'queue_destination': 'emails'}
+        add('queue_oldest_ready_age_seconds', stats, f'{age}+0x10')
+        add('queue_stats_oldest_ready_known', stats, f'{known}+0x10')
+        add('queue_stats_collection_success', stats, '1+0x10')
+
+    def app(name):
+        return {'namespace': 'apps', 'app': name}
+    target = {p['refId']: index for index, p in enumerate(next(p for p in panels(fleet) if p['id'] == 9)['targets'])}
+    checks = [fixture_check(fleet, panel, [({}, value)]) for panel, value in [(2, 3), (3, 1), (4, 2), (5, 1), (6, .1), (7, 10)]]
+    checks.append(fixture_check(fleet, 3, [({}, 0)], namespace='other'))
+    for ref, expected in [('A', [(app('api'), 1), (app('worker'), 1), (app('cron'), 0)]),
+                          ('B', [(app('api'), 2), (app('worker'), 1), (app('cron'), 1)]),
+                          ('C', [(app('api'), 1)]), ('D', [(app('api'), .1)]), ('E', [(app('api'), .475)]),
+                          ('F', [(app('worker'), 2)]), ('G', [(app('worker'), .25)]), ('H', [(app('worker'), 30)]),
+                          ('I', [(app('cron'), 10)])]:
+        checks.append(fixture_check(fleet, 9, expected, target=target[ref]))
+    # 无错误样本时比例为 0；无流量时比例不出值，不能把空闲服务显示成 0% 错误。
+    idle = [input_series('server_requests_code_total', {'namespace': 'apps', 'app': 'api', 'pod': 'api-0', 'code': '200'}, '0+60x10'),
+            input_series('server_requests_code_total', {'namespace': 'apps', 'app': 'idle', 'pod': 'idle-0', 'code': '200'}, '0+0x10')]
+    return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks},
+            {'interval': '1m', 'input_series': idle, 'promql_expr_test': [
+                fixture_check(fleet, 6, [({}, 0)]), fixture_check(fleet, 9, [(app('api'), 0)], target=target['D'])]},
+            {'interval': '1m', 'input_series': idle[1:], 'promql_expr_test': [fixture_check(fleet, 6, []), fixture_check(fleet, 9, [], target=target['D'])]}]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--container', help='使用现有容器中的 promtool；省略时用固定 Prometheus 镜像启动临时容器')
     args = parser.parse_args()
     dashboards = [json.loads(p.read_text()) for p in sorted((ROOT / 'grafana/dashboards').glob('*.json'))]
     uids = [d['uid'] for d in dashboards]
-    expected_uids = {'ack-service-overview', 'ack-container-overview', 'ack-application-components', 'foundation-shared-resources'}
+    expected_uids = {'foundation-fleet-overview', 'ack-service-overview', 'ack-container-overview', 'ack-application-components', 'foundation-shared-resources'}
     assert len(uids) == len(set(uids)), 'Dashboard UID 必须唯一'
-    assert expected_uids <= set(uids), '缺少约定的四份 Dashboard'
+    assert expected_uids <= set(uids), '缺少约定的五份 Dashboard'
     overview = next(d for d in dashboards if d['uid'] == 'ack-container-overview')
     components = next(d for d in dashboards if d['uid'] == 'ack-application-components')
     service = next(d for d in dashboards if d['uid'] == 'ack-service-overview')
     shared = next(d for d in dashboards if d['uid'] == 'foundation-shared-resources')
+    fleet = next(d for d in dashboards if d['uid'] == 'foundation-fleet-overview')
     empty_checks = []
     for d in dashboards:
         names = {v['name'] for v in d['templating']['list']}
@@ -382,7 +437,7 @@ def main():
             assert match and match[1] in set(uids), f'{d["uid"]} 的导航目标不存在: {link["url"]}'
             assert link['includeVars'] is True and link['keepTime'] is True, '跨页导航须保留变量和时间范围'
             linked_uids.add(match[1])
-        assert expected_uids <= linked_uids, f'{d["uid"]} 缺少四页导航链接'
+        assert expected_uids <= linked_uids, f'{d["uid"]} 缺少五页导航链接'
         # Grafana 内置数据链接变量来自当前字段，不属于 dashboard templating。
         referenced = {name for name in re.findall(r'\$\{(\w+)(?::\w+)?\}', json.dumps(d)) if not name.startswith('__')}
         assert referenced <= names, f'{d["uid"]} 未定义变量: {referenced - names}'
@@ -397,9 +452,17 @@ def main():
                     expected = [{'labels': '{}', 'value': 0}] if 'or vector(0)' in t['expr'] else []
                     empty_checks.append({'expr': expression(t['expr'], mode), 'eval_time': '10m', 'exp_samples': expected})
     fixtures = (fixture_tests(overview) + node_fixture_tests(overview) + resource_state_fixture_tests(overview) + component_fixture_tests(components)
-                + service_fixture_tests(service) + shared_fixture_tests(shared))
-    tests = {'rule_files': [], 'evaluation_interval': '1m', 'tests': [{'interval': '1m', 'promql_expr_test': empty_checks}] + fixtures}
-    cmd = ['docker', 'exec', '-i', args.container, 'promtool'] if args.container else ['docker', 'run', '--rm', '-i', '--entrypoint', 'promtool', 'prom/prometheus:v3.5.5']
+                + service_fixture_tests(service) + shared_fixture_tests(shared) + fleet_fixture_tests(fleet))
+    # 舰队页依赖 recording rules，测试与生产加载同一份规则文件，避免面板与规则口径漂移。
+    rules = ROOT / 'prometheus/alerts.yaml'
+    if args.container:
+        rule_path = '/tmp/foundation-alerts.yaml'
+        subprocess.run(['docker', 'cp', str(rules), f'{args.container}:{rule_path}'], check=True)
+        cmd = ['docker', 'exec', '-i', args.container, 'promtool']
+    else:
+        rule_path = '/etc/prometheus/alerts.yaml'
+        cmd = ['docker', 'run', '--rm', '-i', '-v', f'{rules.parent}:/etc/prometheus:ro', '--entrypoint', 'promtool', 'prom/prometheus:v3.5.5']
+    tests = {'rule_files': [rule_path], 'evaluation_interval': '1m', 'tests': [{'interval': '1m', 'promql_expr_test': empty_checks}] + fixtures}
     subprocess.run(cmd + ['test', 'rules', '/dev/stdin'], input=json.dumps(tests), text=True, check=True)
     nonempty_checks = sum(len(test['promql_expr_test']) for test in fixtures)
     print(f'JSON、变量和 {len(empty_checks)} 条空样本查询检查通过；{nonempty_checks} 条合成样本断言覆盖隔离、去重、Limit、组件单位与分母口径')

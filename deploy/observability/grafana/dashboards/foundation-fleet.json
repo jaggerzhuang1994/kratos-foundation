@@ -1,0 +1,845 @@
+{
+  "editable": true,
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "uid": "foundation-fleet-overview",
+  "title": "Foundation · 舰队总览",
+  "version": 1,
+  "tags": [
+    "Foundation",
+    "fleet"
+  ],
+  "links": [
+    {
+      "title": "舰队总览",
+      "type": "link",
+      "url": "/d/foundation-fleet-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "服务总览",
+      "type": "link",
+      "url": "/d/ack-service-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "容器与节点",
+      "type": "link",
+      "url": "/d/ack-container-overview",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "应用组件",
+      "type": "link",
+      "url": "/d/ack-application-components",
+      "includeVars": true,
+      "keepTime": true
+    },
+    {
+      "title": "共享资源与健康",
+      "type": "link",
+      "url": "/d/foundation-shared-resources",
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
+        "name": "namespace",
+        "label": "命名空间",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(kube_pod_info, namespace)",
+        "query": {
+          "query": "label_values(kube_pod_info, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "01 · 舰队症状 — 先看有没有应用不可用或在报错",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "title": "上报就绪的应用",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(app:app_ready:instances{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "上报 app_ready 的应用数（按 env/cluster/namespace/app）；未接入 Foundation 或进程已退出的一次性任务不计入。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "不可用应用",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(app:app_ready:ready{namespace=~\"${namespace}\"} == 0) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "所有实例都未就绪的应用数，对应 FoundationAppUnavailable 的判定口径。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "未全部就绪应用",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(app:app_ready:ready{namespace=~\"${namespace}\"} < app:app_ready:instances{namespace=~\"${namespace}\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "至少一个实例未就绪的应用数，包含不可用应用；滚动发布期间短暂出现属正常。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "总请求速率",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(app:server_requests:rate5m{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "所有应用 Foundation 方法指标层完成的请求，基于 5m 预聚合。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "整体 5xx 比例",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(app:server_errors:rate5m{namespace=~\"${namespace}\"} or 0 * app:server_requests:rate5m{namespace=~\"${namespace}\"}) / (sum(app:server_requests:rate5m{namespace=~\"${namespace}\"}) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "全部应用 5xx 请求占比；无流量时不出值。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "近 1h Job 失败",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(app:job_failures:increase1h{namespace=~\"${namespace}\"}) or vector(0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "description": "框架内 job_runs_total 记录的失败次数；一次性脚本常在被抓取前退出，需结合 K8s Job 状态。",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "未接入 / 无样本",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "title": "02 · 应用健康 — 每个应用一行，点击应用名进入服务总览",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 9,
+      "title": "应用健康表",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (env,cluster,namespace,app) (app:app_ready:ready{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (env,cluster,namespace,app) (app:app_ready:instances{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "sum by (env,cluster,namespace,app) (app:server_errors:rate5m{namespace=~\"${namespace}\"} or 0 * app:server_requests:rate5m{namespace=~\"${namespace}\"}) / (sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\"}) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "histogram_quantile(0.95, sum by (env,cluster,namespace,app,le) (app:server_requests_seconds_bucket:rate5m{namespace=~\"${namespace}\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "expr": "sum by (env,cluster,namespace,app) (app:consumer_messages:rate5m{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "G",
+          "expr": "sum by (env,cluster,namespace,app) (app:consumer_failures:rate5m{namespace=~\"${namespace}\"} or 0 * app:consumer_messages:rate5m{namespace=~\"${namespace}\"}) / (sum by (env,cluster,namespace,app) (app:consumer_messages:rate5m{namespace=~\"${namespace}\"}) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "H",
+          "expr": "max by (env,cluster,namespace,app) (app:queue_oldest_ready_age:max{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "I",
+          "expr": "sum by (env,cluster,namespace,app) (app:job_failures:increase1h{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "description": "全部列来自 foundation-records 预聚合；空单元格表示该应用没有对应负载（如纯消费者没有请求速率），不等于零。就绪实例低于实例数时标红。",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "未接入 / 无样本",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "应用"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "查看该应用的服务总览",
+                    "url": "/d/ack-service-overview?${datasource:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-app=${__value.raw}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "就绪实例"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "实例数"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "请求速率"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx比例"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "消费速率"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ops"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "消费失败比例"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "最老就绪任务"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "近1h Job失败"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "就绪实例",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Time 8": true,
+              "Time 9": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "env": "环境",
+              "cluster": "集群",
+              "namespace": "命名空间",
+              "app": "应用",
+              "Value #A": "就绪实例",
+              "Value #B": "实例数",
+              "Value #C": "请求速率",
+              "Value #D": "5xx比例",
+              "Value #E": "P95",
+              "Value #F": "消费速率",
+              "Value #G": "消费失败比例",
+              "Value #H": "最老就绪任务",
+              "Value #I": "近1h Job失败"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "面板口径",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "本页只查询 `prometheus/alerts.yaml` 中 `foundation-records` 组的预聚合，几十个应用时依然秒开；未加载该规则组时整页无数据。\n\n- 就绪：`app_ready` 与 HTTP `/readyz`、gRPC 健康检查读取同一状态，对所有负载类型成立。\n- 消费：Queue 失败含 `failed`/`storage_error`，Kafka 失败含 `error`/`dead_lettered`；最老就绪任务只取采集成功且年龄已知的观察者。\n- 下钻：应用名链接到服务总览并带上命名空间与应用；告警分级见 `docs/fleet-monitoring.md`。"
+      }
+    }
+  ]
+}
