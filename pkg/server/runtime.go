@@ -217,22 +217,22 @@ func (r *Runtime) Servers() (transport.Server, transport.Server) {
 	return r.httpServer, r.grpcServer
 }
 
-// withStopLifecycle 仅在需要停机前置动作或延迟时包装 Server，并保留 Endpointer 能力。
+// withStopLifecycle 仅在需要附加停机动作或延迟时包装 Server，并保留 Endpointer 能力。
 func withStopLifecycle(
 	server transport.Server,
 	delay time.Duration,
-	beforeStop func(context.Context) error,
+	alongside func(context.Context) error,
 	health *healthState,
 ) transport.Server {
-	if delay <= 0 && beforeStop == nil && health == nil {
+	if delay <= 0 && alongside == nil && health == nil {
 		return server
 	}
 
 	runtime := &stopRuntime{
 		Server:     server,
 		health:     health,
-		delay:      delay,
-		beforeStop: beforeStop,
+		delay:     delay,
+		alongside: alongside,
 	}
 	if endpointer, ok := server.(transport.Endpointer); ok {
 		return &endpointStopRuntime{
@@ -250,8 +250,8 @@ type stopRuntime struct {
 	transport.Server
 	// delay 调用底层停止前的等待时长。
 	delay time.Duration
-	// beforeStop 底层停止前的附加清理回调，可为 nil。
-	beforeStop func(context.Context) error
+	// alongside 与底层停止并行执行的附加停机动作，可为 nil。
+	alongside func(context.Context) error
 }
 
 type endpointStopRuntime struct {
@@ -261,7 +261,7 @@ type endpointStopRuntime struct {
 	transport.Endpointer
 }
 
-// Stop 等待配置延迟后依次执行前置清理和底层 Server 停止，并合并所有错误。
+// Stop 等待配置延迟后并行执行附加停机动作和底层 Server 停止，并合并所有错误。
 func (s *stopRuntime) Stop(ctx context.Context) error {
 	if s.health != nil {
 		s.health.stopped.Store(true)
@@ -272,18 +272,22 @@ func (s *stopRuntime) Stop(ctx context.Context) error {
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			return errors.Join(ctx.Err(), s.runBeforeStop(ctx), s.Server.Stop(ctx))
+			return errors.Join(ctx.Err(), s.stopTogether(ctx))
 		}
 	}
-	return errors.Join(s.runBeforeStop(ctx), s.Server.Stop(ctx))
+	return s.stopTogether(ctx)
 }
 
-// runBeforeStop 在没有前置清理时直接返回，避免每个协议构造空回调。
-func (s *stopRuntime) runBeforeStop(ctx context.Context) error {
-	if s.beforeStop == nil {
-		return nil
+// stopTogether 让附加动作与底层停止共用同一预算而不是先后消耗：WebSocket 等已劫持的连接
+// 不受 http.Server.Shutdown 跟踪，串行时卡住的业务回调会耗尽预算，使普通请求被强制关闭。
+func (s *stopRuntime) stopTogether(ctx context.Context) error {
+	if s.alongside == nil {
+		return s.Server.Stop(ctx)
 	}
-	return s.beforeStop(ctx)
+	alongside := make(chan error, 1)
+	go func() { alongside <- s.alongside(ctx) }()
+	err := s.Server.Stop(ctx)
+	return errors.Join(<-alongside, err)
 }
 
 // AbortStartup 透传启动前回滚，不执行停止延迟或尚未启动的业务停止回调。

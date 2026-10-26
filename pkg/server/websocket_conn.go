@@ -166,7 +166,7 @@ func (c *websocketClient) resolve() {
 		}
 	}()
 	defer func() {
-		if err := c.close(false); err != nil {
+		if err := c.close(0); err != nil {
 			if c.Logger != nil {
 				c.WithContext(c.request.Context()).With("event", "server.websocket.close.failed", "error", err).Error("websocket connection close failed")
 			}
@@ -226,11 +226,16 @@ func (c *websocketClient) Request() *http.Request {
 
 // Close 幂等发送正常关闭帧并释放底层连接。
 func (c *websocketClient) Close() error {
-	return c.close(true)
+	return c.close(websocket.CloseNormalClosure)
 }
 
-// close 让读循环退出与主动关闭共用一次资源释放，同时只在主动关闭时发送控制帧。
-func (c *websocketClient) close(sendControl bool) error {
+// closeGoingAway 在服务停机时发送 1001 关闭帧，提示客户端重连到其他实例。
+func (c *websocketClient) closeGoingAway() error {
+	return c.close(websocket.CloseGoingAway)
+}
+
+// close 让读循环退出与主动关闭共用一次资源释放；code 为 0 时不发送关闭帧（读循环自行退出）。
+func (c *websocketClient) close(code int) error {
 	c.closeOnce.Do(func() {
 		if c.conn == nil {
 			c.closeErr = errors.New("websocket connection is nil")
@@ -241,10 +246,10 @@ func (c *websocketClient) close(sendControl bool) error {
 		c.writeLock.Lock()
 		defer c.writeLock.Unlock()
 		var closeErrors []error
-		if sendControl {
+		if code != 0 {
 			closeErrors = append(closeErrors, c.conn.WriteControl(
 				websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+				websocket.FormatCloseMessage(code, ""),
 				time.Now().Add(writeWait),
 			))
 		}
@@ -280,7 +285,7 @@ func (c *websocketClient) Send(messageType MessageType, data []byte) error {
 	if err != nil {
 		// Gorilla 写失败后的连接不可复用。先释放写锁再关底层连接，使阻塞的读
 		// 循环退出并执行既有 OnClose/hub 清理；不向已损坏的流追加关闭帧。
-		return errors.Join(err, c.close(false))
+		return errors.Join(err, c.close(0))
 	}
 	return nil
 }

@@ -171,7 +171,7 @@ func (h *websocketHub) serve(client *websocketClient) bool {
 	return true
 }
 
-// stop 拒绝新连接、主动关闭现有连接并等待所有读循环退出。
+// stop 拒绝新连接、以 1001 Going Away 关闭现有连接并等待所有读循环退出。
 func (h *websocketHub) stop(ctx context.Context) error {
 	h.mu.Lock()
 	h.stopping = true
@@ -189,7 +189,7 @@ func (h *websocketHub) stop(ctx context.Context) error {
 	closeResults := make(chan error, len(clients))
 	for _, client := range clients {
 		go func() {
-			closeResults <- client.Close()
+			closeResults <- client.closeGoingAway()
 		}()
 	}
 
