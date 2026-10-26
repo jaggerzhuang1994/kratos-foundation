@@ -52,6 +52,7 @@
 - 日志热路径：caller 按调用地址缓存帧解析结果，字段过滤、module 归一化、格式化、去空与去重合并为一遍处理，输出内容不变；启用级别下单条日志开销约降低 6 倍。
 - Client：已构建版本的 `AcquireClient` / release 走无锁分片计数快速路径，16 并发下约 6 倍吞吐，租约与退役语义不变。
 - HTTP 监听、Queue Worker、Kafka ConsumerRuntime 与错误树判断改为共享的精简实现，外部行为不变。
+- 生成器模块（`cmd/protoc-gen-*`）升级依赖：errors-v2 的 grpc 1.61→1.84、x/sys，jsonschema 的 x/text 0.22→0.43 等修复已知漏洞；client-v2 由已拆分前的 `google.golang.org/genproto` 改用 `genproto/googleapis/api`，依赖图从数十个模块降至 10 个。生成产物不变。errors-v2 仅导入 Kratos 的错误扩展定义，GO-2026-5471（`transport/http`）不可达。
 - 仓库结构调整（不影响 Go API）：`deploy/` 拆分为 `observability/`（Grafana 面板、Prometheus 规则与接入说明）与 `test/`（本地可运行的外部服务测试、面板校验与演示环境）；`examples/` 只保留用法代码；`MIGRATION_V2.md` 精简为 [MIGRATION.md](MIGRATION.md)，删除 `PROJECT_VISION.md`、`PACKAGE_REVIEW.md`；开发工具通过 `make init` 安装到 `tools/` 并锁定版本，新增 `make help`、`make vulncheck`、`make changelog`。
 - 依赖安全升级：grpc 1.84、OpenTelemetry 1.47（Prometheus exporter 0.69，导出的指标名与标签经比对不变）、golang.org/x/net 0.61、x/crypto 0.58、x/text、x/sys、pgx 5.11、ch-go 等升级到不受已知漏洞影响的版本，`govulncheck` 在 go1.26.10 下无可达漏洞。go-redis（9.23 在建连时新增 DNS 解析）、franz-go（1.22 改变主题重建与缓冲默认值）、fsnotify（1.10 在 macOS 下热重载偶发 bad file descriptor）均无已知漏洞，为避免行为变化暂保持原版本。剩余未修复公告：Kratos GO-2026-5471（`transport/http`，无上游修复，代码未调用受影响符号）与 x/crypto `openpgp` 包弃用公告（未导入）。
 - WebSocket 停机关闭与 HTTP `Shutdown` 并行执行、共享同一预算，卡住的 WebSocket 回调不再推迟 HTTP 停止接收新连接或挤占在途请求的优雅完成时间；停机关闭帧由 1000 改为 1001 Going Away（业务主动 `Close()` 仍为 1000），依赖关闭码判断是否重连的客户端需同步调整。
