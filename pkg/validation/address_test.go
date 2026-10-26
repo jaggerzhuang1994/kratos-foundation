@@ -17,6 +17,10 @@ func TestAddressValidation(t *testing.T) {
 		{"10.1.2.3", ErrUnsafeIP}, {"172.16.0.1", ErrUnsafeIP}, {"192.168.1.1", ErrUnsafeIP},
 		{"169.254.1.1", ErrUnsafeIP}, {"fe80::1", ErrUnsafeIP}, {"ff02::1", ErrUnsafeIP},
 		{"::ffff:127.0.0.1", ErrUnsafeIP},
+		{"100.100.100.200", ErrUnsafeIP}, {"100.64.0.1", ErrUnsafeIP}, {"100.127.255.254", ErrUnsafeIP}, {"100.128.0.1", nil},
+		{"0.1.2.3", ErrUnsafeIP}, {"192.0.0.8", ErrUnsafeIP}, {"198.18.0.1", ErrUnsafeIP}, {"224.0.0.1", ErrUnsafeIP},
+		{"255.255.255.255", ErrUnsafeIP}, {"fd00::1", ErrUnsafeIP}, {"64:ff9b::a00:1", ErrUnsafeIP}, {"ff05::1", ErrUnsafeIP},
+		{"::ffff:100.100.100.200", ErrUnsafeIP},
 	} {
 		if err := IsSafeIP(net.ParseIP(tt.input)); !errors.Is(err, tt.want) {
 			t.Errorf("%s: %v", tt.input, err)

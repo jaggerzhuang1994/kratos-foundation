@@ -36,7 +36,7 @@ err := validation.IsValidEmail(email) // nil 表示通过；非 nil 时由调用
 | `IsValidDigits(input, minLength, maxLength)` | 仅 ASCII 数字，长度在闭区间内；允许前导零，不裁剪空白；要求 1 ≤ minLength ≤ maxLength，成功返回 nil，失败返回可识别错误 |
 | `IsValidPassword(password, minLength, maxLength, minTypes)` | 仅 ASCII 0x20–0x7E，长度在闭区间内；大写、小写、数字、特殊字符各算一类，空格属于特殊字符；成功返回 nil，失败返回具体原因 |
 | `CheckDisplayText` | 检查 UTF-8 和可配置的三种长度，不修改输入；失败返回可识别错误 |
-| `IsSafeIP` | 拒绝未指定、回环、私网和链路本地地址；调用方须传有效 net.IP，并非完整的公网范围分类 |
+| `IsSafeIP` | 拒绝未指定、回环、私网（含 IPv6 ULA）、链路本地、组播、CGNAT（100.64/10，含云元数据地址）及其他保留网段；调用方须传有效 net.IP，并非完整的公网范围分类 |
 | `IsSafeCallbackURL` | 空字符串允许；非空仅允许 HTTP(S)，拒绝无主机名、localhost 和解析结果中的上述 IP |
 
 ### 邮箱格式

@@ -25,11 +25,42 @@ var (
 	ErrCallbackURLNoIP = errors.New("no ip found for callback hostname")
 )
 
-// IsSafeIP 拒绝未指定、回环、私网及链路本地地址，失败返回 ErrUnsafeIP。
+// unsafeIPRanges 补充标准库判定之外不应作为外部回调目标的保留网段。
+// 100.64.0.0/10 为运营商级 NAT 共享地址，云厂商常把元数据服务放在其中（如阿里云 100.100.100.200）。
+var unsafeIPRanges = mustParseCIDRs(
+	"0.0.0.0/8",      // 本网络
+	"100.64.0.0/10",  // 共享地址空间（CGNAT）
+	"192.0.0.0/24",   // IETF 协议分配
+	"198.18.0.0/15",  // 基准测试
+	"240.0.0.0/4",    // 保留地址及受限广播
+	"64:ff9b::/96",   // NAT64 可映射到内网 IPv4
+	"64:ff9b:1::/48", // 本地 NAT64
+	"2001:db8::/32",  // 文档地址
+)
+
+func mustParseCIDRs(values ...string) []*net.IPNet {
+	result := make([]*net.IPNet, 0, len(values))
+	for _, value := range values {
+		_, network, err := net.ParseCIDR(value)
+		if err != nil {
+			panic(err)
+		}
+		result = append(result, network)
+	}
+	return result
+}
+
+// IsSafeIP 拒绝未指定、回环、私网（含 IPv6 ULA）、链路本地、组播、CGNAT 及其他保留地址，失败返回 ErrUnsafeIP。
 // 调用方须传入有效 IP；本函数不是完整的公网地址分类器。
 func IsSafeIP(ip net.IP) error {
-	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() {
+	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() ||
+		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
 		return ErrUnsafeIP
+	}
+	for _, network := range unsafeIPRanges {
+		if network.Contains(ip) {
+			return ErrUnsafeIP
+		}
 	}
 
 	// 防止IPv4映射的IPv6地址
