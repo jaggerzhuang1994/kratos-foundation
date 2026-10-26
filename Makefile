@@ -210,8 +210,8 @@ components-exercise: ## 驱动 components 示例并核对真实指标增量
 
 # ==================== 发布 ====================
 .PHONY: changelog verify-release all
-changelog: ## 按 Git tag 重新生成 CHANGELOG 中的提交记录块（保留手写说明）
-	python3 scripts/changelog.py
+changelog: ## 按 Git tag 生成 CHANGELOG 提交记录（保留手写说明）；打 tag 前用 RELEASE=vX.Y.Z 整理发布节
+	python3 scripts/changelog.py $(if $(RELEASE),--release $(RELEASE),)
 
 verify-release: verify lint vulncheck test-business ## 本地发布门禁；不打 tag、不推送
 	@echo "verify-release ok"

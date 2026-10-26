@@ -104,6 +104,6 @@ test/                              可在本地运行的测试环境与脚本
 | proto / 配置协议 | `make proto` 并检查 `config.schema.json` 差异 |
 | 面板、规则、指标 | `make test-observability`（需要 Docker） |
 | 纯文档 | 核对事实、示例与链接，`git diff --check` |
-| 发布前 | `make verify-release`；外部服务相关改动加 `make test-external` |
+| 发布前 | `make changelog RELEASE=vX.Y.Z` 整理发布节并提交，再 `make verify-release`；外部服务相关改动加 `make test-external`；打 tag 后运行 `make changelog` 刷新提交记录 |
 
 - **【必须】** 优先使用 Makefile 已有 target；修改 Makefile 时为新 target 添加 `.PHONY` 与 `##` 帮助说明，并保证失败返回非零。

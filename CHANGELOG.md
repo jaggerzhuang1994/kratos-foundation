@@ -4,12 +4,22 @@
 
 ## 计划中
 
-本节尚未发布。包含不兼容变更，升级前逐项确认“升级风险”。
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.5.0（2026-10-26）
+
+本版本包含不兼容变更，升级前逐项确认“升级风险”；接入步骤见 [MIGRATION.md](MIGRATION.md)。
 
 ### 升级风险
 
 - **最低 Go 版本升至 1.26**：根模块改为 `go 1.26.0`（Go 1.25 已停止安全更新，且修复 HTTP/2 服务端漏洞的 `golang.org/x/net` v0.60+ 要求 Go 1.26），依赖本框架的服务需使用 Go 1.26+ 构建。标准库漏洞只能由工具链修复，构建镜像与 CI 应使用 go1.26.10+ 或 go1.27.3+；仓库自身通过 `toolchain go1.26.10` 固定开发工具链。
-- **应用类型由 `*kratos.App` 改为 `*app.App`**：App 自行实现 Run/Stop 生命周期，不再包装 `kratos.App`。`bootstrap.NewKratosApp` 更名为 `bootstrap.NewApp`；业务 injector 的返回类型改为 `*app.App` 后重新执行 `wire`，`main` 中的 `app.Run()` 不变。`*app.App` 实现 `kratos.AppInfo`，`kratos.FromContext` 仍可读取身份。
+- **应用类型由 `*kratos.App` 改为 `*app.App`**：App 自行实现 Run/Stop 生命周期，不再包装 `kratos.App`。`bootstrap.NewKratosApp` 更名为 `bootstrap.NewApp`；业务 injector 的返回类型改为 `*app.App` 后重新执行 `wire`，`main` 中的 `app.Run()` 不变。`bootstrap.NewMetricsBootstrap` 签名改为 `(spec, meter, pusher *metrics.Pusher, logger log.Logger) (MetricsBootstrap, error)`：使用 `BaseProviderSet` 只需重新生成；显式列出 provider 的 injector 需加入 `metrics.NewPusher`。`*app.App` 实现 `kratos.AppInfo`，`kratos.FromContext` 仍可读取身份。
 - **生产环境不再返回错误堆栈**：HTTP 响应 metadata 与 gRPC `ErrorInfo` 中的 `err_stack` 仅在 `env.ExposeDiagnostics()` 为 true 时携带（local/dev/test 始终、pre 需 `APP_DEBUG=true`、prod 一律不带）。依赖跨服务远端堆栈排障的 prod 场景需改用服务端日志。见 [诊断出口环境约束](pkg/errors/README.md#诊断出口环境约束)。
 - **gRPC 健康检查改为跟随应用就绪**：默认注册的 `grpc.health.v1.Health` 不再在 Server 启动后立即报 `SERVING`。空服务名与已注册业务服务名在应用就绪、未停机且 readiness 依赖检查通过时才返回 `SERVING`（`Watch` 只看就绪与停机，不跑依赖检查）；服务名 `liveness` 恒为 `SERVING`。影响与迁移：
   - Kratos gRPC 客户端默认开启客户端健康检查（`Watch` 空服务名），启动钩子完成前不再把流量发往新实例，进入停机后 1s 内摘流，随后 `stop_delay` 内完成切换；无需改动。需要旧行为的调用方可用 `kratosgrpc.WithHealthCheck(false)`。
@@ -92,17 +102,21 @@
 
 **文档**
 
+- ⚠️ 不兼容：restructure documentation, layout and development tooling（`e94add4`）
 - **changelog**：record WebSocket shutdown changes（`20947b6`）
 - **changelog**：record planned foundation review changes（`08450ee`）
 
 **测试**
 
+- align Consul and MySQL external tests with documented semantics（`250c849`）
 - **server**：verify Kratos client health checking across the lifecycle（`4c381b7`）
 - cover composed lifecycle, hot reload and startup signals（`95d8169`）
 - merge scenario-suffixed test files into their implementation tests（`7ff4302`）
 
 **构建与依赖**
 
+- **cmd**：upgrade generator module dependencies（`73635fa`）
+- **cmd**：align generator modules with Go 1.26 and the root toolchain（`e45d79d`）
 - ⚠️ 不兼容：**deps**：require Go 1.26 and upgrade vulnerable dependencies（`7e1b3ae`）
 <!-- changelog:auto:end -->
 
