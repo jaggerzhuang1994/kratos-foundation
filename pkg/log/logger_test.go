@@ -95,6 +95,23 @@ func BenchmarkLoggerFilteredMessages(b *testing.B) {
 	})
 }
 
+// BenchmarkLoggerEnabledMessage 覆盖启用级别下的完整字段管线（caller 定位、过滤、模块归一化、格式化与去重）。
+func BenchmarkLoggerEnabledMessage(b *testing.B) {
+	b.Setenv(EnvStdDisable, "true")
+	instance, cleanup, err := NewLogger()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer cleanup()
+	l := instance.WithModule("bench").With("service", "x").WithContext(context.Background())
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			l.Infow("event", "bench.event", "user", 1, "msg", "hello")
+		}
+	})
+}
+
 func TestLoggerHelperMethodsEmitExpectedLevelsAndPayloads(t *testing.T) {
 	var records []capturedLogRecord
 	shared := &sharedState{}

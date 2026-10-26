@@ -3,6 +3,7 @@ package log
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
@@ -18,8 +19,16 @@ type preparedOutput struct {
 	config envConfig
 	// releaseFile 文件资源释放函数；复用文件时随新代转移。
 	releaseFile func()
-	// ready 关闭后允许本代写入，确保前代资源退役完成。
+	// ready 关闭后允许本代写入，确保前代资源退役完成；nil 表示无需等待。
 	ready chan struct{}
+	// readyDone 在 ready 关闭后置位，写入路径据此跳过 channel 接收及其内部锁。
+	readyDone atomic.Bool
+}
+
+// markReady 关闭 ready 并发布完成标记；读取方未见标记时仍可安全等待已关闭的 channel。
+func (p *preparedOutput) markReady() {
+	close(p.ready)
+	p.readyDone.Store(true)
 }
 
 // outputLogger 保持实例入口稳定，派生 Logger 不持有即将退役的文件句柄。
@@ -65,7 +74,7 @@ func newOutputLogger(config envConfig) (*outputLogger, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	close(prepared.ready)
+	prepared.markReady()
 	out := &outputLogger{preparedOutput: prepared}
 	return out, out.close, nil
 }
@@ -97,7 +106,7 @@ func (l *outputLogger) Log(level kratoslog.Level, keyvals ...any) error {
 		return os.ErrClosed
 	}
 	// 等待前代资源退役，避免同路径轮转与旧文件写入并行。
-	if l.ready != nil {
+	if l.ready != nil && !l.readyDone.Load() {
 		<-l.ready
 	}
 	return l.output.Log(level, keyvals...)

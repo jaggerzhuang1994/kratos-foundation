@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
+	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 )
 
@@ -81,10 +80,8 @@ type logger struct {
 	// module 事件所属模块，供模块策略匹配。
 	module string
 
-	// mu 保护本对象缓存的读取与发布。
-	mu sync.RWMutex
-	// cache 当前共享策略版本对应的只读缓存。
-	cache *loggerCache
+	// cache 原子发布当前共享策略版本对应的只读缓存。
+	cache atomic.Pointer[loggerCache]
 }
 
 // configState 是单个 Wire Logger 持有的不可变默认配置及输出，派生 Logger 复用它。
@@ -211,18 +208,20 @@ func (l *logger) levelEnabled(level kratoslog.Level, custom *customState) bool {
 	return level >= minimum
 }
 
-// log 在锁外求值用户字段；只有内置输出的最终写入进入共享策略边界。
+// log 在锁外求值和格式化用户字段；只有内置输出的最终写入进入共享策略边界。
+// 写入前若共享策略已变化，按最新策略重新组装事件，已格式化的字段文本复用，不重复调用格式化方法。
 func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) error {
 	custom := l.shared.custom.Load()
 	if !l.levelEnabled(level, custom) {
 		return nil
 	}
-	cache := l.currentCache()
+	cache := l.currentCache(custom)
 	ctx := l.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	fields := append([]any(nil), cache.fields...)
+	fields := make([]any, len(cache.fields), len(cache.fields)+len(keyvals)+1)
+	copy(fields, cache.fields)
 	for i := 1; i < len(fields); i += 2 {
 		switch value := fields[i].(type) {
 		case levelValue:
@@ -243,45 +242,28 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 		}
 	}
 	owned, internal := l.config.output.(*outputLogger)
+	var texts []any
 	if internal {
-		// 内置端最终使用 %s/%v 编码。为用户格式化方法建立延迟缓存，
-		// 重试只重新应用策略，不会重复调用可重入的 Valuer 或 Stringer。
-		fields = memoizeFields(fields)
+		texts = make([]any, len(fields))
 	}
 	for {
 		custom = l.shared.custom.Load()
 		if !l.levelEnabled(level, custom) {
 			return nil
 		}
-		cache = l.currentCache()
-		if cache.customVersion != custom.version {
-			continue
-		}
-		var event eventFields
-		filtered := output.NewFilter(&event, false, cache.filterKeys)
-		filtered = output.NewModule(filtered, l.module)
-		if err := filtered.Log(level, fields...); err != nil {
-			return err
-		}
-		if internal {
-			// 先按 key 过滤，敏感或昂贵字段被拒绝时不触发其格式化方法。
-			event = freezeFields(event)
-		}
-		var ready eventFields
-		filtered = output.NewFilter(output.NewDedupe(&ready), l.config.filterEmpty, nil)
-		if err := filtered.Log(level, event...); err != nil {
-			return err
-		}
+		cache = l.currentCache(custom)
+		// 先按 key 过滤再格式化，敏感或昂贵字段被拒绝时不触发其格式化方法。
+		event := cache.render(fields, internal, l.config.filterEmpty, texts)
 		if !internal {
 			// 外部 Logger 保留原始字段类型和自身生命周期，调用时不持有本包锁。
-			return l.config.output.Log(level, ready...)
+			return l.config.output.Log(level, event...)
 		}
 		l.shared.gate.RLock()
 		if l.shared.custom.Load() != custom {
 			l.shared.gate.RUnlock()
 			continue
 		}
-		err := owned.Log(level, ready...)
+		err := owned.Log(level, event...)
 		l.shared.gate.RUnlock()
 		return err
 	}

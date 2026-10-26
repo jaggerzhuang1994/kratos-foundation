@@ -72,7 +72,7 @@ func (s *sharedState) applyRuntimeConfig(config *RuntimeConfig) error {
 			if !change.reused && change.previous.releaseFile != nil {
 				change.previous.releaseFile()
 			}
-			close(change.next.ready)
+			change.next.markReady()
 		}
 		return nil
 	}
