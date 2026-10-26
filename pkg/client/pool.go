@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"sync/atomic"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
@@ -25,6 +25,7 @@ type retiredClient struct {
 }
 
 // AcquireClient 返回当前配置版本的客户端和调用级幂等 release；HTTP 服务发现不在此等待首个节点。
+// 已构建的当前版本经只读索引无锁授予租约；首次构建、等待构建与关闭判断走 mu 保护的慢路径。
 func (f *factory) AcquireClient(ctx context.Context, name string) (
 	httpClient *kratoshttp.Client,
 	grpcClient *stdgrpc.ClientConn,
@@ -33,6 +34,18 @@ func (f *factory) AcquireClient(ctx context.Context, name string) (
 ) {
 	if name == "" {
 		return nil, nil, nil, ErrInvalidClientName
+	}
+	if index := f.published.Load(); index != nil {
+		// 索引可能略旧：版本若已退役则 tryAcquire 撤回并回到慢路径，不会租用已关闭的客户端。
+		if version := (*index)[name]; version != nil {
+			shard, ok, idle := version.tryAcquire()
+			if ok {
+				return f.lease(name, version, shard)
+			}
+			if idle {
+				f.closeVersion(name, version)
+			}
+		}
 	}
 
 	for {
@@ -54,16 +67,12 @@ func (f *factory) AcquireClient(ctx context.Context, name string) (
 			f.slots[name] = slot
 		}
 		version := slot.current
+		// 当前版本只在关闭或配置更新时退役，二者都在 mu 内替换 current，因此这里只需判断是否已构建。
 		if version.client.present() {
-			version.references++
-			f.leases[version] = name
-			f.activities++
-			result := version.client
+			// 持有 mu 时当前版本不会退役，tryAcquire 必然成功。
+			shard, _, _ := version.tryAcquire()
 			f.mu.Unlock()
-			return result.httpClient,
-				result.grpcClient,
-				sync.OnceFunc(func() { f.releaseClient(name, version) }),
-				nil
+			return f.lease(name, version, shard)
 		}
 
 		call := slot.build
@@ -108,6 +117,73 @@ func (f *factory) AcquireClient(ctx context.Context, name string) (
 	}
 }
 
+// clientLease 是一次成功 Acquire 的租约；release 幂等，只归还一次。
+type clientLease struct {
+	factory  *factory
+	name     string
+	version  *clientVersion
+	shard    int
+	released atomic.Bool
+}
+
+// lease 在调用方已持有租约计数后返回客户端；租约存续期间版本不会被关闭，读取 client 无需加锁。
+func (f *factory) lease(name string, version *clientVersion, shard int) (*kratoshttp.Client, *stdgrpc.ClientConn, func(), error) {
+	lease := &clientLease{factory: f, name: name, version: version, shard: shard}
+	return version.client.httpClient, version.client.grpcClient, lease.release, nil
+}
+
+// release 归还租约；归还后版本已退役且无剩余租约时关闭它，多个归还方同时满足条件也只关闭一次。
+func (l *clientLease) release() {
+	if !l.released.CompareAndSwap(false, true) {
+		return
+	}
+	if l.version.releaseShard(l.shard) {
+		l.factory.closeVersion(l.name, l.version)
+	}
+}
+
+// publishLocked 必须持有 mu 调用；按 slots 重建已构建且未退役的当前版本索引并原子发布。
+func (f *factory) publishLocked() {
+	if f.closed {
+		f.published.Store(nil)
+		return
+	}
+	index := make(map[string]*clientVersion, len(f.slots))
+	for name, slot := range f.slots {
+		if slot.current.client.present() && !slot.current.retired.Load() {
+			index[name] = slot.current
+		}
+	}
+	f.published.Store(&index)
+}
+
+// retireLocked 必须持有 mu 调用；退役版本并返回需要立即关闭的客户端，仍有租约时登记到 draining。
+func (f *factory) retireLocked(name string, version *clientVersion, reason retireReason) (retiredClient, bool) {
+	idle := version.retire(reason)
+	if !version.client.present() {
+		return retiredClient{}, false
+	}
+	if !idle {
+		f.draining[version] = name
+		return retiredClient{}, false
+	}
+	return detachRetired(name, version), true
+}
+
+// closeVersion 关闭最后一个租约归还的已退役版本；强制关闭后晚到的归还不会重复关闭。
+func (f *factory) closeVersion(name string, version *clientVersion) {
+	f.mu.Lock()
+	if !version.client.present() {
+		f.mu.Unlock()
+		return
+	}
+	retired := detachRetired(name, version)
+	delete(f.draining, version)
+	f.signalDrainedLocked()
+	f.mu.Unlock()
+	f.closeAndLog(retired)
+}
+
 func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Context) {
 	defer f.endActivity()
 
@@ -140,6 +216,7 @@ func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Contex
 		if buildErr == nil {
 			version.client = result
 			published = true
+			f.publishLocked()
 		} else {
 			call.err = fmt.Errorf(
 				"build client %q revision %d protocol %s target %q: %w",
@@ -152,7 +229,7 @@ func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Contex
 		}
 	} else if result.present() {
 		reason := retireStaleBuild
-		if f.closed && version.retired && version.retireReason == retireFactoryClosed {
+		if f.closed && version.retired.Load() && version.retireReason == retireFactoryClosed {
 			reason = retireFactoryClosed
 		}
 		rejected = &retiredClient{
@@ -179,26 +256,6 @@ func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Contex
 	}
 	close(call.done)
 	f.mu.Unlock()
-}
-
-func (f *factory) releaseClient(name string, version *clientVersion) {
-	defer f.endActivity()
-
-	var retired *retiredClient
-	f.mu.Lock()
-	version.references--
-	if version.references == 0 {
-		delete(f.leases, version)
-	}
-	if version.retired && version.references == 0 && version.client.present() {
-		detached := detachRetired(name, version)
-		retired = &detached
-	}
-	f.mu.Unlock()
-
-	if retired != nil {
-		f.closeAndLog(*retired)
-	}
 }
 
 func (f *factory) beginActivity() error {

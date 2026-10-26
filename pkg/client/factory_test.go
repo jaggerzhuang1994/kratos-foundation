@@ -657,7 +657,7 @@ func newFactoryState(
 		builder:        builder,
 		config:         proto.CloneOf(initial),
 		slots:          make(map[string]*clientSlot),
-		leases:         make(map[*clientVersion]string),
+		draining:       make(map[*clientVersion]string),
 		cleanupTimeout: 30 * time.Second,
 	}
 	for name, option := range initial.GetClients() {
@@ -750,7 +750,12 @@ func newReadyTestFactoryWithCloseCount(
 func currentReferences(f *factory, name string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.slots[name].current.references
+	version := f.slots[name].current
+	total := 0
+	for index := range version.leases {
+		total += int(version.leases[index].n.Load())
+	}
+	return total
 }
 
 func currentSnapshot(f *factory, name string) versionSnapshot {

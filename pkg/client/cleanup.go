@@ -26,13 +26,19 @@ func clientCleanupTimeout(config *config_pb.Client) (time.Duration, error) {
 	return duration, nil
 }
 
-// endActivity 与租约授予、关闭状态共用 mu，保证停机后不会再增加活动计数。
-// 直接通知等待者，不为可能永不归还的租约启动 WaitGroup 等待协程。
+// endActivity 与关闭状态共用 mu，保证停机后不会再增加活动计数。
 func (f *factory) endActivity() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.activities--
-	if f.closed && f.activities == 0 {
+	f.signalDrainedLocked()
+}
+
+// signalDrainedLocked 必须持有 mu 调用；关闭期间构建、配置更新和租约全部结束时唤醒 cleanup。
+// 直接通知等待者，不为可能永不归还的租约启动等待协程。
+func (f *factory) signalDrainedLocked() {
+	if f.closed && f.activities == 0 && len(f.draining) == 0 && !f.drainedClosed {
+		f.drainedClosed = true
 		close(f.drained)
 	}
 }
@@ -49,20 +55,16 @@ func (f *factory) cleanup(cancelSubscription func()) func() {
 		f.mu.Lock()
 		f.closed = true
 		f.drained = make(chan struct{})
-		if f.activities == 0 {
-			close(f.drained)
-		}
+		f.publishLocked()
 		for _, slot := range f.slots {
 			if slot.build != nil && slot.build.cancel != nil {
 				cancels = append(cancels, slot.build.cancel)
 			}
-			current := slot.current
-			current.retired = true
-			current.retireReason = retireFactoryClosed
-			if current.references == 0 && current.client.present() {
-				retired = append(retired, detachRetired(slot.name, current))
+			if client, idle := f.retireLocked(slot.name, slot.current, retireFactoryClosed); idle {
+				retired = append(retired, client)
 			}
 		}
+		f.signalDrainedLocked()
 		f.mu.Unlock()
 		for _, cancel := range cancels {
 			cancel()
@@ -75,17 +77,14 @@ func (f *factory) cleanup(cancelSubscription func()) func() {
 			return
 		case <-timer.C:
 		}
-		// 同时收回当前及热更新退役版本，防止旧租约不再可从 slots 找到而泄漏。
+		// 同时收回当前及热更新退役版本，防止仍被租用的连接泄漏；晚到的 release 不会重复关闭。
 		f.mu.Lock()
-		pending := f.activities
+		pending := f.activities + len(f.draining)
 		retired = nil
-		for version, name := range f.leases {
-			if version.client.present() {
-				version.retired = true
-				version.retireReason = retireFactoryClosed
-				retired = append(retired, detachRetired(name, version))
-			}
+		for version, name := range f.draining {
+			retired = append(retired, detachRetired(name, version))
 		}
+		clear(f.draining)
 		f.mu.Unlock()
 		if pending == 0 {
 			return

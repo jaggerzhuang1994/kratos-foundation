@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -559,4 +561,97 @@ func TestClientResultRejectsBothProtocols(t *testing.T) {
 	if !errors.Is(result.validate(), ErrInvalidBuildResult) {
 		t.Fatalf("error = %v, want %v", result.validate(), ErrInvalidBuildResult)
 	}
+}
+
+// 无锁租约与配置热更新、cleanup 交错时：租约期间客户端不得被关闭，每个构建的客户端最终恰好关闭一次。
+func TestFactoryLeasesSurviveConcurrentUpdatesAndCleanup(t *testing.T) {
+	type tracked struct {
+		closed atomic.Bool
+		closes atomic.Int32
+	}
+	var mu sync.Mutex
+	clients := map[*kratoshttp.Client]*tracked{}
+	f := newConfiguredTestFactory(t, configWithTarget("orders", "http://127.0.0.1:1"), func(context.Context, clientSpec) (clientResult, error) {
+		client, state := new(kratoshttp.Client), new(tracked)
+		mu.Lock()
+		clients[client] = state
+		mu.Unlock()
+		return clientResult{httpClient: client, closeFn: func() error {
+			state.closes.Add(1)
+			state.closed.Store(true)
+			return nil
+		}}, nil
+	})
+	stop := make(chan struct{})
+	var workers sync.WaitGroup
+	var violations atomic.Int32
+	for range 16 {
+		workers.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				httpClient, _, release, err := f.AcquireClient(context.Background(), "orders")
+				if err != nil {
+					violations.Add(1)
+					return
+				}
+				mu.Lock()
+				state := clients[httpClient]
+				mu.Unlock()
+				if state == nil || state.closed.Load() {
+					violations.Add(1)
+				}
+				runtime.Gosched()
+				if state != nil && state.closed.Load() {
+					violations.Add(1)
+				}
+				release()
+				release()
+			}
+		})
+	}
+	for index := range 50 {
+		if err := updateFactoryConfig(f, configWithTarget("orders", fmt.Sprintf("http://127.0.0.1:%d", index+2))); err != nil {
+			t.Fatal(err)
+		}
+		runtime.Gosched()
+	}
+	close(stop)
+	workers.Wait()
+	f.cleanup(nil)()
+	if _, _, _, err := f.AcquireClient(context.Background(), "orders"); !errors.Is(err, ErrFactoryClosed) {
+		t.Fatalf("Acquire after cleanup = %v", err)
+	}
+	if n := violations.Load(); n != 0 {
+		t.Fatalf("%d leases observed a closed client or failed", n)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(clients) < 2 {
+		t.Fatalf("built %d clients, want versions replaced by updates", len(clients))
+	}
+	for _, state := range clients {
+		if got := state.closes.Load(); got != 1 {
+			t.Fatalf("client closed %d times, want exactly once", got)
+		}
+	}
+}
+
+// 已发布版本的 Acquire/release 走无锁快速路径。
+func BenchmarkFactoryAcquireRelease(b *testing.B) {
+	f := newReadyTestFactory(b, "orders")
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			_, _, release, err := f.AcquireClient(context.Background(), "orders")
+			if err != nil {
+				b.Error(err)
+				return
+			}
+			release()
+		}
+	})
 }

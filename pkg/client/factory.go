@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -51,12 +53,59 @@ type clientVersion struct {
 	spec clientSpec
 	// client 本版本持有的协议客户端与释放函数。
 	client clientResult
-	// references 尚未释放的调用租约数，由 factory.mu 保护。
-	references int
-	// retired 是否停止接收新租约，等待旧租约归还。
-	retired bool
-	// retireReason 退役原因，用于释放日志。
+	// retired 标记版本已停止授予新租约；在 factory.mu 内写入，快速路径无锁读取。
+	retired atomic.Bool
+	// leases 按分片保存未归还租约数，避免高并发 Acquire 争用同一缓存行。
+	leases [leaseShards]leaseCounter
+	// retireReason 退役原因，用于释放日志；在设置 retired 之前于 factory.mu 内写入。
 	retireReason retireReason
+}
+
+// leaseShards 是每个版本的租约计数分片数，须为 2 的幂。
+const leaseShards = 32
+
+// leaseCounter 独占一个缓存行，避免相邻分片的伪共享。
+type leaseCounter struct {
+	n atomic.Int64
+	_ [56]byte
+}
+
+// tryAcquire 在版本未退役时增加一个租约并返回所用分片。
+//
+// 与 retire 构成 Dekker 式握手：租约方先增计数再读 retired，退役方先写 retired 再汇总计数，
+// 因此要么租约方看到退役并撤回，要么退役方看到这次计数而不会关闭版本。
+// 撤回时返回 idle，表示调用方可能是最后一个计数者，须检查关闭。
+func (v *clientVersion) tryAcquire() (shard int, ok, idle bool) {
+	shard = int(rand.Uint32() & (leaseShards - 1))
+	v.leases[shard].n.Add(1)
+	if !v.retired.Load() {
+		return shard, true, false
+	}
+	v.leases[shard].n.Add(-1)
+	return 0, false, v.idle()
+}
+
+// releaseShard 归还一个租约，并报告版本是否已退役且没有剩余租约。
+func (v *clientVersion) releaseShard(shard int) (idle bool) {
+	v.leases[shard].n.Add(-1)
+	return v.retired.Load() && v.idle()
+}
+
+// retire 必须持有 factory.mu 调用；标记版本退役并报告此刻是否已无租约。
+// 无租约时由调用方立即关闭，否则由把计数归零的归还方关闭。
+func (v *clientVersion) retire(reason retireReason) (idle bool) {
+	v.retireReason = reason
+	v.retired.Store(true)
+	return v.idle()
+}
+
+// idle 汇总全部分片；持有中的租约使其所在分片始终为正，因此不会误判为零。
+func (v *clientVersion) idle() bool {
+	var total int64
+	for index := range v.leases {
+		total += v.leases[index].n.Load()
+	}
+	return total == 0
 }
 
 type buildCall struct {
@@ -94,12 +143,16 @@ type factory struct {
 	slots map[string]*clientSlot
 	// closed 是否已进入关闭阶段，阻止新租约和活动。
 	closed bool
-	// activities 未结束的构建、租约与配置更新活动数。
+	// published 原子发布“连接名 → 已构建且未退役的当前版本”的只读索引，供 Acquire 无锁读取；
+	// 由持有 mu 的构建发布、配置更新和关闭重建，nil 表示无可用版本。
+	published atomic.Pointer[map[string]*clientVersion]
+	// activities 未结束的构建与配置更新活动数，由 mu 保护。
 	activities int
-	// drained 关闭期间活动归零后关闭的等待信号。
-	drained chan struct{}
-	// leases 持有未归还租约的版本及连接名，用于停机清理。
-	leases map[*clientVersion]string
+	// draining 已退役但仍有租约的版本及连接名，由 mu 保护；最后一个租约归还时关闭并移除。
+	draining map[*clientVersion]string
+	// drained 关闭期间活动与租约都归零后关闭的等待信号；drainedClosed 防止重复关闭。
+	drained       chan struct{}
+	drainedClosed bool
 	// cleanupTimeout 构造时冻结的租约等待预算，默认 30 秒；超时后强制回收，不限制底层 Close 耗时。
 	cleanupTimeout time.Duration
 }
@@ -159,7 +212,7 @@ func newConfiguredFactory(
 		config:                proto.CloneOf(initial),
 		observabilityDefaults: defaults,
 		slots:                 make(map[string]*clientSlot, len(initial.GetClients())),
-		leases:                make(map[*clientVersion]string),
+		draining:              make(map[*clientVersion]string),
 		cleanupTimeout:        timeout,
 	}
 	for name, option := range initial.GetClients() {

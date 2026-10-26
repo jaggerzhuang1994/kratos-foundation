@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 )
@@ -79,17 +80,19 @@ func (f *factory) applyValidatedConfig(next *config_pb.Client) error {
 			revision: old.revision + 1,
 			spec:     nextSpec,
 		}
-		old.retired = true
-		old.retireReason = reasonForConfigChange(currentPresent, nextPresent)
 		if slot.build != nil && slot.build.version == old && slot.build.cancel != nil {
 			cancels = append(cancels, slot.build.cancel)
 		}
-		if old.references == 0 && old.client.present() {
-			retired = append(retired, detachRetired(slot.name, old))
+		// 旧版本继续服务已有租约，最后一个租约归还时关闭；无租约时立即关闭。
+		if client, idle := f.retireLocked(slot.name, old, reasonForConfigChange(currentPresent, nextPresent)); idle {
+			retired = append(retired, client)
 		}
 	}
 	// cleanup 预算在构造时冻结，更新只记录需重启，避免停机过程中改变预算。
 	f.config = next
+	if changedClients > 0 {
+		f.publishLocked()
+	}
 	f.mu.Unlock()
 
 	if timeoutChanged {
