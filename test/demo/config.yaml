@@ -1,0 +1,54 @@
+# Demo 各角色共用的框架配置；角色差异由环境变量 DEMO_ROLE 与 HTTP_DISABLE 控制。
+app:
+  stop_timeout: 20s
+tracing:
+  disable: true
+server:
+  stop_delay: 2s
+  http:
+    disable: ${HTTP_DISABLE:-false}
+    addr: 0.0.0.0:8000
+    metrics:
+      addr: 0.0.0.0:9001
+    health:
+      addr: 0.0.0.0:9001
+  grpc:
+    disable: true
+registry:
+  instances:
+    default:
+      driver: "null"
+client:
+  clients:
+    inventory:
+      protocol: HTTP
+      target: http://inventory-api.shop.svc:8000
+    orders:
+      protocol: HTTP
+      target: http://order-api.shop.svc:8000
+    gateway:
+      protocol: HTTP
+      target: http://gateway.shop.svc:8000
+redis:
+  default: main
+  connections:
+    main:
+      addr: redis.middleware.svc:6379
+      context_timeout_enabled: true
+database:
+  gorm:
+    logger:
+      level: WARN
+      slow_threshold: 0.2s
+  default: primary
+  connections:
+    primary:
+      driver: mysql
+      dsn: root:demo-local-only@tcp(mysql.middleware.svc:3306)/shop?charset=utf8mb4&parseTime=True&loc=UTC
+      max_open_conns: 10
+      max_idle_conns: 5
+kafka:
+  connections:
+    main:
+      brokers: [kafka.middleware.svc:9092]
+      dial_timeout: 5s

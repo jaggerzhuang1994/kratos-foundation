@@ -1,0 +1,331 @@
+# Demo 业务应用：同一镜像按 DEMO_ROLE 扮演不同角色，APP_NAME 取 Pod 标签使日志与注册名区分角色；由 test/demo/run.sh 生成 ConfigMap 并部署。
+apiVersion: v1
+kind: Namespace
+metadata: {name: shop}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: order-api, namespace: shop, labels: {app.kubernetes.io/name: order-api}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: order-api}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: order-api, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: api}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+          ports:
+            - {name: http, containerPort: 8000}
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: order-api, namespace: shop, labels: {app.kubernetes.io/name: order-api, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: order-api}
+  ports:
+    - {name: http, port: 8000}
+    - {name: management, port: 9001}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: inventory-api, namespace: shop, labels: {app.kubernetes.io/name: inventory-api}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: inventory-api}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: inventory-api, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: inventory}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+          ports:
+            - {name: http, containerPort: 8000}
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: inventory-api, namespace: shop, labels: {app.kubernetes.io/name: inventory-api, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: inventory-api}
+  ports:
+    - {name: http, port: 8000}
+    - {name: management, port: 9001}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: gateway, namespace: shop, labels: {app.kubernetes.io/name: gateway}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: gateway}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: gateway, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: gateway}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+          ports:
+            - {name: http, containerPort: 8000}
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: gateway, namespace: shop, labels: {app.kubernetes.io/name: gateway, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: gateway}
+  ports:
+    - {name: http, port: 8000}
+    - {name: management, port: 9001}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: order-cron, namespace: shop, labels: {app.kubernetes.io/name: order-cron}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: order-cron}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: order-cron, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: cron}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+            - {name: HTTP_DISABLE, value: "true"}
+          ports:
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: order-cron, namespace: shop, labels: {app.kubernetes.io/name: order-cron, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: order-cron}
+  ports:
+    - {name: management, port: 9001}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: order-worker, namespace: shop, labels: {app.kubernetes.io/name: order-worker}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: order-worker}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: order-worker, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: worker}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+            - {name: HTTP_DISABLE, value: "true"}
+          ports:
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: order-worker, namespace: shop, labels: {app.kubernetes.io/name: order-worker, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: order-worker}
+  ports:
+    - {name: management, port: 9001}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: stats-daemon, namespace: shop, labels: {app.kubernetes.io/name: stats-daemon}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: stats-daemon}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: stats-daemon, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: daemon}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+            - {name: HTTP_DISABLE, value: "true"}
+          ports:
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: stats-daemon, namespace: shop, labels: {app.kubernetes.io/name: stats-daemon, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: stats-daemon}
+  ports:
+    - {name: management, port: 9001}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: loadgen, namespace: shop, labels: {app.kubernetes.io/name: loadgen}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: loadgen}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: loadgen, environment: dev}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: foundation-demo:dev
+          imagePullPolicy: Never
+          args: [-config, /app/configs/config.yaml]
+          env:
+            - {name: DEMO_ROLE, value: loadgen}
+            - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+            - {name: APP_ENV, value: dev}
+            - {name: LOG_FILE_ENABLE, value: "false"}
+            - {name: HTTP_DISABLE, value: "true"}
+          ports:
+            - {name: management, containerPort: 9001}
+          startupProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 2, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /readyz, port: management}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: management}, periodSeconds: 10}
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+      volumes: [{name: config, configMap: {name: shop-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: loadgen, namespace: shop, labels: {app.kubernetes.io/name: loadgen, environment: dev, demo: shop}}
+spec:
+  selector: {app.kubernetes.io/name: loadgen}
+  ports:
+    - {name: management, port: 9001}
+---
+# 一次性报表：每 2 分钟运行一次，约 30% 失败，演示 K8s Job/CronJob 告警。
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: shop-report, namespace: shop, labels: {app.kubernetes.io/name: shop-report}}
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata: {labels: {app.kubernetes.io/name: shop-report}}
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 120
+      template:
+        metadata: {labels: {app.kubernetes.io/name: shop-report, environment: dev}}
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: app
+              image: foundation-demo:dev
+              imagePullPolicy: Never
+              args: [-config, /app/configs/config.yaml]
+              env:
+                - {name: DEMO_ROLE, value: report}
+                - {name: APP_NAME, valueFrom: {fieldRef: {fieldPath: "metadata.labels['app.kubernetes.io/name']"}}}
+                - {name: APP_ENV, value: dev}
+                - {name: LOG_FILE_ENABLE, value: "false"}
+                - {name: HTTP_DISABLE, value: "true"}
+              volumeMounts: [{name: config, mountPath: /app/configs, readOnly: true}]
+          volumes: [{name: config, configMap: {name: shop-config}}]
+---
+# 与 observability/kubernetes/servicemonitor.yaml 相同的采集身份，覆盖 shop 下所有应用。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: shop-apps, namespace: shop}
+spec:
+  selector: {matchLabels: {demo: shop}}
+  endpoints:
+    - port: management
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: false
+      relabelings:
+        - {targetLabel: foundation, replacement: "true"}
+        - {sourceLabels: [__meta_kubernetes_service_label_environment], targetLabel: env}
+        - {targetLabel: cluster, replacement: kind-demo}
+        - {sourceLabels: [__meta_kubernetes_namespace], targetLabel: namespace}
+        - {sourceLabels: [__meta_kubernetes_service_label_app_kubernetes_io_name], targetLabel: app}
+        - {sourceLabels: [__meta_kubernetes_pod_node_name], targetLabel: node}
+        - {sourceLabels: [__meta_kubernetes_pod_name], targetLabel: pod}
+        - sourceLabels: [app, node, pod, __address__]
+          separator: ";"
+          regex: "(.*);(.*);(.*);(.*)"
+          targetLabel: target
+          replacement: "$1 / $2 / $3 / $4"

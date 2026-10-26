@@ -1,0 +1,12 @@
+# 本地 Demo 集群：1 个控制面 + 2 个工作节点，用于验证面板的 Pod/Node 视图与跨节点分布。
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: foundation-demo
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # Grafana 与 Prometheus 通过 NodePort 暴露到本机回环地址。
+      - {containerPort: 30300, hostPort: 13300, listenAddress: 127.0.0.1}
+      - {containerPort: 30900, hostPort: 19900, listenAddress: 127.0.0.1}
+  - role: worker
+  - role: worker

@@ -50,6 +50,9 @@
 - App 恢复 Runtime `Start/Stop/AbortStartup` 中的 panic，记录 `app.runtime.panicked` 并统一停机（执行停止钩子与服务注销），不再直接崩溃。
 - `env.ExposeDiagnostics()` 统一判断是否允许向调用方返回内部诊断，非法环境值按拒绝处理且不 panic。
 - `server.middleware.updated` 增加 `changed` 字段，列出实际替换的中间件。
+- `server_readiness_status` 指标：最近一次 readiness 判定（`/readyz` 或 gRPC `Check`，含依赖检查），1 就绪、0 未就绪，首次探测前不上报；监控模板新增 `app:readiness:ready` 预聚合，平台总览的“不可用 / 未全部就绪”与应用健康表据此计入依赖检查失败（`app_ready=1` 但已被 K8s 摘流量）的实例，告警口径不变。
+- `appinfo.New` 支持环境变量 `APP_NAME` 覆盖应用名（默认仍为可执行文件名），用于同一二进制以多个角色部署时让日志、注册中心与指标的 `app` 区分角色。
+- `test/demo/`：kind 本地集群 + kube-prometheus-stack 的多角色演示（HTTP 服务、网关、Cron、常驻进程、Queue/Kafka 消费、锁、缓存、一次性 Job），用框架真实组件产生指标，验证面板与告警。
 - 可选 `metrics.push`（默认关闭）：一次性进程在应用结束（成功或失败）后的停止后钩子中，把与 `/metrics` 相同的实例 Registry 推送到 Pushgateway 一次；分组键只有 `job`（默认应用名），指标自身的 `job` 标签改为 `exported_job`，失败只记 WARN `metrics.push.failed` 且不改变退出码。新增 `metrics.NewPusher`（已加入 `BaseProviderSet`），`bootstrap.NewMetricsBootstrap` 签名增加 `pusher`、`logger`；显式列出 provider 的 injector 需加入 `metrics.NewPusher` 并重新执行 `wire`。见 [Metrics 推送](pkg/metrics/README.md#一次性进程推送到-pushgateway)。
 - 监控模板新增 `foundation-kubernetes-jobs` 告警组（基于 kube-state-metrics）：`FoundationJobFailed`、`FoundationCronJobMissedSchedule`、`FoundationCronJobNoRecentSuccess`、`FoundationJobRunningTooLong`，及规则测试；`app` 标签需 kube-state-metrics `metricLabelsAllowlist` 放开 `app.kubernetes.io/name`，示例见 `observability/kubernetes/kube-prometheus-values.yaml`。
 
@@ -65,6 +68,8 @@
 - 生成器模块（`cmd/protoc-gen-*`）升级依赖：errors-v2 的 grpc 1.61→1.84、x/sys，jsonschema 的 x/text 0.22→0.43 等修复已知漏洞；client-v2 由已拆分前的 `google.golang.org/genproto` 改用 `genproto/googleapis/api`，依赖图从数十个模块降至 10 个。生成产物不变。errors-v2 仅导入 Kratos 的错误扩展定义，GO-2026-5471（`transport/http`）不可达。
 - 仓库结构调整（不影响 Go API）：`deploy/` 拆分为 `observability/`（Grafana 面板、Prometheus 规则与接入说明）与 `test/`（本地可运行的外部服务测试、面板校验与演示环境）；`examples/` 只保留用法代码；`MIGRATION_V2.md` 精简为 [MIGRATION.md](MIGRATION.md)，删除 `PROJECT_VISION.md`、`PACKAGE_REVIEW.md`；开发工具通过 `make init` 安装到 `tools/` 并锁定版本，新增 `make help`、`make vulncheck`、`make changelog`。
 - 依赖安全升级：grpc 1.84、OpenTelemetry 1.47（Prometheus exporter 0.69，导出的指标名与标签经比对不变）、golang.org/x/net 0.61、x/crypto 0.58、x/text、x/sys、pgx 5.11、ch-go 等升级到不受已知漏洞影响的版本，`govulncheck` 在 go1.26.10 下无可达漏洞。go-redis（9.23 在建连时新增 DNS 解析）、franz-go（1.22 改变主题重建与缓冲默认值）、fsnotify（1.10 在 macOS 下热重载偶发 bad file descriptor）均无已知漏洞，为避免行为变化暂保持原版本。剩余未修复公告：Kratos GO-2026-5471（`transport/http`，无上游修复，代码未调用受影响符号）与 x/crypto `openpgp` 包弃用公告（未导入）。
+- Kafka `ManagedProducer` 发布失败的 WARN 日志增加 `error` 字段（如 `UNKNOWN_TOPIC_OR_PARTITION`、认证失败），franz-go 错误不含消息正文或 Header。
+- Grafana 面板（演示环境实测后修正）：平台总览数据库 / Redis 实例表先按实例聚合，修复同一实例被拆成多行；当前告警表排除 Watchdog、InfoInhibitor 与 none/info 级别，显示说明与已持续时间；健康表按未就绪实例数降序；表格空单元格统一显示“—”，环境与集群列移到末尾；网关页变量由 `gateway` 改名为 `app` 并改为单选，服务详情跳转可直接带入应用，入口指标不再默认汇总所有有下游调用的应用；容器页 Running / Ready Pod 与容器总数不再计入已结束的 Job Pod；应用视图（Pod / 容器 / 实例）在已按命名空间分组的图例中不再重复命名空间；服务详情抓取状态时间线不再绘制重叠的值文本；面板检查新增“多查询合并表格不得使用保留 `__name__` 的裸选择器”。
 - WebSocket 停机关闭与 HTTP `Shutdown` 并行执行、共享同一预算，卡住的 WebSocket 回调不再推迟 HTTP 停止接收新连接或挤占在途请求的优雅完成时间；停机关闭帧由 1000 改为 1001 Going Away（业务主动 `Close()` 仍为 1000），依赖关闭码判断是否重连的客户端需同步调整。
 
 <!-- changelog:auto:start -->

@@ -1,0 +1,207 @@
+# Demo 中间件与 exporter；密码仅用于本地 kind 集群。
+apiVersion: v1
+kind: Namespace
+metadata: {name: middleware}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mysql, namespace: middleware}
+spec:
+  selector: {matchLabels: {app: mysql}}
+  template:
+    metadata: {labels: {app: mysql}}
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4.7
+          env:
+            - {name: MYSQL_ROOT_PASSWORD, value: demo-local-only}
+            - {name: MYSQL_DATABASE, value: shop}
+          ports: [{name: mysql, containerPort: 3306}]
+          readinessProbe:
+            exec: {command: [mysqladmin, ping, -h, 127.0.0.1, -pdemo-local-only]}
+            periodSeconds: 5
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 1Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mysql, namespace: middleware}
+spec: {selector: {app: mysql}, ports: [{name: mysql, port: 3306}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mysqld-exporter, namespace: middleware}
+spec:
+  selector: {matchLabels: {app: mysqld-exporter}}
+  template:
+    metadata: {labels: {app: mysqld-exporter}}
+    spec:
+      containers:
+        - name: exporter
+          image: prom/mysqld-exporter:v0.18.0
+          args: [--mysqld.address=mysql.middleware.svc:3306, --mysqld.username=root]
+          env: [{name: MYSQLD_EXPORTER_PASSWORD, value: demo-local-only}]
+          ports: [{name: metrics, containerPort: 9104}]
+          resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mysqld-exporter, namespace: middleware, labels: {exporter: mysql}}
+spec: {selector: {app: mysqld-exporter}, ports: [{name: metrics, port: 9104}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis, namespace: middleware}
+spec:
+  selector: {matchLabels: {app: redis}}
+  template:
+    metadata: {labels: {app: redis}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4.10-alpine
+          args: [--maxmemory, 64mb, --maxmemory-policy, allkeys-lru]
+          ports: [{name: redis, containerPort: 6379}]
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis, namespace: middleware}
+spec: {selector: {app: redis}, ports: [{name: redis, port: 6379}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis-exporter, namespace: middleware}
+spec:
+  selector: {matchLabels: {app: redis-exporter}}
+  template:
+    metadata: {labels: {app: redis-exporter}}
+    spec:
+      containers:
+        - name: exporter
+          image: oliver006/redis_exporter:v1.80.0
+          env: [{name: REDIS_ADDR, value: redis://redis.middleware.svc:6379}]
+          ports: [{name: metrics, containerPort: 9121}]
+          resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis-exporter, namespace: middleware, labels: {exporter: redis}}
+spec: {selector: {app: redis-exporter}, ports: [{name: metrics, port: 9121}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kafka, namespace: middleware}
+spec:
+  selector: {matchLabels: {app: kafka}}
+  template:
+    metadata: {labels: {app: kafka}}
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: kafka
+          image: apache/kafka:4.1.2
+          env:
+            - {name: KAFKA_NODE_ID, value: "1"}
+            - {name: KAFKA_PROCESS_ROLES, value: "broker,controller"}
+            - {name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093"}
+            - {name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka.middleware.svc:9092"}
+            - {name: KAFKA_CONTROLLER_LISTENER_NAMES, value: CONTROLLER}
+            - {name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"}
+            - {name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093"}
+            - {name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1"}
+            - {name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1"}
+            - {name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1"}
+            - {name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0"}
+            - {name: KAFKA_NUM_PARTITIONS, value: "3"}
+            - {name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: "true"}
+            - {name: KAFKA_HEAP_OPTS, value: "-Xms256m -Xmx512m"}
+          ports: [{name: kafka, containerPort: 9092}]
+          readinessProbe: {tcpSocket: {port: 9092}, periodSeconds: 5}
+          resources: {requests: {cpu: 100m, memory: 512Mi}, limits: {memory: 1Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kafka, namespace: middleware}
+spec: {selector: {app: kafka}, ports: [{name: kafka, port: 9092}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kafka-exporter, namespace: middleware}
+spec:
+  selector: {matchLabels: {app: kafka-exporter}}
+  template:
+    metadata: {labels: {app: kafka-exporter}}
+    spec:
+      containers:
+        - name: exporter
+          image: danielqsj/kafka-exporter:v1.10.0
+          args: [--kafka.server=kafka.middleware.svc:9092, --kafka.version=4.1.2, --group.metrics.timeout=8s, --offset.show-all]
+          ports: [{name: metrics, containerPort: 9308}]
+          resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kafka-exporter, namespace: middleware, labels: {exporter: kafka}}
+spec: {selector: {app: kafka-exporter}, ports: [{name: metrics, port: 9308}]}
+---
+# franz-go 默认不请求自动建 Topic；业务 Topic 与死信 Topic 在部署时显式创建。
+apiVersion: batch/v1
+kind: Job
+metadata: {name: kafka-topics, namespace: middleware}
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create
+          image: apache/kafka:4.1.2
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              for topic in order-events order-events-dlq; do
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka.middleware.svc:9092 --create --if-not-exists --topic "$topic" --partitions 3 --replication-factor 1
+              done
+---
+# exporter 采集身份：env/cluster 与应用一致；instance 改写为稳定的服务地址，面板按它选择实例。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: mysql-exporter, namespace: middleware}
+spec:
+  selector: {matchLabels: {exporter: mysql}}
+  endpoints:
+    - port: metrics
+      interval: 15s
+      relabelings:
+        - {targetLabel: env, replacement: dev}
+        - {targetLabel: cluster, replacement: kind-demo}
+        - {targetLabel: instance, replacement: "mysql.middleware:3306"}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: redis-exporter, namespace: middleware}
+spec:
+  selector: {matchLabels: {exporter: redis}}
+  endpoints:
+    - port: metrics
+      interval: 15s
+      relabelings:
+        - {targetLabel: env, replacement: dev}
+        - {targetLabel: cluster, replacement: kind-demo}
+        - {targetLabel: instance, replacement: "redis.middleware:6379"}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: kafka-exporter, namespace: middleware}
+spec:
+  selector: {matchLabels: {exporter: kafka}}
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - {targetLabel: foundation_kafka, replacement: "true"}
+        - {targetLabel: env, replacement: dev}
+        - {targetLabel: cluster, replacement: kind-demo}
+        - {targetLabel: kafka_cluster, replacement: demo-kafka}

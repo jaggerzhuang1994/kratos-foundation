@@ -8,6 +8,7 @@
 | `pkg/bootstrap/testdata` | 真实 Wire 组装与 HTTP/SQLite 业务闭环 | `make test-business` | Go |
 | [external/](external/README.md) | 隔离 Docker 中的 MySQL、Redis、Kafka、Consul 真实服务测试、基准与剖析 | `make test-external`、`make test-components-external` | Docker Compose v2 |
 | [observability/](observability) | 告警规则单测、Grafana 面板 PromQL 校验、本地 Prometheus/Grafana 演示环境 | `make test-observability`、`make observability-up` | Docker |
+| [demo/](demo/README.md) | 本地 kind 集群中多角色应用 + MySQL/Redis/Kafka + kube-prometheus-stack，验证面板与告警的真实效果 | `test/demo/run.sh up` | Docker、约 6–8GB 内存 |
 | [components/](components/README.md) | 在监控演示上运行 components 示例并核对真实指标增量 | `make components-up`、`make components-exercise` | Docker、Python 3 |
 
 ```mermaid

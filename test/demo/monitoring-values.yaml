@@ -1,0 +1,57 @@
+# 在 observability/kubernetes/kube-prometheus-values.yaml 的基础上，追加仅用于本地 Demo 的设置。
+# env/cluster 与应用 ServiceMonitor 保持一致，面板按这两个标签筛选基础设施指标。
+alertmanager:
+  enabled: false
+grafana:
+  adminPassword: demo-local-only
+  service:
+    type: NodePort
+    nodePort: 30300
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      folderAnnotation: grafana_folder
+      searchNamespace: ALL
+      provider:
+        foldersFromFilesStructure: true
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30900
+  prometheusSpec:
+    scrapeInterval: 15s
+    retention: 2d
+    # 允许发现任意 namespace 中的 ServiceMonitor/PrometheusRule，Demo 不依赖 release 标签。
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      relabelings:
+        - {targetLabel: env, replacement: dev}
+        - {targetLabel: cluster, replacement: kind-demo}
+        - {sourceLabels: [__meta_kubernetes_pod_node_name], targetLabel: node}
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - jobs=[app.kubernetes.io/name]
+    - cronjobs=[app.kubernetes.io/name]
+  prometheus:
+    monitor:
+      relabelings:
+        - {targetLabel: env, replacement: dev}
+        - {targetLabel: cluster, replacement: kind-demo}
+kubelet:
+  serviceMonitor:
+    cAdvisorRelabelings:
+      - {sourceLabels: [__metrics_path__], targetLabel: metrics_path}
+      - {targetLabel: env, replacement: dev}
+      - {targetLabel: cluster, replacement: kind-demo}
