@@ -1,8 +1,8 @@
 module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema
 
-go 1.22
+go 1.26.0
 
-toolchain go1.24.3
+toolchain go1.26.10
 
 require (
 	github.com/iancoleman/orderedmap v0.0.0-20190318233801-ac98e3ecb4b0

@@ -1,8 +1,8 @@
 module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-errors-v2
 
-go 1.21
+go 1.26.0
 
-toolchain go1.24.10
+toolchain go1.26.10
 
 require (
 	github.com/go-kratos/kratos/v2 v2.9.1

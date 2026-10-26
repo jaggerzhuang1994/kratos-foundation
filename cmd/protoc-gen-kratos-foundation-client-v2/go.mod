@@ -1,6 +1,8 @@
 module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-foundation-client-v2
 
-go 1.19
+go 1.26.0
+
+toolchain go1.26.10
 
 require (
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd
