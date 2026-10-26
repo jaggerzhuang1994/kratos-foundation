@@ -529,6 +529,13 @@ tests:
         values: 1x15
       - series: app_ready{env="prod",namespace="apps",app="api",pod="api-1"}
         values: 0x15
+      # web-0 依赖检查失败（Pod 已摘流量）但 app_ready=1；web-1 未上报 readiness 按 app_ready 计。
+      - series: app_ready{env="prod",namespace="apps",app="web",pod="web-0"}
+        values: 1x15
+      - series: server_readiness_status{env="prod",namespace="apps",app="web",pod="web-0"}
+        values: 0x15
+      - series: app_ready{env="prod",namespace="apps",app="web",pod="web-1"}
+        values: 1x15
       - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="success"}
         values: 0+48x15
       - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="failed"}
@@ -565,11 +572,22 @@ tests:
         exp_samples:
           - labels: 'app:app_ready:ready{env="prod",namespace="apps",app="api"}'
             value: 1
+          - labels: 'app:app_ready:ready{env="prod",namespace="apps",app="web"}'
+            value: 2
       - expr: app:app_ready:instances
         eval_time: 10m
         exp_samples:
           - labels: 'app:app_ready:instances{env="prod",namespace="apps",app="api"}'
             value: 2
+          - labels: 'app:app_ready:instances{env="prod",namespace="apps",app="web"}'
+            value: 2
+      - expr: app:readiness:ready
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:readiness:ready{env="prod",namespace="apps",app="api"}'
+            value: 1
+          - labels: 'app:readiness:ready{env="prod",namespace="apps",app="web"}'
+            value: 1
       - expr: app:consumer_failures:rate5m / app:consumer_messages:rate5m
         eval_time: 10m
         exp_samples:

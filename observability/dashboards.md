@@ -18,7 +18,7 @@ Folder 与文件的对应关系保存在 [folders.json](grafana/folders.json)，
 
 ## 页面判读与导航
 
-平台总览面向整套项目都使用本框架的场景，只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)）与 Prometheus 内置 `ALERTS`，未加载该规则组时整页无数据。自上而下：当前触发中的告警；有没有应用不可用或在报错；应用健康表每个应用一行，按就绪实例升序着色，点击应用名进入服务详情；K8s、数据库、Redis、队列与 Kafka、网关质量各一行，表格中的 Pod、节点、实例、消费组、队列、应用链接到对应详情页。空单元格表示该应用没有对应负载，不等于零；无流量时比例不出值。exporter 未部署时对应卡片显示“未接入”；kube-state-metrics 或消费者已接入但没有异常时，异常计数显示 0 而不是“未接入”。
+平台总览面向整套项目都使用本框架的场景，只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)）与 Prometheus 内置 `ALERTS`，未加载该规则组时整页无数据。自上而下：当前触发中的告警；有没有应用不可用或在报错；应用健康表每个应用一行，按未就绪实例数降序排列（就绪含 readiness 依赖检查，见 `app:readiness:ready`），点击应用名进入服务详情；K8s、数据库、Redis、队列与 Kafka、网关质量各一行，表格中的 Pod、节点、实例、消费组、队列、应用链接到对应详情页。表格中“—”表示该应用没有对应负载或暂无样本，不等于零；无流量时比例不出值；环境与集群列放在最后。当前告警表排除 Watchdog、InfoInhibitor 与 none/info 级别，显示 alerts.yaml 中的说明与已持续时间。exporter 未部署时对应卡片显示“未接入”；kube-state-metrics 或消费者已接入但没有异常时，异常计数显示 0 而不是“未接入”。
 
 单个服务从服务详情开始：首行“负载识别”卡片显示该服务有哪些负载类型（HTTP/gRPC 端点、消费者、Job、Go Runtime）。Grafana 不能按是否有数据自动折叠分区，因此 HTTP/gRPC RED 默认展开，消费者、Job、Runtime 默认折叠，卡片有值时再展开；这三个分区按应用汇总，不受节点与视图影响，Job 分区另列 kube-state-metrics 的 K8s Job 失败（一次性脚本）。RED 首屏卡片汇总当前筛选范围，趋势保留应用身份。异常端点表只列当前有错误或请求样本的对象，可点击端点进入组件页；空表须结合流量与接入诊断判断。卡片不设置业务 SLO 阈值；抓取失败数大于零用红色，应用自报就绪（`app_ready`）或已发现 Pod 未全部就绪用橙色，流量、错误率和耗时用中性色。
 
@@ -78,7 +78,7 @@ flowchart TD
 
 服务页原始应用目标抓取时间线和无法关联 Kubernetes 的目标表不按节点筛选：关联失败时节点本来就未知，先过滤节点会隐藏故障。它们仍受命名空间、应用、Pod、容器和所选 Pod 标签影响。缺少所选 Pod 标签的目标及完全未发现的目标没有完整入口，需核对发现配置与控制器期望副本。
 
-队列与 Kafka 详情的共享区使用 `env`、`cluster`、`queue_name`、`kafka_cluster`、`consumer_group`、`broker_topic` 筛选，不使用 `app/node/pod/container/view`；应用处理区使用应用变量与 `queue_name`、`queue_consumer`、`kafka_topic`、`kafka_consumer`。`broker_topic` 是 Broker 真实 Topic，`kafka_topic` 是应用指标的逻辑目的地，二者不能自动映射。健康探测页使用 `env`、`cluster`、`probe_app`。数据库与 Redis 详情的服务端区只受 `db_instance` / `redis_instance` 筛选，客户端区受应用变量与 `db_name` / `redis_connection` 筛选。网关详情使用 `namespace`、`gateway`、`route`、`client_operation`，按应用汇总，不受节点与视图影响。平台总览只有 `namespace` 与 `gateway`；节点、exporter 实例与 Kafka 区不受命名空间筛选，当前告警表选择具体命名空间时会隐藏不带 namespace 的告警。
+队列与 Kafka 详情的共享区使用 `env`、`cluster`、`queue_name`、`kafka_cluster`、`consumer_group`、`broker_topic` 筛选，不使用 `app/node/pod/container/view`；应用处理区使用应用变量与 `queue_name`、`queue_consumer`、`kafka_topic`、`kafka_consumer`。`broker_topic` 是 Broker 真实 Topic，`kafka_topic` 是应用指标的逻辑目的地，二者不能自动映射。健康探测页使用 `env`、`cluster`、`probe_app`。数据库与 Redis 详情的服务端区只受 `db_instance` / `redis_instance` 筛选，客户端区受应用变量与 `db_name` / `redis_connection` 筛选。网关详情使用 `namespace`、`app`（单选，只列有下游调用的应用，服务详情的应用会直接带入）、`route`、`client_operation`，按应用汇总，不受节点与视图影响。平台总览只有 `namespace` 与 `app`（网关区筛选）；节点、exporter 实例与 Kafka 区不受命名空间筛选，当前告警表选择具体命名空间时会隐藏不带 namespace 的告警。
 
 ## 接入契约
 

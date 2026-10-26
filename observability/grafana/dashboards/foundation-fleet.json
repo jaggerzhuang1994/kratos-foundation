@@ -112,7 +112,7 @@
         }
       },
       {
-        "name": "gateway",
+        "name": "app",
         "label": "网关应用",
         "type": "query",
         "datasource": {
@@ -168,14 +168,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ALERTS{alertstate=\"firing\",namespace=~\"${namespace}\"}",
+          "expr": "label_replace(max by (alertname,severity,namespace,app,pod) (time() - ALERTS_FOR_STATE{namespace=~\"${namespace}\",alertname!~\"Watchdog|InfoInhibitor\",severity!~\"none|info\"}) and on (alertname,severity,namespace,app,pod) ALERTS{alertstate=\"firing\"}, \"summary\", \"$1\", \"alertname\", \"(.+)\")",
           "legendFormat": "",
           "instant": true,
           "range": false,
           "format": "table"
         }
       ],
-      "description": "规则在 Prometheus 中的触发态，不含 Alertmanager 静默与抑制；选择具体命名空间时，不带 namespace 的节点或 exporter 告警会被隐藏。",
+      "description": "Prometheus 正在触发的告警，已排除 Watchdog、InfoInhibitor 与 none/info 级别；已持续从进入 pending 起算。说明列来自 alerts.yaml 的 summary，非 Foundation 告警显示“—”，详情看 Alertmanager。",
       "fieldConfig": {
         "defaults": {
           "noValue": "无触发中的告警",
@@ -184,6 +184,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -197,16 +221,158 @@
                 }
               },
               {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "orange",
-                      "value": null
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
                     }
-                  ]
-                }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "说明"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "FoundationTargetDown": {
+                        "text": "应用指标采集失败",
+                        "index": 0
+                      },
+                      "FoundationAppNotReady": {
+                        "text": "应用实例持续未就绪（启动未完成、依赖不可用或停机卡住）",
+                        "index": 1
+                      },
+                      "FoundationAppUnavailable": {
+                        "text": "应用全部实例未就绪，服务不可用",
+                        "index": 2
+                      },
+                      "FoundationHighServerErrorRate": {
+                        "text": "应用 5xx 比例超过 5%，且最近 5 分钟请求至少 100 次",
+                        "index": 3
+                      },
+                      "FoundationHighLatency": {
+                        "text": "应用 P95 超过 500ms，且最近 5 分钟请求至少 100 次",
+                        "index": 4
+                      },
+                      "FoundationNodeCPUHigh": {
+                        "text": "承载应用的机器 CPU 使用率超过 90%",
+                        "index": 5
+                      },
+                      "FoundationNodeMemoryHigh": {
+                        "text": "承载应用的机器内存使用率超过 90%",
+                        "index": 6
+                      },
+                      "FoundationNodeDiskLow": {
+                        "text": "承载应用的机器根分区可用空间不足 10%",
+                        "index": 7
+                      },
+                      "FoundationKafkaRuntimeFailure": {
+                        "text": "Kafka 消费运行时出现故障",
+                        "index": 8
+                      },
+                      "FoundationQueueRuntimeFailure": {
+                        "text": "Queue 消费运行时出现故障",
+                        "index": 9
+                      },
+                      "FoundationJobFailure": {
+                        "text": "Job 执行失败",
+                        "index": 10
+                      },
+                      "FoundationLockRenewalFailure": {
+                        "text": "Lock 续租失败，需确认任务是否停止受保护操作",
+                        "index": 11
+                      },
+                      "FoundationRedisPoolTimeout": {
+                        "text": "Redis 客户端连接池等待超时",
+                        "index": 12
+                      },
+                      "FoundationDatabasePoolSaturated": {
+                        "text": "数据库实例连接池利用率持续超过 90%",
+                        "index": 13
+                      },
+                      "FoundationHealthProbeFailed": {
+                        "text": "应用 readyz 或 healthz 实际 HTTP 探测失败",
+                        "index": 14
+                      },
+                      "FoundationHealthProbeUnavailable": {
+                        "text": "健康探测结果采集失败，不能判断应用健康",
+                        "index": 15
+                      },
+                      "FoundationQueueStatsFailed": {
+                        "text": "Queue 状态采集失败，积压数量与年龄不可用",
+                        "index": 16
+                      },
+                      "FoundationQueueReadyTooOld": {
+                        "text": "Queue 最老就绪任务等待超过 5 分钟",
+                        "index": 17
+                      },
+                      "FoundationKafkaLagHigh": {
+                        "text": "Kafka 消费组 Topic Lag 持续超过 1000",
+                        "index": 18
+                      },
+                      "FoundationJobFailed": {
+                        "text": "K8s Job 执行失败（owner_name 为所属 CronJob，独立 Job 为 <none>）",
+                        "index": 19
+                      },
+                      "FoundationCronJobMissedSchedule": {
+                        "text": "CronJob 超过预定时间 10 分钟仍未调度",
+                        "index": 20
+                      },
+                      "FoundationCronJobNoRecentSuccess": {
+                        "text": "CronJob 超过 26 小时没有成功运行（阈值按调度周期调整）",
+                        "index": 21
+                      },
+                      "FoundationJobRunningTooLong": {
+                        "text": "K8s Job 运行超过 1 小时仍未结束",
+                        "index": 22
+                      }
+                    }
+                  },
+                  {
+                    "type": "regex",
+                    "options": {
+                      "pattern": ".*",
+                      "result": {
+                        "text": "—",
+                        "index": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "已持续"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           }
@@ -245,21 +411,27 @@
               "Time 7": true,
               "Time 8": true,
               "Time 9": true,
-              "alertstate": true,
-              "Value": true,
-              "Value #A": true
+              "alertstate": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "alertname": 0,
+              "severity": 1,
+              "summary": 2,
+              "namespace": 3,
+              "app": 4,
+              "pod": 5,
+              "Value #A": 6,
+              "Value": 7
+            },
             "renameByName": {
               "alertname": "告警",
+              "summary": "说明",
               "severity": "级别",
-              "env": "环境",
-              "cluster": "集群",
               "namespace": "命名空间",
               "app": "应用",
               "pod": "Pod",
-              "node": "节点",
-              "instance": "实例"
+              "Value #A": "已持续",
+              "Value": "已持续"
             }
           }
         }
@@ -341,13 +513,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(app:app_ready:ready{namespace=~\"${namespace}\"} == 0) or vector(0)",
+          "expr": "count(app:readiness:ready{namespace=~\"${namespace}\"} == 0) or vector(0)",
           "legendFormat": "",
           "instant": true,
           "range": false
         }
       ],
-      "description": "所有实例都未就绪的应用数，对应 FoundationAppUnavailable 的判定口径。",
+      "description": "所有实例都未就绪（含 readiness 依赖检查）的应用数；仅看 app_ready 的判定见 FoundationAppUnavailable 告警。",
       "fieldConfig": {
         "defaults": {
           "unit": "none",
@@ -401,13 +573,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(app:app_ready:ready{namespace=~\"${namespace}\"} < app:app_ready:instances{namespace=~\"${namespace}\"}) or vector(0)",
+          "expr": "count(app:readiness:ready{namespace=~\"${namespace}\"} < app:app_ready:instances{namespace=~\"${namespace}\"}) or vector(0)",
           "legendFormat": "",
           "instant": true,
           "range": false
         }
       ],
-      "description": "至少一个实例未就绪的应用数，包含不可用应用；滚动发布期间短暂出现属正常。",
+      "description": "至少一个实例未就绪的应用数，含不可用应用与依赖检查失败（Pod 已被摘流量但 app_ready=1）；滚动发布期间短暂出现属正常。",
       "fieldConfig": {
         "defaults": {
           "unit": "none",
@@ -645,7 +817,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,app) (app:app_ready:ready{namespace=~\"${namespace}\"})",
+          "expr": "sum by (env,cluster,namespace,app) (app:readiness:ready{namespace=~\"${namespace}\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -714,9 +886,17 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "J",
+          "expr": "sum by (env,cluster,namespace,app) (app:app_ready:instances{namespace=~\"${namespace}\"}) - sum by (env,cluster,namespace,app) (app:readiness:ready{namespace=~\"${namespace}\"})",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
-      "description": "全部列来自 foundation-records 预聚合；空单元格表示该应用没有对应负载（如纯消费者没有请求速率），不等于零。就绪实例低于实例数时标红。",
+      "description": "全部列来自 foundation-records 预聚合；按未就绪实例数从多到少排序。就绪实例同时要求 app_ready=1 与最近一次 readiness 探测通过（含依赖检查），未配置探针的实例按 app_ready 计。“—”表示该应用没有对应负载（如纯消费者没有请求速率）或暂无样本，不等于零。",
       "fieldConfig": {
         "defaults": {
           "noValue": "未接入 / 无样本",
@@ -725,6 +905,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -769,7 +973,7 @@
                       "value": null
                     },
                     {
-                      "color": "green",
+                      "color": "text",
                       "value": 1
                     }
                   ]
@@ -946,6 +1150,40 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "未就绪"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -957,8 +1195,8 @@
         },
         "sortBy": [
           {
-            "displayName": "就绪实例",
-            "desc": false
+            "displayName": "未就绪",
+            "desc": true
           }
         ]
       },
@@ -983,7 +1221,22 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "app": 0,
+              "namespace": 1,
+              "Value #J": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 8,
+              "Value #G": 9,
+              "Value #H": 10,
+              "Value #I": 11,
+              "env": 12,
+              "cluster": 13
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -997,7 +1250,8 @@
               "Value #F": "消费速率",
               "Value #G": "消费失败比例",
               "Value #H": "最老就绪任务",
-              "Value #I": "近1h Job失败"
+              "Value #I": "近1h Job失败",
+              "Value #J": "未就绪"
             }
           }
         }
@@ -1399,15 +1653,39 @@
           "format": "table"
         }
       ],
-      "description": "",
+      "description": "未部署 kube-state-metrics 时表格同样为空，以本分区卡片的“未接入”为准。",
       "fieldConfig": {
         "defaults": {
-          "noValue": "无未就绪 Pod / 未接入",
+          "noValue": "无未就绪 Pod",
           "custom": {
             "align": "auto"
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1458,7 +1736,13 @@
               "Value #A": true,
               "Value": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "pod": 1,
+              "phase": 2,
+              "env": 3,
+              "cluster": 4
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -1494,15 +1778,39 @@
           "format": "table"
         }
       ],
-      "description": "",
+      "description": "未部署 kube-state-metrics 时表格同样为空，以本分区卡片的“未接入”为准。",
       "fieldConfig": {
         "defaults": {
-          "noValue": "近 1h 无重启 / 未接入",
+          "noValue": "近 1h 无重启",
           "custom": {
             "align": "auto"
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1530,6 +1838,10 @@
                     }
                   ]
                 }
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           },
@@ -1587,13 +1899,21 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "pod": 1,
+              "Value #A": 2,
+              "env": 3,
+              "cluster": 4,
+              "Value": 2
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
               "namespace": "命名空间",
               "pod": "Pod",
-              "Value #A": "重启次数"
+              "Value #A": "重启次数",
+              "Value": "重启次数"
             }
           }
         }
@@ -1623,15 +1943,39 @@
           "format": "table"
         }
       ],
-      "description": "",
+      "description": "未部署 kube-state-metrics 时表格同样为空，以本分区卡片的“未接入”为准。",
       "fieldConfig": {
         "defaults": {
-          "noValue": "无异常节点 / 未接入",
+          "noValue": "无异常节点",
           "custom": {
             "align": "auto"
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1682,7 +2026,12 @@
               "Value #A": true,
               "Value": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "node": 0,
+              "condition": 1,
+              "env": 2,
+              "cluster": 3
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -2037,7 +2386,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "instance:mysql_up:max{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:mysql_up:max{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2045,7 +2394,7 @@
         },
         {
           "refId": "B",
-          "expr": "instance:mysql_connections:usage{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:mysql_connections:usage{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2053,7 +2402,7 @@
         },
         {
           "refId": "C",
-          "expr": "instance:mysql_slow_queries:rate5m{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:mysql_slow_queries:rate5m{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2061,7 +2410,7 @@
         },
         {
           "refId": "D",
-          "expr": "instance:mysql_connection_errors:rate5m{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:mysql_connection_errors:rate5m{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2069,7 +2418,7 @@
         },
         {
           "refId": "E",
-          "expr": "instance:mysql_replication_lag:seconds{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:mysql_replication_lag:seconds{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2085,6 +2434,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -2317,7 +2690,16 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "instance": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5,
+              "env": 6,
+              "cluster": 7
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -2365,6 +2747,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -2457,14 +2863,23 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "db_name": 2,
+              "Value #A": 3,
+              "env": 4,
+              "cluster": 5,
+              "Value": 3
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
               "namespace": "命名空间",
               "app": "应用",
               "db_name": "连接名",
-              "Value #A": "最忙实例利用率"
+              "Value #A": "最忙实例利用率",
+              "Value": "最忙实例利用率"
             }
           }
         }
@@ -2810,7 +3225,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "instance:redis_up:max{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:redis_up:max{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2818,7 +3233,7 @@
         },
         {
           "refId": "B",
-          "expr": "instance:redis_memory:usage{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:redis_memory:usage{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2826,7 +3241,7 @@
         },
         {
           "refId": "C",
-          "expr": "instance:redis_evicted_keys:rate5m{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:redis_evicted_keys:rate5m{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2834,7 +3249,7 @@
         },
         {
           "refId": "D",
-          "expr": "instance:redis_command_latency:avg5m{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:redis_command_latency:avg5m{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2842,7 +3257,7 @@
         },
         {
           "refId": "E",
-          "expr": "instance:redis_connected_clients:max{instance!=\"\"}",
+          "expr": "max by (env,cluster,instance) (instance:redis_connected_clients:max{instance!=\"\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -2858,6 +3273,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -3068,7 +3507,16 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "instance": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5,
+              "env": 6,
+              "cluster": 7
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -3389,6 +3837,30 @@
         "overrides": [
           {
             "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
               "id": "byName",
               "options": "Lag"
             },
@@ -3479,14 +3951,23 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "kafka_cluster": 0,
+              "consumergroup": 1,
+              "topic": 2,
+              "Value #A": 3,
+              "env": 4,
+              "cluster": 5,
+              "Value": 3
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
               "kafka_cluster": "Kafka 集群",
               "consumergroup": "消费组",
               "topic": "Topic",
-              "Value #A": "Lag"
+              "Value #A": "Lag",
+              "Value": "Lag"
             }
           }
         }
@@ -3525,6 +4006,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -3617,12 +4122,19 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "queue_destination": 0,
+              "Value #A": 1,
+              "env": 2,
+              "cluster": 3,
+              "Value": 1
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
               "queue_destination": "队列",
-              "Value #A": "最老等待"
+              "Value #A": "最老等待",
+              "Value": "最老等待"
             }
           }
         }
@@ -3661,6 +4173,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -3745,14 +4281,23 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "consumer_type": 2,
+              "Value #A": 3,
+              "env": 4,
+              "cluster": 5,
+              "Value": 3
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
               "namespace": "命名空间",
               "app": "应用",
               "consumer_type": "类型",
-              "Value #A": "速率"
+              "Value #A": "速率",
+              "Value": "速率"
             }
           }
         }
@@ -3787,7 +4332,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"})",
+          "expr": "(sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"})) and on (env,cluster,namespace,app) app_downstream:client_requests:rate5m{namespace=~\"${namespace}\"}",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -3795,7 +4340,7 @@
         },
         {
           "refId": "B",
-          "expr": "(sum by (env,cluster,namespace,app) (app:server_errors:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"}) or 0 * sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"})) / (sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"}) > 0)",
+          "expr": "((sum by (env,cluster,namespace,app) (app:server_errors:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}) or 0 * sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"})) / (sum by (env,cluster,namespace,app) (app:server_requests:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}) > 0)) and on (env,cluster,namespace,app) app_downstream:client_requests:rate5m{namespace=~\"${namespace}\"}",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -3803,14 +4348,14 @@
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (env,cluster,namespace,app,le) (app:server_requests_seconds_bucket:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"}))",
+          "expr": "(histogram_quantile(0.99, sum by (env,cluster,namespace,app,le) (app:server_requests_seconds_bucket:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}))) and on (env,cluster,namespace,app) app_downstream:client_requests:rate5m{namespace=~\"${namespace}\"}",
           "legendFormat": "",
           "instant": true,
           "range": false,
           "format": "table"
         }
       ],
-      "description": "只含“网关应用”变量所选、且有下游调用的应用。",
+      "description": "只含“网关应用”变量所选、且有下游调用的应用。 只列有下游调用（client_requests）的应用。",
       "fieldConfig": {
         "defaults": {
           "noValue": "无下游调用的应用",
@@ -3819,6 +4364,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -3830,7 +4399,7 @@
                 "value": [
                   {
                     "title": "查看网关详情",
-                    "url": "/d/foundation-gateway?${datasource:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-gateway=${__value.raw}&from=${__from}&to=${__to}",
+                    "url": "/d/foundation-gateway?${datasource:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-app=${__value.raw}&from=${__from}&to=${__to}",
                     "targetBlank": false
                   }
                 ]
@@ -3961,7 +4530,15 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "env": 5,
+              "cluster": 6
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -3992,7 +4569,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (env,cluster,namespace,app,downstream) (app_downstream:client_requests:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"})",
+          "expr": "sum by (env,cluster,namespace,app,downstream) (app_downstream:client_requests:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"})",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -4000,7 +4577,7 @@
         },
         {
           "refId": "B",
-          "expr": "(sum by (env,cluster,namespace,app,downstream) (app_downstream:client_errors:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"}) or 0 * sum by (env,cluster,namespace,app,downstream) (app_downstream:client_requests:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"})) / (sum by (env,cluster,namespace,app,downstream) (app_downstream:client_requests:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"}) > 0)",
+          "expr": "(sum by (env,cluster,namespace,app,downstream) (app_downstream:client_errors:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}) or 0 * sum by (env,cluster,namespace,app,downstream) (app_downstream:client_requests:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"})) / (sum by (env,cluster,namespace,app,downstream) (app_downstream:client_requests:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}) > 0)",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -4008,7 +4585,7 @@
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (env,cluster,namespace,app,downstream,le) (app_downstream:client_requests_seconds_bucket:rate5m{namespace=~\"${namespace}\",app=~\"${gateway}\"}))",
+          "expr": "histogram_quantile(0.99, sum by (env,cluster,namespace,app,downstream,le) (app_downstream:client_requests_seconds_bucket:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -4026,6 +4603,30 @@
         "overrides": [
           {
             "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
               "id": "byName",
               "options": "应用"
             },
@@ -4035,7 +4636,7 @@
                 "value": [
                   {
                     "title": "查看网关详情",
-                    "url": "/d/foundation-gateway?${datasource:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-gateway=${__value.raw}&from=${__from}&to=${__to}",
+                    "url": "/d/foundation-gateway?${datasource:queryparam}&var-namespace=${__data.fields[\"命名空间\"]}&var-app=${__value.raw}&from=${__from}&to=${__to}",
                     "targetBlank": false
                   }
                 ]
@@ -4166,7 +4767,16 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "downstream": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "env": 6,
+              "cluster": 7
+            },
             "renameByName": {
               "env": "环境",
               "cluster": "集群",
@@ -4193,7 +4803,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "本页只查询 `prometheus/alerts.yaml` 中 `foundation-records` 组的预聚合与 Prometheus 内置 `ALERTS`，几十个应用时依然秒开；未加载该规则组时整页无数据。\n\n- 就绪：`app_ready` 与 HTTP `/readyz`、gRPC 健康检查读取同一状态，对所有负载类型成立。\n- 基础设施：K8s 区需 kube-state-metrics，数据库区需 mysqld_exporter，Redis 区需 redis_exporter，Kafka Lag 需 kafka-exporter；缺失时显示“未接入”，不当作健康。\n- 网关：下游由 `client_requests_*` 的 operation 推导，gRPC 风格 `/pkg.Service/Method` 取服务名。\n- 下钻：表格中的应用、实例、消费组、队列链接到对应详情页；页面清单见 `docs/fleet-monitoring.md`。"
+        "content": "本页只查询 `prometheus/alerts.yaml` 中 `foundation-records` 组的预聚合与 Prometheus 内置 `ALERTS`，几十个应用时依然秒开；未加载该规则组时整页无数据。\n\n- 就绪：`app_ready` 与 HTTP `/readyz`、gRPC 健康检查读取同一生命周期状态，对所有负载类型成立；“未就绪”还计入 readiness 依赖检查失败（`server_readiness_status=0`），与 K8s 摘流量一致。\n- 基础设施：K8s 区需 kube-state-metrics，数据库区需 mysqld_exporter，Redis 区需 redis_exporter，Kafka Lag 需 kafka-exporter；缺失时显示“未接入”，不当作健康。\n- 网关：下游由 `client_requests_*` 的 operation 推导，gRPC 风格 `/pkg.Service/Method` 取服务名。\n- 下钻：表格中的应用、实例、消费组、队列链接到对应详情页；页面清单见 `observability/fleet-monitoring.md`。"
       }
     }
   ]

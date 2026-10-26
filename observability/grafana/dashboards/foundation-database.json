@@ -1335,6 +1335,30 @@
         "overrides": [
           {
             "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
               "id": "byName",
               "options": "使用中连接"
             },
@@ -1545,7 +1569,18 @@
               "Time 8": true,
               "Time 9": true
             },
-            "indexByName": {},
+            "indexByName": {
+              "namespace": 0,
+              "app": 1,
+              "db_name": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 8,
+              "Value #G": 9
+            },
             "renameByName": {
               "namespace": "命名空间",
               "app": "应用",
@@ -1592,19 +1627,19 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_in_use_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_in_use_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "使用中 · {{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         },
         {
           "refId": "B",
-          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_idle_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_idle_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "空闲 · {{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         },
         {
           "refId": "C",
-          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_max_open_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_max_open_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "上限 · {{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         }
@@ -1735,7 +1770,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_in_use_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\") / (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_max_open_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\") > 0))",
+          "expr": "max by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_in_use_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\") / (label_join(label_replace(label_replace(label_join(label_join(((label_replace(go_sql_max_open_connections{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\") > 0))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         }
@@ -1804,7 +1839,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(go_sql_wait_count_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(go_sql_wait_count_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         }
@@ -1871,7 +1906,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(go_sql_wait_duration_seconds_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) / (sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(go_sql_wait_count_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")) > 0)",
+          "expr": "sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(go_sql_wait_duration_seconds_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")) / (sum by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(go_sql_wait_count_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")) > 0)",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         }
@@ -1938,7 +1973,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (${view:raw},namespace,app,db_name,operation,result) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name,operation,result) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} / {{operation}} / {{result}} · {{${view:raw}}}",
           "range": true
         }
@@ -2051,7 +2086,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (${view:raw},namespace,app,le,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operation_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\")))",
+          "expr": "histogram_quantile(0.95, sum by (${view:raw},namespace,app,le,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operation_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} / {{operation}} · {{${view:raw}}}",
           "range": true
         }
@@ -2118,7 +2153,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "((sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\",result=\"error\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) or on (${view:raw},namespace,app,db_name,operation) (0 * (sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))))) / ((sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))) > 0)",
+          "expr": "((sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\",result=\"error\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))) or on (${view:raw},namespace,app,db_name,operation) (0 * (sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))))) / ((sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))) > 0)",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} / {{operation}} · {{${view:raw}}}",
           "range": true
         }
@@ -2203,7 +2238,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (${view:raw},namespace,app,db_name,operation,result) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_slow_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name,operation,result) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(database_sql_slow_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} / {{operation}} / {{result}} · {{${view:raw}}}",
           "range": true
         }
@@ -2316,7 +2351,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(database_sql_slow_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "sum by (${view:raw},namespace,app,db_name,operation) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(database_sql_slow_operations_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} / {{operation}} · {{${view:raw}}}",
           "range": true
         }
@@ -2383,7 +2418,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(database_sql_slow_threshold_seconds{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"namespace\", \"pod\"), \"view_container\", \" / \", \"namespace\", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"namespace\", \"pod\", \"pod_ip\"))",
+          "expr": "max by (${view:raw},namespace,app,db_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(database_sql_slow_threshold_seconds{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",db_name=~\"${db_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
           "legendFormat": "{{namespace}} / {{app}} / {{db_name}} · {{${view:raw}}}",
           "range": true
         }

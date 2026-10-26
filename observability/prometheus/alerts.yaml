@@ -278,6 +278,18 @@ groups:
         expr: sum by (env, cluster, namespace, app) (app_ready)
       - record: app:app_ready:instances
         expr: count by (env, cluster, namespace, app) (app_ready)
+      # 同时满足生命周期就绪（app_ready）与最近一次 readiness 探测通过（server_readiness_status，含依赖检查）的实例数，
+      # 与 K8s 是否给该 Pod 分流量一致；未上报 server_readiness_status 的实例（未配置探针或旧版本）按 app_ready 计。
+      - record: app:readiness:ready
+        expr: |
+          sum by (env, cluster, namespace, app) (
+            app_ready
+            * on (env, cluster, namespace, app, pod) group_left ()
+            (
+              max by (env, cluster, namespace, app, pod) (server_readiness_status)
+              or max by (env, cluster, namespace, app, pod) (app_ready)
+            )
+          )
       - record: app:consumer_messages:rate5m
         expr: |
           label_replace(sum by (env, cluster, namespace, app) (rate(queue_consumer_messages_total[5m])), "consumer_type", "queue", "", "")

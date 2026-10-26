@@ -98,6 +98,13 @@ def fixture_tests(overview):
         add('node_cpu_seconds_total', {'instance': node + ':9100', 'cpu': '0', 'mode': 'idle'}, '0+30x10')
         add('node_memory_MemAvailable_bytes', {'instance': node + ':9100'}, '400+0x10')
         add('node_memory_MemTotal_bytes', {'instance': node + ':9100'}, '1000+0x10')
+    # 已结束的 Job Pod 仍有 kube_pod_info，Pod/容器卡片的分母不应计入。
+    done = {'namespace': 'one', 'pod': 'report-0'}
+    add('kube_pod_info', dict(done, node='node-a', pod_ip='10.0.0.9'), '1+0x10')
+    add('kube_pod_status_phase', dict(done, phase='Succeeded'), '1+0x10')
+    add('kube_pod_status_ready', dict(done, condition='false'), '1+0x10')
+    add('kube_pod_container_status_running', dict(done, container='report'), '0+0x10')
+    add('kube_pod_container_info', dict(done, container='report', image='report:v1'), '1+0x10')
     # 同 Pod 的 sidecar 无 Limit：使用量应计入总量，但不能污染已设 Limit 的比例。
     extra = {'namespace': 'one', 'pod': 'api-0', 'container': 'sidecar'}
     add('container_cpu_usage_seconds_total', extra, '0+120x10')
@@ -262,8 +269,9 @@ def component_fixture_tests(components):
     checks.append(fixture_check(components, 85, [({'view_node': 'node-a', 'namespace': ns, 'app': app}, value)
                                                for ns, app, value in [('one', 'api', 30), ('one', 'worker', 30), ('two', 'api', 40)]], 'view_node'))
     for view in VIEWS:
-        identity = {'namespace': 'one', 'app': 'api', view: {'view_pod': 'one / api-0', 'view_container': 'one / api-0 / api',
-                                                          'view_node': 'node-a', 'view_instance': 'one / api-0 / 10.0.0.1'}[view]}
+        # 视图标签与 namespace/app 一起分组，图例已显示命名空间，视图值不再重复。
+        identity = {'namespace': 'one', 'app': 'api', view: {'view_pod': 'api-0', 'view_container': 'api-0 / api',
+                                                          'view_node': 'node-a', 'view_instance': 'api-0 / 10.0.0.1'}[view]}
         cases = [(31, {'db_name': 'primary'}, .05),
                  (38, {'redis_connection': 'primary', 'pool_name': 'default', 'type': 'command'}, 0),
                  (39, {'redis_connection': 'primary', 'pool_name': 'default', 'type': 'command'}, 95),
@@ -319,8 +327,8 @@ def service_fixture_tests(service):
         checks.append(fixture_check(service, panel, [({}, value)]))
     for view in VIEWS:
         def identity(app, pod, ip):
-            label = {'view_pod': 'one / ' + pod, 'view_container': 'one / ' + pod + ' / api',
-                     'view_node': 'node-a', 'view_instance': 'one / ' + pod + ' / ' + ip}[view]
+            label = {'view_pod': pod, 'view_container': pod + ' / api',
+                     'view_node': 'node-a', 'view_instance': pod + ' / ' + ip}[view]
             return {'namespace': 'one', 'app': app, view: label}
         expected = [identity('api', 'api-0', '10.0.0.1'), identity('worker', 'worker-0', '10.0.0.2')]
         for panel, values in [(9, [1, 1]), (10, [0, .5]), (11, [.95, .95])]:
@@ -386,6 +394,9 @@ def fleet_fixture_tests(fleet):
     add('app_ready', {'app': 'api', 'pod': 'api-1'}, '0+0x10')
     add('app_ready', {'app': 'worker', 'pod': 'worker-0'}, '1+0x10')
     add('app_ready', {'app': 'cron', 'pod': 'cron-0'}, '0+0x10')
+    # worker-0 依赖检查失败：app_ready=1 但 readiness 探测为 0，舰队页按未就绪计；api-0 探测通过。
+    add('server_readiness_status', {'app': 'worker', 'pod': 'worker-0'}, '0+0x10')
+    add('server_readiness_status', {'app': 'api', 'pod': 'api-0'}, '1+0x10')
     add('server_requests_code_total', {'app': 'api', 'pod': 'api-0', 'code': '200'}, '0+54x10')
     add('server_requests_code_total', {'app': 'api', 'pod': 'api-1', 'code': '500'}, '0+6x10')
     for le in ['0.5', '+Inf']:
@@ -407,9 +418,10 @@ def fleet_fixture_tests(fleet):
     def app(name):
         return {'namespace': 'apps', 'app': name}
     target = {p['refId']: index for index, p in enumerate(next(p for p in panels(fleet) if p['id'] == 9)['targets'])}
-    checks = [fixture_check(fleet, panel, [({}, value)]) for panel, value in [(2, 3), (3, 1), (4, 2), (5, 1), (6, .1), (7, 10)]]
+    checks = [fixture_check(fleet, panel, [({}, value)]) for panel, value in [(2, 3), (3, 2), (4, 3), (5, 1), (6, .1), (7, 10)]]
     checks.append(fixture_check(fleet, 3, [({}, 0)], namespace='other'))
-    for ref, expected in [('A', [(app('api'), 1), (app('worker'), 1), (app('cron'), 0)]),
+    for ref, expected in [('A', [(app('api'), 1), (app('worker'), 0), (app('cron'), 0)]),
+                          ('J', [(app('api'), 1), (app('worker'), 1), (app('cron'), 1)]),
                           ('B', [(app('api'), 2), (app('worker'), 1), (app('cron'), 1)]),
                           ('C', [(app('api'), 1)]), ('D', [(app('api'), .1)]), ('E', [(app('api'), .475)]),
                           ('F', [(app('worker'), 2)]), ('G', [(app('worker'), .25)]), ('H', [(app('worker'), 30)]),
@@ -503,16 +515,16 @@ def platform_fixture_tests(fleet):
     checks.append(fixture_check(fleet, 28, [(rule('pod:kube_pod_container_restarts:increase1h', namespace='apps', pod='api-1'), 10)]))
     checks.append(fixture_check(fleet, 29, [(rule('node:kube_node_not_ready:info', node='node-b', condition='NotReady'), 1),
                                             (rule('node:kube_node_pressure:info', node='node-a', condition='MemoryPressure'), 1)]))
-    for ref, expected in [('A', [(rule('instance:mysql_up:max', instance='db-a'), 1), (rule('instance:mysql_up:max', instance='db-b'), 0)]),
-                          ('B', [(rule('instance:mysql_connections:usage', instance='db-a'), .8)]),
-                          ('C', [(rule('instance:mysql_slow_queries:rate5m', instance='db-a'), .1)]),
-                          ('D', [(rule('instance:mysql_connection_errors:rate5m', instance='db-a'), .1)]),
-                          ('E', [(rule('instance:mysql_replication_lag:seconds', instance='db-b'), 12)])]:
+    for ref, expected in [('A', [(dict(instance='db-a'), 1), (dict(instance='db-b'), 0)]),
+                          ('B', [(dict(instance='db-a'), .8)]),
+                          ('C', [(dict(instance='db-a'), .1)]),
+                          ('D', [(dict(instance='db-a'), .1)]),
+                          ('E', [(dict(instance='db-b'), 12)])]:
         checks.append(fixture_check(fleet, 36, expected, target=ref))
     checks.append(fixture_check(fleet, 37, [(rule('app:go_sql_pool_usage:max', namespace='apps', app='api', db_name='primary'), .9)]))
-    for ref, expected in [('B', [(rule('instance:redis_memory:usage', instance='redis-a'), .9)]),
-                          ('D', [(rule('instance:redis_command_latency:avg5m', instance='redis-a'), .05)]),
-                          ('E', [(rule('instance:redis_connected_clients:max', instance='redis-a'), 42)])]:
+    for ref, expected in [('B', [(dict(instance='redis-a'), .9)]),
+                          ('D', [(dict(instance='redis-a'), .05)]),
+                          ('E', [(dict(instance='redis-a'), 42)])]:
         checks.append(fixture_check(fleet, 46, expected, target=ref))
     checks.append(fixture_check(fleet, 55, [(rule('group:kafka_consumergroup_lag:sum', **kafka), 18)]))
     checks.append(fixture_check(fleet, 56, [(rule('queue:queue_oldest_ready_age:max', queue_destination='emails'), 30)]))
@@ -534,12 +546,18 @@ def platform_fixture_tests(fleet):
     zero = [fixture_check(fleet, panel, [({}, 0)]) for panel in [22, 23, 53, 54]]
     # ALERTS 由 Prometheus 写入；单独一组输入，避免与其他组的告警评估结果混在一起。
     firing = {'alertname': 'FoundationAppNotReady', 'severity': 'warning', 'namespace': 'apps', 'app': 'api', 'pod': 'api-1'}
+    # 已持续时间来自 ALERTS_FOR_STATE（进入 pending 的时间戳）；pending、Watchdog 与 info 级别不进表。
     alerts = [input_series('ALERTS', dict(firing, alertstate='firing'), '1+0x10'),
-              input_series('ALERTS', dict(firing, alertname='FoundationHighLatency', alertstate='pending'), '1+0x10')]
+              input_series('ALERTS_FOR_STATE', firing, '300+0x10'),
+              input_series('ALERTS', dict(firing, alertname='FoundationHighLatency', alertstate='pending'), '1+0x10'),
+              input_series('ALERTS_FOR_STATE', dict(firing, alertname='FoundationHighLatency'), '500+0x10')]
+    for name, severity in [('Watchdog', 'none'), ('InfoInhibitor', 'none'), ('KubeInfo', 'info')]:
+        noise = {'alertname': name, 'severity': severity, 'namespace': 'apps'}
+        alerts += [input_series('ALERTS', dict(noise, alertstate='firing'), '1+0x10'), input_series('ALERTS_FOR_STATE', noise, '0+0x10')]
     return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks},
             {'interval': '1m', 'input_series': unconnected, 'promql_expr_test': empty + zero},
             {'interval': '1m', 'input_series': alerts, 'promql_expr_test': [
-                fixture_check(fleet, 12, [(dict(firing, alertstate='firing', __name__='ALERTS'), 1)]),
+                fixture_check(fleet, 12, [(dict(firing, summary='FoundationAppNotReady'), 300)]),
                 fixture_check(fleet, 12, [], namespace='other')]}]
 
 
@@ -717,8 +735,19 @@ def main():
     # 总览只读预聚合与 ALERTS，几十个应用时不扫原始序列。
     for p in panels(fleet):
         for t in p.get('targets', []):
-            raw = {m for m in re.findall(r'([a-zA-Z_:][a-zA-Z0-9_:]*)\{', t['expr']) if ':' not in m} - {'ALERTS'}
+            raw = {m for m in re.findall(r'([a-zA-Z_:][a-zA-Z0-9_:]*)\{', t['expr']) if ':' not in m} - {'ALERTS', 'ALERTS_FOR_STATE'}
             assert not raw, f'平台总览「{p["title"]}」直接查询原始指标: {raw}'
+    # 多查询合并的表格按标签对齐行；裸选择器（含比较过滤）保留 __name__，各查询的 __name__ 不同会把同一对象拆成多行。
+    bare = re.compile(r'^\s*[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?(\s*(==|!=|>=|<=|>|<)\s*[-\d.]+)?\s*$')
+    for d in dashboards:
+        for p in panels(d):
+            if p['type'] == 'table' and len(p.get('targets', [])) > 1 and any(t['id'] == 'merge' for t in p.get('transformations') or []):
+                for t in p['targets']:
+                    assert not bare.match(t['expr']), f'{d["uid"]}「{p["title"]}」合并表格的 {t["refId"]} 须先聚合去掉 __name__: {t["expr"]}'
+            # 单查询表格的值列名为 Value（多查询才带 #refId），只改名 Value #A 会显示原始列名。
+            organize = next((t['options'] for t in p.get('transformations') or [] if t['id'] == 'organize'), {})
+            if p['type'] == 'table' and len(p.get('targets', [])) == 1 and 'Value #A' in organize.get('renameByName', {}):
+                assert organize['renameByName'].get('Value') == organize['renameByName']['Value #A'], f'{d["uid"]}「{p["title"]}」须同时改名 Value'
     empty_checks = []
     for d in dashboards:
         names = {v['name'] for v in d['templating']['list']}

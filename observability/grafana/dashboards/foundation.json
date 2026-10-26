@@ -767,7 +767,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "受命名空间、节点、Pod筛选影响；不受容器筛选影响。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "description": "受命名空间、节点、Pod筛选影响；不受容器筛选影响。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。分母不含已结束（Succeeded/Failed）的 Job Pod。",
       "gridPos": {
         "x": 4,
         "y": 6,
@@ -784,7 +784,7 @@
         },
         {
           "refId": "B",
-          "expr": "count(max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "expr": "count(max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}) unless on (namespace,pod) (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=~\"Succeeded|Failed\"}) == 1))",
           "legendFormat": "总数",
           "range": false,
           "instant": true
@@ -822,7 +822,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "当前可服务的 Pod 数；不是副本期望值。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "description": "当前可服务的 Pod 数；不是副本期望值。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。分母不含已结束（Succeeded/Failed）的 Job Pod。",
       "gridPos": {
         "x": 8,
         "y": 6,
@@ -839,7 +839,7 @@
         },
         {
           "refId": "B",
-          "expr": "count(max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))",
+          "expr": "count(max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}) unless on (namespace,pod) (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=~\"Succeeded|Failed\"}) == 1))",
           "legendFormat": "总数",
           "range": false,
           "instant": true
@@ -877,7 +877,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "普通容器，不包含 init container；Running 不等于应用健康。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。",
+      "description": "普通容器，不包含 init container；Running 不等于应用健康。 同卡并列显示当前状态数量与所选对象总数；总数不是控制器期望副本。应用筛选仅用于应用埋点，不过滤 Kubernetes 对象。分母不含已结束（Succeeded/Failed）的 Job Pod。",
       "gridPos": {
         "x": 12,
         "y": 6,
@@ -894,7 +894,7 @@
         },
         {
           "refId": "B",
-          "expr": "count((max by (namespace,pod,container) (kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"})))",
+          "expr": "count(((max by (namespace,pod,container) (kube_pod_container_info{namespace=~\"${namespace}\",pod=~\"${pod}\",container=~\"${container}\",container!=\"\",container!=\"POD\"})) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))) unless on (namespace,pod) (max by (namespace,pod) (kube_pod_status_phase{namespace=~\"${namespace}\",pod=~\"${pod}\",phase=~\"Succeeded|Failed\"}) == 1))",
           "legendFormat": "总数",
           "range": false,
           "instant": true
@@ -1046,7 +1046,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "无数据",
+          "noValue": "无未 Ready Pod",
           "color": {
             "mode": "palette-classic"
           }
@@ -1168,7 +1168,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "noValue": "无数据",
+          "noValue": "无未 Ready 节点",
           "color": {
             "mode": "palette-classic"
           }
@@ -1529,6 +1529,30 @@
           "decimals": 0
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -2367,6 +2391,30 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "string"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "—"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",

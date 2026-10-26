@@ -26,6 +26,7 @@
 | `app:server_requests:rate5m` / `app:server_errors:rate5m` | 请求与 5xx 速率 |
 | `app:server_requests_seconds_bucket:rate5m` | 保留 `le` 的延迟桶速率，用于求 P95 |
 | `app:app_ready:ready` / `app:app_ready:instances` | 就绪实例数与上报实例数 |
+| `app:readiness:ready` | 同时满足 `app_ready=1` 与最近一次 readiness 探测通过（`server_readiness_status`，含依赖检查）的实例数；未上报探测结果的实例按 `app_ready` 计。平台总览的“不可用 / 未全部就绪”与健康表使用它，告警仍按 `app_ready` |
 | `app:consumer_messages:rate5m` / `app:consumer_failures:rate5m` | 消费速率与失败速率，`consumer_type` 区分 queue 与 kafka；失败含 Queue `failed`/`storage_error`、Kafka `error`/`dead_lettered` |
 | `app:job_failures:increase1h` | 近 1h Job 失败次数 |
 | `app:queue_oldest_ready_age:max` | 采集成功且年龄已知的最老就绪任务年龄 |
