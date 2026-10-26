@@ -79,6 +79,7 @@
 
 **新增**
 
+- readiness 状态指标、APP_NAME 应用名覆盖与 Kafka 发布错误日志（`f3f00f6`）
 - **observability**：platform overview with templated detail dashboards（`23b1f92`）
 - **observability**：add Kubernetes Job alerts and optional Pushgateway push（`aee73b3`）
 - **observability**：add fleet recording rules and overview dashboard（`68bf5a2`）
@@ -87,6 +88,7 @@
 
 **修复**
 
+- **observability**：按演示环境实测修正平台总览与各详情面板（`dd93cb4`）
 - **server**：stop WebSockets alongside HTTP shutdown and send 1001（`caccaca`）
 - **validation**：reject CGNAT, multicast and reserved ranges in IsSafeIP（`0d28b4a`）
 
@@ -107,12 +109,14 @@
 
 **文档**
 
+- **changelog**：prepare v2.5.0 release notes（`e1cac12`）
 - ⚠️ 不兼容：restructure documentation, layout and development tooling（`e94add4`）
 - **changelog**：record WebSocket shutdown changes（`20947b6`）
 - **changelog**：record planned foundation review changes（`08450ee`）
 
 **测试**
 
+- **demo**：kind 本地多角色演示环境与 changelog（`56b8d17`）
 - align Consul and MySQL external tests with documented semantics（`250c849`）
 - **server**：verify Kratos client health checking across the lifecycle（`4c381b7`）
 - cover composed lifecycle, hot reload and startup signals（`95d8169`）
