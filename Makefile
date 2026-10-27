@@ -32,6 +32,7 @@ endif
 # 镜像版本与本地演示环境保持一致。
 PROMETHEUS_IMAGE ?= prom/prometheus:v3.5.5
 BLACKBOX_IMAGE ?= prom/blackbox-exporter:v0.28.0
+ALERTMANAGER_IMAGE ?= prom/alertmanager:v0.28.1
 OBSERVABILITY_COMPOSE := docker compose -f test/observability/compose.yaml
 COMPONENTS_COMPOSE := $(OBSERVABILITY_COMPOSE) -f test/components/compose.yaml
 PROMETHEUS_URL ?= http://127.0.0.1:19090
@@ -183,6 +184,7 @@ test-observability: ## 校验 Prometheus 配置、告警规则测试与 Grafana 
 	docker run --rm --entrypoint promtool -v "$(CURDIR):/repo:ro" -w /repo $(PROMETHEUS_IMAGE) check rules observability/prometheus/alerts.yaml
 	docker run --rm --entrypoint promtool -v "$(CURDIR):/repo:ro" -w /repo $(PROMETHEUS_IMAGE) check config --syntax-only observability/prometheus/standalone.yaml test/observability/prometheus/prometheus.yaml
 	docker run --rm --entrypoint promtool -v "$(CURDIR):/repo:ro" -w /repo $(PROMETHEUS_IMAGE) test rules test/observability/prometheus/alerts.test.yaml
+	test/observability/check_alertmanager.sh $(ALERTMANAGER_IMAGE)
 	python3 test/observability/check_dashboards.py $(if $(PROMTOOL_CONTAINER),--container $(PROMTOOL_CONTAINER),)
 
 observability-up: ## 启动本地示例应用、Prometheus、Grafana（http://127.0.0.1:13000）

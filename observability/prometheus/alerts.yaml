@@ -440,6 +440,52 @@ groups:
             or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[3d]))
           )
           / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[3d])) > 0)
+      # 延迟 SLO：默认 99% 的请求在 1s 内完成（预算 0.01）。阈值必须是已有直方图桶边界，调整时同时修改下列规则的 le，
+      # 统一秒单位桶见 pkg/metrics README（0.25、0.5、1、2.5 等）；慢请求比例 = 1 - 阈值桶 / 全部请求。
+      - record: foundation:slo_latency_budget:ratio
+        expr: vector(0.01)
+      - record: app:server_slow_ratio:rate5m
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[5m]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[5m])) > 0)
+          )
+      - record: app:server_slow_ratio:rate30m
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[30m]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[30m])) > 0)
+          )
+      - record: app:server_slow_ratio:rate1h
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[1h]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[1h])) > 0)
+          )
+      - record: app:server_slow_ratio:rate2h
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[2h]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[2h])) > 0)
+          )
+      - record: app:server_slow_ratio:rate6h
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[6h]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[6h])) > 0)
+          )
+      - record: app:server_slow_ratio:rate1d
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[1d]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[1d])) > 0)
+          )
+      - record: app:server_slow_ratio:rate3d
+        expr: |
+          1 - (
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[3d]))
+            / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[3d])) > 0)
+          )
       - alert: FoundationSLOBurnRateCritical
         # 14.4 倍：1h 消耗 30 天预算的 2%（约 2 天耗尽）；6 倍：6h 消耗 5%（约 5 天耗尽）。
         expr: |
@@ -492,3 +538,105 @@ groups:
         annotations:
           summary: "应用 5xx 持续消耗可用性错误预算，按当前速率 30 天内耗尽"
           runbook: "observability/troubleshooting.md#foundationsloburnrate"
+      - alert: FoundationLatencySLOBurnRateCritical
+        expr: |
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_slow_ratio:rate1h > 14.4 * scalar(foundation:slo_latency_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_slow_ratio:rate5m > 14.4 * scalar(foundation:slo_latency_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_seconds_count{foundation="true"}[1h])) >= 100
+          )
+          or
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_slow_ratio:rate6h > 6 * scalar(foundation:slo_latency_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_slow_ratio:rate30m > 6 * scalar(foundation:slo_latency_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_seconds_count{foundation="true"}[6h])) >= 100
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "应用慢请求（>1s）快速消耗延迟错误预算（按当前速率数天内耗尽 30 天预算）"
+          runbook: "observability/troubleshooting.md#foundationlatencysloburnrate"
+      - alert: FoundationLatencySLOBurnRateWarning
+        expr: |
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_slow_ratio:rate1d > 3 * scalar(foundation:slo_latency_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_slow_ratio:rate2h > 3 * scalar(foundation:slo_latency_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_seconds_count{foundation="true"}[1d])) >= 100
+          )
+          or
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_slow_ratio:rate3d > 1 * scalar(foundation:slo_latency_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_slow_ratio:rate6h > 1 * scalar(foundation:slo_latency_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_seconds_count{foundation="true"}[3d])) >= 100
+          )
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用慢请求（>1s）持续消耗延迟错误预算，按当前速率 30 天内耗尽"
+          runbook: "observability/troubleshooting.md#foundationlatencysloburnrate"
+  # 单个下游异常：网关或服务调用的某个下游（client_requests，按 operation 推导 downstream）错误率或延迟过高。
+  # 复用 foundation-records 的 app_downstream:* 预聚合；5m 内至少 100 次调用才判断，避免低频调用噪声。
+  - name: foundation-downstream
+    rules:
+      - alert: FoundationDownstreamHighErrorRate
+        expr: |
+          (
+            (app_downstream:client_errors:rate5m or 0 * app_downstream:client_requests:rate5m)
+            / (app_downstream:client_requests:rate5m > 0)
+          ) > 0.05
+          and app_downstream:client_requests:rate5m * 300 >= 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "下游 {{ $labels.downstream }} 调用 5xx 比例超过 5%"
+          runbook: "observability/troubleshooting.md#foundationdownstreamhigherrorrate"
+      - alert: FoundationDownstreamHighLatency
+        expr: |
+          histogram_quantile(0.99, app_downstream:client_requests_seconds_bucket:rate5m) > 1
+          and on (env, cluster, namespace, app, downstream) app_downstream:client_requests:rate5m * 300 >= 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "下游 {{ $labels.downstream }} 调用 P99 超过 1s"
+          runbook: "observability/troubleshooting.md#foundationdownstreamhigherrorrate"
+  # 原先只有日志的异常：log_events_total{event} 由 bootstrap.NewMetricsBootstrap 按事件名计数（WARN 及以上、
+  # 事件名以 .rejected / .panicked / .panic.recovered 结尾，计数不受日志级别影响）。
+  - name: foundation-events
+    rules:
+      - alert: FoundationPanicRecovered
+        # 计数器在首次事件时才出现，increase 看不到这一次，用“窗口内新出现的序列”补上。
+        expr: |
+          sum by (env, cluster, namespace, app, event) (increase(log_events_total{foundation="true",event=~".+\\.(panicked|panic\\.recovered)"}[5m])) > 0
+          or sum by (env, cluster, namespace, app, event) (log_events_total{foundation="true",event=~".+\\.(panicked|panic\\.recovered)"} unless log_events_total{foundation="true",event=~".+\\.(panicked|panic\\.recovered)"} offset 5m)
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用恢复了 panic（{{ $labels.event }}），请求或运行时可能已失败"
+          runbook: "observability/troubleshooting.md#foundationpanicrecovered"
+      - alert: FoundationConfigRejected
+        # 只看配置与策略热更新；Kafka 发布拒绝与 WebSocket 消息拒绝属于请求级事件，由各自指标观察。
+        # 计数器在首次事件时才出现，increase 看不到这一次，用“窗口内新出现的序列”补上。
+        expr: |
+          sum by (env, cluster, namespace, app, event) (increase(log_events_total{foundation="true",event=~".+\\.rejected",event!~"kafka\\.publish\\..+|server\\.websocket\\..+"}[15m])) > 0
+          or sum by (env, cluster, namespace, app, event) (log_events_total{foundation="true",event=~".+\\.rejected",event!~"kafka\\.publish\\..+|server\\.websocket\\..+"} unless log_events_total{foundation="true",event=~".+\\.rejected",event!~"kafka\\.publish\\..+|server\\.websocket\\..+"} offset 15m)
+        labels:
+          severity: warning
+        annotations:
+          summary: "配置更新被拒绝（{{ $labels.event }}），应用仍在使用旧配置"
+          runbook: "observability/troubleshooting.md#foundationconfigrejected"

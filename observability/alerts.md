@@ -13,6 +13,12 @@
 | FoundationHighLatency | App P95 >500ms，5m 请求至少 100 | 10m | 慢接口、资源、外部调用 |
 | FoundationSLOBurnRateCritical（critical） | 可用性错误预算消耗率：1h 与 5m 均 >14.4，或 6h 与 30m 均 >6；长窗口请求至少 100 | 2m | 按当前速率数天内耗尽 30 天预算，立即处理 |
 | FoundationSLOBurnRateWarning | 消耗率：1d 与 2h 均 >3，或 3d 与 6h 均 >1；长窗口请求至少 100 | 15m | 按当前速率 30 天内耗尽，当天处理 |
+| FoundationLatencySLOBurnRateCritical（critical） | 慢请求（>1s）比例的消耗率，窗口与倍数同可用性 SLO | 2m | 延迟预算数天内耗尽 |
+| FoundationLatencySLOBurnRateWarning | 同上，慢速消耗 | 15m | 延迟预算 30 天内耗尽 |
+| FoundationDownstreamHighErrorRate | 单个下游（`downstream`）调用 5xx >5%，5m 调用至少 100 | 5m | 该下游服务、熔断与重试配置 |
+| FoundationDownstreamHighLatency | 单个下游调用 P99 >1s，5m 调用至少 100 | 10m | 下游慢接口、连接池与网络 |
+| FoundationPanicRecovered | 5m 内有 panic 被恢复（`log_events_total` 的 `*.panicked` / `*.panic.recovered`） | 立即 | 按 event 与 trace 查日志中的 panic 类型与堆栈 |
+| FoundationConfigRejected | 15m 内有配置或策略热更新被拒绝（`*.rejected`，不含 Kafka 发布与 WebSocket 消息拒绝） | 立即 | 应用仍在用旧配置，修正配置后重新下发 |
 | FoundationNodeCPUHigh | 应用所在机器 CPU >90% | 15m | 机器进程分布、竞争 |
 | FoundationNodeMemoryHigh | 应用所在机器内存使用 >90% | 10m | 可用内存、OOM、进程 RSS |
 | FoundationNodeDiskLow | 应用所在机器根分区可用 <10% | 15m | 磁盘、日志及保留策略 |
@@ -30,7 +36,9 @@
 | warning | 1d / 2h | 3 | 1d 内消耗 10%，约 10 天耗尽 |
 | warning | 3d / 6h | 1 | 3d 内消耗 10%，按此速率 30 天恰好耗尽 |
 
-长窗口判断是否真的在消耗预算，短窗口确认问题仍在发生，恢复后告警数分钟内解除。长窗口内请求少于 100 次时不告警，低流量关键业务需另配成功事件或端到端探测告警。快速消耗时 critical 先触发，warning 需持续 15m；Alertmanager 可用 critical 抑制同 app 的 warning。错误比例规则 `app:server_error_ratio:rate5m|30m|1h|2h|6h|1d|3d` 只统计 `foundation="true"` 的目标，无请求时无值；面板可直接引用。延迟 SLO 需要按业务阈值对齐直方图桶边界，模板暂不提供。
+长窗口判断是否真的在消耗预算，短窗口确认问题仍在发生，恢复后告警数分钟内解除。长窗口内请求少于 100 次时不告警，低流量关键业务需另配成功事件或端到端探测告警。快速消耗时 critical 先触发，warning 需持续 15m；Alertmanager 可用 critical 抑制同 app 的 warning。错误比例规则 `app:server_error_ratio:rate5m|30m|1h|2h|6h|1d|3d` 只统计 `foundation="true"` 的目标，无请求时无值；面板可直接引用。
+
+**延迟 SLO** 与可用性 SLO 使用同一套窗口与倍数，错误事件换成“慢于阈值的请求”：默认 99% 的请求在 1s 内完成，预算 `foundation:slo_latency_budget:ratio`（0.01），慢请求比例 `app:server_slow_ratio:rate5m…3d` = 1 − `server_requests_seconds_bucket{le="1"}` ÷ `le="+Inf"`。阈值必须是已有桶边界（统一秒单位桶含 0.1、0.25、0.5、1、2.5、5 等，见 [pkg/metrics](../pkg/metrics/README.md#秒单位直方图)），调整阈值时同时修改这 7 条规则里的 `le` 与告警摘要；按应用区分阈值需复制规则组并按 `app` 过滤。
 
 ## Recording rules
 
@@ -68,7 +76,15 @@
 
 本地 Compose 只计算规则，可在 Prometheus Alerts 页面看到 pending/firing，不发送任何外部消息。K8s 的 PrometheusRule 由现有 Prometheus 评估，通知复用现有 Alertmanager 配置。
 
-普通 Prometheus 在现有配置增加 alerting.alertmanagers，指向实际 Alertmanager 地址；之后在 Alertmanager 路由里根据 env、app、severity 分组。建议应用告警按 alertname/env/cluster/namespace/app 分组，机器告警按 alertname/env/cluster/node 分组；业务团队负责接收人、静默、升级和重复提醒间隔。模板不提供真实接收人或凭据。
+普通 Prometheus 在现有配置增加 alerting.alertmanagers，指向实际 Alertmanager 地址；之后在 Alertmanager 路由里根据 env、app、severity 分组。业务团队负责接收人、静默、升级和重复提醒间隔。
+
+[alertmanager.example.yaml](alertmanager/alertmanager.example.yaml) 是可直接改用的示例（接收人为占位地址，不含凭据），`make test-observability` 用 amtool 校验配置与路由：
+
+- **路由**：critical 同时发给值班（`pager`）与群（`team-chat`），其余进群；Watchdog、InfoInhibitor 及 none/info 级别静默。
+- **分组**：应用告警按 `alertname, env, cluster, namespace, app`；机器告警按 `node`；K8s Job 按所属 CronJob `owner_name`；CronJob 按 `cronjob`；下游告警加 `downstream`；panic 与配置拒绝加 `event`。
+- **抑制**：FoundationAppUnavailable 抑制同应用的未就绪、错误率、延迟、SLO 与探测告警；SLO critical 抑制同类 warning 与对应的错误率/延迟告警；FoundationTargetDown 抑制基于缺失指标的就绪告警；同一告警的 critical 抑制 warning。
+
+kube-prometheus-stack 把其中的 `route`、`receivers`、`inhibit_rules` 放进 `alertmanager.config`。
 
 每条告警的 `runbook` 注解为仓库相对文档定位。发布前可换成团队可访问的文档 URL，或由接收模板拼接仓库 URL；它不是已经可点击的绝对 runbook_url。应用名也可以用于生成带 var-app 的 Dashboard 链接，但需同时包含 env/cluster/namespace，避免同名应用混淆。
 

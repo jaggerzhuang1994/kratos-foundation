@@ -54,6 +54,22 @@ K8s 使用 `kubectl -n <namespace> get pods -o wide`、`describe pod <pod>` 和 
 
 FoundationSLOBurnRateCritical / FoundationSLOBurnRateWarning 表示 5xx 正在消耗可用性错误预算，口径见 [可用性 SLO 消耗率告警](alerts.md#可用性-slo-消耗率告警)。先用 `app:server_error_ratio:rate5m` 与 `rate1h` 判断是突发还是持续：短窗口高、长窗口低是刚开始的故障，按 FoundationHighServerErrorRate 的步骤定位 operation、Pod 与依赖；长窗口持续偏高而短窗口不高，多为少量接口长期报错，按 operation 排查错误分布。处理后确认短窗口比例回落，告警会在数分钟内解除。预算耗尽前评估是否暂停发布；只有确认 SLO 目标不合理时才调整 `foundation:slo_error_budget:ratio`，不要用改阈值代替修复。
 
+## FoundationLatencySLOBurnRate
+
+慢请求（默认 >1s）正在消耗延迟错误预算，口径见 [可用性 SLO 消耗率告警](alerts.md#可用性-slo-消耗率告警) 中的延迟 SLO。先用 `app:server_slow_ratio:rate5m` 与 `rate1h` 区分突发与持续，再按 FoundationHighLatency 的步骤按 operation、Pod 与依赖定位。阈值不合适时调整规则中的 `le`（必须是已有桶边界），不要用调大阈值代替排查。
+
+## FoundationDownstreamHighErrorRate
+
+FoundationDownstreamHighErrorRate / FoundationDownstreamHighLatency 指向某个调用方对某个下游（`downstream` 由 client operation 推导，gRPC 取服务名）的 5xx 或 P99 异常。到[网关详情](dashboards.md)按下游查看错误与非 2xx 原因，确认是下游自身故障（下游的 HighServerErrorRate、AppNotReady 同时触发）还是调用方连接池、熔断或重试配置导致；客户端重试只对幂等调用开启，见 [pkg/client 失败重试](../pkg/client/README.md#失败重试)。
+
+## FoundationPanicRecovered
+
+框架恢复了 panic：`event` 为 `server.request.panic.recovered`（HTTP/gRPC 请求）、`server.websocket.panic.recovered`、`app.runtime.panicked`（Runtime，应用随之统一停机）或 `config.observer.panicked`（配置订阅回调）。按同一 event 与时间窗口查 ERROR 日志中的 `panic_type`，开启请求 debug 可得到堆栈。请求级 panic 已被转为错误返回，但说明代码存在空指针、越界等缺陷，应修复而非忽略。告警在事件后 5m 自动解除。
+
+## FoundationConfigRejected
+
+配置或策略热更新被拒绝，应用继续使用旧配置：`event` 指出被拒绝的组件（如 `client.config.rejected`、`database.config.rejected`、`server.middleware.rejected`、`job.config.rejected`、`log.policy.rejected`、`config.snapshot.rejected`）。查同名 WARN 日志中的 `error`，修正配置中心的值后重新下发；数据库只有连接池参数支持热更新，其他字段需要重启。告警在 15m 内无新拒绝后解除。
+
 ## FoundationHighLatency
 
 先按 operation、Pod 拆分观察，并同时查看请求速率、进程 CPU/RSS、Goroutine 及所在机器。若同 Node 多个 App 同时变慢，检查机器资源竞争；若只有特定接口变慢，检查外部调用耗时、连接池等待和业务热点。

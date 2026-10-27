@@ -17,6 +17,10 @@
 - gRPC 客户端 keepalive `client.clients.<name>.grpc.keepalive_time` / `keepalive_timeout` / `keepalive_permit_without_stream`，按需开启。
 - Queue 执行期间续租 `WorkerConfig.RenewLease` 与可选接口 `queue.LeaseRenewer`（Redis Store、数据库 Store 均支持，自定义数据库 Repo 实现 `database.LeaseRepo`）：长任务可用短租约，崩溃后一个租约内即被重新领取；租约已被他人取得时取消 Handler。
 - 管理端口 pprof `server.http.pprof`（默认关闭），只能挂在独立管理监听上，落到业务监听时启动失败。
+- 延迟 SLO 消耗率告警 `FoundationLatencySLOBurnRateCritical` / `Warning`：默认 99% 请求在 1s 内（预算 `foundation:slo_latency_budget:ratio`），慢请求比例 `app:server_slow_ratio:rate5m…3d`，窗口与倍数同可用性 SLO；平台总览健康表新增 1h 可用性与延迟消耗率列。
+- 单个下游告警 `FoundationDownstreamHighErrorRate`（5xx >5%）与 `FoundationDownstreamHighLatency`（P99 >1s），复用 `app_downstream:*` 预聚合。
+- `log_events_total{event}`（`bootstrap.NewMetricsBootstrap` 注册，`log.SetEventCounter` 提供钩子）：WARN 及以上、事件名以 `.rejected` / `.panicked` / `.panic.recovered` 结尾的日志在级别过滤前计数；新增告警 `FoundationPanicRecovered`、`FoundationConfigRejected`（首次出现的计数器也会告警）。
+- Alertmanager 分组、路由与抑制示例 [alertmanager.example.yaml](observability/alertmanager/alertmanager.example.yaml)，`make test-observability` 用 amtool 校验配置与路由。
 - 可用性 SLO 多窗口多消耗率告警 `FoundationSLOBurnRateCritical`（1h/5m 14.4 倍、6h/30m 6 倍）与 `FoundationSLOBurnRateWarning`（1d/2h 3 倍、3d/6h 1 倍），默认 SLO 99.9%，由 `foundation:slo_error_budget:ratio` 调整；新增 `app:server_error_ratio:rate5m…3d` 预聚合及规则测试。见 [可用性 SLO 消耗率告警](observability/alerts.md#可用性-slo-消耗率告警)。
 - 数据库只读副本 `database.connections.<name>.read_replicas`：事务外查询随机分发到副本，写入、事务、锁定读与 `database.UsePrimary(ctx)` 走主库；副本沿用连接的驱动、GORM、AES 与池参数（池参数一起热更新），连接池指标以 `<连接名>/replica-<序号>` 单独上报。数据库 Queue 仓储固定读写主库。见 [只读副本](pkg/database/README.md#只读副本)。
 - `pkg/kafka/outbox`：Kafka 事务外盒，`Write` 在业务数据库事务内写待发消息，`Relay`（queue.Worker）提交后经 ManagedProducer 发布，至少一次、消息 ID 等于外盒 ID；复用数据库 Queue 的租约、重试、失败归档与 SKIP LOCKED 领取。见 [pkg/kafka/outbox](pkg/kafka/outbox/README.md)。

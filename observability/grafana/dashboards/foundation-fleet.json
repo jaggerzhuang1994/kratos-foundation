@@ -894,9 +894,25 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "K",
+          "expr": "sum by (env,cluster,namespace,app) (app:server_error_ratio:rate1h{namespace=~\"${namespace}\"}) / scalar(foundation:slo_error_budget:ratio)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "L",
+          "expr": "sum by (env,cluster,namespace,app) (app:server_slow_ratio:rate1h{namespace=~\"${namespace}\"}) / scalar(foundation:slo_latency_budget:ratio)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
-      "description": "全部列来自 foundation-records 预聚合；按未就绪实例数从多到少排序。就绪实例同时要求 app_ready=1 与最近一次 readiness 探测通过（含依赖检查），未配置探针的实例按 app_ready 计。“—”表示该应用没有对应负载（如纯消费者没有请求速率）或暂无样本，不等于零。",
+      "description": "全部列来自 foundation-records 预聚合；按未就绪实例数从多到少排序。就绪实例同时要求 app_ready=1 与最近一次 readiness 探测通过（含依赖检查），未配置探针的实例按 app_ready 计。“—”表示该应用没有对应负载（如纯消费者没有请求速率）或暂无样本，不等于零。 消耗率 = 1h 错误（5xx）或慢请求（>1s）比例 ÷ 错误预算：1× 表示按此速率 30 天恰好用完预算，6× 以上与 SLO critical 告警同级；默认 SLO 见 foundation-slo 规则组。",
       "fieldConfig": {
         "defaults": {
           "noValue": "未接入 / 无样本",
@@ -1184,6 +1200,90 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "可用性消耗率(1h)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:×"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 6
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "延迟消耗率(1h)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:×"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 6
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -1230,12 +1330,14 @@
               "Value #C": 5,
               "Value #D": 6,
               "Value #E": 7,
-              "Value #F": 8,
-              "Value #G": 9,
-              "Value #H": 10,
-              "Value #I": 11,
-              "env": 12,
-              "cluster": 13
+              "Value #K": 8,
+              "Value #L": 9,
+              "Value #F": 10,
+              "Value #G": 11,
+              "Value #H": 12,
+              "Value #I": 13,
+              "env": 14,
+              "cluster": 15
             },
             "renameByName": {
               "env": "环境",
@@ -1251,7 +1353,9 @@
               "Value #G": "消费失败比例",
               "Value #H": "最老就绪任务",
               "Value #I": "近1h Job失败",
-              "Value #J": "未就绪"
+              "Value #J": "未就绪",
+              "Value #K": "可用性消耗率(1h)",
+              "Value #L": "延迟消耗率(1h)"
             }
           }
         }

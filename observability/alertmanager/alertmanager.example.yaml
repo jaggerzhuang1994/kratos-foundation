@@ -1,0 +1,79 @@
+# Foundation 告警的 Alertmanager 分组、路由与抑制示例。接收人地址为占位符，替换为实际的值班/群机器人地址；
+# 不包含任何凭据。kube-prometheus-stack 可把 route / receivers / inhibit_rules 放进 alertmanager.config。
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: team-chat
+  # 应用告警按应用合并；机器、Job、下游告警各自的身份标签在子路由里补充。
+  group_by: [alertname, env, cluster, namespace, app]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # kube-prometheus 的心跳与 info 级占位告警不通知。
+    - receiver: "null"
+      matchers: ['alertname=~"Watchdog|InfoInhibitor"']
+    - receiver: "null"
+      matchers: ['severity=~"none|info"']
+    # critical：服务不可用或 SLO 快速消耗，立即呼叫值班。
+    - receiver: pager
+      matchers: ['severity="critical"']
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true
+    - receiver: team-chat
+      matchers: ['severity="critical"']
+    # 机器资源告警按节点合并，不为同机每个 App 重复通知。
+    - receiver: team-chat
+      matchers: ['alertname=~"FoundationNode.+"']
+      group_by: [alertname, env, cluster, node]
+    # K8s Job / CronJob 告警按所属 CronJob 合并多次失败。
+    - receiver: team-chat
+      matchers: ['alertname=~"FoundationJobFailed|FoundationJobRunningTooLong"']
+      group_by: [alertname, env, cluster, namespace, owner_name]
+    - receiver: team-chat
+      matchers: ['alertname=~"FoundationCronJob.+"']
+      group_by: [alertname, env, cluster, namespace, cronjob]
+    # 下游告警按调用方与下游合并。
+    - receiver: team-chat
+      matchers: ['alertname=~"FoundationDownstream.+"']
+      group_by: [alertname, env, cluster, namespace, app, downstream]
+    # panic 与配置拒绝按事件合并，同一事件在多实例上只通知一次。
+    - receiver: team-chat
+      matchers: ['alertname=~"FoundationPanicRecovered|FoundationConfigRejected"']
+      group_by: [alertname, env, cluster, namespace, app, event]
+      repeat_interval: 12h
+
+inhibit_rules:
+  # 全部实例不可用时，同一应用的单实例未就绪、错误率、延迟、SLO 与探测告警都是同一故障的症状。
+  - source_matchers: ['alertname="FoundationAppUnavailable"']
+    target_matchers: ['alertname=~"FoundationAppNotReady|FoundationHighServerErrorRate|FoundationHighLatency|FoundationSLOBurnRate.+|FoundationLatencySLOBurnRate.+|FoundationHealthProbeFailed"']
+    equal: [env, cluster, namespace, app]
+  # 可用性 SLO 快速消耗时，慢速消耗与 5xx 比例告警不再单独通知。
+  - source_matchers: ['alertname="FoundationSLOBurnRateCritical"']
+    target_matchers: ['alertname=~"FoundationSLOBurnRateWarning|FoundationHighServerErrorRate"']
+    equal: [env, cluster, namespace, app]
+  # 延迟 SLO 快速消耗时同理。
+  - source_matchers: ['alertname="FoundationLatencySLOBurnRateCritical"']
+    target_matchers: ['alertname=~"FoundationLatencySLOBurnRateWarning|FoundationHighLatency"']
+    equal: [env, cluster, namespace, app]
+  # 指标采集失败时，基于这些指标的应用告警会消失或失真，以采集失败为准。
+  - source_matchers: ['alertname="FoundationTargetDown"']
+    target_matchers: ['alertname=~"FoundationAppNotReady|FoundationAppUnavailable"']
+    equal: [env, cluster, namespace, app]
+  # 同一对象的 critical 抑制 warning（通用兜底）。
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: [alertname, env, cluster, namespace, app]
+
+receivers:
+  - name: "null"
+  - name: pager
+    webhook_configs:
+      - url: http://pager.example.invalid/alertmanager
+        send_resolved: true
+  - name: team-chat
+    webhook_configs:
+      - url: http://chat.example.invalid/alertmanager
+        send_resolved: true

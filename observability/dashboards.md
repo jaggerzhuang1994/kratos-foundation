@@ -18,7 +18,7 @@ Folder 与文件的对应关系保存在 [folders.json](grafana/folders.json)，
 
 ## 页面判读与导航
 
-平台总览面向整套项目都使用本框架的场景，只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)）与 Prometheus 内置 `ALERTS`，未加载该规则组时整页无数据。自上而下：当前触发中的告警；有没有应用不可用或在报错；应用健康表每个应用一行，按未就绪实例数降序排列（就绪含 readiness 依赖检查，见 `app:readiness:ready`），点击应用名进入服务详情；K8s、数据库、Redis、队列与 Kafka、网关质量各一行，表格中的 Pod、节点、实例、消费组、队列、应用链接到对应详情页。表格中“—”表示该应用没有对应负载或暂无样本，不等于零；无流量时比例不出值；环境与集群列放在最后。当前告警表排除 Watchdog、InfoInhibitor 与 none/info 级别，显示 alerts.yaml 中的说明与已持续时间。exporter 未部署时对应卡片显示“未接入”；kube-state-metrics 或消费者已接入但没有异常时，异常计数显示 0 而不是“未接入”。
+平台总览面向整套项目都使用本框架的场景，只读 `foundation-records` 预聚合（见 [告警规则](alerts.md#recording-rules)）与 Prometheus 内置 `ALERTS`，未加载该规则组时整页无数据。自上而下：当前触发中的告警；有没有应用不可用或在报错；应用健康表每个应用一行，按未就绪实例数降序排列（就绪含 readiness 依赖检查，见 `app:readiness:ready`），并显示 1h 可用性与延迟 SLO 消耗率（1× 橙色、6× 红色），点击应用名进入服务详情；K8s、数据库、Redis、队列与 Kafka、网关质量各一行，表格中的 Pod、节点、实例、消费组、队列、应用链接到对应详情页。表格中“—”表示该应用没有对应负载或暂无样本，不等于零；无流量时比例不出值；环境与集群列放在最后。当前告警表排除 Watchdog、InfoInhibitor 与 none/info 级别，显示 alerts.yaml 中的说明与已持续时间。exporter 未部署时对应卡片显示“未接入”；kube-state-metrics 或消费者已接入但没有异常时，异常计数显示 0 而不是“未接入”。
 
 单个服务从服务详情开始：首行“负载识别”卡片显示该服务有哪些负载类型（HTTP/gRPC 端点、消费者、Job、Go Runtime）。Grafana 不能按是否有数据自动折叠分区，因此 HTTP/gRPC RED 默认展开，消费者、Job、Runtime 默认折叠，卡片有值时再展开；这三个分区按应用汇总，不受节点与视图影响，Job 分区另列 kube-state-metrics 的 K8s Job 失败（一次性脚本）。RED 首屏卡片汇总当前筛选范围，趋势保留应用身份。异常端点表只列当前有错误或请求样本的对象，可点击端点进入组件页；空表须结合流量与接入诊断判断。卡片不设置业务 SLO 阈值；抓取失败数大于零用红色，应用自报就绪（`app_ready`）或已发现 Pod 未全部就绪用橙色，流量、错误率和耗时用中性色。
 

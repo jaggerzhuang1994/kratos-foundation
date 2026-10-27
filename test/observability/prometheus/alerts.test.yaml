@@ -899,3 +899,138 @@ tests:
             exp_annotations:
               summary: 应用 5xx 持续消耗可用性错误预算，按当前速率 30 天内耗尽
               runbook: observability/troubleshooting.md#foundationsloburnrate
+  - name: 延迟 SLO 快速消耗触发 critical
+    interval: 1m
+    input_series:
+      # verysl：20% 请求超过 1s，消耗率 20 倍。
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="verysl",le="1"}
+        values: 0+800x30
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="verysl",le="+Inf"}
+        values: 0+1000x30
+      - series: server_requests_seconds_count{foundation="true",env="prod",cluster="c1",namespace="apps",app="verysl"}
+        values: 0+1000x30
+    promql_expr_test:
+      # 1 - 比值有浮点误差，按 0.001 取整比较。
+      - expr: round(app:server_slow_ratio:rate5m, 0.001)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",cluster="c1",namespace="apps",app="verysl"}'
+            value: 0.2
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FoundationLatencySLOBurnRateCritical
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: verysl
+              severity: critical
+            exp_annotations:
+              summary: 应用慢请求（>1s）快速消耗延迟错误预算（按当前速率数天内耗尽 30 天预算）
+              runbook: observability/troubleshooting.md#foundationlatencysloburnrate
+  - name: 延迟 SLO 慢速消耗只触发 warning
+    interval: 1m
+    input_series:
+      # slowapi：5% 请求超过 1s，消耗率 5 倍：超过 warning 的 3 倍，低于 critical 的 6 倍。
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="slowapi",le="1"}
+        values: 0+950x240
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="slowapi",le="+Inf"}
+        values: 0+1000x240
+      - series: server_requests_seconds_count{foundation="true",env="prod",cluster="c1",namespace="apps",app="slowapi"}
+        values: 0+1000x240
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: FoundationLatencySLOBurnRateCritical
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: FoundationLatencySLOBurnRateWarning
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: slowapi
+              severity: warning
+            exp_annotations:
+              summary: 应用慢请求（>1s）持续消耗延迟错误预算，按当前速率 30 天内耗尽
+              runbook: observability/troubleshooting.md#foundationlatencysloburnrate
+  - name: 单个下游错误率与延迟告警
+    interval: 1m
+    input_series:
+      # gw 调用 orders：每分钟 600 次、10% 返回 503，全部落在 2.5s 桶；调用 health 很少，不判断。
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="gw",operation="/orders.v1.Orders/Get",code="200"}
+        values: 0+540x20
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="gw",operation="/orders.v1.Orders/Get",code="503"}
+        values: 0+60x20
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="gw",operation="/healthz",code="503"}
+        values: 0+1x20
+      - series: client_requests_seconds_bucket{env="prod",cluster="c1",namespace="apps",app="gw",operation="/orders.v1.Orders/Get",le="1"}
+        values: 0+0x20
+      - series: client_requests_seconds_bucket{env="prod",cluster="c1",namespace="apps",app="gw",operation="/orders.v1.Orders/Get",le="2.5"}
+        values: 0+600x20
+      - series: client_requests_seconds_bucket{env="prod",cluster="c1",namespace="apps",app="gw",operation="/orders.v1.Orders/Get",le="+Inf"}
+        values: 0+600x20
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationDownstreamHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: gw
+              downstream: orders.v1.Orders
+              severity: warning
+            exp_annotations:
+              summary: 下游 orders.v1.Orders 调用 5xx 比例超过 5%
+              runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate
+      - eval_time: 16m
+        alertname: FoundationDownstreamHighLatency
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: gw
+              downstream: orders.v1.Orders
+              severity: warning
+            exp_annotations:
+              summary: 下游 orders.v1.Orders 调用 P99 超过 1s
+              runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate
+  - name: panic 恢复与配置拒绝告警，含首次出现的计数器
+    interval: 1m
+    input_series:
+      # api 在 5m 首次 panic（计数器此时才出现），9m 再 panic 一次。
+      - series: log_events_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="api",event="server.request.panic.recovered"}
+        values: _x5 1x3 2x10
+      # worker 配置被拒绝一次；websocket 消息拒绝属于请求级事件，不告警。
+      - series: log_events_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",event="client.config.rejected"}
+        values: _x5 1x20
+      - series: log_events_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="api",event="server.websocket.message.rejected"}
+        values: 0+1x20
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: FoundationPanicRecovered
+        exp_alerts:
+          - exp_labels: {env: prod, cluster: c1, namespace: apps, app: api, event: server.request.panic.recovered, severity: warning}
+            exp_annotations:
+              summary: 应用恢复了 panic（server.request.panic.recovered），请求或运行时可能已失败
+              runbook: observability/troubleshooting.md#foundationpanicrecovered
+      - eval_time: 12m
+        alertname: FoundationPanicRecovered
+        exp_alerts:
+          - exp_labels: {env: prod, cluster: c1, namespace: apps, app: api, event: server.request.panic.recovered, severity: warning}
+            exp_annotations:
+              summary: 应用恢复了 panic（server.request.panic.recovered），请求或运行时可能已失败
+              runbook: observability/troubleshooting.md#foundationpanicrecovered
+      - eval_time: 18m
+        alertname: FoundationPanicRecovered
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: FoundationConfigRejected
+        exp_alerts:
+          - exp_labels: {env: prod, cluster: c1, namespace: apps, app: worker, event: client.config.rejected, severity: warning}
+            exp_annotations:
+              summary: 配置更新被拒绝（client.config.rejected），应用仍在使用旧配置
+              runbook: observability/troubleshooting.md#foundationconfigrejected

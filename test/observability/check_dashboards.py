@@ -427,13 +427,21 @@ def fleet_fixture_tests(fleet):
                           ('F', [(app('worker'), 2)]), ('G', [(app('worker'), .25)]), ('H', [(app('worker'), 30)]),
                           ('I', [(app('cron'), 10)])]:
         checks.append(fixture_check(fleet, 9, expected, target=target[ref]))
+    # 消耗率列：0.2% 5xx 为可用性预算（0.1%）的 2 倍；一半请求慢于 1s 为延迟预算（1%）的 50 倍（取可精确表示的比例，避免浮点误差）。SLO 规则只看 foundation="true"。
+    slo_labels = {'foundation': 'true', 'namespace': 'apps', 'app': 'slo', 'pod': 'slo-0'}
+    slo = [input_series('server_requests_code_total', dict(slo_labels, code='200'), '0+998x10'),
+           input_series('server_requests_code_total', dict(slo_labels, code='500'), '0+2x10'),
+           input_series('server_requests_seconds_bucket', dict(slo_labels, le='1'), '0+500x10'),
+           input_series('server_requests_seconds_bucket', dict(slo_labels, le='+Inf'), '0+1000x10')]
     # 无错误样本时比例为 0；无流量时比例不出值，不能把空闲服务显示成 0% 错误。
     idle = [input_series('server_requests_code_total', {'namespace': 'apps', 'app': 'api', 'pod': 'api-0', 'code': '200'}, '0+60x10'),
             input_series('server_requests_code_total', {'namespace': 'apps', 'app': 'idle', 'pod': 'idle-0', 'code': '200'}, '0+0x10')]
     return [{'interval': '1m', 'input_series': series, 'promql_expr_test': checks},
             {'interval': '1m', 'input_series': idle, 'promql_expr_test': [
                 fixture_check(fleet, 6, [({}, 0)]), fixture_check(fleet, 9, [(app('api'), 0)], target=target['D'])]},
-            {'interval': '1m', 'input_series': idle[1:], 'promql_expr_test': [fixture_check(fleet, 6, []), fixture_check(fleet, 9, [], target=target['D'])]}]
+            {'interval': '1m', 'input_series': idle[1:], 'promql_expr_test': [fixture_check(fleet, 6, []), fixture_check(fleet, 9, [], target=target['D'])]},
+            {'interval': '1m', 'input_series': slo, 'promql_expr_test': [
+                fixture_check(fleet, 9, [(app('slo'), 2)], target=target['K']), fixture_check(fleet, 9, [(app('slo'), 50)], target=target['L'])]}]
 
 
 def platform_fixture_tests(fleet):
