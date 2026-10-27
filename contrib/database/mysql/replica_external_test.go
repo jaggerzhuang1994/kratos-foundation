@@ -30,7 +30,11 @@ func TestExternalMySQLReadReplicas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer admin.SQLDB.Close()
+	t.Cleanup(func() {
+		if err := admin.SQLDB.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	suffix := fmt.Sprint(time.Now().UnixNano())
 	replicaSchema, table := "foundation_replica_"+suffix, "replica_records_"+suffix
 	replicaDSN := strings.Replace(dsn, "/foundation_test?", "/"+replicaSchema+"?", 1)
