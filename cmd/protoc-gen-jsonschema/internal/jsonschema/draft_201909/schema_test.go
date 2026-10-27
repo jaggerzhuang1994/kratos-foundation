@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/jsonschema"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/jsonschema"
 )
 
 func TestNewMapsArrayItemsUsingDraft201909Keywords(t *testing.T) {

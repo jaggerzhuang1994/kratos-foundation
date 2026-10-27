@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/proto"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/proto"
 	pgs "github.com/lyft/protoc-gen-star/v2"
 	"sigs.k8s.io/yaml"
 )

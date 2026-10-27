@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/iancoleman/orderedmap"
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/jsonschema"
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/utils"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/jsonschema"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/utils"
 )
 
 type Schema struct {

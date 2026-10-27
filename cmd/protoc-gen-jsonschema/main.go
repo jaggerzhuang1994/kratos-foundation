@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/modules"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/modules"
 	pgs "github.com/lyft/protoc-gen-star/v2"
 	"google.golang.org/protobuf/types/pluginpb"
 )

@@ -1,8 +1,8 @@
 package modules
 
 import (
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/jsonschema"
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/proto"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/jsonschema"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/proto"
 	pgs "github.com/lyft/protoc-gen-star/v2"
 	"testing"
 )

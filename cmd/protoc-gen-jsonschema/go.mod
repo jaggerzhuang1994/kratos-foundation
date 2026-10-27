@@ -1,4 +1,4 @@
-module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema
+module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2
 
 go 1.26.0
 

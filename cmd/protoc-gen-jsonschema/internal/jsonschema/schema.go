@@ -1,7 +1,7 @@
 package jsonschema
 
 import (
-	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/internal/utils"
+	"github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-jsonschema/v2/internal/utils"
 )
 
 type Draft interface {
