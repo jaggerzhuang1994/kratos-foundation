@@ -28,6 +28,12 @@ kind: Service
 metadata: {name: mysql, namespace: middleware}
 spec: {selector: {app: mysql}, ports: [{name: mysql, port: 3306}]}
 ---
+# 只读副本演示：与 mysql 指向同一 Pod，应用侧按 read_replicas 建立独立连接池。
+apiVersion: v1
+kind: Service
+metadata: {name: mysql-replica, namespace: middleware}
+spec: {selector: {app: mysql}, ports: [{name: mysql, port: 3306}]}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: mysqld-exporter, namespace: middleware}

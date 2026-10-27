@@ -1,6 +1,6 @@
 #!/bin/sh
 # 本地 kind 集群监控 Demo：部署 kube-prometheus-stack、中间件、多角色业务应用与仓库面板/规则。
-# 用法：test/demo/run.sh up | down | reload（只重新构建并部署应用）。
+# 用法：test/demo/run.sh up | down | reload（只重新构建并部署应用）| reject-config | restore-config。
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$root"
@@ -54,8 +54,22 @@ deploy_apps() {
     $kubectl -n middleware rollout status deploy/mysql deploy/redis deploy/kafka --timeout=300s
     $kubectl -n middleware wait --for=condition=complete job/kafka-topics --timeout=300s
     $kubectl apply -f test/demo/k8s/apps.yaml
-    $kubectl -n shop create configmap shop-config --from-file=config.yaml=test/demo/config.yaml --dry-run=client -o yaml | $kubectl apply -f -
+    apply_config test/demo/config.yaml
     $kubectl -n shop rollout restart deploy
+}
+
+apply_config() {
+    $kubectl -n shop create configmap shop-config --from-file=config.yaml="$1" --dry-run=client -o yaml | $kubectl apply -f -
+}
+
+# reject-config 热下发一份非法客户端配置（重试次数超出 2–5），各应用拒绝更新并保留旧配置，
+# 演示 client.config.rejected 日志、log_events_total 与 FoundationConfigRejected；restore-config 恢复。
+reject_config() {
+    broken=$(mktemp)
+    awk '{ print } /^        enable: true$/ && !done { print "        max_attempts: 9"; done = 1 }' test/demo/config.yaml > "$broken"
+    apply_config "$broken"
+    rm -f "$broken"
+    echo "已下发非法配置；ConfigMap 同步到 Pod 约需 1 分钟，之后查看 FoundationConfigRejected。恢复：$0 restore-config"
 }
 
 load_dashboards() {
@@ -71,6 +85,8 @@ case "${1:-}" in
         echo "Grafana: http://127.0.0.1:13300 (admin / demo-local-only)  Prometheus: http://127.0.0.1:19900"
         ;;
     reload) build_app; deploy_apps; load_dashboards ;;
+    reject-config) reject_config ;;
+    restore-config) apply_config test/demo/config.yaml ;;
     down) kind delete cluster --name "$cluster" ;;
-    *) echo "usage: $0 up|reload|down" >&2; exit 2 ;;
+    *) echo "usage: $0 up|reload|down|reject-config|restore-config" >&2; exit 2 ;;
 esac

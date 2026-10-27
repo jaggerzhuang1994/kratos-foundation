@@ -11,6 +11,7 @@ import (
 	"time"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client"
 )
 
 // statsDaemon 是自定义常驻 Runtime：周期读取 Redis 状态，Stop 关闭 stop 通道后 Start 返回。
@@ -83,7 +84,7 @@ func (g *loadGenerator) Stop(context.Context) error {
 func (g *loadGenerator) request(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	gateway, _, release, err := g.shop.clients.AcquireClient(ctx, "gateway")
+	gateway, release, err := client.AcquireHTTP(ctx, g.shop.clients, "gateway")
 	if err != nil {
 		return
 	}

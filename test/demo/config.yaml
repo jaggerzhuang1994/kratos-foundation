@@ -12,6 +12,9 @@ server:
       addr: 0.0.0.0:9001
     health:
       addr: 0.0.0.0:9001
+    # 管理端口提供 /debug/pprof/；业务端口不暴露。
+    pprof:
+      enable: true
   grpc:
     disable: true
 registry:
@@ -23,9 +26,16 @@ client:
     inventory:
       protocol: HTTP
       target: http://inventory-api.shop.svc:8000
+      # 查库存是幂等 GET：库存 503 时最多重试 3 次，客户端指标可见每次尝试。
+      retry:
+        enable: true
+        backoff: 0.05s
+        max_backoff: 0.2s
     orders:
       protocol: HTTP
       target: http://order-api.shop.svc:8000
+      retry:
+        enable: true
     gateway:
       protocol: HTTP
       target: http://gateway.shop.svc:8000
@@ -47,6 +57,9 @@ database:
       dsn: root:demo-local-only@tcp(mysql.middleware.svc:3306)/shop?charset=utf8mb4&parseTime=True&loc=UTC
       max_open_conns: 10
       max_idle_conns: 5
+      # mysql-replica 是指向同一 MySQL 的独立 Service：演示只读查询的路由与独立连接池指标，不演示真实复制延迟。
+      read_replicas:
+        - dsn: root:demo-local-only@tcp(mysql-replica.middleware.svc:3306)/shop?charset=utf8mb4&parseTime=True&loc=UTC
 kafka:
   connections:
     main:

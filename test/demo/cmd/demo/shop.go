@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -16,14 +15,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/config/file"
 	redislock "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/lock/redis"
+	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
+	queuegorm "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database/gorm"
 	queueredis "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/redis"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/bootstrap"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/cache"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/database"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka/outbox"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/lock"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
@@ -34,6 +37,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"gorm.io/gorm"
 )
 
 const (
@@ -50,6 +54,8 @@ const (
 	delayedQueue = "shop-delayed"
 	eventTopic   = "order-events"
 	deadTopic    = "order-events-dlq"
+	// outboxTopic 是外盒消息选择 Producer 的键，对应 Kafka Topic order-events。
+	outboxTopic = "orders"
 )
 
 var errScenario = errors.New("demo scenario failure")
@@ -84,7 +90,9 @@ type shop struct {
 	db       database.Manager
 	redis    *redis.Client
 	clients  client.Factory
-	cache    *metrics.CacheMetrics
+	cache    *cache.Cache[order]
+	outbox   *outbox.Outbox
+	relay    *queue.Worker[outbox.Message]
 	locker   lock.Locker
 	orders   metric.Int64Counter
 	producer kafka.Producer
@@ -119,7 +127,12 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 	if s.orders, err = provider.Meter("demo.shop").Int64Counter("business_orders_total"); err != nil {
 		return nil, cleanup, err
 	}
-	if s.cache, err = metrics.NewCacheMetrics(provider, "orders"); err != nil {
+	cacheMetrics, err := metrics.NewCacheMetrics(provider, "orders")
+	if err != nil {
+		return nil, cleanup, err
+	}
+	// 订单旁路缓存：同一订单并发未命中只回源一次，不存在的订单缓存 30 秒，避免反复打到数据库。
+	if s.cache, err = cache.New[order](s.redis, cache.Config{KeyPrefix: "shop:order", TTL: 10 * time.Minute, NegativeTTL: 30 * time.Second, Metrics: cacheMetrics}); err != nil {
 		return nil, cleanup, err
 	}
 	if s.locker, err = redislock.NewDefault(redisManager); err != nil {
@@ -128,12 +141,20 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 	if s.locker, err = lock.WithMetrics(s.locker, "orders", provider); err != nil {
 		return nil, cleanup, err
 	}
+	var outboxRepo *queuegorm.SimpleRepo
 	if role == roleAPI {
+		if outboxRepo, err = queuegorm.NewSimpleRepo(context.Background(), db, queuegorm.SimpleConfig{Table: "order_outbox"}); err != nil {
+			return nil, cleanup, err
+		}
 		// 依赖可能晚于应用就绪，建表重试有界；失败交给 Kubernetes 重启。
+		// 配置了只读副本时迁移必须走主库：Migrator 的存在性检查是 SELECT，会被分发到副本。
 		var migrateErr error
 		for range 30 {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(database.UsePrimary(context.Background()), 5*time.Second)
 			migrateErr = db.Connection(ctx).AutoMigrate(&order{})
+			if migrateErr == nil {
+				migrateErr = outboxRepo.Migrate(ctx)
+			}
 			cancel()
 			if migrateErr == nil {
 				break
@@ -157,6 +178,18 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 		}
 		releases = append(releases, release)
 		if s.producer, err = kafka.NewManagedProducer(topic, raw, obs); err != nil {
+			return nil, cleanup, err
+		}
+	}
+	if role == roleAPI {
+		// 下单事件经事务外盒发布：与订单同一事务写入，提交后由本 Pod 的 Relay 发布；多 Pod 经 SKIP LOCKED 分摊。
+		if s.outbox, err = outbox.New("order-outbox", databasequeue.NewStore(outboxRepo), queueObs); err != nil {
+			return nil, cleanup, err
+		}
+		if s.relay, err = s.outbox.Relay(outbox.RelayConfig{
+			Producers: map[string]kafka.Producer{outboxTopic: s.producer},
+			Worker:    queue.WorkerConfig{Name: "order-outbox-relay", PollInterval: 100 * time.Millisecond},
+		}); err != nil {
 			return nil, cleanup, err
 		}
 	}
@@ -187,7 +220,9 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 				if s.worker, err = q.WorkerWithExecution(func(ctx context.Context, execution queue.Execution[string]) error {
 					return s.handleTask(ctx, execution.ID, execution.Message)
 				}, queue.WorkerConfig{
+					// RenewLease：偶发的 12 秒长任务也只用 6 秒租约，执行期间每 2 秒续租；崩溃后 6 秒内即可被重新领取。
 					Name: "order-notifier", Concurrency: 4, PollInterval: 200 * time.Millisecond,
+					RenewLease: true, Lease: 6 * time.Second, StorageTimeout: time.Second,
 					Retry: &queue.RetryPolicy{MaxAttempts: 3, MinBackoff: 500 * time.Millisecond, MaxBackoff: 2 * time.Second},
 				}); err != nil {
 					return nil, cleanup, err
@@ -228,6 +263,7 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, s *shop) (b
 			route(srv, http.MethodGet, "/orders/{id}", "/shop.Orders/Get", s.getOrder)
 			return nil
 		})
+		spec.RegisterRuntime(s.relay)
 	case roleInventory:
 		spec.Http().Register(func(srv server.HTTPServer) error {
 			route(srv, http.MethodGet, "/stock/{sku}", "/shop.Inventory/Stock", s.stock)
@@ -240,8 +276,9 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, s *shop) (b
 			return nil
 		})
 	case roleCron:
-		spec.Job().RegisterCron("reconcile-orders", "@every 15s", job.TaskFunc(s.reconcile))
-		spec.Job().RegisterCron("cleanup-orders", "@every 30s", job.TaskFunc(s.cleanupOrders))
+		// 两个副本共享 Redis 锁，每次触发只执行一次；另一副本记 job_triggers_skipped_total{reason="cluster_locked"}。
+		spec.Job().RegisterCron("reconcile-orders", "@every 15s", job.TaskFunc(s.reconcile), job.WithClusterLock(s.locker, "shop:job:reconcile-orders", 10*time.Second))
+		spec.Job().RegisterCron("cleanup-orders", "@every 30s", job.TaskFunc(s.cleanupOrders), job.WithClusterLock(s.locker, "shop:job:cleanup-orders", 20*time.Second))
 		spec.Job().RegisterCron("settlement-report", "@every 1m", job.TaskFunc(s.settlement))
 		spec.Job().RegisterCron("schedule-reminders", "@every 20s", job.TaskFunc(s.scheduleReminders))
 	case roleWorker:
@@ -298,7 +335,7 @@ func (s *shop) createOrder(ctx context.Context, params map[string]string) (any, 
 		return nil, err
 	}
 	defer func() { _ = lease.Unlock(context.WithoutCancel(ctx)) }()
-	inventory, _, release, err := s.clients.AcquireClient(ctx, "inventory")
+	inventory, release, err := client.AcquireHTTP(ctx, s.clients, "inventory")
 	if err != nil {
 		return nil, err
 	}
@@ -316,55 +353,53 @@ func (s *shop) createOrder(ctx context.Context, params map[string]string) (any, 
 				return err
 			}
 		}
-		return s.db.Connection(ctx).Create(&item).Error
+		if err := s.db.Connection(ctx).Create(&item).Error; err != nil {
+			return err
+		}
+		// 订单事件与订单同一事务提交，回滚则不发布；消息 ID 等于订单 ID，消费者据此幂等。
+		_, err := s.outbox.Write(ctx, outbox.Message{ID: "order-created:" + item.ID, Topic: outboxTopic, Key: []byte(sku), Body: []byte(pickScenario())})
+		return err
 	}); err != nil {
 		return nil, err
 	}
-	if value, err := json.Marshal(item); err == nil {
-		_ = s.redis.Set(ctx, "order:"+item.ID, value, 10*time.Minute).Err()
-	}
+	// 写后预热缓存，随后的查单直接命中，不读只读副本。
+	_ = s.cache.Set(ctx, item.ID, item)
 	scenario := pickScenario()
 	if _, err := s.tasks.PostWith(ctx, scenario, queue.PostOptions{ID: item.ID}); err != nil {
-		return nil, err
-	}
-	if err := s.producer.Publish(ctx, &kafka.Message{ID: item.ID, Key: []byte(sku), Body: []byte(pickScenario())}); err != nil {
 		return nil, err
 	}
 	s.orders.Add(ctx, 1, metric.WithAttributes(attribute.String("result", "created")))
 	return map[string]string{"id": item.ID, "sku": sku}, nil
 }
 
+// getOrder 走旁路缓存；未命中时从只读副本回源，不存在的订单缓存 30 秒。
 func (s *shop) getOrder(ctx context.Context, params map[string]string) (any, error) {
 	id := params["id"]
-	value, err := s.redis.Get(ctx, "order:"+id).Bytes()
-	switch {
-	case err == nil:
-		s.cache.Hit(ctx)
+	item, err := s.cache.Get(ctx, id, func(ctx context.Context) (order, error) {
 		var item order
-		if err := json.Unmarshal(value, &item); err != nil {
-			return nil, err
+		err := s.db.Connection(ctx).First(&item, "id = ?", id).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return item, cache.ErrNotFound
 		}
-		return item, nil
-	case !errors.Is(err, redis.Nil):
-		s.cache.Error(ctx)
-		return nil, err
-	}
-	s.cache.Miss(ctx)
-	started := time.Now()
-	var item order
-	err = s.db.Connection(ctx).First(&item, "id = ?", id).Error
-	s.cache.Load(ctx, time.Since(started), err)
-	if err != nil {
+		return item, err
+	})
+	if errors.Is(err, cache.ErrNotFound) {
 		return nil, foundationerrors.New(http.StatusNotFound, "ORDER_NOT_FOUND", "order not found")
+	}
+	if err != nil {
+		return nil, err
 	}
 	return item, nil
 }
 
-// stock 模拟下游库存服务：常规 5–80ms，2% 慢请求，5% 暂时不可用。
+// stock 模拟下游库存服务：常规 5–80ms，4% 慢于 1s（触发延迟 SLO），5% 暂时不可用，0.5% panic（被框架恢复）。
 func (s *shop) stock(ctx context.Context, params map[string]string) (any, error) {
+	if rand.IntN(1000) < 5 {
+		panic("demo: inventory handler bug")
+	}
 	delay := time.Duration(5+rand.IntN(75)) * time.Millisecond
-	if rand.IntN(100) < 2 {
-		delay = 400 * time.Millisecond
+	if rand.IntN(100) < 4 {
+		delay = 1200 * time.Millisecond
 	}
 	select {
 	case <-ctx.Done():
@@ -386,7 +421,7 @@ func (s *shop) proxyGet(ctx context.Context, params map[string]string) (any, err
 }
 
 func (s *shop) proxy(ctx context.Context, method, path, operation string) (any, error) {
-	upstream, _, release, err := s.clients.AcquireClient(ctx, "orders")
+	upstream, release, err := client.AcquireHTTP(ctx, s.clients, "orders")
 	if err != nil {
 		return nil, err
 	}
@@ -400,6 +435,9 @@ func (s *shop) proxy(ctx context.Context, method, path, operation string) (any, 
 
 func pickScenario() string {
 	switch n := rand.IntN(100); {
+	case n < 2:
+		// 长任务演示 Worker 执行期间续租。
+		return "long"
 	case n < 85:
 		return "success"
 	case n < 95:
@@ -410,7 +448,15 @@ func pickScenario() string {
 }
 
 func (s *shop) handleTask(ctx context.Context, id, scenario string) error {
-	time.Sleep(time.Duration(10+rand.IntN(90)) * time.Millisecond)
+	delay := time.Duration(10+rand.IntN(90)) * time.Millisecond
+	if scenario == "long" {
+		delay = 12 * time.Second
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(delay):
+	}
 	if scenario == "permanent" {
 		return queue.Permanent(errScenario)
 	}

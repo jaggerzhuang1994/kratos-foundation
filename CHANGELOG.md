@@ -12,6 +12,8 @@
 
 ### Added
 
+- 业务 HTTP Server 默认 `server.http.read_header_timeout` 10s 与 `idle_timeout` 120s（Kratos 原生不设连接级超时，存在慢速请求头占用连接的风险），可配置。
+- `client.AcquireHTTP` / `client.AcquireGRPC`：按协议租用客户端，只返回一个客户端，协议与配置不符时返回 `client.ErrProtocolMismatch`；`Factory.AcquireClient` 不变。
 - `job.WithClusterLock(locker, key, ttl)`：Cron 在共享同一 `lock.Locker` 的多个副本间每次触发只执行一次；未取得租约的实例跳过本轮（`job_triggers_skipped_total{reason="cluster_locked"}`），执行期间每 ttl/3 续租，续租失败取消本次执行，执行结束后租约保留到 TTL 过期以吸收时钟偏差。见 [集群单例](pkg/job/README.md#集群单例)。
 - 客户端失败重试 `client.clients.<name>.retry`（默认关闭）：只重试 503 / gRPC Unavailable，HTTP 只重放 GET/HEAD/OPTIONS，gRPC 只重试 `operations` 列出的方法，倍增退避带抖动并受截止时间约束。见 [失败重试](pkg/client/README.md#失败重试)。
 - gRPC 客户端 keepalive `client.clients.<name>.grpc.keepalive_time` / `keepalive_timeout` / `keepalive_permit_without_stream`，按需开启。
@@ -24,11 +26,13 @@
 - 可用性 SLO 多窗口多消耗率告警 `FoundationSLOBurnRateCritical`（1h/5m 14.4 倍、6h/30m 6 倍）与 `FoundationSLOBurnRateWarning`（1d/2h 3 倍、3d/6h 1 倍），默认 SLO 99.9%，由 `foundation:slo_error_budget:ratio` 调整；新增 `app:server_error_ratio:rate5m…3d` 预聚合及规则测试。见 [可用性 SLO 消耗率告警](observability/alerts.md#可用性-slo-消耗率告警)。
 - 数据库只读副本 `database.connections.<name>.read_replicas`：事务外查询随机分发到副本，写入、事务、锁定读与 `database.UsePrimary(ctx)` 走主库；副本沿用连接的驱动、GORM、AES 与池参数（池参数一起热更新），连接池指标以 `<连接名>/replica-<序号>` 单独上报。数据库 Queue 仓储固定读写主库。见 [只读副本](pkg/database/README.md#只读副本)。
 - `pkg/kafka/outbox`：Kafka 事务外盒，`Write` 在业务数据库事务内写待发消息，`Relay`（queue.Worker）提交后经 ManagedProducer 发布，至少一次、消息 ID 等于外盒 ID；复用数据库 Queue 的租约、重试、失败归档与 SKIP LOCKED 领取。见 [pkg/kafka/outbox](pkg/kafka/outbox/README.md)。
-- `pkg/cache`：基于 Redis 的旁路缓存，进程内同 key 回源合并（singleflight）、TTL 抖动、可选空值缓存，复用 `metrics.CacheMetrics`。见 [pkg/cache](pkg/cache/README.md)。
+- `pkg/cache`：基于 Redis 的旁路缓存，进程内同 key 回源合并（singleflight）、TTL 抖动、可选空值缓存，经 `Config.Metrics` 复用 `metrics.CacheMetrics`。见 [pkg/cache](pkg/cache/README.md)。
 - `queue.FailureCorruptPayload`：数据库 Queue 的失败列表把正文损坏的行按该分类返回（只含 ID 与时间），不再让整个列表报错。
 
 ### Changed
 
+- 业务 HTTP 端口不再暴露 `/debug/pprof`：Kratos 把未匹配路由交给 `http.DefaultServeMux`，任何依赖导入 `net/http/pprof` 都会在业务端口上暴露剖析端点；现保留 DefaultServeMux 回退但对 `/debug/pprof` 返回 404，剖析改用 `server.http.pprof` 挂在管理端口。依赖业务端口 pprof 的部署需改用管理端口。
+- Queue `WorkerConfig` 时长约束校验失败时，错误说明违反的具体约束与实际值（此前只有 `invalid queue worker concurrency or timing configuration`）。
 - 数据库 Queue（`contrib/queue/database/gorm`）在 MySQL 8.0.1+ / MariaDB 10.6+ 上改用短事务内按主键 `FOR UPDATE SKIP LOCKED` 领取：并发 Worker 各自锁定不同候选，不再争抢最早的同一行。MySQL 8.4 上 8 并发领取 200 个积压任务的空领取从 1335 次降到个位数。SQLite 与不支持 SKIP LOCKED 的版本保持原条件更新方式；首次领取时读取一次 `SELECT VERSION()`。
 
 ### Fixed
