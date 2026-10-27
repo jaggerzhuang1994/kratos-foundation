@@ -10,8 +10,7 @@ import (
 	"github.com/google/uuid"
 	internaltelemetry "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/kafka/internal/telemetry"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/observability"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
@@ -24,14 +23,7 @@ var messagePropagator = propagation.NewCompositeTextMapPropagator(
 )
 
 // Observability 提供生产者和消费运行时的观测依赖。
-type Observability struct {
-	// Logger 记录消息处理日志。
-	Logger log.Logger
-	// Tracing 消息追踪 Provider。
-	Tracing tracing.Provider
-	// Metrics 消息指标 Provider。
-	Metrics metrics.Provider
-}
+type Observability = observability.Observability
 
 // NewManagedProducer 将外部 Producer 包装为保留消息所有权且具备统一观测能力的 Producer。
 func NewManagedProducer(name string, producer Producer, observability Observability) (Producer, error) {

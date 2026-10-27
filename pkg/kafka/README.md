@@ -58,7 +58,7 @@ flowchart TD
 
 Observability 的 Tracing、Metrics 必须由应用注入 provider（关闭功能时也注入对应禁用 provider），Logger 可选。
 
-生产者先由后端直接构造，再由 `kafka.NewManagedProducer` 装饰。装饰器深复制单条或批量输入，调用方继续拥有原始 `Message`、`Key`、`Body`、Header Value 及其批次切片；批量中任一输入无效时，整个批次都不会发送。
+生产者通常用 `kafka.NewProducerWithObservability` 一步创建；它等价于先用 `kafka.NewProducer` 直接构造、再由 `kafka.NewManagedProducer` 以 Topic 为名装饰（需要自定义观测名称时仍可分两步）。装饰器深复制单条或批量输入，调用方继续拥有原始 `Message`、`Key`、`Body`、Header Value 及其批次切片；批量中任一输入无效时，整个批次都不会发送。
 
 批量输入校验全部通过，只保证可以开始发送，不保证发送原子性。驱动可能已成功发送部分消息，再返回 `*kafka.BatchError`；其中 `Failures` 的 `Index` 对应原输入下标。不要因一个错误直接重发整个批次。以下函数只提取失败项，由调用方决定是否重试；网络错误仍可能表示结果不确定，重试失败项也需要业务幂等。需要跨重试保持消息身份时，发布前由业务设置稳定的 `Message.ID`。
 
@@ -120,19 +120,11 @@ func newKafkaProducer(
 	kafkaFactory *kafka.ClientFactory,
 	observability kafka.Observability,
 ) (kafka.Producer, func(), error) {
-	rawProducer, releaseProducer, err := kafka.NewProducer(kafkaFactory, kafka.ProducerConfig{
+	// 一步创建带指标、链路与日志的 Producer；cleanup 在 Producer 停止使用后调用。
+	return kafka.NewProducerWithObservability(kafkaFactory, kafka.ProducerConfig{
 		Connection: "main",
 		Topic:      "orders.created",
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	producer, err := kafka.NewManagedProducer("orders.created", rawProducer, observability)
-	if err != nil {
-		releaseProducer()
-		return nil, nil, err
-	}
-	return producer, releaseProducer, nil
+	}, observability)
 }
 
 func publishOrder(ctx context.Context, producer kafka.Producer, body []byte) error {

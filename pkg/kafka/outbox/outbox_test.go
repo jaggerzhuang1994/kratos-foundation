@@ -332,7 +332,7 @@ func TestExternalOutboxKafka(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanupProducer()
-	producer, err := kafka.NewManagedProducer(topic, raw, kafka.Observability{Logger: obs.Logger, Tracing: obs.Tracing, Metrics: obs.Metrics})
+	producer, err := kafka.NewManagedProducer(topic, raw, obs)
 	if err != nil {
 		t.Fatal(err)
 	}

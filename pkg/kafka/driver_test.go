@@ -933,3 +933,21 @@ func TestExternalIntegrationKafkaRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// 一步创建带观测的 Producer：配置无效时不返回资源，成功时返回受管 Producer 与幂等 cleanup。
+func TestNewProducerWithObservability(t *testing.T) {
+	obs := newDisabledTestObservability(t)
+	if producer, cleanup, err := NewProducerWithObservability(nil, ProducerConfig{}, obs); producer != nil || cleanup != nil || err == nil {
+		t.Fatalf("invalid config = %v %v", producer, err)
+	}
+	manager := newQueueKafkaManager(t, map[string]*config_pb.KafkaConnection{"main": {Brokers: []string{"127.0.0.1:1"}}})
+	producer, cleanup, err := NewProducerWithObservability(manager, ProducerConfig{Connection: "main", Topic: "orders"}, obs)
+	if err != nil || producer == nil || cleanup == nil {
+		t.Fatalf("valid = %v %v", producer, err)
+	}
+	if _, ok := producer.(*managedProducer); !ok {
+		t.Fatalf("producer %T is not managed", producer)
+	}
+	cleanup()
+	cleanup()
+}

@@ -10,6 +10,22 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+// NewProducerWithObservability 一步创建带统一指标、链路与日志的 Producer：等价于 NewProducer 后用
+// NewManagedProducer 以 config.Topic 为名包装，包装失败时自动释放客户端。返回的 cleanup 幂等关闭客户端，
+// 调用方在 Producer 停止使用后调用。需要自定义观测名称时仍可分两步组装。
+func NewProducerWithObservability(manager *ClientFactory, config ProducerConfig, observability Observability) (Producer, func(), error) {
+	raw, cleanup, err := NewProducer(manager, config)
+	if err != nil {
+		return nil, nil, err
+	}
+	producer, err := NewManagedProducer(config.Topic, raw, observability)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	return producer, cleanup, nil
+}
+
 // NewProducer 创建独占一个 all-ISR franz-go Client 的 Kafka Producer。
 // 返回的 cleanup 幂等关闭该 Client，调用方负责在 Producer 停止使用后调用它。
 func NewProducer(
