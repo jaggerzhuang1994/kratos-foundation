@@ -41,8 +41,7 @@ APP_POD_LABEL ?= pod_name
 # ==================== 协议定义 ====================
 PROTO_OUT := ./proto/kratos_foundation_pb
 CONFIG_PROTO := proto/config.proto
-CLIENT_OPTION_PROTO := proto/kratos_foundation_client/client.proto
-PROTO_FILES := $(filter-out $(CLIENT_OPTION_PROTO),$(shell find proto -name '*.proto' | sort))
+PROTO_FILES := $(shell find proto -name '*.proto' | sort)
 
 # 根模块与 cmd/ 下的插件模块分别执行 lint/test/vet。
 GO_MODULE_DIRS := $(sort $(patsubst %/,%,$(dir $(shell git ls-files --cached --others --exclude-standard -- 'go.mod' '**/go.mod'))))
@@ -90,8 +89,6 @@ proto: install-protoc $(TOOLS_DIR)/protoc-gen-go $(TOOLS_DIR)/protoc-gen-validat
 	(cd cmd/protoc-gen-kratos-foundation-errors-v2 && go build -o "$(TOOLS_DIR)/protoc-gen-kratos-foundation-errors-v2" .); \
 	(cd cmd/protoc-gen-jsonschema && go build -o "$(TOOLS_DIR)/protoc-gen-jsonschema" .); \
 	find ./proto -type f \( -name '*.pb.go' -o -name '*.pb.validate.go' \) -delete; \
-	"$(PROTOC)" --proto_path=./proto --proto_path=./third_party \
-		--go_out=. --go_opt=module=github.com/jaggerzhuang1994/kratos-foundation/v2 $(CLIENT_OPTION_PROTO); \
 	"$(PROTOC)" --proto_path=./third_party \
 		--go_out=. --go_opt=module=github.com/jaggerzhuang1994/kratos-foundation/v2 third_party/pubg/jsonschema.proto; \
 	"$(PROTOC)" --proto_path=./proto --proto_path=./third_party \

@@ -189,7 +189,7 @@ func TestExplicitConnectionAndLeaseLifetime(t *testing.T) {
     }
     factory := &recordingFactory{err: sentinel}
     _, _ = NewOrderService(factory).Get(context.Background(), new(GetRequest))
-    if factory.name != "v1" { t.Fatalf("default connection=%q", factory.name) }
+    if factory.name != "orders" { t.Fatalf("default connection=%q", factory.name) }
     if _, err := NewOrderService(nil).Get(context.Background(), new(GetRequest)); err == nil {
         t.Fatal("nil factory accepted")
     }

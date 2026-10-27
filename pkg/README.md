@@ -31,6 +31,7 @@
 | [`request`](request/README.md) | 应用级请求状态 | M1 值对象/工具 | Context 保存 debug；传输层按配置跨服务传播，无 cleanup |
 | [`log`](log/README.md) | 基础日志服务 | M3 资源 | 每次 NewLogger 拥有独立输出及 cleanup；配置热更新共享过滤与输出策略，支持文件资源切换，包级 With 方法返回派生实例；组装层 cleanup 恢复全局 Logger 绑定；输出保留 module，缺失时 unknown；非 Runtime |
 | [`appinfo`](appinfo/README.md) | 应用身份与元数据 | M1 值对象 | 同步采集身份，组装层贡献 AppInfo 和日志字段；非 Runtime |
+| [`servicename`](servicename/README.md) | proto service 到服务名的推导规则 | M1 工具 | 纯函数；只按 proto 路径推导，版本目录名报错；客户端插件、服务注册与网关共用同一规则；无资源与 cleanup |
 | [`metrics`](metrics/README.md) | 指标服务 | M3 Provider | Provider cleanup 关闭资源；组装层注入 ContextDecorator，不启动 Runtime |
 | [`tracing`](tracing/README.md) | 链路追踪服务 | M3 Provider | Provider 管理 exporter/sampler 等资源；组装层贡献日志字段；非 Runtime |
 | [`compress`](compress/readme.md) | 压缩工具 | M1 工具 | 单次调用完成；校验输入及解压限制 |

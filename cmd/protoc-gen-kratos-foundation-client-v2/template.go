@@ -25,7 +25,7 @@ type fileDesc struct {
 	ProtocVersion string
 	// Deprecated 表示源 Proto 文件是否已弃用。
 	Deprecated bool
-	// ServiceName 是未显式声明 client_name 时使用的默认连接名。
+	// ServiceName 是由 proto 路径推导的服务名，作为文件内各服务的默认连接名。
 	ServiceName string
 	// Services 按 Proto 声明顺序保存服务。
 	Services []*serviceDesc

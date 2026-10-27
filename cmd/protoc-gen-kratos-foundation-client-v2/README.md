@@ -2,20 +2,19 @@
 
 生成基于 `pkg/client.Factory` 的非流式 HTTP/gRPC 客户端适配器。它与 protobuf、gRPC，以及有 HTTP 注解时的 Kratos HTTP 生成代码放在同一 Go 包中。
 
-需要 Go、`protoc`、`protoc-gen-go` 和 `protoc-gen-go-grpc`；第三方插件由根 [Makefile](../../Makefile) 的 `make init` 安装。以下命令从**仓库根目录**执行，在临时目录生成最小 gRPC 示例，包含服务选项的 import 和伴随生成物：
+需要 Go、`protoc`、`protoc-gen-go` 和 `protoc-gen-go-grpc`；第三方插件由根 [Makefile](../../Makefile) 的 `make init` 安装。以下命令从**仓库根目录**执行，在临时目录的 `orders/` 下生成最小 gRPC 示例及伴随生成物：
 
 ```sh
 set -eu
 repo_dir="$PWD"
 client_demo_dir="$(mktemp -d)"
 (cd cmd/protoc-gen-kratos-foundation-client-v2 && go build -o "$client_demo_dir/protoc-gen-kratos-foundation-client-v2" .)
-cat > "$client_demo_dir/order.proto" <<'PROTO'
+mkdir -p "$client_demo_dir/orders"
+cat > "$client_demo_dir/orders/order.proto" <<'PROTO'
 syntax = "proto3";
 package demo;
 option go_package = "example.com/demo;demo";
-import "kratos_foundation_client/client.proto";
 service OrderService {
-  option (kratos_foundation_client.client_name) = "orders";
   rpc GetOrder(GetOrderRequest) returns (GetOrderReply);
 }
 message GetOrderRequest {}
@@ -27,17 +26,17 @@ protoc --proto_path="$client_demo_dir" --proto_path="$repo_dir/proto" \
   --go-grpc_out=paths=source_relative:"$client_demo_dir" \
   --plugin=protoc-gen-kratos-foundation-client-v2="$client_demo_dir/protoc-gen-kratos-foundation-client-v2" \
   --kratos-foundation-client-v2_out=paths=source_relative:"$client_demo_dir" \
-  "$client_demo_dir/order.proto"
-test -s "$client_demo_dir/order.pb.go"
-test -s "$client_demo_dir/order_grpc.pb.go"
-test -s "$client_demo_dir/order_client.pb.go"
+  "$client_demo_dir/orders/order.proto"
+test -s "$client_demo_dir/orders/order.pb.go"
+test -s "$client_demo_dir/orders/order_grpc.pb.go"
+grep -q 'NewOrderServiceWithConnName(factory, "orders")' "$client_demo_dir/orders/order_client.pb.go"
 ```
 
 业务模块需要依赖本仓库 `/v2` 模块、gRPC 和 Wire。使用 HTTP 时，还须导入 `google/api/annotations.proto`、为方法声明 `google.api.http` 注解，并在同一 protoc 命令加入 `--go-http_out=paths=source_relative:"$client_demo_dir"`；`protoc-gen-go-http` 同样由 `make init` 安装。HTTP 与 gRPC 生成物必须与适配器同包。
 
 ```mermaid
 flowchart TD
-    A([开始]) --> B[构建当前插件并声明服务选项]
+    A([开始]) --> B[构建当前插件并写入示例 proto]
     B --> C[protoc 读取 proto 和 third_party]
     C --> D{解析、插件执行成功?}
     D -- 否 --> E([返回错误并停止])
@@ -47,7 +46,7 @@ flowchart TD
     G -- 是 --> H([完成])
 ```
 
-生成的 `NewOrderService(factory)` 使用服务选项 `kratos_foundation_client.client_name` 指定的连接名；未指定时使用 proto 所在目录名，顶层文件使用文件名。服务选项不能是空白或包含首尾空白。
+生成的 `NewOrderService(factory)` 使用服务名作为连接名。服务名只由 proto 路径推导，规则由 [`pkg/servicename`](../../pkg/servicename/README.md) 统一提供，运行期服务注册使用同一规则：取 proto 所在目录名，顶层文件取文件名；没有声明式覆盖。目录约定是 `api/<service_name>/*.proto`，推导结果是 `v1`、`v2beta1` 这类 API 版本名时生成失败。
 
 需要把同一个服务绑定到另一份连接配置时，在构造阶段显式指定：
 

@@ -1,12 +1,12 @@
 package main
 
 import (
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/servicename"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/pluginpb"
 	"strings"
 	"testing"
@@ -32,7 +32,7 @@ func TestRunGeneratesUnaryClientContract(t *testing.T) {
 	wants := []string{
 		"type OrderService interface",
 		"func NewOrderService(",
-		"NewOrderServiceWithConnName(factory, \"v1\")",
+		"NewOrderServiceWithConnName(factory, \"orders\")",
 		"c.factory.AcquireClient(ctx, c.connName)",
 		"defer release()",
 		"google.api.http annotation is required",
@@ -57,73 +57,69 @@ func TestRunRejectsStreamingRPC(t *testing.T) {
 	}
 }
 
-func TestRunUsesExplicitServiceConnectionName(t *testing.T) {
-	optionFile, err := protodesc.NewFile(&descriptorpb.FileDescriptorProto{
-		Name:       proto.String("client_options.proto"),
-		Package:    proto.String("kratos_foundation_client"),
-		Syntax:     proto.String("proto3"),
-		Dependency: []string{"google/protobuf/descriptor.proto"},
-		Extension: []*descriptorpb.FieldDescriptorProto{{
-			Name:     proto.String("client_name"),
-			Number:   proto.Int32(51000),
-			Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-			Type:     descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
-			Extendee: proto.String(".google.protobuf.ServiceOptions"),
-		}},
-	}, protoregistry.GlobalFiles)
-	if err != nil {
-		t.Fatal(err)
-	}
-	option := dynamicpb.NewExtensionType(optionFile.Extensions().Get(0))
-	for _, name := range []string{"orders-service", "", " orders-service"} {
-		t.Run(name, func(t *testing.T) {
-			fixture := newClientGeneratorFixture(t, false)
-			service := fixture.Request.ProtoFile[0].Service[0]
-			service.Options = new(descriptorpb.ServiceOptions)
-			proto.SetExtension(service.Options, option, name)
-			fixture, err := (protogen.Options{}).New(fixture.Request)
+// 生成期写入的默认连接名必须与运行期 servicename.Of 对同一描述符推导的服务名一致，
+// 否则服务端注册名与客户端解析名会再次分叉。请求经过一次序列化，模拟 protoc 传入的真实字节。
+func TestGeneratedConnNameMatchesRuntimeServiceName(t *testing.T) {
+	for _, test := range []struct{ path, want string }{
+		{path: "orders/order.proto", want: "orders"},
+		{path: "order.proto", want: "order"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			request := newClientGeneratorFixture(t, false).Request
+			request.FileToGenerate = []string{test.path}
+			request.ProtoFile[0].Name = proto.String(test.path)
+			raw, err := proto.Marshal(request)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = run(fixture)
-			if strings.TrimSpace(name) == "" || name != strings.TrimSpace(name) {
-				if err == nil {
-					t.Fatalf("invalid client_name %q accepted", name)
-				}
-				return
+			decoded := new(pluginpb.CodeGeneratorRequest)
+			if err := proto.Unmarshal(raw, decoded); err != nil {
+				t.Fatal(err)
 			}
+			plugin, err := (protogen.Options{}).New(decoded)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if content := fixture.Response().File[0].GetContent(); !strings.Contains(content, `NewOrderServiceWithConnName(factory, "orders-service")`) {
-				t.Fatalf("service connection name not bound in generated constructor:\n%s", content)
+			if err := run(plugin); err != nil {
+				t.Fatal(err)
+			}
+			content := plugin.Response().File[0].GetContent()
+			if !strings.Contains(content, `NewOrderServiceWithConnName(factory, "`+test.want+`")`) {
+				t.Fatalf("generated connection name is not %q:\n%s", test.want, content)
+			}
+
+			runtimeFile, err := protodesc.NewFile(decoded.ProtoFile[0], new(protoregistry.Files))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := servicename.Of(runtimeFile.Services().Get(0))
+			if err != nil || got != test.want {
+				t.Fatalf("servicename.Of = %q, %v, want generated name %q", got, err, test.want)
 			}
 		})
 	}
 }
 
-func TestDefaultServiceNameUsesStablePathFallbacks(t *testing.T) {
-	tests := []struct {
-		path string
-		pkg  protogen.GoPackageName
-		want string
-	}{
-		{path: "orders/v1/order.proto", pkg: "ordersv1", want: "v1"},
-		{path: "order.proto", pkg: "ordersv1", want: "order"},
+func TestRunRejectsVersionDirectoryAsServiceName(t *testing.T) {
+	request := newClientGeneratorFixture(t, false).Request
+	request.FileToGenerate = []string{"orders/v1/order.proto"}
+	request.ProtoFile[0].Name = proto.String("orders/v1/order.proto")
+	plugin, err := (protogen.Options{}).New(request)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		if got := defaultServiceName(test.path, test.pkg); got != test.want {
-			t.Fatalf("defaultServiceName(%q) = %q, want %q", test.path, got, test.want)
-		}
+	err = run(plugin)
+	if err == nil || !strings.Contains(err.Error(), "API version") || !strings.Contains(err.Error(), servicename.Layout) {
+		t.Fatalf("version directory error = %v", err)
 	}
 }
 
 func newClientGeneratorFixture(t *testing.T, streaming bool) *protogen.Plugin {
 	t.Helper()
 	request := &pluginpb.CodeGeneratorRequest{
-		FileToGenerate: []string{"orders/v1/order.proto"},
+		FileToGenerate: []string{"orders/order.proto"},
 		ProtoFile: []*descriptorpb.FileDescriptorProto{{
-			Name:    proto.String("orders/v1/order.proto"),
+			Name:    proto.String("orders/order.proto"),
 			Package: proto.String("orders.v1"),
 			Syntax:  proto.String("proto3"),
 			Options: &descriptorpb.FileOptions{
