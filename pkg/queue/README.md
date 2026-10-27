@@ -94,7 +94,7 @@ flowchart TD
 
 采用**允许重投、有限重试**的执行模型。存储可靠且领取正常完成时，未确认任务可重投；领取后、执行前反复崩溃也可能耗尽次数进入失败状态，不保证 Handler 至少实际执行一次或最终成功。业务成功后、确认前崩溃仍会重投，必须依靠业务幂等。超时 Context 无法强杀忽略取消的 Go Handler；它可能超过租约并与重投任务同时执行。Worker 不启动额外 Handler goroutine，不自动续租；较长任务应配置相应执行窗口与租约，或在业务中拆成可恢复的小任务。
 
-Start 阻塞运行且实例只能启动一次。进入消费阶段记录一次 `INFO event=queue.worker.started`，包含 queue、worker、concurrency 和 processing_enabled；运行退出时记录一次 `INFO event=queue.worker.stopped`。空队列轮询不写 Info，逐次成功由指标统计。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。存储故障或损坏记录返回错误，由 Worker 记录 `ERROR queue.storage.failed` 后退出，应用 supervisor 决定后续动作；不自动把存储失败当作成功确认。损坏记录的隔离与修复方式见对应 Store 文档。
+Start 阻塞运行且实例只能启动一次。进入消费阶段记录一次 `INFO event=queue.worker.started`，包含 queue、worker、concurrency 和 processing_enabled；运行退出时记录一次 `INFO event=queue.worker.stopped`。空队列轮询不写 Info，逐次成功由指标统计。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。领取或确认时的存储故障（断连、存储操作超时、主从切换、损坏记录）不退出 Worker：该循环记录 `WARN queue.storage.retrying`（字段 failures、retry_after、error）并累加 `queue_consumer_runtime_failures_total`，按 500ms 起倍增、上限 30s 退避后重试，恢复后记录一次 `INFO queue.storage.recovered`；未确认的任务由租约到期重新领取，不把存储失败当作成功确认。只有 Store 返回不满足契约的领取结果（实现缺陷）时，Worker 记录 `ERROR queue.storage.failed` 并退出，交由应用统一停机。持续的存储故障由 FoundationQueueRuntimeFailure 告警暴露。损坏记录的隔离与修复方式见对应 Store 文档。
 
 ```mermaid
 flowchart TD
@@ -133,11 +133,14 @@ flowchart TD
     TL --> T[WARN Worker queue.lease.lost]
     T --> H
     N & O & R -- 存储故障 --> U1[DEBUG queue.task.execution.finished result=storage_error duration]
-    U1 --> U[ERROR Worker queue.storage.failed]
+    U1 --> U[WARN queue.storage.retrying 倍增退避 500ms-30s]
     H -- 领取故障 --> U
-    U --> Z
-    ZL --> ZR{是否存储故障?}
-    ZR -- 是 --> V([返回存储错误])
+    U --> H
+    H -- 故障后首次成功 --> UR[INFO queue.storage.recovered]
+    H -- Store 返回非法领取 --> UF[ERROR Worker queue.storage.failed]
+    UF --> Z
+    ZL --> ZR{是否 Store 契约错误?}
+    ZR -- 是 --> V([返回错误])
     ZR -- 否 --> ZE
 ```
 

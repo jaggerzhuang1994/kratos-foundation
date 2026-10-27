@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"testing"
 	"testing/synctest"
@@ -421,16 +422,16 @@ func prepareServer(t *testing.T, spec *testSpec) bootstrap.ServerBootstrap {
 
 type deliveryConsumer struct{}
 
-// taskStore 让应用完成一次真实 Worker 调用后用存储故障结束，验证登记及退出传播。
+// taskStore 让应用完成一次真实 Worker 调用后返回不满足契约的领取结果；存储瞬时故障会被 Worker 重试，
+// 只有 Store 契约错误才让 Worker 退出，用它验证登记及退出传播。
 type taskStore struct {
 	queue.Store
 	acknowledged bool
-	failure      error
 }
 
 func (s *taskStore) Reserve(context.Context, time.Time, time.Duration) (*queue.Reservation, error) {
 	if s.acknowledged {
-		return nil, s.failure
+		return &queue.Reservation{}, nil
 	}
 	return &queue.Reservation{Task: &queue.Task{ID: "one", MessageVersion: "string.v1", Payload: []byte(`"test"`)}, Token: "lease", Attempts: 1}, nil
 }
@@ -462,7 +463,7 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 				}
 				register = func() *bootstrap.Spec { return components.RegisterKafkaConsumer(runtime) }
 			case "queue":
-				q, err := queue.NewQueue(queue.Definition[string]{Queue: "test", Version: 1}, &taskStore{failure: failure}, queue.NewObservability(logger, tracing, metrics))
+				q, err := queue.NewQueue(queue.Definition[string]{Queue: "test", Version: 1}, &taskStore{}, queue.NewObservability(logger, tracing, metrics))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -485,7 +486,10 @@ func TestRuntimeBootstrapWorkerLifecycle(t *testing.T) {
 			if mode == "once" && err != nil {
 				t.Fatal(err)
 			}
-			if mode != "once" && !errors.Is(err, failure) {
+			if mode == "queue" && (err == nil || !strings.Contains(err.Error(), "invalid reservation")) {
+				t.Fatalf("queue error = %v", err)
+			}
+			if mode == "consumer" && !errors.Is(err, failure) {
 				t.Fatalf("consumer error = %v", err)
 			}
 			if !called {

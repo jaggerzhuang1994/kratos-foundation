@@ -52,24 +52,74 @@ func TestWorkerLifecycle(t *testing.T) {
 	})
 }
 
-func TestWorkerDoesNotSwallowStorageErrors(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		err  error
-	}{
-		{"failure", errors.New("offline")}, {"self cancellation", context.Canceled}, {"self timeout", context.DeadlineExceeded}, {"joined lease", errors.Join(ErrLeaseLost, errors.New("offline"))},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			obs, _ := testObservability(t)
-			store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) { return nil, tc.err }}
-			w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
-			if err != nil {
-				t.Fatal(err)
+// 存储瞬时故障（含存储操作自身超时、与租约冲突合并的故障）不退出 Worker，按 500ms 起倍增退避重试，恢复后记录一次。
+func TestWorkerRetriesTransientStorageErrors(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		obs, _ := testObservability(t)
+		failures := []error{errors.New("offline"), context.Canceled, context.DeadlineExceeded, errors.Join(ErrLeaseLost, errors.New("offline"))}
+		var calls []time.Time
+		recovered := make(chan struct{})
+		store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
+			calls = append(calls, time.Now())
+			if len(calls) <= len(failures) {
+				return nil, failures[len(calls)-1]
 			}
-			if err = w.Start(context.Background()); !errors.Is(err, tc.err) {
-				t.Fatalf("lost error %v", err)
+			if len(calls) == len(failures)+1 {
+				close(recovered)
 			}
-		})
+			return nil, nil
+		}}
+		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- w.Start(context.Background()) }()
+		<-recovered
+		synctest.Wait()
+		if err := w.Stop(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("worker exited on transient storage error: %v", err)
+		}
+		for i, want := range []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second} {
+			if got := calls[i+1].Sub(calls[i]); got != want {
+				t.Fatalf("retry %d after %v, want %v", i+1, got, want)
+			}
+		}
+		logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+		if strings.Count(logs, "WARN eventqueue.storage.retrying") != len(failures) || strings.Count(logs, "INFO eventqueue.storage.recovered") != 1 || strings.Contains(logs, "queue.storage.failed") {
+			t.Fatalf("storage retry logs: %s", logs)
+		}
+		families, err := obs.Metrics.PrometheusGatherer().Gather()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var runtimeFailures float64
+		for _, family := range families {
+			if family.GetName() == "queue_consumer_runtime_failures_total" {
+				for _, metric := range family.GetMetric() {
+					runtimeFailures += metric.GetCounter().GetValue()
+				}
+			}
+		}
+		if runtimeFailures != float64(len(failures)) {
+			t.Fatalf("runtime failures = %v, want %d", runtimeFailures, len(failures))
+		}
+	})
+}
+
+// Store 返回不满足契约的领取结果属于实现缺陷，Worker 退出而不是重试。
+func TestWorkerStopsOnInvalidReservation(t *testing.T) {
+	obs, _ := testObservability(t)
+	store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) { return &Reservation{}, nil }}
+	w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}, obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = w.Start(context.Background()); !errors.Is(err, errInvalidReservation) {
+		t.Fatalf("invalid reservation error = %v", err)
 	}
 }
 
@@ -98,13 +148,12 @@ func TestWorkerLeaseConflictAndStoredOutcome(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = w.Start(ctx)
-			if joined && !errors.Is(err, failure) {
-				t.Fatalf("lost joined error %v", err)
-			}
-			if !joined && (err != nil || count != 2) {
-				t.Fatalf("did not recover %d %v", count, err)
-			}
+			// 合并了存储故障的租约冲突按存储故障退避重试，纯租约冲突立即继续；两者都不退出。
+			synctest.Test(t, func(t *testing.T) {
+				if err := w.Start(ctx); err != nil || count != 2 {
+					t.Fatalf("did not recover %d %v", count, err)
+				}
+			})
 		})
 	}
 }

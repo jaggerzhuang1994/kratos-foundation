@@ -4,6 +4,18 @@
 
 ## 计划中
 
+### 升级风险
+
+- **Queue Worker 遇到存储故障不再退出**：领取、确认、释放、失败持久化时的数据库或 Redis 故障（断连、`storage_timeout` 超时、主从切换、损坏记录）改为在循环内按 500ms 起倍增、上限 30s 退避重试，记录 `WARN queue.storage.retrying`，恢复后记录 `INFO queue.storage.recovered`；此前会记录 `ERROR queue.storage.failed` 并让整个应用停机重启。`queue_consumer_runtime_failures_total` 仍按每次故障累加，FoundationQueueRuntimeFailure 告警口径不变；依赖“存储故障即重启 Pod”的部署需改为按该告警处理。Store 返回不满足契约的领取结果仍会退出。
+
+### Changed
+
+- 数据库 Queue（`contrib/queue/database/gorm`）在 MySQL 8.0.1+ / MariaDB 10.6+ 上改用短事务内按主键 `FOR UPDATE SKIP LOCKED` 领取：并发 Worker 各自锁定不同候选，不再争抢最早的同一行。MySQL 8.4 上 8 并发领取 200 个积压任务的空领取从 1335 次降到个位数。SQLite 与不支持 SKIP LOCKED 的版本保持原条件更新方式；首次领取时读取一次 `SELECT VERSION()`。
+
+### Fixed
+
+- 告警 FoundationAppNotReady 与预聚合 `app:readiness:ready` 在按实例分组前把 `pod_name`（ACK 默认采集标签）补成 `pod`；此前只有 `pod_name` 时所有实例被并成一组，单个实例未就绪会被其他实例掩盖。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

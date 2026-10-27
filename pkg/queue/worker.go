@@ -163,7 +163,7 @@ func newWorker[T any](config workerConfig, store Store, handlers map[string]task
 	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner()}, nil
 }
 
-// Start 阻塞运行所有领取循环；存储故障取消同实例其他循环，等待全部退出后返回错误。
+// Start 阻塞运行所有领取循环；存储瞬时故障在循环内退避重试，只有 Store 违反契约时取消同实例其他循环并返回错误。
 // 同一实例只能启动一次；Stop 先于 Start 时直接返回 nil。
 func (w *Worker[T]) Start(ctx context.Context) error {
 	err := w.runner.Run(ctx, func(runCtx context.Context) error {
@@ -198,7 +198,19 @@ func (w *Worker[T]) Stop(ctx context.Context) error {
 	return w.runner.Stop(ctx)
 }
 
+// 存储瞬时故障（断连、超时、主从切换）按倍增退避重试，不退出 Worker；
+// 未确认的任务由持久化租约到期恢复，不会被当作成功。
+const (
+	storageRetryMinBackoff = 500 * time.Millisecond
+	storageRetryMaxBackoff = 30 * time.Second
+)
+
+// errInvalidReservation 表示 Store 实现返回了不满足契约的领取结果，属于实现缺陷，不重试。
+var errInvalidReservation = errors.New("queue store returned an invalid reservation")
+
 func (w *Worker[T]) run(ctx context.Context) error {
+	failures := 0
+	var backoff time.Duration
 	for {
 		if ctx.Err() != nil {
 			return nil
@@ -207,27 +219,42 @@ func (w *Worker[T]) run(ctx context.Context) error {
 		operationCtx, cancel := context.WithTimeout(ctx, w.config.StorageTimeout)
 		reservation, err := w.store.Reserve(operationCtx, now.UTC(), w.config.Lease)
 		cancel()
-		if err != nil {
-			if ctx.Err() != nil && errtree.Only(err, ctx.Err()) {
-				return nil
+		if err == nil && reservation != nil {
+			err = w.execute(ctx, reservation, now)
+			if err != nil && errtree.Only(err, ErrLeaseLost) {
+				w.log.WithContext(ctx).Warnw("event", "queue.lease.lost", "msg", "task lease lost", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID)
+				err = nil
 			}
-			return fmt.Errorf("reserve task: %w", err)
 		}
-		if reservation == nil {
-			if err := waitBackoff(ctx, w.config.PollInterval); err != nil {
+		if ctx.Err() != nil {
+			// 停止期间的存储结果不再重试，未确认任务由租约恢复。
+			return nil
+		}
+		if errors.Is(err, errInvalidReservation) {
+			return err
+		}
+		if err != nil {
+			failures++
+			if backoff == 0 {
+				backoff = storageRetryMinBackoff
+			} else {
+				backoff = nextBackoff(backoff, storageRetryMaxBackoff)
+			}
+			w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
+			w.log.WithContext(ctx).Warnw("event", "queue.storage.retrying", "msg", "queue storage failed; retrying", "queue", w.config.Queue, "worker", w.config.Name, "failures", failures, "retry_after", backoff, "error", err)
+			if waitBackoff(ctx, backoff) != nil {
 				return nil
 			}
 			continue
 		}
-		if err := w.execute(ctx, reservation, now); err != nil {
-			if errtree.Only(err, ErrLeaseLost) {
-				w.log.WithContext(ctx).Warnw("event", "queue.lease.lost", "msg", "task lease lost", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID)
-				continue
-			}
-			if ctx.Err() != nil && errtree.Only(err, ctx.Err()) {
+		if failures > 0 {
+			w.log.WithContext(ctx).Infow("event", "queue.storage.recovered", "msg", "queue storage recovered", "queue", w.config.Queue, "worker", w.config.Name, "failures", failures)
+			failures, backoff = 0, 0
+		}
+		if reservation == nil {
+			if waitBackoff(ctx, w.config.PollInterval) != nil {
 				return nil
 			}
-			return err
 		}
 	}
 }

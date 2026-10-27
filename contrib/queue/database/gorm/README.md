@@ -130,7 +130,12 @@ Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写
 
 Insert 通过 `Connection(ctx)` 取得会话，允许复用同一 Manager 的业务事务；成功仅代表插入该事务，最终以业务提交结果为准。工厂和业务 Repo 均应传播该 Context。普通插入不做 upsert，重复 ID 返回 `queue.ErrDuplicate`；错误转换在独立会话 Config 上启用，不改变共享连接配置。
 
-Claim、CompleteReserved、ReleaseReserved、FailReserved、RetryFailed 必须在没有外层事务的 Context 中调用，连接提供者必须保证这一点；Repo 会拒绝 GORM 能识别的已打开事务，不要把业务事务 Context 传给 Worker。Repo 不使用长期事务或进程锁：读取候选后，以 ID、Generation、Token、Attempts、租约和可执行时间作为条件执行单次更新，只有更新一行才取得租约。冲突返回空领取；数据库错误返回调用方，不隐式重试。单行更新期间由数据库加锁，语句/默认短事务结束即释放，不跨 Handler 持锁；热点任务可能反复竞争，不保证公平性。
+Claim、CompleteReserved、ReleaseReserved、FailReserved、RetryFailed 必须在没有外层事务的 Context 中调用，连接提供者必须保证这一点；Repo 会拒绝 GORM 能识别的已打开事务，不要把业务事务 Context 传给 Worker。Repo 不使用长期事务或进程锁，按方言选择领取方式：
+
+- **MySQL 8.0.1+ / MariaDB 10.6+**：首次领取时读取一次 `SELECT VERSION()`。先无锁读取最早的至多 16 个到期候选，再在短事务内按顺序以主键 `SELECT ... FOR UPDATE SKIP LOCKED` 锁定，已被其他 Worker 锁定或状态已变化的行直接跳过，锁定后按 ID 与 Generation 写入租约并提交。主键点查只锁定返回的那一行，并发 Worker 各自拿到不同任务，积压时不会因争抢同一行而空等轮询间隔。
+- **SQLite、MySQL 5.7 等**：读取候选后，以 ID、Generation、Token、Attempts、租约和可执行时间作为条件执行单次更新，只有更新一行才取得租约；冲突返回空领取，热点任务可能反复竞争，不保证公平性。
+
+数据库错误返回调用方，由 Worker 退避重试。两种方式都在返回前提交，不跨 Handler 持锁。
 
 Ack/Release/Fail 以 ID、Token、非失败及非空租约为条件更新，旧 owner 返回 `ErrLeaseLost`。成功按 `RetainCompleted` 删除或保留在原行；失败始终保留在原行，Retry 清零次数并重新排期。Claim 解码发现损坏时，按同一快照条件标记失败、保留原始正文并返回错误；失败查询也明确报告损坏。至少需一个正常 Worker 或外部 supervisor 恢复消费；有限尝试次数、网络结果不确定及业务幂等边界见 [核心文档](../../../../pkg/queue/README.md)。本包不提供 exactly-once、永久去重、自动续租或故障数据库的数据恢复。
 
@@ -139,7 +144,9 @@ flowchart TD
     A([并发 Worker]) --> B[读取已提交 pending/running 的到期候选]
     B --> C{有候选?}
     C -- 否 --> E([返回空])
-    C -- 是 --> D{正文有效?}
+    C -- 是 MySQL 8 --> SL[短事务内按主键 FOR UPDATE SKIP LOCKED 逐个锁定候选 / 跳过已锁定]
+    SL --> D
+    C -- 是 其他方言 --> D{正文有效?}
     D -- 否 --> F[按快照条件标记失败 / 保留正文]
     D -- 是 --> G[条件 UPDATE running 并竞争单行租约 / 数据库短锁]
     G --> H{更新一行?}

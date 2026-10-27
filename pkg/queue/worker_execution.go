@@ -12,7 +12,7 @@ import (
 
 func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claimedAt time.Time) error {
 	if reservation.Task == nil || reservation.Token == "" || reservation.Attempts < 1 {
-		return errors.New("queue store returned an invalid reservation")
+		return errInvalidReservation
 	}
 	task := reservation.Task
 	parent := taskPropagator.Extract(ctx, propagation.MapCarrier(task.Headers))

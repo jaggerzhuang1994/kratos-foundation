@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,6 +54,8 @@ type Repo[T Entity] struct {
 	// timestampMin 和 timestampMax 限制 MySQL TIMESTAMP 的可写 UTC 范围；SQLite 不限制。
 	timestampMin time.Time
 	timestampMax time.Time
+	// skipLocked 缓存领取方式探测结果：SQLite 构造时即不支持，MySQL 首次领取时按服务端版本确定。
+	skipLocked atomic.Int32
 }
 
 // NewRepo 校验模型和方言，不查询或迁移表，不启动后台任务。
@@ -119,11 +122,15 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 	if len(statement.Schema.PrimaryFields) != 1 || statement.Schema.PrimaryFields[0].Name != "ID" || len(statement.Schema.QueryClauses) != 0 || len(statement.Schema.DeleteClauses) != 0 {
 		return nil, errors.New("queue model cannot change primary key or use soft delete")
 	}
-	return &Repo[T]{
+	repo := &Repo[T]{
 		provider: provider, factory: factory, table: table, modelTable: modelTable,
 		entityType: typ.Elem(), retainCompleted: config.RetainCompleted,
 		timestampPrecision: timestampPrecision, timestampMin: timestampMin, timestampMax: timestampMax,
-	}, nil
+	}
+	if db.Dialector.Name() != "mysql" {
+		repo.skipLocked.Store(skipLockedUnsupported)
+	}
+	return repo, nil
 }
 
 func (r *Repo[T]) entity() T { return reflect.New(r.entityType).Interface().(T) }

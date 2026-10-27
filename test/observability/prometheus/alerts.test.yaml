@@ -30,6 +30,27 @@ tests:
       - eval_time: 6m
         alertname: FoundationAppUnavailable
         exp_alerts: []
+  - name: 只有 pod_name 标签（ACK 默认）时仍按实例告警
+    interval: 1m
+    input_series:
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod_name="worker-1"}
+        values: "0x10"
+      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod_name="worker-2"}
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: FoundationAppNotReady
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: worker
+              pod: worker-1
+              severity: warning
+            exp_annotations:
+              summary: 应用实例持续未就绪（启动未完成、依赖不可用或停机卡住）
+              runbook: observability/troubleshooting.md#foundationappnotready
   - name: 全部实例未就绪触发服务不可用
     interval: 1m
     input_series:
@@ -536,6 +557,15 @@ tests:
         values: 0x15
       - series: app_ready{env="prod",namespace="apps",app="web",pod="web-1"}
         values: 1x15
+      # 只有 pod_name 时同样按实例关联：acme-0 探测失败、acme-1 就绪，不能被合并成整体失败。
+      - series: app_ready{env="prod",namespace="apps",app="acme",pod_name="acme-0"}
+        values: 1x15
+      - series: server_readiness_status{env="prod",namespace="apps",app="acme",pod_name="acme-0"}
+        values: 0x15
+      - series: app_ready{env="prod",namespace="apps",app="acme",pod_name="acme-1"}
+        values: 1x15
+      - series: server_readiness_status{env="prod",namespace="apps",app="acme",pod_name="acme-1"}
+        values: 1x15
       - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="success"}
         values: 0+48x15
       - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="failed"}
@@ -574,6 +604,8 @@ tests:
             value: 1
           - labels: 'app:app_ready:ready{env="prod",namespace="apps",app="web"}'
             value: 2
+          - labels: 'app:app_ready:ready{env="prod",namespace="apps",app="acme"}'
+            value: 2
       - expr: app:app_ready:instances
         eval_time: 10m
         exp_samples:
@@ -581,12 +613,16 @@ tests:
             value: 2
           - labels: 'app:app_ready:instances{env="prod",namespace="apps",app="web"}'
             value: 2
+          - labels: 'app:app_ready:instances{env="prod",namespace="apps",app="acme"}'
+            value: 2
       - expr: app:readiness:ready
         eval_time: 10m
         exp_samples:
           - labels: 'app:readiness:ready{env="prod",namespace="apps",app="api"}'
             value: 1
           - labels: 'app:readiness:ready{env="prod",namespace="apps",app="web"}'
+            value: 1
+          - labels: 'app:readiness:ready{env="prod",namespace="apps",app="acme"}'
             value: 1
       - expr: app:consumer_failures:rate5m / app:consumer_messages:rate5m
         eval_time: 10m

@@ -141,3 +141,49 @@ func TestRepoClaimOnlyExecutableStates(t *testing.T) {
 		t.Fatalf("unexpected candidate: %+v %v", record, err)
 	}
 }
+
+// SQLite 方言忽略行锁子句，可在本地覆盖 SKIP LOCKED 分支的候选遍历与损坏隔离；
+// 并发行锁与单一 owner 由 TestExternalRepoMySQL 在真实 MySQL 上覆盖。
+func TestRepoSkipLockedClaimPath(t *testing.T) {
+	repo, db := testRepo(t)
+	repo.skipLocked.Store(skipLockedSupported)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for i, id := range []string{"bad", "first", "second"} {
+		if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: id, MessageVersion: "test", AvailableAt: now.Add(time.Duration(i-3) * time.Second)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Model(&testTask{}).Where("id = ?", "bad").Update("data", []byte("broken")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Claim(ctx, now, now.Add(time.Hour), "t0"); err == nil {
+		t.Fatal("corrupt payload accepted")
+	}
+	var bad testTask
+	if err := db.Where("id = ?", "bad").Take(&bad).Error; err != nil || bad.Status != StatusFailed || string(bad.Data) != "broken" {
+		t.Fatalf("corrupt task not quarantined: %+v %v", bad.Model, err)
+	}
+	for _, want := range []string{"first", "second"} {
+		record, err := repo.Claim(ctx, now, now.Add(time.Hour), "owner-"+want)
+		if err != nil || record == nil || record.Task.ID != want || record.Attempts != 1 || record.Token != "owner-"+want {
+			t.Fatalf("claim %s: %+v %v", want, record, err)
+		}
+	}
+	if record, err := repo.Claim(ctx, now, now.Add(time.Hour), "late"); err != nil || record != nil {
+		t.Fatalf("drained queue: %+v %v", record, err)
+	}
+}
+
+// SQLite 构造时即确定不走 SKIP LOCKED；未知状态下探测失败本次按条件更新处理，且不缓存失败结果。
+func TestRepoSkipLockedDetection(t *testing.T) {
+	repo, _ := testRepo(t)
+	ctx := context.Background()
+	if repo.skipLocked.Load() != skipLockedUnsupported || repo.supportsSkipLocked(ctx) {
+		t.Fatal("SQLite repo selected SKIP LOCKED")
+	}
+	repo.skipLocked.Store(skipLockedUnknown)
+	if repo.supportsSkipLocked(ctx) || repo.skipLocked.Load() != skipLockedUnknown {
+		t.Fatal("failed version probe was cached or enabled SKIP LOCKED")
+	}
+}

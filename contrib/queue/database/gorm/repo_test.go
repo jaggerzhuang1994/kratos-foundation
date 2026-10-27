@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -541,4 +543,72 @@ func TestExternalRepoMySQL(t *testing.T) {
 			t.Fatalf("claim at ceiling: %+v %v", record, err)
 		}
 	})
+	t.Run("skip locked", func(t *testing.T) {
+		// 并发 Worker 用 SKIP LOCKED 各自锁定不同候选：每个任务只被领取一次，积压期间几乎没有空领取。
+		repo, _ := open(t)
+		ctx := context.Background()
+		start := time.Unix(1700000000, 0)
+		const tasks, workers = 200, 8
+		for i := range tasks {
+			if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: fmt.Sprintf("task-%03d", i), MessageVersion: "job", AvailableAt: start}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		now, until := start.Add(time.Minute), start.Add(time.Hour)
+		var mu sync.Mutex
+		claimed := map[string]int{}
+		empty := 0
+		var wg sync.WaitGroup
+		for w := range workers {
+			wg.Go(func() {
+				for {
+					record, err := repo.Claim(ctx, now, until, fmt.Sprintf("owner-%d", w))
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					mu.Lock()
+					if record == nil {
+						remaining := tasks - len(claimed)
+						if remaining > workers {
+							empty++
+						}
+						mu.Unlock()
+						if remaining == 0 {
+							return
+						}
+						continue
+					}
+					claimed[record.Task.ID]++
+					mu.Unlock()
+				}
+			})
+		}
+		wg.Wait()
+		if repo.skipLocked.Load() != skipLockedSupported {
+			t.Fatal("MySQL 8 did not use SKIP LOCKED")
+		}
+		if len(claimed) != tasks {
+			t.Fatalf("claimed %d of %d tasks", len(claimed), tasks)
+		}
+		for id, count := range claimed {
+			if count != 1 {
+				t.Fatalf("task %s claimed %d times", id, count)
+			}
+		}
+		if empty > tasks/20 {
+			t.Fatalf("%d empty claims while backlog remained", empty)
+		}
+	})
+}
+
+func TestVersionSupportsSkipLocked(t *testing.T) {
+	for version, want := range map[string]bool{
+		"8.0.0": false, "8.0.1": true, "8.4.6": true, "9.1.0": true, "5.7.44-log": false, "8.0.36-0ubuntu0.22.04.1": true,
+		"10.5.23-MariaDB": false, "10.6.0-MariaDB": true, "11.4.2-MariaDB-ubu2404": true, "": false, "garbage": false,
+	} {
+		if got := versionSupportsSkipLocked(version); got != want {
+			t.Errorf("%q = %v, want %v", version, got, want)
+		}
+	}
 }
