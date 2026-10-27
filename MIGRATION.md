@@ -25,7 +25,7 @@
 | `ResolveClient` / `MakeGrpcConn` / `MakeHttpClient` | `factory.AcquireClient(ctx, name)`，成功后必须 `defer release()` |
 | `WithDefaultConnName` / `WithConnName` | 生成客户端 `NewXxxWithConnName(factory, name)` |
 | `GrpcCallOptionFromContext` 等 | `client.WithGRPCCallOptions` / `client.WithHTTPCallOptions` |
-| `GetConnection`、`UseRead/UseWrite`、`replicas` 自动读写分离 | `Connection(ctx)`、`UseConnection`；读库配置为独立连接 |
+| `GetConnection`、`UseRead/UseWrite`、`replicas` 自动读写分离 | `Connection(ctx)`、`UseConnection`；读写分离改用 `read_replicas` 与 `database.UsePrimary`，见 [只读副本](pkg/database/README.md#只读副本) |
 | `WithSqlTxOptions` | `database.WithSQLTxOptions` |
 | Redis `GetConnection`、Manager 透传命令 | `Connection(name)` / `Default()` 获取 client，由 Manager 关闭 |
 | `HTTP().HealthChecks(...)` | `spec.Health().Checks(...)`，地址与路径在 `server.http.health` |

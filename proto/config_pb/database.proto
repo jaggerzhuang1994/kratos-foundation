@@ -33,7 +33,7 @@ message DBConnection {
   optional string driver = 1;
   // dsn
   string dsn = 2;
-  // 已移除读写分离与按表隐式路由；连接由 default 或 UseConnection 显式选择。
+  // 不按表隐式路由；连接由 default 或 UseConnection 显式选择，读写分离见 read_replicas。
   // 用于设置连接池中空闲连接的最大数量
   // 如果 MaxOpenConns > 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。
   // 如果 n ≤ 0，则不保留任何空闲连接。
@@ -64,6 +64,15 @@ message DBConnection {
   // 覆盖 database.gorm 中显式配置的字段；未配置字段继续继承全局值。
   // 每个连接拥有独立的 GORM 实例、方言与回调。
   optional Gorm gorm = 8;
+  // 只读副本。配置后事务外的查询随机分发到副本，写入、事务、锁定读与 database.UsePrimary 走本连接 dsn；
+  // 副本沿用本连接的 driver、gorm、aes 与连接池参数（连接池参数随本连接热更新）。[需重启]
+  repeated DBReplica read_replicas = 9;
+}
+
+// DBReplica 是一个只读副本。
+message DBReplica {
+  // 副本 dsn，必填。
+  string dsn = 1;
 }
 
 // 数据库字段 AES 加密配置。

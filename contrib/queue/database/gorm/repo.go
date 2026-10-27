@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/dbroute"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -136,8 +137,10 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 func (r *Repo[T]) entity() T { return reflect.New(r.entityType).Interface().(T) }
 
 func (r *Repo[T]) db(ctx context.Context) *gorm.DB {
+	// 队列状态必须读主库：配置只读副本时，候选、统计与运维读取若走副本会看到复制延迟前的租约。
+	// 该标记即 database.UsePrimary，对 pkg/database.Manager 生效，其他连接提供者忽略该 Context 值。
 	// Session 复制 Config，转换重复键错误且不修改业务连接；跳过业务钩子，防止改写租约。
-	db := r.provider.Connection(ctx).Session(&gorm.Session{NewDB: true, SkipHooks: true})
+	db := r.provider.Connection(dbroute.WithPrimary(ctx)).Session(&gorm.Session{NewDB: true, SkipHooks: true})
 	db.Config.TranslateError = true
 	// 借用独立日志会话，避免高频 SQL 刷屏且不改变共享连接的业务日志策略。
 	if logger, ok := db.Logger.(interface{ WithDebugQueries() gormlogger.Interface }); ok {

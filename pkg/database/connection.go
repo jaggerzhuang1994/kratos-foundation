@@ -20,8 +20,10 @@ var errConnectionFactoryClosed = errors.New("database connection factory is clos
 type connectionPool struct {
 	// db 由连接工厂负责关闭的 SQL 连接池。
 	db *sql.DB
-	// name 用于指标标签的逻辑连接名。
+	// name 用于指标标签的连接池名；只读副本为 "<连接名>/replica-<序号>"。
 	name string
+	// connection 所属具名连接，连接池热更新按它应用同一份参数。
+	connection string
 	// driver 用于选择专用采集器的驱动名。
 	driver string
 }
@@ -49,7 +51,7 @@ func newConnectionFactory(drivers map[string]DriverFactory) *connectionFactory {
 	}
 }
 
-// make 创建并纳管一个连接池；工厂关闭后不再接受新连接。
+// make 创建并纳管具名连接的主连接池；工厂关闭后不再接受新连接。
 func (f *connectionFactory) make(
 	name string,
 	conf *config_pb.DBConnection,
@@ -57,7 +59,27 @@ func (f *connectionFactory) make(
 	if conf == nil {
 		return nil, errors.New("database connection config is nil")
 	}
+	return f.open(name, name, conf, conf.GetDsn())
+}
 
+// makeReplicas 按配置顺序创建并纳管只读副本连接池，沿用主连接的驱动与池参数。
+func (f *connectionFactory) makeReplicas(name string, conf *config_pb.DBConnection) ([]gorm.Dialector, error) {
+	dialectors := make([]gorm.Dialector, 0, len(conf.GetReadReplicas()))
+	for index, replica := range conf.GetReadReplicas() {
+		dialector, err := f.open(replicaPoolName(name, index), name, conf, replica.GetDsn())
+		if err != nil {
+			return nil, fmt.Errorf("read replica %d: %w", index+1, err)
+		}
+		dialectors = append(dialectors, dialector)
+	}
+	return dialectors, nil
+}
+
+func replicaPoolName(connection string, index int) string {
+	return fmt.Sprintf("%s/replica-%d", connection, index+1)
+}
+
+func (f *connectionFactory) open(name, connectionName string, conf *config_pb.DBConnection, dsn string) (gorm.Dialector, error) {
 	driver := normalizeDriverName(conf.GetDriver())
 	if driver == "" {
 		driver = "mysql"
@@ -67,7 +89,7 @@ func (f *connectionFactory) make(
 		return nil, fmt.Errorf("unsupported database driver %q", conf.GetDriver())
 	}
 
-	connection, err := factory(DriverConfig{Name: name, DSN: conf.GetDsn()})
+	connection, err := factory(DriverConfig{Name: name, DSN: dsn})
 	if err != nil {
 		// todo connection 可能为空
 		if connection.SQLDB != nil {
@@ -86,7 +108,7 @@ func (f *connectionFactory) make(
 	}
 
 	configConnectionPool(connection.SQLDB, conf)
-	if err = f.track(connectionPool{db: connection.SQLDB, name: name, driver: driver}); err != nil {
+	if err = f.track(connectionPool{db: connection.SQLDB, name: name, connection: connectionName, driver: driver}); err != nil {
 		return nil, errors.Join(err, connection.SQLDB.Close())
 	}
 	return connection.Dialector, nil
@@ -117,6 +139,19 @@ func (f *connectionFactory) pools() []connectionPool {
 	slices.SortFunc(pools, func(a, b connectionPool) int {
 		return cmp.Compare(a.name, b.name)
 	})
+	return pools
+}
+
+// connectionPools 返回具名连接的主连接池与全部只读副本连接池。
+func (f *connectionFactory) connectionPools(connection string) []connectionPool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var pools []connectionPool
+	for _, pool := range f.connections {
+		if pool.connection == connection {
+			pools = append(pools, pool)
+		}
+	}
 	return pools
 }
 
@@ -223,6 +258,11 @@ func validateConnectionConfig(
 	}
 	if strings.TrimSpace(config.GetDsn()) == "" {
 		return fmt.Errorf("%s DSN is required", location)
+	}
+	for index, replica := range config.GetReadReplicas() {
+		if strings.TrimSpace(replica.GetDsn()) == "" {
+			return fmt.Errorf("%s read replica %d DSN is required", location, index+1)
+		}
 	}
 	return nil
 }

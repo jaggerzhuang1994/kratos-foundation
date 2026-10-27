@@ -436,6 +436,9 @@
         },
         "gorm": {
           "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.gorm"
+        },
+        "read_replicas": {
+          "$ref": "#/definitions/.kratos_foundation_pb.DBConnection.read_replicas"
         }
       },
       "type": "object",
@@ -471,11 +474,35 @@
     },
     ".kratos_foundation_pb.DBConnection.max_idle_conns": {
       "type": "integer",
-      "description": "已移除读写分离与按表隐式路由；连接由 default 或 UseConnection 显式选择。\n 用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 未配置时默认 2；热更新删除字段也恢复为 2。\n [热更新]"
+      "description": "不按表隐式路由；连接由 default 或 UseConnection 显式选择，读写分离见 read_replicas。\n 用于设置连接池中空闲连接的最大数量\n 如果 MaxOpenConns \u003e 0，并且 MaxIdleConns 大于 MaxOpenConns，那么 MaxIdleConns 会被自动降低到 MaxOpenConns。\n 如果 n ≤ 0，则不保留任何空闲连接。\n 未配置时默认 2；热更新删除字段也恢复为 2。\n [热更新]"
     },
     ".kratos_foundation_pb.DBConnection.max_open_conns": {
       "type": "integer",
       "description": "用于设置数据库最大打开连接数。\n 如果 MaxIdleConns \u003e 0，并且新的 MaxOpenConns 小于 MaxIdleConns，那么 MaxIdleConns 会被自动降低，以匹配新的 MaxOpenConns 上限。\n 如果 n ≤ 0，表示不限制打开连接的数量。\n 默认值是 0，也就是无限制。\n [热更新] 连接池打满时可以在线扩容，无需重启。"
+    },
+    ".kratos_foundation_pb.DBConnection.read_replicas": {
+      "items": {
+        "$ref": "#/definitions/.kratos_foundation_pb.DBReplica",
+        "description": "只读副本。配置后事务外的查询随机分发到副本，写入、事务、锁定读与 database.UsePrimary 走本连接 dsn；\n 副本沿用本连接的 driver、gorm、aes 与连接池参数（连接池参数随本连接热更新）。[需重启]"
+      },
+      "type": "array",
+      "description": "只读副本。配置后事务外的查询随机分发到副本，写入、事务、锁定读与 database.UsePrimary 走本连接 dsn；\n 副本沿用本连接的 driver、gorm、aes 与连接池参数（连接池参数随本连接热更新）。[需重启]"
+    },
+    ".kratos_foundation_pb.DBReplica": {
+      "properties": {
+        "dsn": {
+          "$ref": "#/definitions/.kratos_foundation_pb.DBReplica.dsn"
+        }
+      },
+      "type": "object",
+      "required": [
+        "dsn"
+      ],
+      "description": "DBReplica 是一个只读副本。"
+    },
+    ".kratos_foundation_pb.DBReplica.dsn": {
+      "type": "string",
+      "description": "副本 dsn，必填。"
     },
     ".kratos_foundation_pb.Database": {
       "properties": {

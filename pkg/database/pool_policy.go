@@ -92,7 +92,8 @@ func applyConnectionPools(factory *connectionFactory, config *config_pb.Database
 		if connection == nil {
 			continue
 		}
-		if pool, ok := factory.pool(name); ok {
+		// 只读副本沿用所属连接的池参数，一起热更新。
+		for _, pool := range factory.connectionPools(name) {
 			configConnectionPool(pool.db, connection)
 			applied++
 		}

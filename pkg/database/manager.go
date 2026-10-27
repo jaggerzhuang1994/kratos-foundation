@@ -8,12 +8,15 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/dbroute"
+
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	foundationconfig "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	foundationmetrics "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
 	"gorm.io/gorm"
+	"gorm.io/plugin/dbresolver"
 )
 
 // ErrManagerClosed 表示 Manager 已关闭。
@@ -44,6 +47,8 @@ type manager struct {
 	connectionFactory *connectionFactory
 	// metricsCollector 当前 Manager 拥有的指标采集器。
 	metricsCollector *metricsCollector
+	// replicated 配置了只读副本的连接根实例，UsePrimary 只对它们追加主库子句。
+	replicated map[*gorm.DB]struct{}
 
 	// stateMu 保护关闭状态及清理时的资源快照。
 	stateMu sync.RWMutex
@@ -76,6 +81,7 @@ func newManagerWithDrivers(
 	}
 	// 每个具名连接单独 gorm.Open，方言、ClauseBuilders、回调和配置均不共享。
 	connections := make(map[string]*gorm.DB, len(config.GetConnections()))
+	replicated := make(map[*gorm.DB]struct{})
 	enabledDrivers := make(map[string]struct{})
 	for _, name := range slices.Sorted(maps.Keys(config.GetConnections())) {
 		connection := config.GetConnections()[name]
@@ -91,6 +97,17 @@ func newManagerWithDrivers(
 		db, err := gorm.Open(dialector, newGORMConfig(effective, newGORMLogger(gormModuleLogger, effective.GetLogger())))
 		if err != nil {
 			return fail(fmt.Errorf("open database connection %q: %w", name, err))
+		}
+		if len(connection.GetReadReplicas()) > 0 {
+			replicas, err := connectionFactory.makeReplicas(name, connection)
+			if err != nil {
+				return fail(fmt.Errorf("open database connection %q: %w", name, err))
+			}
+			// 查询在事务外随机分发到副本；写入、事务、FOR UPDATE 与 UsePrimary 走主连接。
+			if err := db.Use(dbresolver.Register(dbresolver.Config{Replicas: replicas, Policy: dbresolver.RandomPolicy{}})); err != nil {
+				return fail(fmt.Errorf("register database read replicas for %q: %w", name, err))
+			}
+			replicated[db] = struct{}{}
 		}
 		if tracingPlugin := newTracingPlugin(config, appInfo, tracingProvider); tracingPlugin != nil {
 			if err := db.Use(tracingPlugin); err != nil {
@@ -147,6 +164,7 @@ func newManagerWithDrivers(
 		connections:       connections,
 		connectionFactory: connectionFactory,
 		metricsCollector:  metricsCollector,
+		replicated:        replicated,
 	}
 	databaseLogger.With("event", "database.manager.ready", "connections", len(connections), "drivers", slices.Sorted(maps.Keys(enabledDrivers))).Info("database manager ready")
 	var cleanupOnce sync.Once
@@ -208,6 +226,9 @@ func (mgr *manager) Connection(ctx context.Context) *gorm.DB {
 			return db
 		}
 		return frame.db.WithContext(ctx)
+	}
+	if _, ok := mgr.replicated[selected]; ok && dbroute.Primary(ctx) {
+		return selected.Clauses(dbresolver.Write).WithContext(ctx)
 	}
 	return selected.WithContext(ctx)
 }

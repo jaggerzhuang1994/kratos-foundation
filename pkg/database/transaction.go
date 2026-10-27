@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/dbroute"
 	"gorm.io/gorm"
 )
 
@@ -63,6 +64,13 @@ func (mgr *manager) Transaction(ctx context.Context, fc func(context.Context) er
 }
 
 type useConnectionKey struct{}
+
+// UsePrimary 让后续查询走主库而不是只读副本，用于写后立即读（read-your-writes）或不能容忍复制延迟的读。
+// 没有配置 read_replicas 的连接不受影响；事务内的查询本来就在主库。
+func UsePrimary(ctx context.Context) context.Context {
+	return dbroute.WithPrimary(ctx)
+}
+
 type useTxKey struct{}
 
 type transactionFrame struct {

@@ -37,7 +37,35 @@ database:
 
 每个 `DBConnection` 对应一个独立的 SQL 连接池和 GORM 根实例，方言、SQL 构造器、回调、AES 与连接级 GORM 配置相互隔离。默认调用使用 `database.default`；跨库访问通过 `database.UseConnection(ctx, "local")` 选择连接。连接上的 `gorm` 配置只覆盖显式设置的字段，包括显式 `false`，其余字段继承全局配置。
 
-已删除读写分离和隐式表路由：迁移时移除 `replicas`、`datas`、`trace_resolver_mode` 配置及 `GormDialector` 类型；配置协议已移除这些字段及 reserved 声明，迁移时应主动清理旧键。删除 `UseRead` / `UseWrite` 调用，将需要访问的其他数据库声明为独立的 `connections` 条目，并用 `UseConnection` 选择。`datas` 原来关联的表不会再自动切换连接。
+v1 的 `replicas`、`datas`、`trace_resolver_mode` 配置、`GormDialector` 类型与 `UseRead` / `UseWrite` 已删除，迁移时应主动清理旧键；其他数据库声明为独立的 `connections` 条目并用 `UseConnection` 选择，`datas` 原来关联的表不会再自动切换连接。读写分离改由 `read_replicas` 提供，语义如下。
+
+### 只读副本
+
+```yaml
+database:
+  connections:
+    primary:
+      dsn: ${DB_PRIMARY_DSN}
+      max_open_conns: 50
+      read_replicas:
+        - dsn: ${DB_REPLICA_1_DSN}
+        - dsn: ${DB_REPLICA_2_DSN}
+```
+
+| 语句 | 落点 |
+| --- | --- |
+| 事务外的查询（`First`/`Find`/`Count`/`Pluck`/`Scan`，以 `SELECT` 开头的 `Raw`） | 随机一个副本 |
+| 写入（`Create`/`Save`/`Update`/`Delete`、非 `SELECT` 的 `Raw`/`Exec`） | 主库（本连接 `dsn`） |
+| `Transaction` 内的全部语句 | 主库 |
+| 锁定读（`clause.Locking`、以 `FOR UPDATE` 结尾的 `Raw`） | 主库 |
+| `database.UsePrimary(ctx)` 之后的查询 | 主库 |
+
+- 副本沿用本连接的 driver、GORM 配置、AES key 与连接池参数；池参数热更新同时作用于主库和全部副本。副本列表、DSN 变化需要重启。
+- 每个副本是独立连接池，指标 `go_sql_*{db_name="<连接名>/replica-<序号>"}` 单独上报；SQL 操作指标与链路仍按连接名统计，不区分落到主库还是副本。
+- **复制延迟**：副本可能落后主库，写入后立即读取（read-your-writes）、余额校验、幂等检查等不能容忍旧数据的读，要么放进同一个 `Transaction`，要么先 `ctx = database.UsePrimary(ctx)`。
+- **迁移与 DDL**：GORM Migrator 用 `SELECT` 判断表和列是否存在，会被分发到副本；在配置副本的连接上执行 `AutoMigrate`/DDL 时必须使用 `UsePrimary(ctx)`，否则副本尚未同步时会重复建表失败。框架的数据库 Queue 仓储已固定读写主库。
+- **故障**：不做副本健康检查或自动摘除；某个副本不可用时分发到它的查询失败。副本故障应在负载均衡层（如云数据库只读地址、ProxySQL）处理，或从配置移除后重启。
+- `UseConnection` 与副本互不影响：选择另一个连接后，按该连接自己的 `read_replicas` 路由。
 
 事务在进入 `Transaction` 时固定数据库连接、GORM 配置和 AES key。回调内使用传入 Context 调用 `Connection` 或嵌套 `Transaction`；同一 Manager 的事务 Context 再次选择事务所在连接时复用当前事务；选择另一个已存在连接（包括在其上嵌套 `Transaction`）返回 `ErrConnectionInTransaction`，错误中带事务所在连接名，避免数据被静默写进事务所在的库。需要跨库写入时在事务外分别执行，或使用 Queue 等最终一致方案。未知连接仍返回 `ErrConnectionUnknown`。事务 Context 仅在回调期间有效。
 
