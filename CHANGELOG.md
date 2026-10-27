@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.7.0（2026-10-27）
+
 ### 升级风险
 
 - **服务改为按服务名注册**：注册中心的服务名由 Server 实际承载的 proto 服务推导（proto 所在目录名），不再使用 `APP_NAME` / 可执行文件名；每个服务名只挂载承载它的端点，未在 proto 声明的手写路由等入口归入应用名并告警。Queue、Cron 等不承载业务服务的进程不再注册。客户端按同一规则解析，按目录名约定（`api/<service_name>/*.proto` 与二进制同名）的项目名字不变。
@@ -24,7 +34,16 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- **server**：mount handwritten HTTP and WebSocket endpoints by proto method（`f0b2197`）
+- ⚠️ 不兼容：**app**：register services by name instead of application name（`10bc684`）
+- **server**：report service names served by HTTP and gRPC servers（`b9fbc47`）
+- ⚠️ 不兼容：**servicename**：derive service names only from the proto directory（`0f6f795`）
+
+**文档**
+
+- explain service-name registration in the demo and minimal example（`7668705`）
 <!-- changelog:auto:end -->
 
 ## v2.6.0（2026-10-27）
@@ -118,6 +137,7 @@
 
 **文档**
 
+- **changelog**：refresh v2.6.0 commit list（`0b32d2a`）
 - **changelog**：prepare v2.6.0 release notes（`bc2f1ec`）
 - **outbox**：stress that Write must run inside the business transaction（`ae35c53`）
 - CHANGELOG 记录管理端口、请求体上限、SQL 参数等默认值变化；演示改用新接口（`eb35724`）
