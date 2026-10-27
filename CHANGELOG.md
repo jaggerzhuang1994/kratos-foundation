@@ -21,6 +21,7 @@
 - `kafka.NewProducerWithObservability(factory, config, obs)`：一步创建带指标、链路与日志的 Producer，等价于 `NewProducer` + `NewManagedProducer`。
 - `server.HandleRoute(method, path, operation, handler)`：注册经过 Foundation 服务端中间件链（恢复、截止时间、限流、日志、指标、链路、错误归一化）的手写 HTTP 路由，处理器通过 `*server.HTTPRequest` 取路径参数、查询参数与绑定请求体，返回值按服务器编码器输出。原生 `Route(...).GET/POST`、`HandleFunc`、`Handle`、`HandlePrefix` 保留，文档标注其不经过中间件。
 - 开启重试的客户端额外上报逻辑调用指标 `client_calls_code_total` / `client_calls_seconds`（重试结束后记一次最终结果与总耗时），新增预聚合 `app_downstream:client_calls:rate5m`、`app_downstream:client_call_errors:rate5m`、`app_downstream:client_calls_seconds_bucket:rate5m`（未上报时退回尝试级）；平台总览与网关详情的按下游表格并列“尝试 5xx”与“调用 5xx（重试后）”。
+- `totp.Authenticator.Verify` / `VerifyAt`：验证成功时返回匹配的时间步，供认证服务持久化最后一次成功的时间步以防重放；`Authenticate` / `AuthenticateAt` 不变。
 - `database.AutoMigrate(ctx, manager, models...)`：固定在主库迁移，配置 `read_replicas` 时不会因 Migrator 的存在性检查落到副本而重复建表。
 - `bootstrap.Spec.HTTP()` / `GRPC()`，与 `server.Spec` 命名一致；原 `Http()` / `Grpc()` 保留为兼容别名。
 - `client.AcquireHTTP` / `client.AcquireGRPC`：按协议租用客户端，只返回一个客户端，协议与配置不符时返回 `client.ErrProtocolMismatch`；`Factory.AcquireClient` 不变。
@@ -48,6 +49,8 @@
 
 ### Fixed
 
+- `cache.Cache.Get` 的回源函数 panic 时不再让进程崩溃（singleflight 会在独立协程中重新 panic），改为在每个等待的调用方协程中以原值重新 panic，由请求、任务或队列的恢复中间件处理。
+- 数据库 Queue 的 SKIP LOCKED 探测把上报 MySQL 8 版本号的 TiDB 视为不支持，沿用条件更新领取。
 - 告警 FoundationAppNotReady 与预聚合 `app:readiness:ready` 在按实例分组前把 `pod_name`（ACK 默认采集标签）补成 `pod`；此前只有 `pod_name` 时所有实例被并成一组，单个实例未就绪会被其他实例掩盖。
 
 <!-- changelog:auto:start -->

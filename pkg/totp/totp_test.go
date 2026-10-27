@@ -193,3 +193,25 @@ func BenchmarkAuthenticateAt(b *testing.B) {
 	}
 	runtime.KeepAlive(valid)
 }
+
+func TestVerifyAtReturnsMatchedStep(t *testing.T) {
+	t.Parallel()
+
+	authenticator, err := New(rfc6238SHA1Secret, WithSkew(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Unix(90, 0)
+	if step, ok := authenticator.VerifyAt(authenticator.CodeAt(time.Unix(60, 0)), at); !ok || step != 2 {
+		t.Fatalf("VerifyAt previous step = %d, %v; want 2, true", step, ok)
+	}
+	if step, ok := authenticator.VerifyAt(authenticator.CodeAt(at), at); !ok || step != 3 {
+		t.Fatalf("VerifyAt current step = %d, %v; want 3, true", step, ok)
+	}
+	if _, ok := authenticator.VerifyAt("12a456", at); ok {
+		t.Fatal("VerifyAt accepted a malformed code")
+	}
+	if _, ok := authenticator.Verify(authenticator.Current()); !ok {
+		t.Fatal("Verify rejected the current code")
+	}
+}

@@ -300,3 +300,23 @@ func TestExternalCacheRedis(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 }
+
+// 回源 panic 在调用方协程中重新抛出，由调用方的恢复中间件处理，而不是在 singleflight 协程中让进程崩溃。
+func TestCacheAsideRepanicsLoadPanicInCaller(t *testing.T) {
+	c, _, _ := newTestCache(t, newMemoryClient(), Config{TTL: time.Minute})
+	recovered := func() (value any) {
+		defer func() { value = recover() }()
+		_, _ = c.Get(context.Background(), "p1", func(context.Context) (product, error) { panic("boom") })
+		return nil
+	}()
+	if recovered != "boom" {
+		t.Fatalf("recovered = %v, want boom", recovered)
+	}
+	if got := (loadPanic{value: "boom"}).Error(); got != "cache load panicked: boom" {
+		t.Fatalf("loadPanic.Error() = %q", got)
+	}
+	value, err := c.Get(context.Background(), "p1", func(context.Context) (product, error) { return product{ID: "p1"}, nil })
+	if err != nil || value.ID != "p1" {
+		t.Fatalf("after panic value=%+v err=%v", value, err)
+	}
+}

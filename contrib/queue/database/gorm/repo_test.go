@@ -605,7 +605,7 @@ func TestExternalRepoMySQL(t *testing.T) {
 func TestVersionSupportsSkipLocked(t *testing.T) {
 	for version, want := range map[string]bool{
 		"8.0.0": false, "8.0.1": true, "8.4.6": true, "9.1.0": true, "5.7.44-log": false, "8.0.36-0ubuntu0.22.04.1": true,
-		"10.5.23-MariaDB": false, "10.6.0-MariaDB": true, "11.4.2-MariaDB-ubu2404": true, "": false, "garbage": false,
+		"10.5.23-MariaDB": false, "10.6.0-MariaDB": true, "11.4.2-MariaDB-ubu2404": true, "8.0.11-TiDB-v7.5.0": false, "": false, "garbage": false,
 	} {
 		if got := versionSupportsSkipLocked(version); got != want {
 			t.Errorf("%q = %v, want %v", version, got, want)

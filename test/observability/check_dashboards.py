@@ -704,7 +704,10 @@ def gateway_fixture_tests(gateway):
         inbound.append(input_series('server_requests_seconds_bucket', dict(gw, operation='/api/orders', le=le), '0+60x10'))
     outbound = [input_series('client_requests_code_total', dict(gw, operation='/orders.v1.Orders/Get', code='200'), '0+30x10'),
                 input_series('client_requests_code_total', dict(gw, operation='/orders.v1.Orders/Get', code='503', reason='SERVICE_UNAVAILABLE'), '0+30x10'),
-                input_series('client_requests_code_total', dict(gw, operation='/healthz', code='200'), '0+60x10')]
+                input_series('client_requests_code_total', dict(gw, operation='/healthz', code='200'), '0+60x10'),
+                # 开启重试的客户端另报逻辑调用：重试兜住后只剩 1/6 调用失败；/healthz 未开启重试，没有调用级序列。
+                input_series('client_calls_code_total', dict(gw, operation='/orders.v1.Orders/Get', code='200'), '0+50x10'),
+                input_series('client_calls_code_total', dict(gw, operation='/orders.v1.Orders/Get', code='503'), '0+10x10')]
     for le in ['1', '+Inf']:
         outbound.append(input_series('client_requests_seconds_bucket', dict(gw, operation='/orders.v1.Orders/Get', le=le), '0+60x10'))
     route = {'namespace': 'apps', 'app': 'gw', 'operation': '/api/orders'}
@@ -712,7 +715,7 @@ def gateway_fixture_tests(gateway):
     checks = [fixture_check(gateway, panel, [({}, value)]) for panel, value in [(2, 1), (3, .1), (4, .495), (5, .1), (6, .25), (7, .99)]]
     for ref, value in [('A', 1), ('B', .1), ('C', .1), ('D', .495)]:
         checks.append(fixture_check(gateway, 9, [(route, value)], target=ref))
-    for ref, expected in [('A', [(orders, 1), (health, 1)]), ('B', [(orders, .5), (health, 0)]), ('C', [(orders, .99)])]:
+    for ref, expected in [('A', [(orders, 1), (health, 1)]), ('B', [(orders, .5), (health, 0)]), ('C', [(orders, .99)]), ('D', [(orders, 1 / 6)])]:
         checks.append(fixture_check(gateway, 13, expected, target=ref))
     checks.append(fixture_check(gateway, 14, [(dict(orders, code='503', reason='SERVICE_UNAVAILABLE'), .5)]))
     # 只有入口流量的应用：下游区为空，不显示 0% 错误。

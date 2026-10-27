@@ -385,6 +385,7 @@ groups:
         expr: sum by (env, cluster, namespace, app, downstream, le) (label_replace(label_replace(rate(client_requests_seconds_bucket[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
       # 按逻辑调用的下游结果：开启重试的客户端额外上报 client_calls_*（重试结束后只记一次最终结果与总耗时）；
       # 未开启重试时逻辑调用与单次尝试相同，退回 client_requests_*。告警用这组，面板同时展示尝试级与调用级。
+      # 退回按下游整体判断：同一应用里开启与未开启重试的客户端调用同一下游时，只统计开启重试的那部分。
       - record: app_downstream:client_calls:rate5m
         expr: |
           sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_calls_code_total[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))

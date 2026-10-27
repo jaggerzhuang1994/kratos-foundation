@@ -129,12 +129,24 @@ func (authenticator *Authenticator) Authenticate(code string) bool {
 
 // AuthenticateAt 按指定时刻验证代码。
 func (authenticator *Authenticator) AuthenticateAt(code string, at time.Time) bool {
+	_, ok := authenticator.VerifyAt(code, at)
+	return ok
+}
+
+// Verify 按当前时刻验证代码，并返回匹配的时间步。
+func (authenticator *Authenticator) Verify(code string) (int64, bool) {
+	return authenticator.VerifyAt(code, time.Now())
+}
+
+// VerifyAt 按指定时刻验证代码，成功时返回匹配的时间步（Unix 秒 / period）。
+// 防重放：认证服务持久化每个用户最后一次成功的时间步，只接受大于它的时间步，并在同一事务内更新。
+func (authenticator *Authenticator) VerifyAt(code string, at time.Time) (int64, bool) {
 	if len(code) != authenticator.digits {
-		return false
+		return 0, false
 	}
 	for _, character := range code {
 		if character < '0' || character > '9' {
-			return false
+			return 0, false
 		}
 	}
 	step := at.Unix() / int64(authenticator.period/time.Second)
@@ -145,10 +157,10 @@ func (authenticator *Authenticator) AuthenticateAt(code string, at time.Time) bo
 		}
 		candidate := hotp(authenticator.key, uint64(candidateStep), authenticator.digits)
 		if subtle.ConstantTimeCompare([]byte(candidate), []byte(code)) == 1 {
-			return true
+			return candidateStep, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 // ProvisionURI 返回适合生成二维码的 otpauth URI。

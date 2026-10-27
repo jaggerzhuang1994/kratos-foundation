@@ -36,10 +36,9 @@ func HandleHTTP(method, path string, handler HTTPHandler) HTTPEndpoint {
 	if handler == nil {
 		return nil
 	}
-	return func(server HTTPServer) error {
-		server.Route("/").Handle(method, path, middlewareHTTPHandler(path, handler))
-		return nil
-	}
+	return HandleRoute(method, path, "", func(_ context.Context, request *HTTPRequest) (any, error) {
+		return handler(request.Request)
+	})
 }
 
 // HandleHTTPWriter 创建一条允许 handler 直接写响应的自定义 HTTP 路由注册回调。
@@ -51,23 +50,6 @@ func HandleHTTPWriter(method, path string, handler HTTPWriterHandler) HTTPEndpoi
 	return func(server HTTPServer) error {
 		server.Route("/").Handle(method, path, middlewareHTTPWriterHandler(path, handler))
 		return nil
-	}
-}
-
-// middlewareHTTPHandler 让声明式自定义路由复用生成式 HTTP 接口的中间件和编码边界。
-func middlewareHTTPHandler(operation string, handler HTTPHandler) http.HandlerFunc {
-	return func(ctx http.Context) error {
-		http.SetOperation(ctx, operation)
-		next := ctx.Middleware(func(callCtx context.Context, req any) (any, error) {
-			request, ok := req.(*nethttp.Request)
-			if !ok || request == nil {
-				return nil, fmt.Errorf("http middleware request has type %T, want *http.Request", req)
-			}
-			// 自定义处理器应观察中间件替换后的请求及其派生 Context。
-			return handler(request.WithContext(callCtx))
-		})
-		reply, err := next(ctx, ctx.Request())
-		return ctx.Returns(reply, err)
 	}
 }
 

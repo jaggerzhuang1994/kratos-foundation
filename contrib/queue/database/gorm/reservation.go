@@ -165,8 +165,13 @@ func (r *Repo[T]) supportsSkipLocked(ctx context.Context) bool {
 }
 
 // versionSupportsSkipLocked 判断 MySQL 8.0.1+ 或 MariaDB 10.6+；无法解析时按不支持处理。
+// TiDB 等兼容 MySQL 协议的数据库会上报 MySQL 版本号（如 "8.0.11-TiDB-v7.5.0"），但不一定支持 SKIP LOCKED，按不支持处理。
 func versionSupportsSkipLocked(version string) bool {
-	mariadb := strings.Contains(strings.ToLower(version), "mariadb")
+	lower := strings.ToLower(version)
+	if strings.Contains(lower, "tidb") {
+		return false
+	}
+	mariadb := strings.Contains(lower, "mariadb")
 	parts := strings.SplitN(strings.SplitN(version, "-", 2)[0], ".", 3)
 	if len(parts) < 3 {
 		return false

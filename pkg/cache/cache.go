@@ -122,6 +122,7 @@ func (c *Cache[V]) Key(key string) string { return c.config.KeyPrefix + ":" + ke
 // Get 先读缓存；未命中、值损坏或 Redis 不可用时调用 load 回源并写回。
 // 同一 key 的并发回源只执行一次，结果共享给所有等待者；每个调用方仍按自己的 ctx 提前返回。
 // Redis 读写失败不影响返回回源结果（降级为直接回源）；load 返回 ErrNotFound 时 Get 也返回 ErrNotFound。
+// load panic 时在每个等待的调用方协程中以原值重新 panic，与直接调用 load 的行为一致。
 func (c *Cache[V]) Get(ctx context.Context, key string, load func(context.Context) (V, error)) (V, error) {
 	var zero V
 	redisKey := c.Key(key)
@@ -146,13 +147,23 @@ func (c *Cache[V]) Get(ctx context.Context, key string, load func(context.Contex
 		}
 		c.error(ctx)
 	}
-	result := c.group.DoChan(redisKey, func() (any, error) {
+	result := c.group.DoChan(redisKey, func() (value any, err error) {
+		// singleflight.DoChan 会在新协程中重新 panic，进程无法恢复；这里截住后交给等待的调用方各自 panic，
+		// 由所在请求、任务或队列的恢复中间件处理。
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				err = loadPanic{value: recovered}
+			}
+		}()
 		return c.load(ctx, redisKey, load)
 	})
 	select {
 	case <-ctx.Done():
 		return zero, ctx.Err()
 	case shared := <-result:
+		if panicked, ok := shared.Err.(loadPanic); ok {
+			panic(panicked.value)
+		}
 		if shared.Err != nil {
 			return zero, shared.Err
 		}
@@ -160,6 +171,11 @@ func (c *Cache[V]) Get(ctx context.Context, key string, load func(context.Contex
 		return value, nil
 	}
 }
+
+// loadPanic 携带回源函数的 panic 值，在等待的调用方协程中重新抛出。
+type loadPanic struct{ value any }
+
+func (p loadPanic) Error() string { return fmt.Sprintf("cache load panicked: %v", p.value) }
 
 // load 在脱离调用方取消的 Context 中回源并写回缓存；写回失败不影响结果。
 func (c *Cache[V]) load(ctx context.Context, redisKey string, load func(context.Context) (V, error)) (V, error) {
