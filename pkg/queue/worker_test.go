@@ -324,3 +324,16 @@ func TestWorkerRenewLeaseValidation(t *testing.T) {
 		t.Fatalf("lease=%v err=%v", w.config.Lease, err)
 	}
 }
+
+// 时长约束违反时错误说明具体约束与实际值。
+func TestWorkerConfigErrorsNameTheConstraint(t *testing.T) {
+	for config, want := range map[workerConfig]string{
+		{Name: "w", Queue: "q", Concurrency: 2000}:                                                          "concurrency 2000 must be between 1 and 1024",
+		{Name: "w", Queue: "q", Timeout: time.Minute, Lease: 30 * time.Second}:                              "lease 30s must exceed timeout 1m0s + storage timeout 5s (or enable RenewLease)",
+		{Name: "w", Queue: "q", RenewLease: true, Lease: 10 * time.Second, StorageTimeout: 5 * time.Second}: "lease 10s must exceed 3 x storage timeout 5s",
+	} {
+		if _, err := config.resolve(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%+v: err = %v, want %q", config, err, want)
+		}
+	}
+}

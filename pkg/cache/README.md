@@ -19,7 +19,8 @@ products, err := cache.New[*Product](client, cache.Config{
     KeyPrefix:   "orders:product",
     TTL:         10 * time.Minute,
     NegativeTTL: 30 * time.Second,
-}, cache.WithMetrics[*Product](productMetrics))
+    Metrics:     productMetrics,
+})
 
 product, err := products.Get(ctx, id, func(ctx context.Context) (*Product, error) {
     product, err := repo.FindProduct(ctx, id)
@@ -40,6 +41,7 @@ _ = products.Delete(ctx, id)
 | `Jitter` | 0.1 | TTL 随机浮动比例，范围 0–0.5，负值关闭 |
 | `NegativeTTL` | 0 | 大于 0 时缓存 `ErrNotFound`；应明显短于 TTL，数据新增后最多在该时长内仍返回不存在 |
 | `LoadTimeout` | 10s | 单次回源超时 |
+| `Metrics` | nil | `metrics.NewCacheMetrics` 创建的指标，nil 不记录 |
 
 值默认用 JSON 编码，`WithCodec` 可替换；Redis 中的值首字节为格式标记（1 正常值、0 不存在），不要与其他写入方共享同一前缀。
 
@@ -57,7 +59,7 @@ _ = products.Delete(ctx, id)
 
 ## 指标
 
-`WithMetrics` 复用 [`metrics.CacheMetrics`](../metrics/README.md)：命中、未命中、访问错误按 `business_cache_lookups_total{cache_name,result}` 统计；实际回源只由执行回源的一方记录一次 `business_cache_loads_total` 与 `business_cache_load_duration_seconds`，合并等待的调用方不重复计数，`ErrNotFound` 记为成功回源。应用组件面板的缓存分区直接使用这些指标。
+`Config.Metrics` 复用 [`metrics.CacheMetrics`](../metrics/README.md)：命中、未命中、访问错误按 `business_cache_lookups_total{cache_name,result}` 统计；实际回源只由执行回源的一方记录一次 `business_cache_loads_total` 与 `business_cache_load_duration_seconds`，合并等待的调用方不重复计数，`ErrNotFound` 记为成功回源。应用组件面板的缓存分区直接使用这些指标。
 
 ```mermaid
 flowchart TD

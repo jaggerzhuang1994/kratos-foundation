@@ -271,4 +271,6 @@ var (
 	ErrInvalidProtocol = errors.New("invalid client protocol")
 	// ErrInvalidBuildResult 表示构建结果没有恰好包含一个协议客户端。
 	ErrInvalidBuildResult = errors.New("invalid client build result")
+	// ErrProtocolMismatch 表示 AcquireHTTP / AcquireGRPC 请求的协议与连接配置不符。
+	ErrProtocolMismatch = errors.New("client protocol mismatch")
 )

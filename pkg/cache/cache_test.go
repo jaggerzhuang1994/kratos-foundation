@@ -80,7 +80,8 @@ func newTestCache(t *testing.T, client Client, config Config) (*Cache[product], 
 	if config.TTL == 0 {
 		config.TTL = time.Minute
 	}
-	c, err := New(client, config, WithMetrics[product](cacheMetrics))
+	config.Metrics = cacheMetrics
+	c, err := New[product](client, config)
 	if err != nil {
 		t.Fatal(err)
 	}

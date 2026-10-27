@@ -56,6 +56,8 @@ type Config struct {
 	// LoadTimeout 为单次回源的超时。回源脱离调用方取消，避免第一个调用方取消导致合并等待的其他调用方一起失败；
 	// 零值默认 10s。
 	LoadTimeout time.Duration
+	// Metrics 记录命中、未命中、访问错误与实际回源（business_cache_*）；nil 不记录。
+	Metrics *metrics.CacheMetrics
 }
 
 // 缓存值首字节区分正常值与“不存在”标记，避免与业务值冲突。
@@ -81,11 +83,6 @@ func WithCodec[V any](codec Codec[V]) Option[V] {
 	return func(c *Cache[V]) { c.codec = codec }
 }
 
-// WithMetrics 记录命中、未命中、访问错误与实际回源（business_cache_*）；nil 不记录。
-func WithMetrics[V any](cacheMetrics *metrics.CacheMetrics) Option[V] {
-	return func(c *Cache[V]) { c.metrics = cacheMetrics }
-}
-
 // New 校验配置，不访问 Redis。
 func New[V any](client Client, config Config, options ...Option[V]) (*Cache[V], error) {
 	config.KeyPrefix = strings.TrimSpace(config.KeyPrefix)
@@ -107,7 +104,7 @@ func New[V any](client Client, config Config, options ...Option[V]) (*Cache[V], 
 	if config.LoadTimeout == 0 {
 		config.LoadTimeout = 10 * time.Second
 	}
-	c := &Cache[V]{client: client, codec: JSONCodec[V]{}, config: config}
+	c := &Cache[V]{client: client, codec: JSONCodec[V]{}, metrics: config.Metrics, config: config}
 	for _, option := range options {
 		if option != nil {
 			option(c)

@@ -11,13 +11,16 @@ if err != nil {
 }
 // cleanup 由 Wire 持有，在业务停止使用客户端后执行。
 
-httpClient, grpcConn, release, err := factory.AcquireClient(ctx, "orders")
+// 按协议租用：返回值只有一个客户端，协议与配置不符时返回 client.ErrProtocolMismatch。
+httpClient, release, err := client.AcquireHTTP(ctx, factory, "orders")
 if err != nil {
     return err
 }
 defer release()
-// 在 release 前使用当前协议对应的 httpClient 或 grpcConn。
+// 在 release 前使用 httpClient；gRPC 连接用 client.AcquireGRPC。
 ```
+
+`client.AcquireHTTP` / `client.AcquireGRPC` 是 `Factory.AcquireClient` 的类型化封装；需要按配置同时兼容两种协议时仍可直接调用 `AcquireClient`，它返回的 HTTP 客户端与 gRPC 连接恰有一个非 nil。
 
 除 `discoveries` 外，构造依赖必须非 nil，由组装层保证，构造函数不重复判空。服务发现仅在使用 `discovery:///...` 目标时需要；直连客户端可传 nil。客户端名称不能为空，未配置的名称使用默认 discovery 目标，并继承 `client.discovery`（根配置也省略时为 `default`）；需要提供对应 registry 实例能力。
 

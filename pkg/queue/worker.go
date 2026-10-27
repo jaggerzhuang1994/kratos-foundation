@@ -113,13 +113,19 @@ func (config workerConfig) resolve() (workerConfig, error) {
 			config.Lease = max(30*time.Second, 3*config.StorageTimeout+time.Second)
 		}
 	}
-	// 续租时每 Lease/3 写一次，单次写入受 StorageTimeout 限制，必须在租约到期前完成。
-	window := config.Lease <= config.Timeout || config.Lease-config.Timeout <= config.StorageTimeout
-	if config.RenewLease {
-		window = config.Lease <= 3*config.StorageTimeout
-	}
-	if config.Concurrency < 1 || config.Concurrency > 1024 || config.PollInterval < 0 || config.Timeout < 0 || config.StorageTimeout < 0 || config.Lease < time.Millisecond || window {
-		return workerConfig{}, errors.New("invalid queue worker concurrency or timing configuration")
+	// 逐项校验，错误说明违反的约束与实际值，便于直接修正配置。
+	switch {
+	case config.Concurrency < 1 || config.Concurrency > 1024:
+		return workerConfig{}, fmt.Errorf("queue worker concurrency %d must be between 1 and 1024", config.Concurrency)
+	case config.PollInterval < 0 || config.Timeout < 0 || config.StorageTimeout < 0:
+		return workerConfig{}, fmt.Errorf("queue worker poll interval %s, timeout %s and storage timeout %s must not be negative", config.PollInterval, config.Timeout, config.StorageTimeout)
+	case config.Lease < time.Millisecond:
+		return workerConfig{}, fmt.Errorf("queue worker lease %s must be at least 1ms", config.Lease)
+	case config.RenewLease && config.Lease <= 3*config.StorageTimeout:
+		// 续租时每 Lease/3 写一次，单次写入受 StorageTimeout 限制，必须在租约到期前完成。
+		return workerConfig{}, fmt.Errorf("queue worker lease %s must exceed 3 x storage timeout %s when renewing leases", config.Lease, config.StorageTimeout)
+	case !config.RenewLease && (config.Lease <= config.Timeout || config.Lease-config.Timeout <= config.StorageTimeout):
+		return workerConfig{}, fmt.Errorf("queue worker lease %s must exceed timeout %s + storage timeout %s (or enable RenewLease)", config.Lease, config.Timeout, config.StorageTimeout)
 	}
 	return config, nil
 }
