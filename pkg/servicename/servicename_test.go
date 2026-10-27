@@ -125,6 +125,9 @@ func TestIsFrameworkExcludesStandardServices(t *testing.T) {
 	if !IsFramework(health.FullName()) {
 		t.Fatalf("%s should be a framework service", health.FullName())
 	}
+	if !IsFramework("kratos.api.Metadata") {
+		t.Fatal("kratos metadata service should be a framework service")
+	}
 	if IsFramework(protoreflect.FullName("wallet_service.WalletService")) {
 		t.Fatal("business service reported as framework service")
 	}

@@ -221,6 +221,8 @@ flowchart TD
 
 登记不调用 Runtime，也不启动后台工作；冻结后的写入直接 panic，不在此重复记录日志。冻结时在同一锁内复制 Runtime 列表，后续生命周期消费该快照。
 
+Runtime 可以选择实现两个与服务注册相关的接口：`ServiceNamer` 汇报承载的业务服务名、无法推导服务名的业务入口和推导错误；`RegistrationExempt` 返回 true 时即使实现了 `Endpointer` 也不参与服务注册。`server.Runtime` 的业务 Server 实现前者，管理端口实现后者。
+
 ### 停机超时热更新
 
 `NewStopPolicy` 以 `NewConfig` 已校验的 `app.stop_timeout` 为初值，并订阅该字段的后续更新；只校验该字段为合法且为正的 Duration，其他 app 字段不会阻止更新。运行时从源中省略字段遵循官方 merge，不保证恢复默认值。

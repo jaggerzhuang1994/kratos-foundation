@@ -16,6 +16,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // Runtime 持有按同一份配置组装出的 HTTP、gRPC 和停机策略。
@@ -114,7 +115,19 @@ func NewRuntime(
 	if err != nil {
 		return fail(err)
 	}
-	if err := logRegisteredEndpoints(logger, business, grpcServer, monitoringEndpoints); err != nil {
+	var httpNames, grpcNames serviceNames
+	var routeNames map[httpRoute]string
+	var grpcServiceNames map[string]string
+	if business != nil {
+		httpNames, routeNames, err = collectHTTPServiceNames(business, config.GetHttp().GetPathPrefix(), len(spec.http.registrations) > 0, newHTTPRouteIndex(protoregistry.GlobalFiles))
+		if err != nil {
+			return fail(err)
+		}
+	}
+	if grpcServer != nil {
+		grpcNames, grpcServiceNames = collectGRPCServiceNames(grpcServer, protoregistry.GlobalFiles)
+	}
+	if err := logRegisteredEndpoints(logger, business, grpcServer, monitoringEndpoints, routeNames, grpcServiceNames); err != nil {
 		return fail(err)
 	}
 	// 记录配置的监听地址而非实际绑定端口；:0 等动态端口以 SDK 启动时的 listening 日志为准。
@@ -130,14 +143,15 @@ func NewRuntime(
 		managementAddresses[index] = server.listener.address
 	}
 	logger.With("event", "server.assembled", "http", httpAddress, "grpc", grpcAddress,
-		"management", managementAddresses, "stop_delay", config.GetStopDelay().AsDuration()).Info("servers assembled")
+		"management", managementAddresses, "stop_delay", config.GetStopDelay().AsDuration(),
+		"http_services", httpNames.names, "grpc_services", grpcNames.names).Info("servers assembled")
 	stopDelay := config.GetStopDelay().AsDuration()
 	runtime := &Runtime{health: health, http: httpServer, grpc: grpcServer, management: management, stopDelay: stopDelay}
 	if httpServer != nil {
-		runtime.httpServer = withStopLifecycle(httpServer, stopDelay, websockets.stop, health)
+		runtime.httpServer = withServiceNames(withStopLifecycle(httpServer, stopDelay, websockets.stop, health), httpNames)
 	}
 	if grpcServer != nil {
-		runtime.grpcServer = withStopLifecycle(grpcServer, stopDelay, nil, nil)
+		runtime.grpcServer = withServiceNames(withStopLifecycle(grpcServer, stopDelay, nil, nil), grpcNames)
 	}
 	for _, srv := range management {
 		runtime.managementServers = append(runtime.managementServers, &managementRuntime{Server: withStopLifecycle(srv, stopDelay, nil, health)})
@@ -157,18 +171,21 @@ type registeredEndpoint struct {
 	method    string
 	path      string
 	listener  string
+	// serviceName 由 proto 推导的服务名；框架端点和未映射的路由为空。
+	serviceName string
 }
 
-// logRegisteredEndpoints 在服务启动前输出最终路由表，便于核对实际暴露的入口。
-func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer GRPCServer, extra []registeredEndpoint) error {
+// logRegisteredEndpoints 在服务启动前输出最终路由表及每个入口归属的服务名，便于核对实际暴露的入口。
+func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer GRPCServer, extra []registeredEndpoint, routeNames map[httpRoute]string, grpcServiceNames map[string]string) error {
 	endpoints := append([]registeredEndpoint(nil), extra...)
 	if httpServer != nil {
 		if err := httpServer.WalkRoute(func(routeInfo http.RouteInfo) error {
 			endpoints = append(endpoints, registeredEndpoint{
-				transport: "http",
-				method:    routeInfo.Method,
-				path:      routeInfo.Path,
-				listener:  "business",
+				transport:   "http",
+				method:      routeInfo.Method,
+				path:        routeInfo.Path,
+				listener:    "business",
+				serviceName: routeNames[httpRoute{method: routeInfo.Method, path: routeInfo.Path}],
 			})
 			return nil
 		}); err != nil {
@@ -179,11 +196,12 @@ func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer
 		for service, info := range grpcServer.GetServiceInfo() {
 			for _, method := range info.Methods {
 				endpoints = append(endpoints, registeredEndpoint{
-					transport: "grpc",
-					service:   service,
-					method:    method.Name,
-					path:      "/" + service + "/" + method.Name,
-					listener:  "business",
+					transport:   "grpc",
+					service:     service,
+					method:      method.Name,
+					path:        "/" + service + "/" + method.Name,
+					listener:    "business",
+					serviceName: grpcServiceNames[service],
 				})
 			}
 		}
@@ -204,6 +222,7 @@ func logRegisteredEndpoints(logger log.Logger, httpServer HTTPServer, grpcServer
 			"method", endpoint.method,
 			"path", endpoint.path,
 			"service", endpoint.service,
+			"service_name", endpoint.serviceName,
 			"listener", endpoint.listener,
 		).Debug("endpoint registered")
 	}
@@ -320,6 +339,9 @@ type managementRuntime struct {
 	// Server 被委托启停的管理服务。
 	transport.Server
 }
+
+// RegistrationExempt 声明管理端口不参与服务注册。
+func (s *managementRuntime) RegistrationExempt() bool { return true }
 
 // AbortStartup 保留管理监听的回滚能力，同时仍不暴露 Endpointer。
 func (s *managementRuntime) AbortStartup(ctx context.Context) error {

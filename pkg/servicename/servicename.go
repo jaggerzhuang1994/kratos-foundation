@@ -25,11 +25,13 @@ const Layout = "api/<service_name>/*.proto"
 var versionName = regexp.MustCompile(`^v[0-9]+(?:(?:alpha|beta)[0-9]*|p[0-9]+)*$`)
 
 // frameworkServices 是 gRPC 标准与框架自带的服务，它们不属于任何业务服务名。
+// kratos.api.Metadata 由每个 Kratos gRPC Server 自动注册。
 var frameworkServices = map[protoreflect.FullName]struct{}{
 	"grpc.health.v1.Health":                    {},
 	"grpc.reflection.v1.ServerReflection":      {},
 	"grpc.reflection.v1alpha.ServerReflection": {},
 	"grpc.channelz.v1.Channelz":                {},
+	"kratos.api.Metadata":                      {},
 }
 
 // Of 返回运行期服务描述符对应的服务名。
@@ -68,7 +70,7 @@ func FromPath(protoPath, goPackageName string) (string, error) {
 	return name, nil
 }
 
-// IsFramework 报告服务是否为 gRPC 标准或框架自带服务（健康检查、反射等），这类服务不参与业务服务名推导。
+// IsFramework 报告服务是否为 gRPC 标准或框架自带服务（健康检查、反射、Kratos 元数据等），这类服务不参与业务服务名推导。
 func IsFramework(service protoreflect.FullName) bool {
 	_, ok := frameworkServices[service]
 	return ok

@@ -17,7 +17,7 @@ name, err := servicename.Of(walletpb.File_wallet_service_wallet_service_proto.Se
 
 `Of` 读取运行期描述符；`FromPath(protoPath, goPackageName)` 是生成期与运行期共用的底层入口，`protoPath` 是 protoc 看到的 import 路径。描述符来自生成代码还是运行时编译的 proto，结果都相同。
 
-`IsFramework` 报告 gRPC 健康检查、反射、channelz 等标准服务。这类服务由框架自动注册，不属于任何业务服务名，服务名收集时应先排除。
+`IsFramework` 报告 gRPC 健康检查、反射、channelz 等标准服务，以及每个 Kratos gRPC Server 自动注册的 `kratos.api.Metadata`。这类服务由框架自动注册，不属于任何业务服务名，服务名收集时应先排除。
 
 包不持有资源，也没有 cleanup。
 

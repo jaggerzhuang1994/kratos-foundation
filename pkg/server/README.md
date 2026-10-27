@@ -453,6 +453,17 @@ flowchart TD
     C --> O
 ```
 
+## 服务名收集
+
+`NewRuntime` 在组装完路由后按 [`servicename`](../servicename/README.md) 规则收集每个业务 Server 承载的服务名，`Servers()` 返回的 HTTP、gRPC Server 实现 `app.ServiceNamer`，服务注册据此按服务名分组 endpoint；管理端口实现 `app.RegistrationExempt`，不参与服务注册。HTTP 与 gRPC 分开收集：
+
+- **gRPC**：遍历已注册服务，跳过健康检查、反射与 `kratos.api.Metadata` 等框架服务，按服务描述符推导服务名。没有 proto 描述符的手写服务记为未映射。
+- **HTTP**：按 protoc-gen-go-http 的生成规则把 proto 的 `google.api.http`（含 `additional_bindings`、未声明规则时的默认 `POST /<package.Service>/<Method>`）与 `WalkRoute` 枚举到的路由逐条匹配，`server.http.path_prefix` 会先去掉。匹配不到的业务路由（如 `HandleRoute` 注册的手写接口）记为未映射；同一路由匹配到多个服务名也记为未映射。
+
+未映射的入口由服务注册归入应用名并告警。Kratos 原生 `Handle`、`HandleFunc`、`HandlePrefix` 注册的路由不带方法，`WalkRoute` 无法枚举：业务登记过 HTTP 路由却一条都枚举不到时，整体记为未映射；和可枚举的路由混用时，这些原生路由随同一 endpoint 暴露但不会单独告警。手写路由优先使用 `HandleRoute`。
+
+proto 位于 `v1` 这类版本目录导致的推导失败不在组装期中断启动，作为 `ServiceNames` 的错误交给服务注册处理。`server.assembled` 日志带 `http_services` 与 `grpc_services`，DEBUG 级 `server.endpoint.registered` 逐条带 `service_name`（框架端点与未映射路由为空）。
+
 ## 监控端点监听地址
 
 监听位置统一由 `server.http` 管理：metrics 领域负责指标数据，app 提供就绪状态，server 负责将

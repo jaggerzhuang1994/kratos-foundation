@@ -214,6 +214,20 @@ type Runtime interface {
 	Stop(context.Context) error
 }
 
+// ServiceNamer 是 Runtime 的可选能力：汇报该 Runtime 承载的业务服务名，服务注册按名字分组 endpoint。
+// names 是由 proto 推导的服务名；unmapped 描述无法推导服务名的业务入口（如手写 HTTP 路由），应归入应用名并告警；
+// err 表示服务名推导失败（如 proto 位于版本目录）。三者都为空表示该 Runtime 没有业务服务，不参与服务注册。
+// 实现了 Endpointer 但未实现本接口的 Runtime，整体归入应用名。
+type ServiceNamer interface {
+	ServiceNames() (names []string, unmapped []string, err error)
+}
+
+// RegistrationExempt 是 Runtime 的可选能力：返回 true 时即使实现了 Endpointer 也不参与服务注册，
+// 用于管理端口、调试端口等不应被服务发现的监听。
+type RegistrationExempt interface {
+	RegistrationExempt() bool
+}
+
 // AppInfo 提供应用身份和静态元数据。
 type AppInfo interface {
 	ID() string
