@@ -17,7 +17,8 @@ import (
 func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 	spec := newTestSpec()
 	application := spec.application
-	if spec.Http() != spec.servers.HTTP() || spec.Grpc() != spec.servers.GRPC() ||
+	// Http/Grpc 是 HTTP/GRPC 的兼容别名。
+	if spec.HTTP() != spec.servers.HTTP() || spec.GRPC() != spec.servers.GRPC() || spec.Http() != spec.HTTP() || spec.Grpc() != spec.GRPC() ||
 		spec.Health() != spec.servers.Health() || spec.Job() != spec.jobs {
 		t.Fatal("bootstrap did not retain the injected domain Specs")
 	}

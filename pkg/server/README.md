@@ -41,8 +41,8 @@ flowchart TD
 
 ```go
 func Boot(spec *bootstrap.Spec) bootstrap.Bootstrap {
-    spec.Http().Register(registerHTTP)
-    spec.Grpc().Register(registerGRPC)
+    spec.HTTP().Register(registerHTTP)
+    spec.GRPC().Register(registerGRPC)
     return bootstrap.Bootstrap{}
 }
 ```

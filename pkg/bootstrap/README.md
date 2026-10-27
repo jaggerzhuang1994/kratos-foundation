@@ -12,7 +12,7 @@ Wire 构造当前 provider 实际依赖的实现，业务 Boot provider 接收�
 ```go
 // cmd/api/bootstrap.go：声明业务 HTTP；未注册 gRPC 服务时默认不创建 gRPC。
 func Boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *service.AuthService) (bootstrap.Bootstrap, error) {
-    spec.Http().Register(func(srv server.HTTPServer) error {
+    spec.HTTP().Register(func(srv server.HTTPServer) error {
         auth_service_pb.RegisterAuthServiceHTTPServer(srv, service)
         return nil
     })

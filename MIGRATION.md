@@ -9,7 +9,7 @@
 
 1. **工具链与模块**：Go 1.26+；import 前缀改为 `github.com/jaggerzhuang1994/kratos-foundation/v2`，执行 `go mod tidy`。
 2. **Wire 入口**：injector 返回 `*app.App`，provider 使用 `bootstrap.BaseProviderSet` + `consulconfig.ProviderSet`（或自定义配置源），业务入口函数签名为 `func Bootstrap(bootstrap.InfrastructureBootstrap, *bootstrap.Spec, ...) (bootstrap.Bootstrap, error)`。删除旧的领域 Bootstrap、`ApplicationSpec` 等 provider，然后 `go tool wire ./cmd/...`。参考 [README 快速开始](README.md#快速开始)。
-3. **服务注册**：在 `Bootstrap` 中用 `spec.Http().Register`、`spec.Grpc().Register`、`spec.Health().Checks`、`spec.Job().RegisterCron`、`spec.RegisterRuntime` 登记；不要再自行 `kratos.New`。
+3. **服务注册**：在 `Bootstrap` 中用 `spec.HTTP().Register`、`spec.GRPC().Register`、`spec.Health().Checks`、`spec.Job().RegisterCron`、`spec.RegisterRuntime` 登记；不要再自行 `kratos.New`。
 4. **驱动空导入**：`_ "…/v2/contrib/database/mysql"`、`_ "…/v2/contrib/registry/consul"`、`_ "…/v2/contrib/oss/aliyun"` 按需导入。
 5. **配置**：按下方速查表清理已删除或改名的字段（旧字段会被**静默忽略**，不会报错）；`server.http.disable` / `server.grpc.disable` 控制监听。
 6. **调用替换**：按速查表替换数据库、Redis、客户端、日志与应用身份 API。

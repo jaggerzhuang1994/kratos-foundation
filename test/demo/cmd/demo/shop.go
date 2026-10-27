@@ -258,19 +258,19 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, s *shop) (b
 	}
 	switch s.role {
 	case roleAPI:
-		spec.Http().Register(func(srv server.HTTPServer) error {
+		spec.HTTP().Register(func(srv server.HTTPServer) error {
 			route(srv, http.MethodPost, "/orders", "/shop.Orders/Create", s.createOrder)
 			route(srv, http.MethodGet, "/orders/{id}", "/shop.Orders/Get", s.getOrder)
 			return nil
 		})
 		spec.RegisterRuntime(s.relay)
 	case roleInventory:
-		spec.Http().Register(func(srv server.HTTPServer) error {
+		spec.HTTP().Register(func(srv server.HTTPServer) error {
 			route(srv, http.MethodGet, "/stock/{sku}", "/shop.Inventory/Stock", s.stock)
 			return nil
 		})
 	case roleGateway:
-		spec.Http().Register(func(srv server.HTTPServer) error {
+		spec.HTTP().Register(func(srv server.HTTPServer) error {
 			route(srv, http.MethodPost, "/api/orders", "/gateway.Orders/Create", s.proxyCreate)
 			route(srv, http.MethodGet, "/api/orders/{id}", "/gateway.Orders/Get", s.proxyGet)
 			return nil

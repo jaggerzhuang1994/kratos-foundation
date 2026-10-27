@@ -46,15 +46,21 @@ func (s *Spec) Configuration(loaders ...config.SourceLoader) *Spec {
 	return s
 }
 
-// Http 返回业务 HTTP 声明；默认启用，配置 disable=true 可关闭业务监听。
-func (s *Spec) Http() server.HTTPBuilder {
+// HTTP 返回业务 HTTP 声明；默认启用，配置 disable=true 可关闭业务监听。
+func (s *Spec) HTTP() server.HTTPBuilder {
 	return s.server.HTTP()
 }
 
-// Grpc 返回业务 gRPC 声明；有效服务注册默认启用，显式配置优先。
-func (s *Spec) Grpc() server.GRPCBuilder {
+// GRPC 返回业务 gRPC 声明；有效服务注册默认启用，显式配置优先。
+func (s *Spec) GRPC() server.GRPCBuilder {
 	return s.server.GRPC()
 }
+
+// Http 是 HTTP 的兼容别名，与 server.Spec 的命名不一致，新代码使用 HTTP。
+func (s *Spec) Http() server.HTTPBuilder { return s.HTTP() }
+
+// Grpc 是 GRPC 的兼容别名，新代码使用 GRPC。
+func (s *Spec) Grpc() server.GRPCBuilder { return s.GRPC() }
 
 // Health 返回独立的健康检查声明，不改变业务 HTTP 或 gRPC 的启用状态。
 func (s *Spec) Health() *server.HealthBuilder {

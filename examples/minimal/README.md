@@ -6,7 +6,7 @@
 | --- | --- |
 | [cmd/api/main.go](cmd/api/main.go) | 解析参数、记录 `command.starting`、调用 Wire injector、`application.Run()` 与逆序 cleanup |
 | [cmd/api/wire.go](cmd/api/wire.go) | 显式列出各 provider 的 injector（等价于 `bootstrap.BaseProviderSet` 的子集），便于理解组装顺序 |
-| [cmd/api/bootstrap.go](cmd/api/bootstrap.go) | `newSpec` 声明文件配置源；`boot` 用 `spec.Http().Register` 登记路由 |
+| [cmd/api/bootstrap.go](cmd/api/bootstrap.go) | `newSpec` 声明文件配置源；`boot` 用 `spec.HTTP().Register` 登记路由 |
 | [cmd/api/service.go](cmd/api/service.go) | 手写 Kratos HTTP 路由：设置稳定 operation、显式调用 `ctx.Middleware`，以及一个低基数业务计数器 |
 | [configs/config.yaml](configs/config.yaml) | 业务端口 8000、管理端口 9001（`/healthz` `/readyz` `/metrics`）、关闭 gRPC |
 

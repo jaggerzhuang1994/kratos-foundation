@@ -28,7 +28,7 @@ func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, path c
 }
 
 func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *greetingService) (bootstrap.Bootstrap, error) {
-	spec.Http().Register(func(srv server.HTTPServer) error {
+	spec.HTTP().Register(func(srv server.HTTPServer) error {
 		service.register(srv)
 		return nil
 	})

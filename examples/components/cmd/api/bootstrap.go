@@ -32,7 +32,7 @@ func newSpec(application *app.Spec, servers *server.Spec, jobs *job.Spec, path c
 }
 
 func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, service *demoService, messages *messaging, redisManager redis.Manager) (bootstrap.Bootstrap, error) {
-	spec.Http().Register(func(srv server.HTTPServer) error { service.register(srv); return nil })
+	spec.HTTP().Register(func(srv server.HTTPServer) error { service.register(srv); return nil })
 	spec.Health().Checks(server.ReadinessCheck{Name: "redis", Check: func(ctx context.Context) error { return redisManager.Default().Ping(ctx).Err() }})
 	// 任务只读 Redis，沿用调度器的超时和释放顺序，不创建额外后台状态。
 	for _, name := range []string{"redis-heartbeat", "cache-size", "cache-ttl"} {

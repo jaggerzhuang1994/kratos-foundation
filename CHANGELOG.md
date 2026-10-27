@@ -13,6 +13,7 @@
 ### Added
 
 - 业务 HTTP Server 默认 `server.http.read_header_timeout` 10s 与 `idle_timeout` 120s（Kratos 原生不设连接级超时，存在慢速请求头占用连接的风险），可配置。
+- `bootstrap.Spec.HTTP()` / `GRPC()`，与 `server.Spec` 命名一致；原 `Http()` / `Grpc()` 保留为兼容别名。
 - `client.AcquireHTTP` / `client.AcquireGRPC`：按协议租用客户端，只返回一个客户端，协议与配置不符时返回 `client.ErrProtocolMismatch`；`Factory.AcquireClient` 不变。
 - `job.WithClusterLock(locker, key, ttl)`：Cron 在共享同一 `lock.Locker` 的多个副本间每次触发只执行一次；未取得租约的实例跳过本轮（`job_triggers_skipped_total{reason="cluster_locked"}`），执行期间每 ttl/3 续租，续租失败取消本次执行，执行结束后租约保留到 TTL 过期以吸收时钟偏差。见 [集群单例](pkg/job/README.md#集群单例)。
 - 客户端失败重试 `client.clients.<name>.retry`（默认关闭）：只重试 503 / gRPC Unavailable，HTTP 只重放 GET/HEAD/OPTIONS，gRPC 只重试 `operations` 列出的方法，倍增退避带抖动并受截止时间约束。见 [失败重试](pkg/client/README.md#失败重试)。
