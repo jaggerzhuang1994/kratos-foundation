@@ -17,6 +17,7 @@
 - 业务指标标签保持低基数，不使用用户 ID、订单 ID、请求 ID。
 - 应用身份 `AppInfo.Name()` 默认取可执行文件名，应与 Prometheus 的 `app` 标签保持一致。
 - 示例导入了 Consul 注册驱动；本地未设置 `CONSUL_HTTP_ADDR` 时驱动自动禁用，也可设置 `DISABLE_CONSUL=true`。
+- 服务注册按 proto 推导服务名：业务项目把 proto 放在 `api/<service_name>/*.proto`，生成的 HTTP/gRPC 服务注册在 `<service_name>` 下；示例的路由未在 proto 声明，注册时归入应用名并输出 WARN `app.registration.unmapped`。已在 proto 声明、只是处理器需要手写的接口用 `server.HandleMethod` 挂载，见 [按 proto 声明挂载](../../pkg/server/README.md#按-proto-声明挂载)。
 
 ## 复制为业务项目
 

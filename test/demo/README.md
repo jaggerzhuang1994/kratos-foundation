@@ -27,6 +27,6 @@ test/demo/run.sh down    # 删除集群
 
 `test/demo/run.sh reject-config` 热下发一份非法客户端配置（重试次数超出范围），约 1 分钟内各应用拒绝更新并保留旧配置，触发 `client.config.rejected`、`log_events_total` 与 FoundationConfigRejected；`test/demo/run.sh restore-config` 恢复。
 
-同一镜像通过 `APP_NAME` 取 Pod 标签 `app.kubernetes.io/name` 作为应用名，日志、注册名与指标的 `app` 一致。
+同一镜像通过 `APP_NAME` 取 Pod 标签 `app.kubernetes.io/name` 作为应用名，日志与指标的 `app` 一致。Demo 的路由用 `HandleRoute` 手写、未在 proto 声明，服务注册把它们归入应用名（启动时 WARN `app.registration.unmapped`），所以注册名也等于 `APP_NAME`；只消费消息、不承载 HTTP/gRPC 接口的 Worker 角色不注册。角色之间按 `client.clients.*.target` 的 Kubernetes Service 地址调用，不依赖服务发现。
 
 代码位于 [cmd/demo](cmd/demo)，带 `demo` 构建标签，不参与 `go build ./...`、`make test` 与 lint。修改 `wire.go` 后执行 `go tool wire gen -tags demo ./test/demo/cmd/demo`，并把生成文件的构建约束改为 `//go:build demo && !wireinject`。
