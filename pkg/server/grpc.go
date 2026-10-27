@@ -70,10 +70,10 @@ func newGRPCServerOptions(
 	// gRPC 原生只允许客户端每 5min ping 一次且有活动流时才可 ping，客户端开启 keepalive 后会被以
 	// too_many_pings 断开；默认放宽到 10s 且允许空闲 ping。业务 grpc.Options 会整体替换此设置。
 	enforcement := keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}
-	if conf.KeepaliveMinTime != nil {
-		enforcement.MinTime = conf.GetKeepaliveMinTime().AsDuration()
+	if minTime := conf.GetKeepaliveMinTime(); minTime != nil {
+		enforcement.MinTime = minTime.AsDuration()
 	}
-	if conf.KeepalivePermitWithoutStream != nil {
+	if conf != nil && conf.KeepalivePermitWithoutStream != nil {
 		enforcement.PermitWithoutStream = conf.GetKeepalivePermitWithoutStream()
 	}
 	opts = append(opts, grpc.Options(stdgrpc.KeepaliveEnforcementPolicy(enforcement)))

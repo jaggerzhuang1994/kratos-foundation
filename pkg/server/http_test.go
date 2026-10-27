@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	kratosmetadata "github.com/go-kratos/kratos/v2/metadata"
 	"github.com/go-kratos/kratos/v2/middleware"
@@ -22,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func TestHandleHTTPUsesRequestMiddlewareAndResponseEncoder(t *testing.T) {
@@ -396,5 +398,44 @@ func TestIntegrationHTTPRoutes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// 业务 HTTP 默认限制读取请求头与空闲连接时长，配置可覆盖。
+func TestHTTPServerConnectionTimeouts(t *testing.T) {
+	spec := NewSpec()
+	spec.HTTP()
+	server, err := newHTTPServer(nil, nil, spec, newRuntimeTestLogger(t), newWebSocketHub())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if server.ReadHeaderTimeout != 10*time.Second || server.IdleTimeout != 120*time.Second {
+		t.Fatalf("default timeouts = %v / %v", server.ReadHeaderTimeout, server.IdleTimeout)
+	}
+	config := &config_pb.Server{Http: &config_pb.HttpServerOption{ReadHeaderTimeout: durationpb.New(2 * time.Second), IdleTimeout: durationpb.New(30 * time.Second)}}
+	server, err = newHTTPServer(config, nil, spec, newRuntimeTestLogger(t), newWebSocketHub())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if server.ReadHeaderTimeout != 2*time.Second || server.IdleTimeout != 30*time.Second {
+		t.Fatalf("configured timeouts = %v / %v", server.ReadHeaderTimeout, server.IdleTimeout)
+	}
+}
+
+// pkg/server 导入了 net/http/pprof（会在 DefaultServeMux 注册剖析端点）；业务端口仍回退 DefaultServeMux，但不暴露 /debug/pprof。
+func TestHTTPServerDoesNotExposeDefaultMuxPprof(t *testing.T) {
+	http.DefaultServeMux.HandleFunc("/foundation-test-default-mux", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	spec := NewSpec()
+	spec.HTTP()
+	server, err := newHTTPServer(nil, nil, spec, newRuntimeTestLogger(t), newWebSocketHub())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]int{"/debug/pprof/": http.StatusNotFound, "/debug/pprof/heap": http.StatusNotFound, "/debug/pprof": http.StatusNotFound, "/foundation-test-default-mux": http.StatusTeapot} {
+		recorder := httptest.NewRecorder()
+		server.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != want {
+			t.Errorf("%s = %d, want %d", path, recorder.Code, want)
+		}
 	}
 }

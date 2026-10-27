@@ -1036,6 +1036,12 @@
         },
         "pprof": {
           "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.pprof"
+        },
+        "read_header_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.read_header_timeout"
+        },
+        "idle_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.idle_timeout"
         }
       },
       "type": "object"
@@ -1146,6 +1152,11 @@
       "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Health",
       "description": "HTTP 健康检查端点。[需重启]"
     },
+    ".kratos_foundation_pb.HttpServerOption.idle_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "keep-alive 连接两次请求之间的最长空闲时间，默认 120s，应大于前置负载均衡的空闲超时。[需重启]"
+    },
     ".kratos_foundation_pb.HttpServerOption.metrics": {
       "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Metrics",
       "description": "metrics 路由"
@@ -1168,6 +1179,11 @@
     ".kratos_foundation_pb.HttpServerOption.pprof": {
       "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Pprof",
       "description": "Go 运行时剖析端点（/debug/pprof/），默认关闭。[需重启]"
+    },
+    ".kratos_foundation_pb.HttpServerOption.read_header_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "读取请求头的最长时间，默认 10s；防止慢速发送请求头的连接（Slowloris）长期占用。不限制请求体与 WebSocket。[需重启]"
     },
     ".kratos_foundation_pb.Job": {
       "properties": {

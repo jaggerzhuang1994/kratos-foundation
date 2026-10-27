@@ -681,6 +681,74 @@ func (m *HttpServerOption) validate(all bool) error {
 
 	}
 
+	if m.ReadHeaderTimeout != nil {
+
+		if d := m.GetReadHeaderTimeout(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = HttpServerOptionValidationError{
+					field:  "ReadHeaderTimeout",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := HttpServerOptionValidationError{
+						field:  "ReadHeaderTimeout",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
+	if m.IdleTimeout != nil {
+
+		if d := m.GetIdleTimeout(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = HttpServerOptionValidationError{
+					field:  "IdleTimeout",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := HttpServerOptionValidationError{
+						field:  "IdleTimeout",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return HttpServerOptionMultiError(errors)
 	}

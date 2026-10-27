@@ -6,6 +6,8 @@ import (
 	"fmt"
 	nethttp "net/http"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/transport/http"
 	foundationhttp "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/transport/http"
@@ -98,8 +100,20 @@ func newHTTPServer(
 	}
 
 	conf := config.GetHttp()
+	// Kratos 把未匹配路由交给 http.DefaultServeMux；net/http/pprof 被任何依赖导入时都会在其上注册剖析端点。
+	// 业务端口保留 DefaultServeMux 回退，但屏蔽 /debug/pprof/，剖析只经 server.http.pprof 挂在管理端口。
+	// 业务 option 在后，仍可显式覆盖。
+	opts = append(httpServerOptions{http.NotFoundHandler(withoutPprof(nethttp.DefaultServeMux)), http.MethodNotAllowedHandler(withoutPprof(nethttp.DefaultServeMux))}, opts...)
 	runtime := newManagedHTTPServer(conf.GetNetwork(), conf.GetAddr(), spec.http.listener, opts...)
 	srv := runtime.HTTPServer
+	// Kratos 构造的 http.Server 不设连接级超时；业务端口面向调用方，默认限制读取请求头与空闲连接时长。
+	srv.ReadHeaderTimeout, srv.IdleTimeout = 10*time.Second, 120*time.Second
+	if timeout := conf.GetReadHeaderTimeout(); timeout != nil {
+		srv.ReadHeaderTimeout = timeout.AsDuration()
+	}
+	if timeout := conf.GetIdleTimeout(); timeout != nil {
+		srv.IdleTimeout = timeout.AsDuration()
+	}
 	fail := func(err error) (*httpRuntime, error) {
 		return nil, errors.Join(err, runtime.AbortStartup(context.Background()))
 	}
@@ -159,4 +173,15 @@ func newHTTPServerOptions(
 	opts = append(opts, spec.http.options...)
 	opts = append(opts, http.Middleware(middlewares.build(spec.http.middlewares)...))
 	return opts
+}
+
+// withoutPprof 对 /debug/pprof 路径返回 404，其余交给 next。
+func withoutPprof(next nethttp.Handler) nethttp.Handler {
+	return nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		if r.URL.Path == "/debug/pprof" || strings.HasPrefix(r.URL.Path, "/debug/pprof/") {
+			nethttp.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

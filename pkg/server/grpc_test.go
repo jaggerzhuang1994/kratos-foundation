@@ -218,3 +218,10 @@ func TestGRPCNullConfigUsesServiceRegistration(t *testing.T) {
 		}
 	}
 }
+
+// 未配置 server.grpc 时也能构造 keepalive 放宽策略，不访问 nil 配置。
+func TestGRPCServerOptionsWithoutGRPCConfig(t *testing.T) {
+	if opts := newGRPCServerOptions(&config_pb.Server{}, nil, NewSpec()); len(opts) == 0 {
+		t.Fatal("no gRPC server options")
+	}
+}

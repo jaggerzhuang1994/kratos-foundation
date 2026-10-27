@@ -478,7 +478,9 @@ IP 表示及 `0.0.0.0`/空 host；不通过 DNS 推断 localhost 与 IP 等价�
 路由、WebSocket、业务原生 Option 或全局 DefaultServeMux，默认使用普通 HTTP；TLS/mTLS 由平台网关或 Service Mesh 终止，必须通过绑定地址和网络策略把业务及管理监听限制在受信任网络，禁止直接暴露到不可信网络。业务 HTTP 自定义监听通过 `HTTPBuilder.Listener` 声明，TLS 仍可通过原生 Option 注入；gRPC 原生 Listener/TLS 扩展保持现有契约。不能据此推断独立管理监听也获得相同 TLS，也不属于默认平台责任边界。
 同一监听上的 metrics 和健康路径不能冲突，不同监听可以使用相同路径。
 
-`server.http.pprof.enable=true` 在管理监听上挂载 `/debug/pprof/`（Index、cmdline、profile、symbol、trace 及按名称的 heap/goroutine 等），默认关闭。地址取 `pprof.addr`，省略时使用 `metrics.addr`；解析后落在业务监听上（含省略且 metrics 挂在业务监听上）时启动失败：剖析数据包含命令行参数、内存内容与调用栈，不能对业务流量暴露。不受环境限制，生产可在受信任的管理网络中按需开启，排查完成后关闭。处理器显式挂载，不依赖 `net/http/pprof` 对 DefaultServeMux 的注册副作用。
+`server.http.pprof.enable=true` 在管理监听上挂载 `/debug/pprof/`（Index、cmdline、profile、symbol、trace 及按名称的 heap/goroutine 等），默认关闭。地址取 `pprof.addr`，省略时使用 `metrics.addr`；解析后落在业务监听上（含省略且 metrics 挂在业务监听上）时启动失败：剖析数据包含命令行参数、内存内容与调用栈，不能对业务流量暴露。不受环境限制，生产可在受信任的管理网络中按需开启，排查完成后关闭。处理器显式挂载，不依赖 `net/http/pprof` 对 DefaultServeMux 的注册副作用。Kratos 业务 HTTP 把未匹配路由交给 `http.DefaultServeMux`，`net/http/pprof` 被任何依赖导入时都会在其上注册剖析端点；Foundation 业务端口保留 DefaultServeMux 回退，但对 `/debug/pprof` 一律返回 404，业务需要剖析时使用 `server.http.pprof`。
+
+业务 HTTP Server 默认 `read_header_timeout` 10s、`idle_timeout` 120s（Kratos 原生均不限制）：前者防止慢速发送请求头的连接（Slowloris）长期占用，不限制请求体与 WebSocket；后者应大于前置负载均衡的空闲超时，避免负载均衡复用已被关闭的连接。两者可在 `server.http` 下调整，需重启生效。
 
 `Health().Checks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
 声明时复制检查切片，运行时再次保存独立切片快照；函数及其捕获的依赖仍由业务持有，必须支持并发探针和 Context 取消。
