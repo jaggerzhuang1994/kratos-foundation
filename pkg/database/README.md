@@ -63,7 +63,7 @@ database:
 - 副本沿用本连接的 driver、GORM 配置、AES key 与连接池参数；池参数热更新同时作用于主库和全部副本。副本列表、DSN 变化需要重启。
 - 每个副本是独立连接池，指标 `go_sql_*{db_name="<连接名>/replica-<序号>"}` 单独上报；SQL 操作指标与链路仍按连接名统计，不区分落到主库还是副本。
 - **复制延迟**：副本可能落后主库，写入后立即读取（read-your-writes）、余额校验、幂等检查等不能容忍旧数据的读，要么放进同一个 `Transaction`，要么先 `ctx = database.UsePrimary(ctx)`。
-- **迁移与 DDL**：GORM Migrator 用 `SELECT` 判断表和列是否存在，会被分发到副本；在配置副本的连接上执行 `AutoMigrate`/DDL 时必须使用 `UsePrimary(ctx)`，否则副本尚未同步时会重复建表失败。框架的数据库 Queue 仓储已固定读写主库。
+- **迁移与 DDL**：GORM Migrator 用 `SELECT` 判断表和列是否存在，会被分发到副本，副本尚未同步时会误判并重复建表失败。用 `database.AutoMigrate(ctx, manager, models...)` 迁移，它固定走主库，没有副本时与直接 `AutoMigrate` 相同；其他 DDL 或手写 Migrator 调用先 `ctx = database.UsePrimary(ctx)`。框架的数据库 Queue 仓储已固定读写主库。
 - **故障**：不做副本健康检查或自动摘除；某个副本不可用时分发到它的查询失败。副本故障应在负载均衡层（如云数据库只读地址、ProxySQL）处理，或从配置移除后重启。
 - `UseConnection` 与副本互不影响：选择另一个连接后，按该连接自己的 `read_replicas` 路由。
 
@@ -338,7 +338,7 @@ GORM 上游的日志配置没有 Debug 档：`silent` 不生成 SQL 日志；当
 
 [GORM 队列仓储](../../contrib/queue/database/gorm/README.md#sql-日志) 使用 Foundation logger 时，会在复制的独立会话中将普通 SQL 从 INFO 转为 DEBUG，覆盖投递、消费、统计、运维和简单模式迁移。慢查询仍为 WARN，失败仍为 ERROR，`event=database.gorm.query`、caller、Context 和参数过滤保持原有行为；共享连接上的其他业务 SQL 级别不变。自定义 GORM logger 未提供可选的 `WithDebugQueries() gormlogger.Interface` 方法时，Repo 沿用其自身策略。查看普通队列 SQL 仍需 GORM `gorm.logger.level: info` 开启生成，且 Foundation 模块策略及对应输出端允许 DEBUG；派生会话不会恢复 GORM 已关闭的日志。
 
-`parameterized_queries: true` 会保留 SQL 占位符而不记录参数值，生产环境建议开启。设为 `false` 时，GORM 可能把实际参数写入 `sql` 字段，应确保其中不包含令牌、密码和个人信息。
+`parameterized_queries: true` 会保留 SQL 占位符而不记录参数值。未配置时按环境取默认值，与错误堆栈的诊断出口约束一致：`prod` 和未开 `APP_DEBUG` 的 `pre` 默认 `true`，`local`/`dev`/`test` 默认 `false` 以便排查；显式配置始终优先。设为 `false` 时，GORM 可能把实际参数写入 `sql` 字段，应确保其中不包含令牌、密码和个人信息。
 
 ```mermaid
 flowchart TD

@@ -183,3 +183,26 @@ func TestQueueRepoUsesPrimaryWithReadReplicas(t *testing.T) {
 		t.Fatalf("queue table reached replica: %d %v", tables, err)
 	}
 }
+
+// database.AutoMigrate 在配置副本的连接上可重复执行，表只建在主库；直接 Connection(ctx).AutoMigrate 会被副本误导。
+func TestAutoMigrateUsesPrimaryWithReadReplicas(t *testing.T) {
+	m := newReplicaManager(t)
+	ctx := context.Background()
+	type migratedRecord struct {
+		ID   int `gorm:"primaryKey"`
+		Name string
+	}
+	for range 2 {
+		if err := AutoMigrate(ctx, m, &migratedRecord{}); err != nil {
+			t.Fatalf("AutoMigrate with read replica: %v", err)
+		}
+	}
+	if err := m.Connection(ctx).AutoMigrate(&migratedRecord{}); err == nil {
+		t.Fatal("plain AutoMigrate unexpectedly safe; replica routing changed")
+	}
+	replica, _ := m.connectionFactory.pool("primary/replica-1")
+	var tables int
+	if err := replica.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE name = 'migrated_records'").Scan(&tables); err != nil || tables != 0 {
+		t.Fatalf("migration reached replica: %d %v", tables, err)
+	}
+}

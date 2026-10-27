@@ -131,3 +131,23 @@ func TestValidateDatabaseConfigAcceptsNormalizedRegisteredDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// SQL 日志参数默认值随诊断出口约束：prod 与未开调试的 pre 隐去参数，其余保留；显式配置优先。
+func TestParameterizedQueriesDefaultFollowsEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		env, debug string
+		want       bool
+	}{{"local", "", false}, {"dev", "", false}, {"test", "", false}, {"pre", "", true}, {"pre", "true", false}, {"prod", "", true}, {"prod", "true", true}} {
+		t.Run(tc.env+"/"+tc.debug, func(t *testing.T) {
+			t.Setenv("APP_ENV", tc.env)
+			t.Setenv("APP_DEBUG", tc.debug)
+			template, err := loadDefaultConfig(testconfig.Empty(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := template.GetGorm().GetLogger().GetParameterizedQueries(); got != tc.want {
+				t.Fatalf("parameterized_queries default = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

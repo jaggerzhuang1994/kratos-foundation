@@ -7,6 +7,7 @@ import (
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/env"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -23,7 +24,7 @@ func defaultConfig() *config_pb.Database {
 				SlowThreshold:             durationpb.New(200 * time.Millisecond),
 				Colorful:                  proto.Bool(false), // 兼容旧配置；结构化日志不输出 ANSI 颜色码。
 				IgnoreRecordNotFoundError: proto.Bool(true),  // 未查到记录是常见分支，默认不将其写成错误日志。
-				ParameterizedQueries:      proto.Bool(false), // 默认保留完整 SQL，由业务显式决定是否隐去参数。
+				ParameterizedQueries:      proto.Bool(false), // 环境相关默认值由 loadDefaultConfig 补齐，见 defaultParameterizedQueries。
 			},
 		},
 		Default: proto.String("default"),
@@ -58,6 +59,7 @@ func loadDefaultConfig(reader config.Reader) (*config_pb.Database, error) {
 	// 只为独立模板补齐开关；局部显式 true/false 仍由配置合并覆盖。
 	template := defaultConfig()
 	template.Tracing = &config_pb.GormTracing{Disable: proto.Bool(defaults.TracingDisabled)}
+	template.Gorm.Logger.ParameterizedQueries = proto.Bool(defaultParameterizedQueries())
 	return template, nil
 }
 
@@ -103,4 +105,11 @@ func validateGORMConfig(location string, gormConfig *config_pb.Gorm) error {
 		return fmt.Errorf("validate database config: %s create batch size must not be negative", location)
 	}
 	return nil
+}
+
+// defaultParameterizedQueries 决定 SQL 日志是否默认隐去参数值：与错误堆栈同一条诊断出口约束，
+// prod 与未开调试的 pre 隐去参数（避免令牌、密码与个人信息进入日志），local/dev/test 保留完整 SQL 便于排查。
+// 显式配置 database.gorm.logger.parameterized_queries 始终优先。
+func defaultParameterizedQueries() bool {
+	return !env.ExposeDiagnostics()
 }
