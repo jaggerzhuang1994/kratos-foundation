@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testconfig"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/protobuf/proto"
@@ -195,5 +197,56 @@ func TestManagementBindFailureIsReturned(t *testing.T) {
 	management := &managementRuntime{Server: withStopLifecycle(extras[0], 0, nil, configuredHealth(config, NewSpec()))}
 	if err := management.Start(context.Background()); err == nil || !errors.Is(err, syscall.EADDRINUSE) {
 		t.Fatalf("bind error=%v", err)
+	}
+}
+
+// pprof 默认关闭；开启后只能挂在独立管理端口，落到业务监听时构造失败。
+func TestMonitoringPprofRequiresDedicatedListener(t *testing.T) {
+	business := kratoshttp.NewServer()
+	business.Handler = http.NotFoundHandler()
+	newConfig := func(metricsAddr, pprofAddr string, enable bool) componentConfig {
+		config := proto.CloneOf(defaultConfig)
+		config.Http.Addr = proto.String("127.0.0.1:8000")
+		config.Http.Metrics.Addr = proto.String(metricsAddr)
+		config.Http.Pprof = &config_pb.HttpServerOption_Pprof{Enable: proto.Bool(enable), Addr: proto.String(pprofAddr)}
+		return config
+	}
+	configure := func(config componentConfig) ([]*httpRuntime, []registeredEndpoint, error) {
+		health := configuredHealth(config, NewSpec())
+		return configureMonitoring(config, business, health, testMetricsProvider{registry: prometheus.NewRegistry()})
+	}
+	get := func(handler http.Handler, path string) int {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		return recorder.Code
+	}
+	for _, tc := range []struct{ name, metricsAddr, pprofAddr string }{
+		{"metrics on business listener", "", ""},
+		{"pprof on business address", "127.0.0.1:9001", "127.0.0.1:8000"},
+	} {
+		if _, _, err := configure(newConfig(tc.metricsAddr, tc.pprofAddr, true)); err == nil || !strings.Contains(err.Error(), "dedicated management address") {
+			t.Fatalf("%s: err = %v", tc.name, err)
+		}
+	}
+	extras, endpoints, err := configure(newConfig("127.0.0.1:9001", "", true))
+	if err != nil || len(extras) != 1 {
+		t.Fatalf("extras=%d err=%v", len(extras), err)
+	}
+	if code := get(extras[0].Handler, "/debug/pprof/goroutine?debug=1"); code != http.StatusOK {
+		t.Fatalf("pprof on management listener = %d", code)
+	}
+	if code := get(business.Handler, "/debug/pprof/"); code != http.StatusNotFound {
+		t.Fatalf("pprof leaked to business listener = %d", code)
+	}
+	found := false
+	for _, endpoint := range endpoints {
+		found = found || (endpoint.service == "pprof" && endpoint.listener == "127.0.0.1:9001")
+	}
+	if !found {
+		t.Fatalf("pprof endpoint not reported: %+v", endpoints)
+	}
+	extras, _, err = configure(newConfig("127.0.0.1:9001", "", false))
+	if err != nil || get(extras[0].Handler, "/debug/pprof/") != http.StatusNotFound {
+		t.Fatalf("pprof enabled by default: %v", err)
 	}
 }

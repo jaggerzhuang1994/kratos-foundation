@@ -60,6 +60,16 @@ message HttpServerOption {
   optional Metrics metrics = 7;
   // HTTP 健康检查端点。[需重启]
   optional Health health = 8;
+  // Go 运行时剖析端点（/debug/pprof/），默认关闭。[需重启]
+  optional Pprof pprof = 9;
+
+  // Pprof 只能挂在独立管理端口上：剖析数据包含命令行、内存内容与调用栈，不能对业务流量暴露。
+  message Pprof {
+    // 是否启用，默认 false。
+    optional bool enable = 1;
+    // 监听地址；省略时使用 metrics.addr。解析后与业务监听相同（含省略且 metrics 挂在业务监听上）时启动失败。
+    optional string addr = 2;
+  }
 
   message Metrics {
     // 禁用

@@ -1006,6 +1006,9 @@
         },
         "health": {
           "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.health"
+        },
+        "pprof": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.pprof"
         }
       },
       "type": "object"
@@ -1076,6 +1079,26 @@
       "type": "string",
       "description": "metrics 路由，默认 /metrics"
     },
+    ".kratos_foundation_pb.HttpServerOption.Pprof": {
+      "properties": {
+        "enable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Pprof.enable"
+        },
+        "addr": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Pprof.addr"
+        }
+      },
+      "type": "object",
+      "description": "Pprof 只能挂在独立管理端口上：剖析数据包含命令行、内存内容与调用栈，不能对业务流量暴露。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Pprof.addr": {
+      "type": "string",
+      "description": "监听地址；省略时使用 metrics.addr。解析后与业务监听相同（含省略且 metrics 挂在业务监听上）时启动失败。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.Pprof.enable": {
+      "type": "boolean",
+      "description": "是否启用，默认 false。"
+    },
     ".kratos_foundation_pb.HttpServerOption.addr": {
       "type": "string",
       "description": "服务监听地址，host:port 或者 unix文件地址"
@@ -1114,6 +1137,10 @@
     ".kratos_foundation_pb.HttpServerOption.path_prefix": {
       "type": "string",
       "description": "http 路由前缀"
+    },
+    ".kratos_foundation_pb.HttpServerOption.pprof": {
+      "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.Pprof",
+      "description": "Go 运行时剖析端点（/debug/pprof/），默认关闭。[需重启]"
     },
     ".kratos_foundation_pb.Job": {
       "properties": {

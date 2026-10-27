@@ -89,10 +89,10 @@ func TestRetryBackoffAndRecovery(t *testing.T) {
 		if err != nil || reply != "ok" || len(calls) != 5 {
 			t.Fatalf("reply=%v err=%v calls=%d", reply, err, len(calls))
 		}
-		for i, ceiling := range []time.Duration{100, 200, 250, 250} {
+		for i, ceiling := range []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 250 * time.Millisecond, 250 * time.Millisecond} {
 			gap := calls[i+1].Sub(calls[i])
-			if gap < ceiling*time.Millisecond/2 || gap > ceiling*time.Millisecond {
-				t.Fatalf("retry %d waited %v, want within [%v, %v]", i+1, gap, ceiling*time.Millisecond/2, ceiling*time.Millisecond)
+			if gap < ceiling/2 || gap > ceiling {
+				t.Fatalf("retry %d waited %v, want within [%v, %v]", i+1, gap, ceiling/2, ceiling)
 			}
 		}
 	})

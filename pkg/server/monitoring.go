@@ -1,9 +1,11 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -54,6 +56,23 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 		return nil, nil, fmt.Errorf("health addr: %w", err)
 	}
 	healthEnabled = healthEnabled && !health.config.Disable
+	pprofConf := conf.GetPprof()
+	pprofAddr := ""
+	if pprofConf.GetEnable() {
+		configured := pprofConf.GetAddr()
+		if configured == "" {
+			configured = metricsConf.GetAddr()
+		}
+		var mounted bool
+		pprofAddr, mounted, err = destination(configured)
+		if err != nil {
+			return nil, nil, fmt.Errorf("pprof addr: %w", err)
+		}
+		// 剖析端点不能落到业务监听：未开启独立地址时宁可启动失败，也不对业务流量暴露。
+		if !mounted || pprofAddr == "" {
+			return nil, nil, errors.New("server.http.pprof requires a dedicated management address (pprof.addr or metrics.addr) distinct from server.http.addr")
+		}
+	}
 	metricsPath := metricsConf.GetPath()
 	if metricsEnabled {
 		if strings.TrimSpace(metricsPath) == "" || metricsPath != strings.TrimSpace(metricsPath) || !strings.HasPrefix(metricsPath, "/") {
@@ -69,8 +88,8 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 			return nil, nil, err
 		}
 	}
-	extras := make([]*httpRuntime, 0, 2)
-	endpoints := make([]registeredEndpoint, 0, 5)
+	extras := make([]*httpRuntime, 0, 3)
+	endpoints := make([]registeredEndpoint, 0, 6)
 	byAddress := make(map[string]*httpRuntime)
 	target := func(addr string) HTTPServer {
 		if addr == "" {
@@ -101,6 +120,11 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 		})
 		endpoints = append(endpoints, registeredEndpoint{transport: "http", service: "metrics", method: http.MethodGet, path: metricsPath, listener: monitoringListener(metricsAddr)})
 	}
+	if pprofConf.GetEnable() {
+		srv := target(pprofAddr)
+		srv.Handler = pprofHandler(srv.Handler)
+		endpoints = append(endpoints, registeredEndpoint{transport: "http", service: "pprof", method: http.MethodGet, path: pprofPrefix, listener: pprofAddr})
+	}
 	if healthEnabled {
 		srv := target(healthAddr)
 		srv.Handler = health.wrap(srv.Handler)
@@ -111,6 +135,25 @@ func configureMonitoring(config componentConfig, business HTTPServer, health *he
 		}
 	}
 	return extras, endpoints, nil
+}
+
+const pprofPrefix = "/debug/pprof/"
+
+// pprofHandler 显式挂载 net/http/pprof 处理器，不依赖 DefaultServeMux 的注册副作用。
+func pprofHandler(next http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pprofPrefix, pprof.Index)
+	mux.HandleFunc(pprofPrefix+"cmdline", pprof.Cmdline)
+	mux.HandleFunc(pprofPrefix+"profile", pprof.Profile)
+	mux.HandleFunc(pprofPrefix+"symbol", pprof.Symbol)
+	mux.HandleFunc(pprofPrefix+"trace", pprof.Trace)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, pprofPrefix) {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func monitoringListener(addr string) string {

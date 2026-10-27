@@ -6,7 +6,18 @@
 
 ### 升级风险
 
+- **事务内不能再切换数据库连接**：同一 Manager 的事务 Context 中用 `database.UseConnection` 选择另一个已存在连接（含在其上嵌套 `Transaction`）返回 `database.ErrConnectionInTransaction`；此前会静默沿用事务所在连接，把数据写进错误的库。选择事务所在连接仍复用事务。依赖旧行为的代码需改为在事务外访问其他连接。
+- **gRPC 服务端默认放宽 keepalive 检测**：允许客户端最短 10s 一次 ping，且允许无活动 RPC 时 ping（gRPC 原生为 5min 且需活动流），可用 `server.grpc.keepalive_min_time` / `keepalive_permit_without_stream` 调整。业务自行传入 Kratos `grpc.Options` 会整体替换该设置。
 - **Queue Worker 遇到存储故障不再退出**：领取、确认、释放、失败持久化时的数据库或 Redis 故障（断连、`storage_timeout` 超时、主从切换、损坏记录）改为在循环内按 500ms 起倍增、上限 30s 退避重试，记录 `WARN queue.storage.retrying`，恢复后记录 `INFO queue.storage.recovered`；此前会记录 `ERROR queue.storage.failed` 并让整个应用停机重启。`queue_consumer_runtime_failures_total` 仍按每次故障累加，FoundationQueueRuntimeFailure 告警口径不变；依赖“存储故障即重启 Pod”的部署需改为按该告警处理。Store 返回不满足契约的领取结果仍会退出。
+
+### Added
+
+- `job.WithClusterLock(locker, key, ttl)`：Cron 在共享同一 `lock.Locker` 的多个副本间每次触发只执行一次；未取得租约的实例跳过本轮（`job_triggers_skipped_total{reason="cluster_locked"}`），执行期间每 ttl/3 续租，续租失败取消本次执行，执行结束后租约保留到 TTL 过期以吸收时钟偏差。见 [集群单例](pkg/job/README.md#集群单例)。
+- 客户端失败重试 `client.clients.<name>.retry`（默认关闭）：只重试 503 / gRPC Unavailable，HTTP 只重放 GET/HEAD/OPTIONS，gRPC 只重试 `operations` 列出的方法，倍增退避带抖动并受截止时间约束。见 [失败重试](pkg/client/README.md#失败重试)。
+- gRPC 客户端 keepalive `client.clients.<name>.grpc.keepalive_time` / `keepalive_timeout` / `keepalive_permit_without_stream`，按需开启。
+- Queue 执行期间续租 `WorkerConfig.RenewLease` 与可选接口 `queue.LeaseRenewer`（Redis Store、数据库 Store 均支持，自定义数据库 Repo 实现 `database.LeaseRepo`）：长任务可用短租约，崩溃后一个租约内即被重新领取；租约已被他人取得时取消 Handler。
+- 管理端口 pprof `server.http.pprof`（默认关闭），只能挂在独立管理监听上，落到业务监听时启动失败。
+- `queue.FailureCorruptPayload`：数据库 Queue 的失败列表把正文损坏的行按该分类返回（只含 ID 与时间），不再让整个列表报错。
 
 ### Changed
 

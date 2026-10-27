@@ -648,6 +648,39 @@ func (m *HttpServerOption) validate(all bool) error {
 
 	}
 
+	if m.Pprof != nil {
+
+		if all {
+			switch v := interface{}(m.GetPprof()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Pprof",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "Pprof",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetPprof()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOptionValidationError{
+					field:  "Pprof",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return HttpServerOptionMultiError(errors)
 	}
@@ -943,6 +976,116 @@ var _GrpcServerOption_Network_InLookup = map[string]struct{}{
 	"unix":       {},
 	"unixpacket": {},
 }
+
+// Validate checks the field values on HttpServerOption_Pprof with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *HttpServerOption_Pprof) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HttpServerOption_Pprof with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// HttpServerOption_PprofMultiError, or nil if none found.
+func (m *HttpServerOption_Pprof) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HttpServerOption_Pprof) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Enable != nil {
+		// no validation rules for Enable
+	}
+
+	if m.Addr != nil {
+		// no validation rules for Addr
+	}
+
+	if len(errors) > 0 {
+		return HttpServerOption_PprofMultiError(errors)
+	}
+
+	return nil
+}
+
+// HttpServerOption_PprofMultiError is an error wrapping multiple validation
+// errors returned by HttpServerOption_Pprof.ValidateAll() if the designated
+// constraints aren't met.
+type HttpServerOption_PprofMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HttpServerOption_PprofMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HttpServerOption_PprofMultiError) AllErrors() []error { return m }
+
+// HttpServerOption_PprofValidationError is the validation error returned by
+// HttpServerOption_Pprof.Validate if the designated constraints aren't met.
+type HttpServerOption_PprofValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HttpServerOption_PprofValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HttpServerOption_PprofValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HttpServerOption_PprofValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HttpServerOption_PprofValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HttpServerOption_PprofValidationError) ErrorName() string {
+	return "HttpServerOption_PprofValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e HttpServerOption_PprofValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttpServerOption_Pprof.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HttpServerOption_PprofValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HttpServerOption_PprofValidationError{}
 
 // Validate checks the field values on HttpServerOption_Metrics with the rules
 // defined in the proto definition for this message. If any rules are
