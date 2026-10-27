@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.6.0（2026-10-26）
+
 ### 升级风险
 
 - **`/metrics` 与健康检查默认改到独立管理端口 `0.0.0.0:8001`**：`server.http.metrics.addr` / `health.addr` 省略时不再挂在业务 HTTP 上（此前默认复用业务端口，`/metrics` 会随业务端口对外暴露），与业务部署模板的 management 端口一致；业务 HTTP 关闭的 Worker 也默认有健康检查与指标端点。仍需挂在业务端口的应用把两项显式设为 `""`；K8s 探针与 ServiceMonitor 指向 8001。
@@ -58,7 +68,45 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- **server,client**：add HandleRoute and call-level downstream metrics（`9d00186`）
+- ⚠️ 不兼容：**server**：管理端点默认独立端口 8001；业务 HTTP 默认请求体上限 32 MiB（`aff0f81`）
+- **database**：SQL 日志按环境默认隐去参数；database.AutoMigrate 固定走主库（`34ed93e`）
+- **observability**：延迟 SLO、单下游、panic 与配置拒绝告警及 Alertmanager 示例（`0237038`）
+- **log**：log_events_total 统计 panic 恢复与配置拒绝事件（`8677f5a`）
+- **database**：只读副本 read_replicas 与 UsePrimary（`35792a5`）
+- **kafka**：事务外盒 pkg/kafka/outbox（`7c9fb3a`）
+- **observability**：可用性 SLO 多窗口多消耗率告警（`a9b316d`）
+- **cache**：基于 Redis 的旁路缓存，进程内回源合并、TTL 抖动与空值缓存（`530a46a`）
+- **server**：管理端口 pprof；CHANGELOG 记录计划中的改动（`e7b2f13`）
+- **queue**：执行期间续租（WorkerConfig.RenewLease）（`42190e5`）
+- **client**：失败重试与 gRPC keepalive；服务端默认放宽 keepalive 检测（`206cbac`）
+- **job**：WithClusterLock 让 Cron 在多副本间每次触发只执行一次（`945fb18`）
+
+**修复**
+
+- harden cache load panics, TiDB claim probe; add totp.VerifyAt（`01f80de`）
+- **observability**：延迟 SLO 匹配 Prometheus 3 规范后的 le；告警说明映射覆盖全部告警（`66ac1e6`）
+- **server**：业务端口屏蔽 DefaultServeMux 上的 pprof；默认连接级超时（`274a048`）
+- 拒绝事务内切换数据库连接；失败任务列表不再被损坏行中断（`bd42260`）
+- **queue**：retry transient storage errors, SKIP LOCKED claims on MySQL, pod_name-aware rules（`a8896e8`）
+
+**重构**
+
+- 统一 Observability 类型；kafka.NewProducerWithObservability 一步创建受管 Producer（`64ac458`）
+- **bootstrap**：Spec.HTTP()/GRPC() 与 server.Spec 命名一致，Http()/Grpc() 保留为兼容别名（`f5baf65`）
+- 易用性修正——Worker 配置报错说明约束、cache 指标改为 Config 字段、按协议租用客户端（`1aadeac`）
+
+**文档**
+
+- **outbox**：stress that Write must run inside the business transaction（`ae35c53`）
+- CHANGELOG 记录管理端口、请求体上限、SQL 参数等默认值变化；演示改用新接口（`eb35724`）
+
+**测试**
+
+- **demo**：演示缓存、事务外盒、只读副本、Cron 集群锁、续租、重试、pprof、SLO 与配置拒绝（`9dca4a8`）
+- **database**：检查副本外部测试的连接关闭错误（`890bdf6`）
 <!-- changelog:auto:end -->
 
 ## v2.5.0（2026-10-26）
@@ -158,6 +206,7 @@
 
 **文档**
 
+- **changelog**：refresh v2.5.0 commit list（`85bc84f`）
 - **changelog**：prepare v2.5.0 release notes（`e1cac12`）
 - ⚠️ 不兼容：restructure documentation, layout and development tooling（`e94add4`）
 - **changelog**：record WebSocket shutdown changes（`20947b6`）

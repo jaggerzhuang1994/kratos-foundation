@@ -39,7 +39,8 @@ def releases():
 
 def commits(start, end):
     span = f'{start}..{end}' if start else end
-    lines = git('log', '--no-merges', '--format=%h%x09%s', span).splitlines()
+    # 固定 7 位短哈希（冲突时 git 自动加长），避免仓库变大后默认长度增长导致历史版本的记录整体改写。
+    lines = git('log', '--no-merges', '--abbrev=7', '--format=%h%x09%s', span).splitlines()
     return [line.split('\t', 1) for line in lines if line]
 
 
