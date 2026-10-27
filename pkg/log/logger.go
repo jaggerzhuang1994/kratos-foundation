@@ -213,6 +213,7 @@ func (l *logger) levelEnabled(level kratoslog.Level, custom *customState) bool {
 // log 在锁外求值和格式化用户字段；只有内置输出的最终写入进入共享策略边界。
 // 写入前若共享策略已变化，按最新策略重新组装事件，已格式化的字段文本复用，不重复调用格式化方法。
 func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) error {
+	l.observeEvent(level, keyvals)
 	custom := l.shared.custom.Load()
 	if !l.levelEnabled(level, custom) {
 		return nil
@@ -320,6 +321,8 @@ func (l *logger) Infow(keyvals ...any) {
 
 func (l *logger) Warn(a ...any) {
 	if !l.levelEnabled(kratoslog.LevelWarn, l.shared.custom.Load()) {
+		// 级别被关闭时仍计入异常事件指标。
+		l.observeEvent(kratoslog.LevelWarn, nil)
 		return
 	}
 	_ = l.log(kratoslog.LevelWarn, true, fmt.Sprint(a...))
@@ -327,6 +330,8 @@ func (l *logger) Warn(a ...any) {
 
 func (l *logger) Warnf(format string, a ...any) {
 	if !l.levelEnabled(kratoslog.LevelWarn, l.shared.custom.Load()) {
+		// 级别被关闭时仍计入异常事件指标。
+		l.observeEvent(kratoslog.LevelWarn, nil)
 		return
 	}
 	_ = l.log(kratoslog.LevelWarn, true, fmt.Sprintf(format, a...))
@@ -338,6 +343,8 @@ func (l *logger) Warnw(keyvals ...any) {
 
 func (l *logger) Error(a ...any) {
 	if !l.levelEnabled(kratoslog.LevelError, l.shared.custom.Load()) {
+		// 级别被关闭时仍计入异常事件指标。
+		l.observeEvent(kratoslog.LevelError, nil)
 		return
 	}
 	_ = l.log(kratoslog.LevelError, true, fmt.Sprint(a...))
@@ -345,6 +352,8 @@ func (l *logger) Error(a ...any) {
 
 func (l *logger) Errorf(format string, a ...any) {
 	if !l.levelEnabled(kratoslog.LevelError, l.shared.custom.Load()) {
+		// 级别被关闭时仍计入异常事件指标。
+		l.observeEvent(kratoslog.LevelError, nil)
 		return
 	}
 	_ = l.log(kratoslog.LevelError, true, fmt.Sprintf(format, a...))

@@ -766,3 +766,41 @@ type blockingTestRuntime struct{ release <-chan struct{} }
 
 func (r blockingTestRuntime) Start(context.Context) error { <-r.release; return nil }
 func (blockingTestRuntime) Stop(context.Context) error    { return nil }
+
+// Metrics Bootstrap 把 panic 恢复与配置拒绝日志计入 log_events_total{event}。
+func TestMetricsBootstrapCountsAlertableLogEvents(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	t.Cleanup(func() { foundationlog.SetEventCounter(nil) })
+	spec := app.NewSpec()
+	logger, release, err := testlog.New(bootstrapConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release)
+	if _, err := bootstrap.NewMetricsBootstrap(spec, provider.Meter("test"), nil, logger); err != nil {
+		t.Fatal(err)
+	}
+	logger.With("event", "client.config.rejected").Warn("client config rejected; keeping previous")
+	logger.With("event", "client.config.rejected").Warn("client config rejected; keeping previous")
+	logger.With("event", "server.request.panic.recovered").Error("request panic recovered")
+	var collected metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &collected); err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int64{}
+	for _, scope := range collected.ScopeMetrics {
+		for _, item := range scope.Metrics {
+			if sum, ok := item.Data.(metricdata.Sum[int64]); ok && item.Name == "log_events_total" {
+				for _, point := range sum.DataPoints {
+					event, _ := point.Attributes.Value("event")
+					counts[event.AsString()] += point.Value
+				}
+			}
+		}
+	}
+	if counts["client.config.rejected"] != 2 || counts["server.request.panic.recovered"] != 1 || len(counts) != 2 {
+		t.Fatalf("log_events_total = %v", counts)
+	}
+}

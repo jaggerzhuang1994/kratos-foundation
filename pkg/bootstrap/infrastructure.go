@@ -11,6 +11,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/config"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
@@ -106,6 +107,16 @@ func NewMetricsBootstrap(spec *app.Spec, meter metrics.Metrics, pusher *metrics.
 	if err != nil {
 		return MetricsBootstrap{}, fmt.Errorf("register app_ready metric: %w", err)
 	}
+	// panic 被恢复、配置/策略被拒绝等事件原先只有日志；按事件名计数后可直接告警（FoundationPanicRecovered、
+	// FoundationConfigRejected）。事件名是框架代码中的固定常量，标签基数可控。
+	events, err := meter.Int64Counter("log_events_total",
+		metric.WithDescription("Warn-or-higher log events that indicate a recovered panic or a rejected configuration, by event name."))
+	if err != nil {
+		return MetricsBootstrap{}, fmt.Errorf("register log_events_total metric: %w", err)
+	}
+	log.SetEventCounter(func(event string) {
+		events.Add(context.Background(), 1, metric.WithAttributes(attribute.String("event", event)))
+	})
 	if pusher != nil {
 		spec.AfterStop(func(ctx context.Context) error {
 			pushMetrics(ctx, pusher, logger.WithModule("metrics"))

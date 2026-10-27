@@ -427,6 +427,8 @@ Foundation 自有运行事件使用稳定的点分 `event` 和 `module`。事件
 | WARN | 保留旧配置、重试/退避、配额或并发准入限制、探针超时、强制关闭 |
 | ERROR | 最终失败、恢复的 panic、无法向调用方返回的 cleanup/通知失败 |
 
+**异常事件计数**：`log.SetEventCounter(fn)` 注册进程级回调，WARN 及以上、事件名以 `.rejected`、`.panicked` 或 `.panic.recovered` 结尾的日志（配置/策略被拒绝、panic 被恢复）在级别过滤之前回调一次，调高模块日志级别也不会漏计；`bootstrap.NewMetricsBootstrap` 用它维护 `log_events_total{event}`，供 FoundationPanicRecovered / FoundationConfigRejected 告警。新增需要告警的框架事件时沿用这些后缀；业务事件使用其他后缀则不会进入计数。
+
 同步底层操作将错误返回给能够决定下一步的调用方；不为每次校验、正常读取或每个 SQL/Redis/OSS 调用重复输出日志。App 的终态是运行级汇总，与任务或资源的故障事件有不同定位范围，Runtime 转发层不另记原错误。原错误字段仍须由生产错误的一方避免夹带业务敏感内容；不打印配置全文、argv、密码、令牌、原始消息载荷或任意 panic 原文。文件输出自身关闭失败直接向 stderr 写一次 ERROR module=log event=log.file.cleanup.failed，避免递归使用已经关闭的 Logger。
 
 ```mermaid
