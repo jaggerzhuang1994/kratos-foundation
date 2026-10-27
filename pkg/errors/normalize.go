@@ -94,6 +94,11 @@ func Normalize(err error) error {
 	if stderrors.Is(err, context.DeadlineExceeded) {
 		return New(http.StatusGatewayTimeout, "DEADLINE_EXCEEDED", "Gateway Timeout").WithCause(err)
 	}
+	// 业务读取请求体（如 multipart 上传）超过 server.http.request_body 上限。
+	var tooLarge *http.MaxBytesError
+	if stderrors.As(err, &tooLarge) {
+		return New(http.StatusRequestEntityTooLarge, "REQUEST_BODY_TOO_LARGE", "request body too large").WithCause(err)
+	}
 	if gs, ok := status.FromError(err); ok {
 		se := FromError(err)
 

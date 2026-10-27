@@ -208,6 +208,7 @@ func TestMonitoringPprofRequiresDedicatedListener(t *testing.T) {
 		config := proto.CloneOf(defaultConfig)
 		config.Http.Addr = proto.String("127.0.0.1:8000")
 		config.Http.Metrics.Addr = proto.String(metricsAddr)
+		config.Http.Health.Addr = proto.String(metricsAddr)
 		config.Http.Pprof = &config_pb.HttpServerOption_Pprof{Enable: proto.Bool(enable), Addr: proto.String(pprofAddr)}
 		return config
 	}

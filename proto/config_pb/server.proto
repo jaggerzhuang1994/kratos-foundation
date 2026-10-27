@@ -66,12 +66,30 @@ message HttpServerOption {
   optional google.protobuf.Duration read_header_timeout = 10 [(validate.rules).duration = {gt: {}}];
   // keep-alive 连接两次请求之间的最长空闲时间，默认 120s，应大于前置负载均衡的空闲超时。[需重启]
   optional google.protobuf.Duration idle_timeout = 11 [(validate.rules).duration = {gt: {}}];
+  // 请求体大小上限。超限返回 413 REQUEST_BODY_TOO_LARGE；WebSocket 升级请求与 gRPC 不受影响。[需重启]
+  optional RequestBody request_body = 12;
+
+  message RequestBody {
+    // 单个请求体最大字节数，默认 33554432（32 MiB）；0 表示不限制。
+    optional int64 max_bytes = 1 [(validate.rules).int64 = {gte: 0}];
+    // 按路径覆盖，如文件上传接口放大上限；精确 path 优先，其次最长 prefix。
+    repeated Route routes = 2;
+
+    message Route {
+      oneof rule {
+        string path = 1;
+        string prefix = 2;
+      }
+      // 该路由的最大字节数，0 表示不限制。
+      int64 max_bytes = 3 [(validate.rules).int64 = {gte: 0}];
+    }
+  }
 
   // Pprof 只能挂在独立管理端口上：剖析数据包含命令行、内存内容与调用栈，不能对业务流量暴露。
   message Pprof {
     // 是否启用，默认 false。
     optional bool enable = 1;
-    // 监听地址；省略时使用 metrics.addr。解析后与业务监听相同（含省略且 metrics 挂在业务监听上）时启动失败。
+    // 监听地址；省略时使用 metrics.addr（默认 0.0.0.0:8001）。解析后与业务监听相同时启动失败。
     optional string addr = 2;
   }
 
@@ -80,12 +98,14 @@ message HttpServerOption {
     optional bool disable = 1;
     // metrics 路由，默认 /metrics
     optional string path = 2;
-    // 监听地址 host:port；空值复用业务 HTTP（业务关闭则不启动）；显式地址与已启用的业务地址相同时复用，否则独立监听。[需重启]
+    // 监听地址 host:port，默认 0.0.0.0:8001 独立管理端口，不随业务端口对外暴露；显式空值复用业务 HTTP（业务关闭则不启动）；
+    // 与已启用的业务地址相同时复用，否则独立监听。[需重启]
     optional string addr = 3;
   }
   message Health {
     optional bool disable = 1;
-    // 空值复用业务 HTTP（业务关闭则不启动）；显式地址与已启用的业务地址相同时复用，否则独立监听；与 metrics.addr 相同则共享。[需重启]
+    // 默认 0.0.0.0:8001 独立管理端口（与 metrics 共享）；显式空值复用业务 HTTP（业务关闭则不启动）；
+    // 与已启用的业务地址相同时复用，否则独立监听；与 metrics.addr 相同则共享。[需重启]
     optional string addr = 2;
     // 存活探针路径，默认 /healthz。[需重启]
     // GET/HEAD 返回 200，仅表示 HTTP 可响应，不检查依赖或应用就绪状态。

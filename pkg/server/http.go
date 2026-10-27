@@ -170,6 +170,8 @@ func newHTTPServerOptions(
 		opts = append(opts, http.PathPrefix(conf.GetPathPrefix()))
 	}
 	opts = append(opts, http.ErrorEncoder(foundationhttp.Encoder()))
+	// 请求体上限在路由前生效，解码器把读取超限识别为 413；业务 option 在后仍可覆盖解码器。
+	opts = append(opts, http.Filter(newRequestBodyLimits(conf.GetRequestBody()).filter), http.RequestDecoder(decodeRequest))
 	opts = append(opts, spec.http.options...)
 	opts = append(opts, http.Middleware(middlewares.build(spec.http.middlewares)...))
 	return opts

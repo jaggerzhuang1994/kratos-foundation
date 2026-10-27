@@ -749,6 +749,39 @@ func (m *HttpServerOption) validate(all bool) error {
 
 	}
 
+	if m.RequestBody != nil {
+
+		if all {
+			switch v := interface{}(m.GetRequestBody()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "RequestBody",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOptionValidationError{
+						field:  "RequestBody",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRequestBody()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOptionValidationError{
+					field:  "RequestBody",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return HttpServerOptionMultiError(errors)
 	}
@@ -1044,6 +1077,158 @@ var _GrpcServerOption_Network_InLookup = map[string]struct{}{
 	"unix":       {},
 	"unixpacket": {},
 }
+
+// Validate checks the field values on HttpServerOption_RequestBody with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *HttpServerOption_RequestBody) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HttpServerOption_RequestBody with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// HttpServerOption_RequestBodyMultiError, or nil if none found.
+func (m *HttpServerOption_RequestBody) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HttpServerOption_RequestBody) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetRoutes() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, HttpServerOption_RequestBodyValidationError{
+						field:  fmt.Sprintf("Routes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, HttpServerOption_RequestBodyValidationError{
+						field:  fmt.Sprintf("Routes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return HttpServerOption_RequestBodyValidationError{
+					field:  fmt.Sprintf("Routes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.MaxBytes != nil {
+
+		if m.GetMaxBytes() < 0 {
+			err := HttpServerOption_RequestBodyValidationError{
+				field:  "MaxBytes",
+				reason: "value must be greater than or equal to 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return HttpServerOption_RequestBodyMultiError(errors)
+	}
+
+	return nil
+}
+
+// HttpServerOption_RequestBodyMultiError is an error wrapping multiple
+// validation errors returned by HttpServerOption_RequestBody.ValidateAll() if
+// the designated constraints aren't met.
+type HttpServerOption_RequestBodyMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HttpServerOption_RequestBodyMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HttpServerOption_RequestBodyMultiError) AllErrors() []error { return m }
+
+// HttpServerOption_RequestBodyValidationError is the validation error returned
+// by HttpServerOption_RequestBody.Validate if the designated constraints
+// aren't met.
+type HttpServerOption_RequestBodyValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HttpServerOption_RequestBodyValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HttpServerOption_RequestBodyValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HttpServerOption_RequestBodyValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HttpServerOption_RequestBodyValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HttpServerOption_RequestBodyValidationError) ErrorName() string {
+	return "HttpServerOption_RequestBodyValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e HttpServerOption_RequestBodyValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttpServerOption_RequestBody.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HttpServerOption_RequestBodyValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HttpServerOption_RequestBodyValidationError{}
 
 // Validate checks the field values on HttpServerOption_Pprof with the rules
 // defined in the proto definition for this message. If any rules are
@@ -1419,3 +1604,148 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = HttpServerOption_HealthValidationError{}
+
+// Validate checks the field values on HttpServerOption_RequestBody_Route with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *HttpServerOption_RequestBody_Route) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HttpServerOption_RequestBody_Route
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// HttpServerOption_RequestBody_RouteMultiError, or nil if none found.
+func (m *HttpServerOption_RequestBody_Route) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HttpServerOption_RequestBody_Route) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetMaxBytes() < 0 {
+		err := HttpServerOption_RequestBody_RouteValidationError{
+			field:  "MaxBytes",
+			reason: "value must be greater than or equal to 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	switch v := m.Rule.(type) {
+	case *HttpServerOption_RequestBody_Route_Path:
+		if v == nil {
+			err := HttpServerOption_RequestBody_RouteValidationError{
+				field:  "Rule",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+		// no validation rules for Path
+	case *HttpServerOption_RequestBody_Route_Prefix:
+		if v == nil {
+			err := HttpServerOption_RequestBody_RouteValidationError{
+				field:  "Rule",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+		// no validation rules for Prefix
+	default:
+		_ = v // ensures v is used
+	}
+
+	if len(errors) > 0 {
+		return HttpServerOption_RequestBody_RouteMultiError(errors)
+	}
+
+	return nil
+}
+
+// HttpServerOption_RequestBody_RouteMultiError is an error wrapping multiple
+// validation errors returned by
+// HttpServerOption_RequestBody_Route.ValidateAll() if the designated
+// constraints aren't met.
+type HttpServerOption_RequestBody_RouteMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HttpServerOption_RequestBody_RouteMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HttpServerOption_RequestBody_RouteMultiError) AllErrors() []error { return m }
+
+// HttpServerOption_RequestBody_RouteValidationError is the validation error
+// returned by HttpServerOption_RequestBody_Route.Validate if the designated
+// constraints aren't met.
+type HttpServerOption_RequestBody_RouteValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HttpServerOption_RequestBody_RouteValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HttpServerOption_RequestBody_RouteValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HttpServerOption_RequestBody_RouteValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HttpServerOption_RequestBody_RouteValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HttpServerOption_RequestBody_RouteValidationError) ErrorName() string {
+	return "HttpServerOption_RequestBody_RouteValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e HttpServerOption_RequestBody_RouteValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttpServerOption_RequestBody_Route.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HttpServerOption_RequestBody_RouteValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HttpServerOption_RequestBody_RouteValidationError{}

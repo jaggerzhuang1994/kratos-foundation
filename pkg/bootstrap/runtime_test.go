@@ -96,7 +96,10 @@ func TestServerBootstrapConfigOnlyListeners(t *testing.T) {
 		{"http default", &config_pb.Server{}, true},
 		{"grpc explicit", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true)}, Grpc: &config_pb.GrpcServerOption{Disable: proto.Bool(false)}}, true},
 		{"management only", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true), Health: &config_pb.HttpServerOption_Health{Addr: proto.String("127.0.0.1:0")}}}, true},
-		{"all disabled", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true)}}, false},
+		// 业务 HTTP 关闭时管理端点仍默认在独立端口启动；显式空地址挂回业务监听后才没有任何监听。
+		{"http disabled keeps management port", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true)}}, true},
+		{"all disabled", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true),
+			Health: &config_pb.HttpServerOption_Health{Addr: proto.String("")}, Metrics: &config_pb.HttpServerOption_Metrics{Addr: proto.String("")}}}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := newTestSpec()
@@ -411,7 +414,9 @@ func TestJobBootstrapStopsBeforeApplicationReady(t *testing.T) {
 func prepareServer(t *testing.T, spec *testSpec) bootstrap.ServerBootstrap {
 	t.Helper()
 	logger, tracer, meter := newTestObservability(t)
-	manager := testconfig.New(t, "server", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true)}})
+	// 管理端点默认独立监听 8001；生命周期测试不打开任何真实监听。
+	manager := testconfig.New(t, "server", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: proto.Bool(true),
+		Health: &config_pb.HttpServerOption_Health{Addr: proto.String("")}, Metrics: &config_pb.HttpServerOption_Metrics{Addr: proto.String("")}}})
 	marker, cleanup, err := bootstrap.NewServerBootstrap(spec.application, spec.servers, manager, logger, meter, tracer, bootstrap.Bootstrap{})
 	if err != nil {
 		t.Fatal(err)

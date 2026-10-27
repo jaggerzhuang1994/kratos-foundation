@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"google.golang.org/protobuf/proto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -175,6 +176,9 @@ func TestHTTPHealthPrecedesBusinessFiltersAndPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 显式空地址把健康检查挂在业务监听上（默认在独立管理端口）。
+	config.Http.Health.Addr = proto.String("")
+	config.Http.Metrics.Addr = proto.String("")
 	spec := NewSpec()
 	spec.HTTP().Option(kratoshttp.PathPrefix("/api"), kratoshttp.Filter(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusUnauthorized) })

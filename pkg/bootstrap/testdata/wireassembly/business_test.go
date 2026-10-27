@@ -31,7 +31,8 @@ func businessSources(t *testing.T) config.Sources {
 		"database": map[string]any{"default": "default", "connections": connections,
 			"metrics": map[string]any{"disable": true}, "tracing": map[string]any{"disable": true}},
 		"tracing": map[string]any{"disable": true},
-		"server":  map[string]any{"http": map[string]any{"addr": "127.0.0.1:0"}, "stop_delay": "0s"},
+		// 管理端点默认独立监听 8001；测试显式挂回业务监听，避免并发测试争用固定端口。
+		"server": map[string]any{"http": map[string]any{"addr": "127.0.0.1:0", "health": map[string]any{"addr": ""}, "metrics": map[string]any{"addr": ""}}, "stop_delay": "0s"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -215,6 +216,10 @@ server:
     disable: %t
   http:
     addr: 127.0.0.1:0
+    health:
+      addr: ""
+    metrics:
+      addr: ""
 `, stopTimeout, filepath.Join(dir, "compose.db"), loggingDisable)
 }
 

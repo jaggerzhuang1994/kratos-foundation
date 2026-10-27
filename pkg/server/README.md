@@ -378,7 +378,7 @@ flowchart TD
 
 ## 默认健康检查
 
-未指定独立地址时，启用业务 HTTP 默认提供 `GET/HEAD /healthz` 和 `GET/HEAD /readyz`。成功返回 200，未就绪返回
+默认在独立管理端口 `0.0.0.0:8001` 提供 `GET/HEAD /healthz` 和 `GET/HEAD /readyz`（与 `/metrics` 共享，业务 HTTP 关闭时仍启动）；`health.addr` 显式设为空字符串时挂回业务 HTTP。成功返回 200，未就绪返回
 503，其他方法返回 405；不返回内部错误或依赖地址。它们是独立于业务 `PathPrefix` 的保留路径，
 优先于业务路由、Filter、鉴权和限流。不要在这些路径注册业务接口；需要复用路径时先关闭健康检查。
 同一监听上的健康路径不能与 metrics 路径相同。
@@ -457,11 +457,12 @@ server:
 ```
 
 该示例启动业务端口 8000 和一个管理端口 9001；9001 同时提供 metrics 和健康检查，8000 不再
-重复提供它们。省略两个管理 addr 时，三个端点默认都挂载到业务 HTTP。
+重复提供它们。省略两个管理 addr 时默认共享独立管理端口 `0.0.0.0:8001`，与业务部署模板的 management 端口一致，`/metrics`、探针与 pprof 不随业务端口对外暴露。
 
 | 地址与开关 | 行为 |
 | --- | --- |
-| addr 为空 | 复用业务 HTTP；业务 HTTP 禁用时该端点不启动 |
+| addr 省略 | 默认 `0.0.0.0:8001` 独立管理监听，业务 HTTP 禁用时仍启动 |
+| addr 显式为空字符串 | 复用业务 HTTP；业务 HTTP 禁用时该端点不启动 |
 | addr 与启用的 server.http.addr 相同 | 复用业务监听，不重复绑定 |
 | addr 与业务地址不同 | 只在新增监听上提供对应监控端点 |
 | metrics.addr 与 health.addr 相同 | 两个端点共享一个新增监听 |
@@ -481,6 +482,24 @@ IP 表示及 `0.0.0.0`/空 host；不通过 DNS 推断 localhost 与 IP 等价�
 `server.http.pprof.enable=true` 在管理监听上挂载 `/debug/pprof/`（Index、cmdline、profile、symbol、trace 及按名称的 heap/goroutine 等），默认关闭。地址取 `pprof.addr`，省略时使用 `metrics.addr`；解析后落在业务监听上（含省略且 metrics 挂在业务监听上）时启动失败：剖析数据包含命令行参数、内存内容与调用栈，不能对业务流量暴露。不受环境限制，生产可在受信任的管理网络中按需开启，排查完成后关闭。处理器显式挂载，不依赖 `net/http/pprof` 对 DefaultServeMux 的注册副作用。Kratos 业务 HTTP 把未匹配路由交给 `http.DefaultServeMux`，`net/http/pprof` 被任何依赖导入时都会在其上注册剖析端点；Foundation 业务端口保留 DefaultServeMux 回退，但对 `/debug/pprof` 一律返回 404，业务需要剖析时使用 `server.http.pprof`。
 
 业务 HTTP Server 默认 `read_header_timeout` 10s、`idle_timeout` 120s（Kratos 原生均不限制）：前者防止慢速发送请求头的连接（Slowloris）长期占用，不限制请求体与 WebSocket；后者应大于前置负载均衡的空闲超时，避免负载均衡复用已被关闭的连接。两者可在 `server.http` 下调整，需重启生效。
+
+### 请求体上限
+
+业务 HTTP 默认限制单个请求体 32 MiB（`server.http.request_body.max_bytes`，0 表示不限制），防止超大请求体耗尽内存。声明的 `Content-Length` 超限时在路由前直接返回 413 `REQUEST_BODY_TOO_LARGE`；分块传输的请求在读取时截断，`ctx.Bind` 解码与业务自行读取 `r.Body`（如 `ParseMultipartForm`）超限同样返回 413。文件上传等大请求按路径放大：
+
+```yaml
+server:
+  http:
+    request_body:
+      max_bytes: 33554432        # 32 MiB
+      routes:
+        - prefix: /api/upload/   # 最长 prefix 优先
+          max_bytes: 524288000   # 500 MiB
+        - path: /api/import      # 精确 path 优先于 prefix
+          max_bytes: 0           # 不限制
+```
+
+WebSocket 升级请求没有请求体，帧数据经接管的连接传输，不受限制（消息大小由 WebSocket 配置的消息上限控制）；gRPC 使用自身的接收上限，也不受影响。上限在路由前按请求路径匹配（含 `path_prefix`），需重启生效。
 
 `Health().Checks(...)` 只追加检查函数，不改变文件配置的地址、路径和 disable。
 声明时复制检查切片，运行时再次保存独立切片快照；函数及其捕获的依赖仍由业务持有，必须支持并发探针和 Context 取消。

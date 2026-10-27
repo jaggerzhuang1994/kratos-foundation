@@ -125,14 +125,14 @@ server:
       disable: false
       # Metrics 路由路径 [默认: /metrics]
       path: /metrics
-      # 空值复用业务 HTTP；指定其他 host:port 时独立监听 [默认: 空；需重启]
-      # addr: 127.0.0.1:9001
+      # 管理监听地址 [默认: 0.0.0.0:8001；需重启]；显式空值 "" 复用业务 HTTP
+      # addr: 0.0.0.0:8001
     # HTTP 健康检查 [需重启]；独立于业务 path_prefix、Filter 和鉴权
     health:
       # 是否禁用 [默认: false]
       disable: false
-      # 与 metrics.addr 相同则共享管理监听；省略则复用业务 HTTP
-      # addr: 127.0.0.1:9001
+      # 管理监听地址 [默认: 0.0.0.0:8001]，与 metrics.addr 相同则共享；显式空值 "" 复用业务 HTTP
+      # addr: 0.0.0.0:8001
       # 存活探针路径 [默认: /healthz]；GET/HEAD 返回 200，仅表示 HTTP 可响应，不检查依赖或应用就绪状态
       liveness_path: /healthz
       # 就绪探针路径 [默认: /readyz]；GET/HEAD 在应用完成启动、依赖检查通过且未停机时返回 200，否则返回 503

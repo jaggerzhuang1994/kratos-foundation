@@ -1042,6 +1042,9 @@
         },
         "idle_timeout": {
           "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.idle_timeout"
+        },
+        "request_body": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.request_body"
         }
       },
       "type": "object"
@@ -1068,7 +1071,7 @@
     },
     ".kratos_foundation_pb.HttpServerOption.Health.addr": {
       "type": "string",
-      "description": "空值复用业务 HTTP（业务关闭则不启动）；显式地址与已启用的业务地址相同时复用，否则独立监听；与 metrics.addr 相同则共享。[需重启]"
+      "description": "默认 0.0.0.0:8001 独立管理端口（与 metrics 共享）；显式空值复用业务 HTTP（业务关闭则不启动）；\n 与已启用的业务地址相同时复用，否则独立监听；与 metrics.addr 相同则共享。[需重启]"
     },
     ".kratos_foundation_pb.HttpServerOption.Health.disable": {
       "type": "boolean"
@@ -1102,7 +1105,7 @@
     },
     ".kratos_foundation_pb.HttpServerOption.Metrics.addr": {
       "type": "string",
-      "description": "监听地址 host:port；空值复用业务 HTTP（业务关闭则不启动）；显式地址与已启用的业务地址相同时复用，否则独立监听。[需重启]"
+      "description": "监听地址 host:port，默认 0.0.0.0:8001 独立管理端口，不随业务端口对外暴露；显式空值复用业务 HTTP（业务关闭则不启动）；\n 与已启用的业务地址相同时复用，否则独立监听。[需重启]"
     },
     ".kratos_foundation_pb.HttpServerOption.Metrics.disable": {
       "type": "boolean",
@@ -1126,11 +1129,61 @@
     },
     ".kratos_foundation_pb.HttpServerOption.Pprof.addr": {
       "type": "string",
-      "description": "监听地址；省略时使用 metrics.addr。解析后与业务监听相同（含省略且 metrics 挂在业务监听上）时启动失败。"
+      "description": "监听地址；省略时使用 metrics.addr（默认 0.0.0.0:8001）。解析后与业务监听相同时启动失败。"
     },
     ".kratos_foundation_pb.HttpServerOption.Pprof.enable": {
       "type": "boolean",
       "description": "是否启用，默认 false。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody": {
+      "properties": {
+        "max_bytes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody.max_bytes"
+        },
+        "routes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody.routes"
+        }
+      },
+      "type": "object"
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody.Route": {
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody.Route.path"
+        },
+        "prefix": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody.Route.prefix"
+        },
+        "max_bytes": {
+          "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody.Route.max_bytes"
+        }
+      },
+      "type": "object",
+      "required": [
+        "max_bytes"
+      ]
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody.Route.max_bytes": {
+      "type": "integer",
+      "description": "该路由的最大字节数，0 表示不限制。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody.Route.path": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody.Route.prefix": {
+      "type": "string"
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody.max_bytes": {
+      "type": "integer",
+      "description": "单个请求体最大字节数，默认 33554432（32 MiB）；0 表示不限制。"
+    },
+    ".kratos_foundation_pb.HttpServerOption.RequestBody.routes": {
+      "items": {
+        "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody.Route",
+        "description": "按路径覆盖，如文件上传接口放大上限；精确 path 优先，其次最长 prefix。"
+      },
+      "type": "array",
+      "description": "按路径覆盖，如文件上传接口放大上限；精确 path 优先，其次最长 prefix。"
     },
     ".kratos_foundation_pb.HttpServerOption.addr": {
       "type": "string",
@@ -1184,6 +1237,10 @@
       "type": "string",
       "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
       "description": "读取请求头的最长时间，默认 10s；防止慢速发送请求头的连接（Slowloris）长期占用。不限制请求体与 WebSocket。[需重启]"
+    },
+    ".kratos_foundation_pb.HttpServerOption.request_body": {
+      "$ref": "#/definitions/.kratos_foundation_pb.HttpServerOption.RequestBody",
+      "description": "请求体大小上限。超限返回 413 REQUEST_BODY_TOO_LARGE；WebSocket 升级请求与 gRPC 不受影响。[需重启]"
     },
     ".kratos_foundation_pb.Job": {
       "properties": {

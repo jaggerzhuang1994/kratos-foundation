@@ -16,6 +16,9 @@ import (
 
 type componentConfig = *config_pb.Server
 
+// defaultManagementAddr 是 metrics 与健康检查默认的独立管理端口。
+const defaultManagementAddr = "0.0.0.0:8001"
+
 // defaultConfig 只作为合并模板使用，Manager.Load 会先复制它。
 var defaultConfig = &config_pb.Server{
 	StopDelay: durationpb.New(0),
@@ -26,14 +29,17 @@ var defaultConfig = &config_pb.Server{
 		Endpoint:           nil,
 		DisableStrictSlash: proto.Bool(false),
 		PathPrefix:         proto.String(""),
+		// 管理端点默认独立监听 8001，与业务部署模板的 management 端口一致，不随业务端口对外暴露。
 		Health: &config_pb.HttpServerOption_Health{
 			Disable:       proto.Bool(false),
+			Addr:          proto.String(defaultManagementAddr),
 			LivenessPath:  proto.String("/healthz"),
 			ReadinessPath: proto.String("/readyz"),
 			Timeout:       durationpb.New(time.Second),
 		},
 		Metrics: &config_pb.HttpServerOption_Metrics{
 			Disable: proto.Bool(false),
+			Addr:    proto.String(defaultManagementAddr),
 			Path:    proto.String("/metrics"),
 		},
 	},
