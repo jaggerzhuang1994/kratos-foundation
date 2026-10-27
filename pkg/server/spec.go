@@ -8,6 +8,7 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // HTTPEndpoint 在 HTTPServer 上注册一组应用路由。
@@ -34,6 +35,11 @@ type HTTPBuilder interface {
 	WebSocket(path string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder
 	// WebSocketWithConfig 注册带消息上限和握手设置的 WebSocket 端点。
 	WebSocketWithConfig(path string, handler any, config WebSocketConfig) HTTPBuilder
+	// WebSocketMethod 把 WebSocket 端点挂到 proto 流式方法声明的 GET 路由上，fullMethod 传 gRPC 生成的
+	// *_FullMethodName；方法不存在、不是流式或不是唯一一条 GET 规则时 Validate 返回错误。
+	WebSocketMethod(fullMethod string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder
+	// WebSocketMethodWithConfig 是带消息上限和握手设置的 WebSocketMethod。
+	WebSocketMethodWithConfig(fullMethod string, handler any, config WebSocketConfig) HTTPBuilder
 }
 
 // GRPCBuilder 在启动配置阶段记录 gRPC 运行选项；所有方法修改同一个 Spec，不能并发调用。
@@ -99,6 +105,18 @@ type websocketEndpoint struct {
 	handler any
 	// upgrader 可选握手升级器，最多一个；省略时采用默认升级器。
 	upgrader []Upgrader
+	// method 由 WebSocketMethod 声明时解析出的 proto 方法；path 取自其 GET 规则，operation 为方法全名。
+	method protoHTTPMethod
+	// methodErr 是 WebSocketMethod 解析失败的原因，由 Validate 返回。
+	methodErr error
+}
+
+// operation 返回访问日志、指标与限流使用的接口名：按 proto 挂载时为方法全名，否则为路径。
+func (e *websocketEndpoint) operation() string {
+	if e.method.operation != "" {
+		return e.method.operation
+	}
+	return e.path
 }
 
 type httpRegistration struct {
@@ -131,6 +149,9 @@ func (s *Spec) Validate() error {
 			continue
 		}
 		endpoint := registration.websocket
+		if endpoint.methodErr != nil {
+			return endpoint.methodErr
+		}
 		if !strings.HasPrefix(endpoint.path, "/") {
 			return fmt.Errorf("websocket path %q must start with /", endpoint.path)
 		}
@@ -241,6 +262,28 @@ func (s *httpSpec) WebSocket(path string, handler any, optionalUpgrader ...Upgra
 // WebSocketWithConfig 复用端点登记校验，保持调用顺序并保存本端点的接收上限。
 func (s *httpSpec) WebSocketWithConfig(path string, handler any, config WebSocketConfig) HTTPBuilder {
 	s.WebSocket(path, handler, config.Upgrader)
+	endpoint := s.registrations[len(s.registrations)-1].websocket
+	endpoint.maxMessageBytes = config.MaxMessageBytes
+	endpoint.maxInFlightMessages = config.MaxInFlightMessages
+	return s
+}
+
+// WebSocketMethod 在声明时按 proto 解析握手路径；生成代码的描述符在包初始化时已登记，解析失败的原因留给 Validate 返回。
+func (s *httpSpec) WebSocketMethod(fullMethod string, handler any, optionalUpgrader ...Upgrader) HTTPBuilder {
+	method, err := resolveWebSocketMethod(protoregistry.GlobalFiles, fullMethod)
+	path := ""
+	if err == nil {
+		path = method.routes[0].path
+	}
+	s.WebSocket(path, handler, optionalUpgrader...)
+	endpoint := s.registrations[len(s.registrations)-1].websocket
+	endpoint.method, endpoint.methodErr = method, err
+	return s
+}
+
+// WebSocketMethodWithConfig 复用 WebSocketMethod 的解析，并保存本端点的接收上限。
+func (s *httpSpec) WebSocketMethodWithConfig(fullMethod string, handler any, config WebSocketConfig) HTTPBuilder {
+	s.WebSocketMethod(fullMethod, handler, config.Upgrader)
 	endpoint := s.registrations[len(s.registrations)-1].websocket
 	endpoint.maxMessageBytes = config.MaxMessageBytes
 	endpoint.maxInFlightMessages = config.MaxInFlightMessages

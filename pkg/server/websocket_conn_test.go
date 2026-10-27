@@ -43,7 +43,7 @@ func TestWebSocketPreservesMiddlewareContextUntilConnectionCloses(t *testing.T) 
 				}
 			})
 			server := kratoshttp.NewServer(kratoshttp.Middleware(propagate))
-			newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, 0)
+			newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", "/ws", handler, 0, 0)
 			httpServer := httptest.NewServer(server)
 			t.Cleanup(httpServer.Close)
 			peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(httpServer.URL, "http")+"/ws", nil)
@@ -136,7 +136,7 @@ func TestWebSocketRejectedHandshakePreservesMiddlewareContext(t *testing.T) {
 	}
 	hub := newWebSocketHub()
 	server := kratoshttp.NewServer(kratoshttp.Middleware(propagate, normalizeErrors(logger)))
-	newWebSocketServer(logger, server, hub).Handle("/ws", handler, 0, 0)
+	newWebSocketServer(logger, server, hub).Handle("/ws", "/ws", handler, 0, 0)
 	server.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws", nil))
 	<-middlewareDone
 	ctx := <-handler.handshake
@@ -188,7 +188,7 @@ func TestWebSocketPanicDiagnosticsFollowConnectionDebug(t *testing.T) {
 				hub := newWebSocketHub()
 				handler := &panicWebSocketHandler{stage: stage, connected: make(chan struct{}), message: make(chan struct{})}
 				server := kratoshttp.NewServer(kratoshttp.Middleware(propagate), kratoshttp.Endpoint(&url.URL{Scheme: "http", Host: "ws.example"}))
-				newWebSocketServer(logger, server, hub).Handle("/ws", handler, 0, 0)
+				newWebSocketServer(logger, server, hub).Handle("/ws", "/ws", handler, 0, 0)
 				host := httptest.NewServer(server)
 				t.Cleanup(host.Close)
 				peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(host.URL, "http")+"/ws", nil)
@@ -296,7 +296,7 @@ func TestWebSocketWriteFailureClosesConnectionAndReleasesReadLoop(t *testing.T) 
 	hub := newWebSocketHub()
 	handler := newRuntimeWebSocketHandler()
 	server := kratoshttp.NewServer()
-	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", handler, 0, 0, Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
+	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle("/ws", "/ws", handler, 0, 0, Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
 	var fail atomic.Bool
 	host := httptest.NewUnstartedServer(server)
 	host.Listener = &failedWriteListener{Listener: host.Listener, fail: &fail}
@@ -342,6 +342,7 @@ func TestWebSocketStopDeadlineInterruptsBlockedConnectionClose(t *testing.T) {
 	handler := newRuntimeWebSocketHandler()
 	server := kratoshttp.NewServer()
 	newWebSocketServer(newRuntimeTestLogger(t), server, hub).Handle(
+		"/ws",
 		"/ws",
 		handler,
 		0,

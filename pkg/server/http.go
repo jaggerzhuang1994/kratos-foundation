@@ -122,6 +122,7 @@ func newHTTPServer(
 			endpoint := registration.websocket
 			websocket.Handle(
 				endpoint.path,
+				endpoint.operation(),
 				endpoint.handler,
 				endpoint.maxMessageBytes,
 				endpoint.maxInFlightMessages,

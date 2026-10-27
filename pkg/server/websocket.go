@@ -63,6 +63,7 @@ func newWebSocketServer(
 // Handle 在 HTTP 路由上注册一条 WebSocket 端点。
 func (s *websocketServer) Handle(
 	path string,
+	operation string,
 	handler any,
 	maxMessageBytes int64,
 	maxInFlightMessages int,
@@ -83,7 +84,7 @@ func (s *websocketServer) Handle(
 		w := ctx.Response()
 		r := ctx.Request()
 
-		http.SetOperation(ctx, path)
+		http.SetOperation(ctx, operation)
 		h := ctx.Middleware(func(ctx context.Context, req any) (any, error) {
 			clog := rlog.WithContext(ctx)
 			if info, ok := transport.FromServerContext(ctx); ok {

@@ -50,6 +50,7 @@ func TestWebSocketServerHandlesConnectionMessagesAndReplies(t *testing.T) {
 	server := kratoshttp.NewServer()
 	newWebSocketServer(logger, server, hub).Handle(
 		"/ws",
+		"/ws",
 		handler,
 		0,
 		0,
@@ -119,6 +120,7 @@ func TestWebSocketHandshakeCanRejectBeforeUpgrade(t *testing.T) {
 		t.Fatalf("upgrade() error = %v, want %v", err, wantErr)
 	}
 	newWebSocketServer(logger, nil, newWebSocketHub()).Handle(
+		"/unavailable",
 		"/unavailable",
 		runtimeHandshakeHandler{},
 		0,

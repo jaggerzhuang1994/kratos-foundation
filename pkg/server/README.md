@@ -47,7 +47,7 @@ func Boot(spec *bootstrap.Spec) bootstrap.Bootstrap {
 }
 ```
 
-`HTTP().Register(...)`、`HTTP().WebSocket(...)` 和 `HTTP().WebSocketWithConfig(...)` 共享同一条有序声明流，底层服务器严格按照 Spec 调用顺序注册。路由发生重叠时，仍采用 Kratos 底层路由器的先注册优先语义；调用方不应依赖旧版“先注册全部 HTTP、再注册全部 WebSocket”的分组行为。启动阶段的 `server.endpoint.registered` 日志为了稳定对比仍按路径和方法排序，不表示实际注册顺序。
+`HTTP().Register(...)`、`HTTP().WebSocket(...)`、`HTTP().WebSocketWithConfig(...)` 及按 proto 挂载的 `WebSocketMethod` 系列共享同一条有序声明流，底层服务器严格按照 Spec 调用顺序注册。路由发生重叠时，仍采用 Kratos 底层路由器的先注册优先语义；调用方不应依赖旧版“先注册全部 HTTP、再注册全部 WebSocket”的分组行为。启动阶段的 `server.endpoint.registered` 日志为了稳定对比仍按路径和方法排序，不表示实际注册顺序。
 
 Wire 通过 `app.NewSpec`、`server.NewSpec`、`job.NewSpec` 创建共享声明，注入 `bootstrap.NewSpec`；`NewServerBootstrap` 直接接收同一 app.Spec/server.Spec，并将 Boot 纳入前置依赖。`NewServerBootstrap` 在 Boot 完成后构造服务器，内部登记启用的业务 HTTP/gRPC Runtime 和独立管理监听；不启动服务。成功返回的 cleanup 由 Wire 在应用停止后逆序执行，构造失败会回滚。完整示例见 [bootstrap](../bootstrap/README.md)。它返回的 ServerBootstrap 标记注入 NewRuntimeBootstrap，保证服务器登记先完成。
 
@@ -177,6 +177,36 @@ spec.HTTP().Register(server.HandleRoute(http.MethodPost, "/orders/{id}/cancel", 
 ```
 
 `HTTPRequest` 内嵌中间件替换后的 `*http.Request`（其 Context 与 `ctx` 相同），另提供 `PathParam`、`Query`、`Bind`、`BindQuery`。operation 为空时使用路径模板；返回值与错误的编码规则同下文 `HandleHTTP`。
+
+#### 按 proto 声明挂载
+
+接口已在 proto 中用 `google.api.http` 声明、只是处理器需要手写（文件上传、回调等）时，用 `HandleMethod` 按方法全名挂载，method 与 path 取自 proto（含 `additional_bindings`），operation 为方法全名，与生成式接口一致；路由与声明始终一致，[服务名收集](#服务名收集)据此把它归入对应服务名：
+
+```go
+spec.HTTP().Register(server.HandleMethod(filepb.FileService_UploadFile_FullMethodName,
+    func(ctx context.Context, req *server.HTTPRequest) (any, error) {
+        return files.Upload(ctx, req.Request)
+    }))
+```
+
+方法不存在、没有 `google.api.http` 或是流式方法时，Server 组装返回错误。同一路由不要再通过生成的 `RegisterXxxHTTPServer` 注册，否则按先注册优先只有一个生效。
+
+WebSocket 同样可以在 proto 中声明：把方法写成**流式** rpc（protoc-gen-go-http 跳过流式方法，不会生成冲突的处理器），只声明一条 `GET` 规则，放在单独的 service 里，并且**不要**把这个 service 注册到 gRPC：
+
+```proto
+service MpcWebsocketService {
+  // 只用于声明，服务端用 WebSocketMethod 挂载手写处理器。
+  rpc Join(stream MpcFrame) returns (stream MpcFrame) {
+    option (google.api.http) = { get: "/mpc/join" };
+  }
+}
+```
+
+```go
+spec.HTTP().WebSocketMethod(mpcpb.MpcWebsocketService_Join_FullMethodName, handler)
+```
+
+`WebSocketMethod` / `WebSocketMethodWithConfig` 与 `WebSocket` / `WebSocketWithConfig` 行为相同，握手路径取自 proto，operation 为方法全名；方法不存在、不是流式或不是唯一一条 GET 规则时 `Spec.Validate` 返回错误。若该方法所属的 service 同时注册到了 gRPC，组装时输出 WARN `server.websocket.grpc_conflict`。
 
 > **原生路由不经过中间件**：在 `Register` 回调里直接调用 Kratos 原生 API（`srv.Route("/").GET/POST/Handle`、`srv.HandleFunc`、`srv.Handle`、`srv.HandlePrefix`）注册的路由不执行 Foundation 服务端中间件链，没有 panic 恢复、截止时间、限流、访问日志、请求指标、链路与错误归一化，除非处理器自行调用 `ctx.Middleware`。仅在确实需要完全自行处理请求（如反向代理、静态文件）时使用，并自行承担这些能力。
 
@@ -460,7 +490,7 @@ flowchart TD
 - **gRPC**：遍历已注册服务，跳过健康检查、反射与 `kratos.api.Metadata` 等框架服务，按服务描述符推导服务名。没有 proto 描述符的手写服务记为未映射。
 - **HTTP**：按 protoc-gen-go-http 的生成规则把 proto 的 `google.api.http`（含 `additional_bindings`、未声明规则时的默认 `POST /<package.Service>/<Method>`）与 `WalkRoute` 枚举到的路由逐条匹配，`server.http.path_prefix` 会先去掉。匹配不到的业务路由（如 `HandleRoute` 注册的手写接口）记为未映射；同一路由匹配到多个服务名也记为未映射。
 
-未映射的入口由服务注册归入应用名并告警。Kratos 原生 `Handle`、`HandleFunc`、`HandlePrefix` 注册的路由不带方法，`WalkRoute` 无法枚举：业务登记过 HTTP 路由却一条都枚举不到时，整体记为未映射；和可枚举的路由混用时，这些原生路由随同一 endpoint 暴露但不会单独告警。手写路由优先使用 `HandleRoute`。
+未映射的入口由服务注册归入应用名并告警；已在 proto 声明的手写处理器与 WebSocket 用 `HandleMethod` / `WebSocketMethod` 挂载即可正确归属，见[按 proto 声明挂载](#按-proto-声明挂载)。Kratos 原生 `Handle`、`HandleFunc`、`HandlePrefix` 注册的路由不带方法，`WalkRoute` 无法枚举：业务登记过 HTTP 路由却一条都枚举不到时，整体记为未映射；和可枚举的路由混用时，这些原生路由随同一 endpoint 暴露但不会单独告警。手写路由优先使用 `HandleRoute`。
 
 proto 位于 `v1` 这类版本目录导致的推导失败不在组装期中断启动，作为 `ServiceNames` 的错误交给服务注册，由 App 在注册前启动失败。`server.assembled` 日志带 `http_services` 与 `grpc_services`，DEBUG 级 `server.endpoint.registered` 逐条带 `service_name`（框架端点与未映射路由为空）。
 

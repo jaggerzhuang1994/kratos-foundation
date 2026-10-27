@@ -127,6 +127,10 @@ func NewRuntime(
 	if grpcServer != nil {
 		grpcNames, grpcServiceNames = collectGRPCServiceNames(grpcServer, protoregistry.GlobalFiles)
 	}
+	// 按 proto 挂载的 WebSocket 方法所属服务同时注册到 gRPC 时，gRPC 上会暴露一个未实现的流式方法。
+	for _, operation := range websocketGRPCConflicts(spec, grpcServer) {
+		logger.With("event", "server.websocket.grpc_conflict", "operation", operation).Warn("websocket method also exposed on grpc")
+	}
 	if err := logRegisteredEndpoints(logger, business, grpcServer, monitoringEndpoints, routeNames, grpcServiceNames); err != nil {
 		return fail(err)
 	}

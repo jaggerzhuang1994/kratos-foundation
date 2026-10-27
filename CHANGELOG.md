@@ -16,6 +16,7 @@
 
 - `pkg/servicename`：proto service 到服务名的唯一推导规则（目录名 → 文件名 → Go 包名，版本名报错），客户端插件、服务注册与网关共用；`IsFramework` 识别健康检查、反射、channelz 与 `kratos.api.Metadata`。
 - 按服务名注册多个实例：一个进程承载多个服务名时分别注册，实例元数据带 `app_name` / `process_id`；任一实例注册失败时整体回滚。见 [注册名与端点](pkg/app/README.md#注册名与端点)。
+- `server.HandleMethod(fullMethod, handler)` 与 `HTTPBuilder.WebSocketMethod` / `WebSocketMethodWithConfig`：按 proto 方法全名挂载手写 HTTP 处理器与 WebSocket 端点，method、path 取自 `google.api.http`，operation 为方法全名，路由随 proto 声明保持一致并归入对应服务名。WebSocket 方法须为只声明一条 GET 规则的流式 rpc；其 service 同时注册到 gRPC 时输出 WARN `server.websocket.grpc_conflict`。见 [按 proto 声明挂载](pkg/server/README.md#按-proto-声明挂载)。
 - `app.ServiceNamer` / `app.RegistrationExempt`：Runtime 汇报承载的服务名、声明不参与服务注册的可选接口；`server.Runtime` 的业务 HTTP/gRPC Server 按路由与已注册服务收集服务名，见 [服务名收集](pkg/server/README.md#服务名收集)。
 
 <!-- changelog:auto:start -->
