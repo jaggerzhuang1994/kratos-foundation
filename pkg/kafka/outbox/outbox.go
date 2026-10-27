@@ -64,6 +64,9 @@ func validate(message Message) error {
 
 // Write 在 ctx 携带的业务事务中写入一条待发消息，返回消息 ID。事务提交后 Relay 才能领取；
 // 事务回滚则消息一起撤销。成功只表示已写入事务，不代表已提交或已发布。
+//
+// 必须在 database.Manager.Transaction 的回调内、用回调传入的 ctx 调用。Write 不检查事务是否存在：
+// 在事务外调用时消息立即单独提交并会被发布，与业务数据不再原子，业务回滚时消息仍会发出。
 func (o *Outbox) Write(ctx context.Context, message Message) (string, error) {
 	if message.ID == "" {
 		message.ID = uuid.NewString()

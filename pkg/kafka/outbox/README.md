@@ -36,6 +36,8 @@ err := databaseManager.Transaction(ctx, func(ctx context.Context) error {
 })
 ```
 
+> **`Write` 必须在业务事务内调用。** `Write` 不检查 ctx 是否携带事务：在 `databaseManager.Transaction` 回调之外调用时，消息会立即单独提交，照常被 Relay 发布，但与业务数据不再原子提交，业务回滚时消息仍会发出，外盒失去意义。同样，Store 必须是复用 Context 中事务的数据库 Store（Repo 的连接提供者是同一个事务感知的 `database.Manager`，且外盒表与业务表在同一个数据库连接上）；Redis Store 或另一个连接上的数据库 Store 都无法与业务数据一起提交。
+
 `Message.Topic` 是 Relay 中 Producer 的选择键，不必等于 Kafka 真实 Topic；一个外盒可以服务多个 Topic。
 
 ## 语义与边界
