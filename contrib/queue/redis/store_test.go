@@ -560,3 +560,65 @@ func TestStoreRequiresContextTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreRenewLeaseResults(t *testing.T) {
+	client := goredis.NewClient(&goredis.Options{Addr: "unused", ContextTimeoutEnabled: true})
+	t.Cleanup(func() { _ = client.Close() })
+	var response any = int64(1)
+	var commandErr error
+	client.AddHook(commandHook{run: func(c goredis.Cmder) error {
+		if commandErr != nil {
+			return commandErr
+		}
+		c.(*goredis.Cmd).SetVal(response)
+		return nil
+	}})
+	s, err := NewStore(testManager{client: client}, Config{Connection: "redis", KeyPrefix: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	r := &queue.Reservation{Task: &queue.Task{ID: "id", MessageVersion: "job"}, Token: "token"}
+	if !s.CanRenewLease() || s.RenewLease(ctx, r, time.Now()) != nil {
+		t.Fatal("renewal rejected")
+	}
+	response = int64(0)
+	if err := s.RenewLease(ctx, r, time.Now()); !errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("stale renewal = %v", err)
+	}
+	if err := s.RenewLease(ctx, &queue.Reservation{Task: &queue.Task{ID: "id"}}, time.Now()); !errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("tokenless renewal = %v", err)
+	}
+	commandErr = errors.New("offline")
+	if err := s.RenewLease(ctx, r, time.Now()); err == nil || errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("storage error = %v", err)
+	}
+}
+
+// 续租后租约在原截止时间之后仍有效，旧 token 不能续租。
+func TestStoreRedisRenewLease(t *testing.T) {
+	s, ctx := integrationStore(t)
+	now := time.Unix(1700000000, 0)
+	if err := s.Enqueue(ctx, &queue.Task{ID: "long", MessageVersion: "job", AvailableAt: now, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := s.Reserve(ctx, now, time.Second)
+	if err != nil || owner == nil {
+		t.Fatalf("%v %v", owner, err)
+	}
+	if err := s.RenewLease(ctx, owner, now.Add(10*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.Reserve(ctx, now.Add(5*time.Second), time.Second); err != nil || r != nil {
+		t.Fatalf("renewed lease reclaimed: %v %v", r, err)
+	}
+	if err := s.RenewLease(ctx, &queue.Reservation{Task: owner.Task, Token: "stale"}, now.Add(time.Minute)); !errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("stale token renewal = %v", err)
+	}
+	if err := s.Ack(ctx, owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RenewLease(ctx, owner, now.Add(time.Minute)); !errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("renewal after ack = %v", err)
+	}
+}

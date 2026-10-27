@@ -102,6 +102,32 @@ func (s *Store) Failed(ctx context.Context, limit int) ([]queue.FailedTask, erro
 	return result, nil
 }
 
+// LeaseRepo 是 Repo 的可选续租能力；框架的 gorm Repo 实现了它，自定义 Repo 未实现时 Worker 不能开启 RenewLease。
+type LeaseRepo interface {
+	// RenewReserved 仅在 Task.ID/Token 匹配、非失败且租约非空时原子更新租约截止时间，不匹配返回 queue.ErrLeaseLost。
+	RenewReserved(ctx context.Context, taskID, token string, reservedUntil time.Time) error
+}
+
+// CanRenewLease 报告底层 Repo 是否实现 LeaseRepo。
+func (s *Store) CanRenewLease() bool {
+	_, ok := s.repo.(LeaseRepo)
+	return ok
+}
+
+// RenewLease 请求 Repo 延长当前领取的租约。
+func (s *Store) RenewLease(ctx context.Context, r *queue.Reservation, until time.Time) error {
+	repo, ok := s.repo.(LeaseRepo)
+	if !ok {
+		return errors.ErrUnsupported
+	}
+	if !validReservation(r) {
+		return queue.ErrLeaseLost
+	}
+	return repo.RenewReserved(ctx, r.Task.ID, r.Token, until)
+}
+
+var _ queue.LeaseRenewer = (*Store)(nil)
+
 // Retry 请求 Repo 清零失败任务次数并重新排期。
 func (s *Store) Retry(ctx context.Context, id string, at time.Time) error {
 	if strings.TrimSpace(id) == "" || len(id) > 128 {

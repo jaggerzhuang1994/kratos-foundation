@@ -92,7 +92,9 @@ flowchart TD
 
 多 Worker 通过 Redis Lua 或业务 Repo 的原子操作竞争领取；Token 防止旧 Worker 确认、释放或失败归档已被重新分配的任务，冲突返回 `ErrLeaseLost`，Worker 记录 WARN 并继续。Token 到期但尚未重新分配时仍可确认。Handler 执行不在 Redis Lua、领取事务或 Go 互斥锁内；Repo 的具体同步机制由业务实现；竞争可能有饥饿，不保证领取公平。
 
-采用**允许重投、有限重试**的执行模型。存储可靠且领取正常完成时，未确认任务可重投；领取后、执行前反复崩溃也可能耗尽次数进入失败状态，不保证 Handler 至少实际执行一次或最终成功。业务成功后、确认前崩溃仍会重投，必须依靠业务幂等。超时 Context 无法强杀忽略取消的 Go Handler；它可能超过租约并与重投任务同时执行。Worker 不启动额外 Handler goroutine，不自动续租；较长任务应配置相应执行窗口与租约，或在业务中拆成可恢复的小任务。
+采用**允许重投、有限重试**的执行模型。存储可靠且领取正常完成时，未确认任务可重投；领取后、执行前反复崩溃也可能耗尽次数进入失败状态，不保证 Handler 至少实际执行一次或最终成功。业务成功后、确认前崩溃仍会重投，必须依靠业务幂等。超时 Context 无法强杀忽略取消的 Go Handler；它可能超过租约并与重投任务同时执行。Worker 不启动额外 Handler goroutine；默认不续租，较长任务应配置相应执行窗口与租约，或开启 `RenewLease`。
+
+**租约续期**：`WorkerConfig.RenewLease=true` 时，Handler 执行期间每 `Lease/3` 调用一次 `LeaseRenewer.RenewLease` 把租约延长到当前时间加 `Lease`，`Timeout` 不再受 `Lease` 限制，`Lease` 须大于 3×`StorageTimeout`，零值默认 max(30s, 3×StorageTimeout+1s)。这样长任务可以用短租约，进程崩溃后任务在一个租约内即被重新领取，而不必把租约设得比最长任务还长。续租遇到存储错误记录 `WARN queue.lease.renew_failed` 并在下一周期重试；返回 `ErrLeaseLost`（租约已过期并被他人领取）时记录 `WARN queue.lease.lost` 并取消 Handler Context，随后的确认同样以租约丢失处理。要求 Store 实现 `LeaseRenewer` 且 `CanRenewLease()` 为 true，否则构造失败：Redis Store 与数据库 Store（框架 gorm Repo）均支持，自定义数据库 Repo 需实现 `database.LeaseRepo`。续租不能阻止不响应取消的 Handler 在租约丢失后继续运行，业务仍需幂等。
 
 Start 阻塞运行且实例只能启动一次。进入消费阶段记录一次 `INFO event=queue.worker.started`，包含 queue、worker、concurrency 和 processing_enabled；运行退出时记录一次 `INFO event=queue.worker.stopped`。空队列轮询不写 Info，逐次成功由指标统计。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。领取或确认时的存储故障（断连、存储操作超时、主从切换、损坏记录）不退出 Worker：该循环记录 `WARN queue.storage.retrying`（字段 failures、retry_after、error）并累加 `queue_consumer_runtime_failures_total`，按 500ms 起倍增、上限 30s 退避后重试，恢复后记录一次 `INFO queue.storage.recovered`；未确认的任务由租约到期重新领取，不把存储失败当作成功确认。只有 Store 返回不满足契约的领取结果（实现缺陷）时，Worker 记录 `ERROR queue.storage.failed` 并退出，交由应用统一停机。持续的存储故障由 FoundationQueueRuntimeFailure 告警暴露。损坏记录的隔离与修复方式见对应 Store 文档。
 

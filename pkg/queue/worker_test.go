@@ -205,3 +205,122 @@ func TestWorkerConfigurationAndErrorClassification(t *testing.T) {
 		}
 	}
 }
+
+// renewingStore 记录续租调用；lostAfter 次后返回 ErrLeaseLost。
+type renewingStore struct {
+	*storeStub
+	canRenew  bool
+	lostAfter int
+	renewals  []time.Time
+}
+
+func (s *renewingStore) CanRenewLease() bool { return s.canRenew }
+func (s *renewingStore) RenewLease(context.Context, *Reservation, time.Time) error {
+	s.renewals = append(s.renewals, time.Now())
+	if s.lostAfter > 0 && len(s.renewals) >= s.lostAfter {
+		return ErrLeaseLost
+	}
+	return nil
+}
+
+// 开启 RenewLease 后，执行时长可超过租约：每 Lease/3 续租一次，任务正常确认。
+func TestWorkerRenewsLeaseDuringLongHandler(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		obs, _ := testObservability(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		reserved := false
+		acked := make(chan struct{})
+		store := &renewingStore{canRenew: true, storeStub: &storeStub{
+			reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
+				if reserved {
+					return nil, nil
+				}
+				reserved = true
+				return &Reservation{Task: &Task{ID: "long", MessageVersion: "x"}, Token: "t", Attempts: 1}, nil
+			},
+			ack: func(context.Context, *Reservation) error { close(acked); return nil },
+		}}
+		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q", RenewLease: true, Lease: 3 * time.Second, StorageTimeout: 500 * time.Millisecond, Timeout: time.Minute}, store,
+			map[string]taskHandler{"x": func(ctx context.Context, _ *Task) error { time.Sleep(10 * time.Second); return ctx.Err() }}, obs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- w.Start(ctx) }()
+		<-acked
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if len(store.renewals) != 10 {
+			t.Fatalf("renewals = %d, want 10 (every 1s over 10s)", len(store.renewals))
+		}
+	})
+}
+
+// 续租发现租约已被他人取得时取消 Handler，不再确认任务。
+func TestWorkerCancelsHandlerWhenRenewalLosesLease(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		obs, _ := testObservability(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		reserved := false
+		canceled := make(chan time.Duration, 1)
+		store := &renewingStore{canRenew: true, lostAfter: 2, storeStub: &storeStub{
+			reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
+				if reserved {
+					return nil, nil
+				}
+				reserved = true
+				return &Reservation{Task: &Task{ID: "long", MessageVersion: "x"}, Token: "t", Attempts: 1}, nil
+			},
+			release: func(context.Context, *Reservation, time.Time) error { return ErrLeaseLost },
+		}}
+		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q", RenewLease: true, Lease: 3 * time.Second, StorageTimeout: 500 * time.Millisecond, Timeout: time.Minute}, store,
+			map[string]taskHandler{"x": func(ctx context.Context, _ *Task) error {
+				started := time.Now()
+				<-ctx.Done()
+				canceled <- time.Since(started)
+				return ctx.Err()
+			}}, obs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- w.Start(ctx) }()
+		if after := <-canceled; after != 2*time.Second {
+			t.Fatalf("handler canceled after %v, want 2s", after)
+		}
+		synctest.Wait()
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if logs := strings.Join(obs.Logger.(*testLog).events, "\n"); strings.Count(logs, "WARN eventqueue.lease.lost") != 2 {
+			t.Fatalf("lease lost logs: %s", logs)
+		}
+	})
+}
+
+func TestWorkerRenewLeaseValidation(t *testing.T) {
+	obs, _ := testObservability(t)
+	handlers := map[string]taskHandler{"x": func(context.Context, *Task) error { return nil }}
+	for _, tc := range []struct {
+		store  Store
+		config workerConfig
+	}{
+		{&storeStub{}, workerConfig{Name: "w", Queue: "q", RenewLease: true}},
+		{&renewingStore{storeStub: &storeStub{}}, workerConfig{Name: "w", Queue: "q", RenewLease: true}},
+		{&renewingStore{canRenew: true, storeStub: &storeStub{}}, workerConfig{Name: "w", Queue: "q", RenewLease: true, Lease: 15 * time.Second}},
+	} {
+		if _, err := newWorker[*Task](tc.config, tc.store, handlers, obs); err == nil {
+			t.Fatalf("accepted %+v", tc.config)
+		}
+	}
+	// 续租时 Timeout 不受 Lease 限制，默认租约为 max(30s, 3×StorageTimeout+1s)。
+	w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q", RenewLease: true, Timeout: time.Hour}, &renewingStore{canRenew: true, storeStub: &storeStub{}}, handlers, obs)
+	if err != nil || w.config.Lease != 30*time.Second {
+		t.Fatalf("lease=%v err=%v", w.config.Lease, err)
+	}
+}

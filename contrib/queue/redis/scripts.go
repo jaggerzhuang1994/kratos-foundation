@@ -46,6 +46,16 @@ redis.call('LPOP', KEYS[2])
 return result
 `
 
+// renewScript 只在任务仍处于租约集合且 token 匹配时更新租约截止时间。
+const renewScript = validateKeysScript + `
+local raw = redis.call('HGET', KEYS[1], ARGV[1])
+if not raw or not redis.call('ZSCORE', KEYS[4], ARGV[1]) then return 0 end
+local data = cjson.decode(raw)
+if data.token ~= ARGV[2] then return 0 end
+redis.call('ZADD', KEYS[4], ARGV[3], ARGV[1])
+return 1
+`
+
 const transitionScript = validateKeysScript + `
 local raw = redis.call('HGET', KEYS[1], ARGV[1])
 if not raw or not redis.call('ZSCORE', KEYS[4], ARGV[1]) then return 0 end

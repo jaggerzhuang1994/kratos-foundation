@@ -137,7 +137,7 @@ Claim、CompleteReserved、ReleaseReserved、FailReserved、RetryFailed 必须�
 
 数据库错误返回调用方，由 Worker 退避重试。两种方式都在返回前提交，不跨 Handler 持锁。
 
-Ack/Release/Fail 以 ID、Token、非失败及非空租约为条件更新，旧 owner 返回 `ErrLeaseLost`。成功按 `RetainCompleted` 删除或保留在原行；失败始终保留在原行，Retry 清零次数并重新排期。Claim 解码发现损坏时，按同一快照条件标记失败、保留原始正文并返回错误。失败查询不因损坏行中断：该行以 `queue.FailureCorruptPayload` 返回，只含任务 ID、可执行时间、次数与失败时间，消息版本与正文为空，其他失败任务照常列出；主键或失败时间缺失的行仍返回错误。至少需一个正常 Worker 或外部 supervisor 恢复消费；有限尝试次数、网络结果不确定及业务幂等边界见 [核心文档](../../../../pkg/queue/README.md)。本包不提供 exactly-once、永久去重、自动续租或故障数据库的数据恢复。
+Ack/Release/Fail 以 ID、Token、非失败及非空租约为条件更新，旧 owner 返回 `ErrLeaseLost`。成功按 `RetainCompleted` 删除或保留在原行；失败始终保留在原行，Retry 清零次数并重新排期。Claim 解码发现损坏时，按同一快照条件标记失败、保留原始正文并返回错误。失败查询不因损坏行中断：该行以 `queue.FailureCorruptPayload` 返回，只含任务 ID、可执行时间、次数与失败时间，消息版本与正文为空，其他失败任务照常列出；主键或失败时间缺失的行仍返回错误。至少需一个正常 Worker 或外部 supervisor 恢复消费；有限尝试次数、网络结果不确定及业务幂等边界见 [核心文档](../../../../pkg/queue/README.md)。`RenewReserved` 以同样的 ID/Token 条件只更新 `reserved_until`，供 Worker 的 `RenewLease` 在执行期间续租。本包不提供 exactly-once、永久去重或故障数据库的数据恢复。
 
 ```mermaid
 flowchart TD

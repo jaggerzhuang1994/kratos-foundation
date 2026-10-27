@@ -52,7 +52,9 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		handlerCtx, cancel := context.WithDeadline(spanCtx, claimedAt.Add(w.config.Timeout))
 		if handlerCtx.Err() == nil {
 			handlerCtx = context.WithValue(handlerCtx, executionMetadataKey{}, executionMetadata{attempt: reservation.Attempts, maxAttempts: w.retry.MaxAttempts})
+			stopRenewal := w.keepLease(handlerCtx, reservation, func() { cancel() })
 			handlerErr = invokeHandler(handlerCtx, handler, task)
+			stopRenewal()
 		}
 		if handlerCtx.Err() != nil {
 			handlerErr = handlerCtx.Err()
@@ -180,4 +182,44 @@ func invokeFailure(ctx context.Context, callback func(context.Context, FailureEv
 		}
 	}()
 	return callback(ctx, event)
+}
+
+// keepLease 在 RenewLease 开启时每 Lease/3 续租一次，返回的函数停止续租并等待其退出。
+// 租约已被他人取得时调用 lost 取消 Handler；其他存储错误只告警，下一周期再试。
+func (w *Worker[T]) keepLease(ctx context.Context, reservation *Reservation, lost func()) func() {
+	if w.renewer == nil {
+		return func() {}
+	}
+	done := make(chan struct{})
+	exited := make(chan struct{})
+	go func() {
+		defer close(exited)
+		ticker := time.NewTicker(w.config.Lease / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			renewCtx, cancel := context.WithTimeout(ctx, w.config.StorageTimeout)
+			err := w.renewer.RenewLease(renewCtx, reservation, time.Now().UTC().Add(w.config.Lease))
+			cancel()
+			switch {
+			case err == nil, ctx.Err() != nil:
+			case errors.Is(err, ErrLeaseLost):
+				w.log.WithContext(ctx).Warnw("event", "queue.lease.lost", "msg", "task lease lost; canceling handler", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID)
+				lost()
+				return
+			default:
+				w.log.WithContext(ctx).Warnw("event", "queue.lease.renew_failed", "msg", "task lease renewal failed; retrying", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID, "error", err)
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-exited
+	}
 }

@@ -91,6 +91,15 @@ type Store interface {
 	Retry(context.Context, string, time.Time) error
 }
 
+// LeaseRenewer 是 Store 的可选能力：Handler 执行期间延长租约，使短租约也能覆盖长任务，
+// 进程崩溃后任务在一个租约内即可被重新领取。WorkerConfig.RenewLease 依赖它。
+type LeaseRenewer interface {
+	// CanRenewLease 报告当前后端实例能否续租（例如自定义数据库 Repo 未实现续租时返回 false）。
+	CanRenewLease() bool
+	// RenewLease 在 token 仍属于该领取时把租约截止时间设为 until；已被他人领取或已确认返回 ErrLeaseLost。
+	RenewLease(context.Context, *Reservation, time.Time) error
+}
+
 // Stats 是单个队列在采样时钟下的独立只读统计快照；各状态互斥，不计已完成记录。
 type Stats struct {
 	// Ready 为已到期或租约已过期、可再次领取的任务数。

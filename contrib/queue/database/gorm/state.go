@@ -37,6 +37,13 @@ func (r *Repo[T]) CompleteReserved(ctx context.Context, id, token string, at tim
 	return transitionResult(reserved.Delete(r.entity()), "complete", queue.ErrLeaseLost)
 }
 
+// RenewReserved 按当前 token 延长租约截止时间；旧 owner、已确认或已失败返回 ErrLeaseLost。
+func (r *Repo[T]) RenewReserved(ctx context.Context, id, token string, until time.Time) error {
+	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"reserved_until": deadlineMillis(until)}), "renew", queue.ErrLeaseLost)
+}
+
+var _ databasequeue.LeaseRepo = (*Repo[Entity])(nil)
+
 // ReleaseReserved 原子释放租约并排期，保留自定义字段与领取次数。
 func (r *Repo[T]) ReleaseReserved(ctx context.Context, id, token string, at time.Time) error {
 	if err := r.validateTimestamp("available_at", at); err != nil {

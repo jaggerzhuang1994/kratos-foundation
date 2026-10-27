@@ -120,6 +120,26 @@ func (s *Store) Reserve(ctx context.Context, now time.Time, lease time.Duration)
 	return reservation, nil
 }
 
+// CanRenewLease 报告 Redis 后端支持续租。
+func (s *Store) CanRenewLease() bool { return true }
+
+// RenewLease 在 token 仍匹配且任务仍处于租约中时把截止时间设为 until；租约已过期被回收或已确认返回 ErrLeaseLost。
+func (s *Store) RenewLease(ctx context.Context, r *queue.Reservation, until time.Time) error {
+	if r == nil || r.Task == nil || strings.TrimSpace(r.Task.ID) == "" || len(r.Task.ID) > 128 || r.Token == "" {
+		return queue.ErrLeaseLost
+	}
+	result, err := s.client.Eval(ctx, renewScript, s.keys, r.Task.ID, r.Token, scheduledMillis(until)).Int()
+	if err != nil {
+		return fmt.Errorf("renew redis task lease: %w", err)
+	}
+	if result == 0 {
+		return queue.ErrLeaseLost
+	}
+	return nil
+}
+
+var _ queue.LeaseRenewer = (*Store)(nil)
+
 // Ack 仅删除 token 仍匹配的当前领取任务。
 func (s *Store) Ack(ctx context.Context, reservation *queue.Reservation) error {
 	return s.transition(ctx, reservation, "ack", time.Time{}, "")

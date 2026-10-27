@@ -33,9 +33,12 @@ type WorkerConfig struct {
 	PollInterval time.Duration
 	// StorageTimeout 为单次存储操作及失败通知的协作超时，零值默认 5s，负值无效。
 	StorageTimeout time.Duration
-	// Lease 为领取租约时长，至少 1ms 且须大于 Timeout + StorageTimeout，不自动续租。
-	// 零值默认 max(60s, Timeout + StorageTimeout + 1s)。
+	// Lease 为领取租约时长，至少 1ms。未开启 RenewLease 时须大于 Timeout + StorageTimeout，
+	// 零值默认 max(60s, Timeout + StorageTimeout + 1s)；开启时须大于 3×StorageTimeout，零值默认 max(30s, 3×StorageTimeout + 1s)。
 	Lease time.Duration
+	// RenewLease 在 Handler 执行期间每 Lease/3 续租一次，Timeout 不再受 Lease 限制；续租发现租约已被他人取得时
+	// 取消 Handler Context。要求 Store 实现 LeaseRenewer 且 CanRenewLease 为 true，否则构造失败。
+	RenewLease bool
 	// Retry 可选；nil 使用 MaxAttempts 和 500ms/30s 退避，非 nil 时不补齐其中的零值。
 	Retry *RetryPolicy
 	// BeforeHandle 在解码校验后、处理中间件前执行，可用于等待限流器；失败消耗本次领取。
@@ -61,7 +64,7 @@ func (c WorkerConfig) workerConfig(queue string) (workerConfig, error) {
 		c.Retry = &RetryPolicy{MaxAttempts: c.MaxAttempts, MinBackoff: defaultMinBackoff, MaxBackoff: defaultMaxBackoff}
 	}
 	// 时长默认值与执行窗口校验统一由 resolve 完成。
-	return workerConfig{Name: c.Name, Queue: queue, Concurrency: c.Concurrency, PollInterval: c.PollInterval, Timeout: c.Timeout, StorageTimeout: c.StorageTimeout, Lease: c.Lease, Retry: c.Retry}, nil
+	return workerConfig{Name: c.Name, Queue: queue, Concurrency: c.Concurrency, PollInterval: c.PollInterval, Timeout: c.Timeout, StorageTimeout: c.StorageTimeout, Lease: c.Lease, RenewLease: c.RenewLease, Retry: c.Retry}, nil
 }
 
 // workerConfig 保存供底层消费循环解析和校验的参数。
@@ -80,6 +83,8 @@ type workerConfig struct {
 	Lease time.Duration
 	// StorageTimeout 为单次存储操作及失败通知的协作超时，零值默认 5s，负值无效。
 	StorageTimeout time.Duration
+	// RenewLease 为执行期间是否续租。
+	RenewLease bool
 	// Retry 为重试策略；nil 使用 3 次领取、500ms 初始退避和 30s 最大退避。
 	Retry *RetryPolicy
 }
@@ -104,8 +109,16 @@ func (config workerConfig) resolve() (workerConfig, error) {
 	if config.Lease == 0 {
 		// 极大时长相加溢出时得到的租约无法覆盖执行窗口，会被下面的校验拒绝。
 		config.Lease = max(60*time.Second, config.Timeout+config.StorageTimeout+time.Second)
+		if config.RenewLease {
+			config.Lease = max(30*time.Second, 3*config.StorageTimeout+time.Second)
+		}
 	}
-	if config.Concurrency < 1 || config.Concurrency > 1024 || config.PollInterval < 0 || config.Timeout < 0 || config.StorageTimeout < 0 || config.Lease < time.Millisecond || config.Lease <= config.Timeout || config.Lease-config.Timeout <= config.StorageTimeout {
+	// 续租时每 Lease/3 写一次，单次写入受 StorageTimeout 限制，必须在租约到期前完成。
+	window := config.Lease <= config.Timeout || config.Lease-config.Timeout <= config.StorageTimeout
+	if config.RenewLease {
+		window = config.Lease <= 3*config.StorageTimeout
+	}
+	if config.Concurrency < 1 || config.Concurrency > 1024 || config.PollInterval < 0 || config.Timeout < 0 || config.StorageTimeout < 0 || config.Lease < time.Millisecond || window {
 		return workerConfig{}, errors.New("invalid queue worker concurrency or timing configuration")
 	}
 	return config, nil
@@ -136,6 +149,8 @@ type Worker[T any] struct {
 	disabled bool
 	// onFailed 为归档成功后的可选通知回调，不保证可靠投递。
 	onFailed func(context.Context, FailureEvent) error
+	// renewer 在 RenewLease 开启时为 Store 的续租能力，否则为 nil。
+	renewer LeaseRenewer
 }
 
 // newWorker 复制 Handler 表并校验执行窗口，构造阶段不调用 Store。
@@ -160,7 +175,14 @@ func newWorker[T any](config workerConfig, store Store, handlers map[string]task
 	if err != nil {
 		return nil, fmt.Errorf("create queue worker telemetry: %w", err)
 	}
-	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner()}, nil
+	var renewer LeaseRenewer
+	if config.RenewLease {
+		var ok bool
+		if renewer, ok = store.(LeaseRenewer); !ok || !renewer.CanRenewLease() {
+			return nil, errors.New("queue store does not support lease renewal")
+		}
+	}
+	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner(), renewer: renewer}, nil
 }
 
 // Start 阻塞运行所有领取循环；存储瞬时故障在循环内退避重试，只有 Store 违反契约时取消同实例其他循环并返回错误。

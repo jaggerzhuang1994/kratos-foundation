@@ -2,6 +2,7 @@ package gorm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -206,5 +207,39 @@ func TestRepoSkipLockedDetection(t *testing.T) {
 	repo.skipLocked.Store(skipLockedUnknown)
 	if repo.supportsSkipLocked(ctx) || repo.skipLocked.Load() != skipLockedUnknown {
 		t.Fatal("failed version probe was cached or enabled SKIP LOCKED")
+	}
+}
+
+// 续租只对当前 token 生效，续租后的租约在原截止时间之后不能被他人领取。
+func TestRepoRenewReserved(t *testing.T) {
+	repo, _ := testRepo(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "long", MessageVersion: "test", AvailableAt: now}}); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := repo.Claim(ctx, now, now.Add(time.Second), "owner")
+	if err != nil || owner == nil {
+		t.Fatalf("%v %v", owner, err)
+	}
+	store := databasequeue.NewStore(repo)
+	if !store.CanRenewLease() {
+		t.Fatal("gorm repo cannot renew")
+	}
+	reservation := &queue.Reservation{Task: &owner.Task, Token: owner.Token, Attempts: owner.Attempts}
+	if err := store.RenewLease(ctx, reservation, now.Add(10*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if record, err := repo.Claim(ctx, now.Add(5*time.Second), now.Add(6*time.Second), "thief"); err != nil || record != nil {
+		t.Fatalf("renewed lease reclaimed: %+v %v", record, err)
+	}
+	if err := repo.RenewReserved(ctx, "long", "stale", now.Add(time.Minute)); !errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("stale renewal = %v", err)
+	}
+	if err := repo.CompleteReserved(ctx, "long", "owner", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RenewLease(ctx, reservation, now.Add(time.Minute)); !errors.Is(err, queue.ErrLeaseLost) {
+		t.Fatalf("renewal after completion = %v", err)
 	}
 }

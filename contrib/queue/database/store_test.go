@@ -246,3 +246,14 @@ func TestStoresUseIndependentRepos(t *testing.T) {
 		t.Fatal("repo routing was shared")
 	}
 }
+
+// 自定义 Repo 未实现 LeaseRepo 时不声明续租能力。
+func TestStoreLeaseRenewalRequiresLeaseRepo(t *testing.T) {
+	store := NewStore(repoStub{})
+	if store.CanRenewLease() {
+		t.Fatal("repo without RenewReserved reported renewal support")
+	}
+	if err := store.RenewLease(context.Background(), &queue.Reservation{Task: &queue.Task{ID: "a"}, Token: "t", Attempts: 1}, time.Now()); !errors.Is(err, errors.ErrUnsupported) {
+		t.Fatalf("renew without LeaseRepo = %v", err)
+	}
+}
