@@ -12,7 +12,7 @@
 - 无新增提交
 <!-- changelog:auto:end -->
 
-## v2.6.0（2026-10-26）
+## v2.6.0（2026-10-27）
 
 ### 升级风险
 
@@ -88,6 +88,7 @@
 
 **修复**
 
+- recover panics in gRPC streams and background goroutines（`7ad0728`）
 - harden cache load panics, TiDB claim probe; add totp.VerifyAt（`01f80de`）
 - **observability**：延迟 SLO 匹配 Prometheus 3 规范后的 le；告警说明映射覆盖全部告警（`66ac1e6`）
 - **server**：业务端口屏蔽 DefaultServeMux 上的 pprof；默认连接级超时（`274a048`）
@@ -102,6 +103,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.6.0 release notes（`bc2f1ec`）
 - **outbox**：stress that Write must run inside the business transaction（`ae35c53`）
 - CHANGELOG 记录管理端口、请求体上限、SQL 参数等默认值变化；演示改用新接口（`eb35724`）
 
