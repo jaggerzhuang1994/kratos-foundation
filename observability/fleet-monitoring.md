@@ -61,7 +61,7 @@ flowchart TD
 
 | 负载 | 关键指标 | 告警（已有 / 规划） |
 | --- | --- | --- |
-| HTTP 服务 | `server_requests_code_total`、`server_requests_seconds`、`app_ready`、DB/Redis 池 | TargetDown、AppNotReady、AppUnavailable、HighServerErrorRate、HighLatency；规划：可用性与延迟 SLO 消耗率 |
+| HTTP 服务 | `server_requests_code_total`、`server_requests_seconds`、`app_ready`、DB/Redis 池 | TargetDown、AppNotReady、AppUnavailable、HighServerErrorRate、HighLatency、SLOBurnRateCritical / SLOBurnRateWarning（可用性）；规划：延迟 SLO |
 | gRPC 服务 | 同上（`kind=grpc`）；gRPC 健康检查已与 `app_ready` 联动 | 同 HTTP；K8s 使用原生 gRPC 探针 |
 | API 网关 | 入口 RED + 出口 `client_requests_seconds`（按下游 target）、429 限流、熔断打开 | 同 HTTP；规划：单下游错误率/延迟（定位“哪个后端拖垮网关”）、限流比例突增 |
 | 队列消费者（Queue/Kafka） | `queue_consumer_*` / `kafka_consumer_*` 吞吐与失败、重试、死信、`queue_oldest_ready_age_seconds`、Kafka lag、`app_ready` | QueueRuntimeFailure、KafkaRuntimeFailure、QueueReadyTooOld、KafkaLagHigh、AppNotReady；规划：死信速率 >0、失败率阈值 |
@@ -74,8 +74,8 @@ flowchart TD
 
 | 级别 | 规则 | 通知 |
 | --- | --- | --- |
-| critical | FoundationAppUnavailable；规划：SLO 快速消耗（1h/5m 窗口 14.4 倍） | 电话/值班即时通知 |
-| warning | FoundationAppNotReady、TargetDown、HighServerErrorRate、HighLatency、消费积压与运行时故障、Job 失败、K8s Job/CronJob 失败与调度异常、DB/Redis 池饱和；规划：SLO 慢速消耗（6h/30m 窗口 6 倍） | 团队群或工单，工作时间处理 |
+| critical | FoundationAppUnavailable、FoundationSLOBurnRateCritical（1h/5m 14.4 倍、6h/30m 6 倍） | 电话/值班即时通知 |
+| warning | FoundationAppNotReady、TargetDown、HighServerErrorRate、HighLatency、消费积压与运行时故障、Job 失败、K8s Job/CronJob 失败与调度异常、DB/Redis 池饱和、FoundationSLOBurnRateWarning（1d/2h 3 倍、3d/6h 1 倍） | 团队群或工单，工作时间处理 |
 
 - **分组**：应用告警按 `alertname, env, cluster, namespace, app`，节点告警按 `alertname, env, cluster, node`，同一 app 的多实例合并为一条通知。K8s Job/CronJob 告警按 `alertname, env, cluster, namespace, owner_name`（或 `cronjob`）分组，同一 CronJob 的多次失败合并；`app` 需 kube-state-metrics 放开 `app.kubernetes.io/name` 才有值。
 - **抑制**：同 app 的 FoundationAppUnavailable 抑制 FoundationAppNotReady 与 TargetDown；节点不可用抑制该节点上的应用告警，避免一次故障刷屏。
@@ -101,9 +101,7 @@ flowchart TD
 
 每个 app 按负载类型定义一个可用性 SLO（例如 99.9%）和一个延迟 SLO（例如 P99 < 1s 的请求占比 99%）。为避免 L0 面板和告警在几十个 app 上重复计算原始直方图，已用 `foundation-records` 组预聚合 5m 速率、延迟桶、就绪实例、消费失败、Job 失败与最老就绪任务，规则清单见 [alerts.md](alerts.md#recording-rules)。比例与分位数在查询时由计数求得，不预存比值，避免跨应用再聚合时出错。
 
-规划：为消耗率告警补 `app:server_requests:rate1h` / `rate6h` 及对应错误速率等多窗口规则。
-
-消耗率告警采用多窗口：1h 与 5m 同时超过 14.4 倍预算消耗为 critical，6h 与 30m 同时超过 6 倍为 warning。低流量服务配合端到端探测或业务成功事件，避免少量请求导致误报。
+可用性 SLO 已由 `foundation-slo` 组实现：`app:server_error_ratio:rate5m…3d` 多窗口错误比例，1h/5m 超过 14.4 倍或 6h/30m 超过 6 倍为 critical，1d/2h 超过 3 倍或 3d/6h 超过 1 倍为 warning，默认 SLO 99.9% 由 `foundation:slo_error_budget:ratio` 调整，见 [可用性 SLO 消耗率告警](alerts.md#可用性-slo-消耗率告警)。长窗口请求少于 100 次时不告警，低流量服务配合端到端探测或业务成功事件。规划：延迟 SLO（需按业务阈值对齐直方图桶）。
 
 ## 落地顺序
 
@@ -111,5 +109,6 @@ flowchart TD
 2. 已完成：`foundation-records` recording rules 及规则测试、L0 舰队总览面板、L1 首行 `app_ready` 就绪率；[check_dashboards.py](../test/observability/check_dashboards.py) 加载同一份规则文件，用合成原始样本验证舰队页与 L1 就绪率。
 3. 已完成：一次性任务的 K8s Job/CronJob 告警（`foundation-kubernetes-jobs` 组及规则测试，kube-state-metrics `metricLabelsAllowlist` 示例），以及可选的退出时 Pushgateway 推送 `metrics.push`（默认关闭）。
 4. 已完成：平台总览扩展（当前告警、K8s、数据库、Redis、队列与 Kafka、网关质量分区及对应预聚合）与按资源类型的模板化详情页（服务、网关、数据库、Redis、队列与 Kafka）；[check_dashboards.py](../test/observability/check_dashboards.py) 校验统一导航、Folder 映射与链接目标，并为每个新页提供含 exporter 未接入的合成样本断言。
-5. 下一步：SLO 消耗率告警、网关单下游告警（可直接复用 `app_downstream:*` 预聚合）、Alertmanager 分组/抑制配置示例。
-6. 持续：panic 与配置拒绝计数指标（`app_runtime_panics_total`、`server_request_panics_total`、`config_updates_rejected_total`），让目前只有日志的异常也能告警。
+5. 已完成：可用性 SLO 多窗口多消耗率告警（`foundation-slo` 组及规则测试）。
+6. 下一步：延迟 SLO、网关单下游告警（可直接复用 `app_downstream:*` 预聚合）、Alertmanager 分组/抑制配置示例。
+7. 持续：panic 与配置拒绝计数指标（`app_runtime_panics_total`、`server_request_panics_total`、`config_updates_rejected_total`），让目前只有日志的异常也能告警。

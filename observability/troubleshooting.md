@@ -50,6 +50,10 @@ K8s 使用 `kubectl -n <namespace> get pods -o wide`、`describe pod <pod>` 和 
 
 检查 4xx/5xx 分类是否符合业务错误映射。请求级重试可能重复副作用；涉及订单、支付或消息消费时先确认幂等和事务边界，不直接批量重放或扩大重试次数。回滚或扩容由业务发布流程执行。
 
+## FoundationSLOBurnRate
+
+FoundationSLOBurnRateCritical / FoundationSLOBurnRateWarning 表示 5xx 正在消耗可用性错误预算，口径见 [可用性 SLO 消耗率告警](alerts.md#可用性-slo-消耗率告警)。先用 `app:server_error_ratio:rate5m` 与 `rate1h` 判断是突发还是持续：短窗口高、长窗口低是刚开始的故障，按 FoundationHighServerErrorRate 的步骤定位 operation、Pod 与依赖；长窗口持续偏高而短窗口不高，多为少量接口长期报错，按 operation 排查错误分布。处理后确认短窗口比例回落，告警会在数分钟内解除。预算耗尽前评估是否暂停发布；只有确认 SLO 目标不合理时才调整 `foundation:slo_error_budget:ratio`，不要用改阈值代替修复。
+
 ## FoundationHighLatency
 
 先按 operation、Pod 拆分观察，并同时查看请求速率、进程 CPU/RSS、Goroutine 及所在机器。若同 Node 多个 App 同时变慢，检查机器资源竞争；若只有特定接口变慢，检查外部调用耗时、连接池等待和业务热点。

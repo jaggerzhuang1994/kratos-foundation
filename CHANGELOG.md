@@ -17,6 +17,8 @@
 - gRPC 客户端 keepalive `client.clients.<name>.grpc.keepalive_time` / `keepalive_timeout` / `keepalive_permit_without_stream`，按需开启。
 - Queue 执行期间续租 `WorkerConfig.RenewLease` 与可选接口 `queue.LeaseRenewer`（Redis Store、数据库 Store 均支持，自定义数据库 Repo 实现 `database.LeaseRepo`）：长任务可用短租约，崩溃后一个租约内即被重新领取；租约已被他人取得时取消 Handler。
 - 管理端口 pprof `server.http.pprof`（默认关闭），只能挂在独立管理监听上，落到业务监听时启动失败。
+- 可用性 SLO 多窗口多消耗率告警 `FoundationSLOBurnRateCritical`（1h/5m 14.4 倍、6h/30m 6 倍）与 `FoundationSLOBurnRateWarning`（1d/2h 3 倍、3d/6h 1 倍），默认 SLO 99.9%，由 `foundation:slo_error_budget:ratio` 调整；新增 `app:server_error_ratio:rate5m…3d` 预聚合及规则测试。见 [可用性 SLO 消耗率告警](observability/alerts.md#可用性-slo-消耗率告警)。
+- `pkg/cache`：基于 Redis 的旁路缓存，进程内同 key 回源合并（singleflight）、TTL 抖动、可选空值缓存，复用 `metrics.CacheMetrics`。见 [pkg/cache](pkg/cache/README.md)。
 - `queue.FailureCorruptPayload`：数据库 Queue 的失败列表把正文损坏的行按该分类返回（只含 ID 与时间），不再让整个列表报错。
 
 ### Changed

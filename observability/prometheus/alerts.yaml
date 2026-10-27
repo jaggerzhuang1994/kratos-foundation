@@ -383,3 +383,112 @@ groups:
         expr: sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_requests_code_total{code=~"5.."}[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
       - record: app_downstream:client_requests_seconds_bucket:rate5m
         expr: sum by (env, cluster, namespace, app, downstream, le) (label_replace(label_replace(rate(client_requests_seconds_bucket[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
+  # 可用性 SLO 的多窗口多消耗率告警（Google SRE Workbook）：消耗率 = 错误比例 / 错误预算。
+  # 默认 SLO 99.9%（30 天错误预算 0.1%），只把 5xx 计为错误；调整 SLO 时修改 foundation:slo_error_budget:ratio。
+  # 长窗口判断是否真的在消耗预算，短窗口确认仍在发生，恢复后告警尽快解除。
+  - name: foundation-slo
+    rules:
+      - record: foundation:slo_error_budget:ratio
+        # 1 - SLO 目标；99.9% 对应 0.001，99.5% 对应 0.005。
+        expr: vector(0.001)
+      - record: app:server_error_ratio:rate5m
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[5m]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[5m]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[5m])) > 0)
+      - record: app:server_error_ratio:rate30m
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[30m]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[30m]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[30m])) > 0)
+      - record: app:server_error_ratio:rate1h
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[1h]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[1h]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[1h])) > 0)
+      - record: app:server_error_ratio:rate2h
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[2h]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[2h]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[2h])) > 0)
+      - record: app:server_error_ratio:rate6h
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[6h]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[6h]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[6h])) > 0)
+      - record: app:server_error_ratio:rate1d
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[1d]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[1d]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[1d])) > 0)
+      - record: app:server_error_ratio:rate3d
+        expr: |
+          (
+            sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true",code=~"5.."}[3d]))
+            or 0 * sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[3d]))
+          )
+          / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[3d])) > 0)
+      - alert: FoundationSLOBurnRateCritical
+        # 14.4 倍：1h 消耗 30 天预算的 2%（约 2 天耗尽）；6 倍：6h 消耗 5%（约 5 天耗尽）。
+        expr: |
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_error_ratio:rate1h > 14.4 * scalar(foundation:slo_error_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_error_ratio:rate5m > 14.4 * scalar(foundation:slo_error_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_code_total{foundation="true"}[1h])) >= 100
+          )
+          or
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_error_ratio:rate6h > 6 * scalar(foundation:slo_error_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_error_ratio:rate30m > 6 * scalar(foundation:slo_error_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_code_total{foundation="true"}[6h])) >= 100
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "应用 5xx 快速消耗可用性错误预算（按当前速率数天内耗尽 30 天预算）"
+          runbook: "observability/troubleshooting.md#foundationsloburnrate"
+      - alert: FoundationSLOBurnRateWarning
+        # 3 倍：1d 消耗 10%；1 倍：3d 消耗 10%，按此速率 30 天恰好耗尽。
+        expr: |
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_error_ratio:rate1d > 3 * scalar(foundation:slo_error_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_error_ratio:rate2h > 3 * scalar(foundation:slo_error_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_code_total{foundation="true"}[1d])) >= 100
+          )
+          or
+          max by (env, cluster, namespace, app) (
+          (
+            app:server_error_ratio:rate3d > 1 * scalar(foundation:slo_error_budget:ratio)
+            and on (env, cluster, namespace, app) app:server_error_ratio:rate6h > 1 * scalar(foundation:slo_error_budget:ratio)
+          )
+          and on (env, cluster, namespace, app)
+          sum by (env, cluster, namespace, app) (increase(server_requests_code_total{foundation="true"}[3d])) >= 100
+          )
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "应用 5xx 持续消耗可用性错误预算，按当前速率 30 天内耗尽"
+          runbook: "observability/troubleshooting.md#foundationsloburnrate"

@@ -11,11 +11,26 @@
 | FoundationAppUnavailable（critical） | 同一 App 全部实例 `app_ready=0` | 2m | 服务整体不可用，优先处理 |
 | FoundationHighServerErrorRate | App 5xx >5%，5m 请求至少 100 | 5m | 发布变更、错误分布、依赖 |
 | FoundationHighLatency | App P95 >500ms，5m 请求至少 100 | 10m | 慢接口、资源、外部调用 |
+| FoundationSLOBurnRateCritical（critical） | 可用性错误预算消耗率：1h 与 5m 均 >14.4，或 6h 与 30m 均 >6；长窗口请求至少 100 | 2m | 按当前速率数天内耗尽 30 天预算，立即处理 |
+| FoundationSLOBurnRateWarning | 消耗率：1d 与 2h 均 >3，或 3d 与 6h 均 >1；长窗口请求至少 100 | 15m | 按当前速率 30 天内耗尽，当天处理 |
 | FoundationNodeCPUHigh | 应用所在机器 CPU >90% | 15m | 机器进程分布、竞争 |
 | FoundationNodeMemoryHigh | 应用所在机器内存使用 >90% | 10m | 可用内存、OOM、进程 RSS |
 | FoundationNodeDiskLow | 应用所在机器根分区可用 <10% | 15m | 磁盘、日志及保留策略 |
 
 应用错误率和延迟按 env/cluster/namespace/app 聚合，先聚合计数或桶再求比值或分位数。低流量抑制减少少量请求造成的噪声，也意味着低流量关键业务需要自己的成功事件/端到端探测告警。机器告警按 env/cluster/node 聚合且只匹配应用目标所在的机器；不重复为同机每个 App 发一条告警。
+
+## 可用性 SLO 消耗率告警
+
+`foundation-slo` 组按 [Google SRE Workbook](https://sre.google/workbook/alerting-on-slos/) 的多窗口多消耗率方案告警。消耗率 = 错误比例 ÷ 错误预算；只把 5xx 计为错误，4xx 视为调用方问题不消耗预算。默认 SLO 99.9%，错误预算由 `foundation:slo_error_budget:ratio`（`vector(0.001)`）定义，调整 SLO 只改这一条规则，例如 99.5% 改为 0.005。所有应用共用同一目标；需要按应用区分时复制该组并按 `app` 过滤。
+
+| 级别 | 长窗口 / 短窗口 | 消耗率 | 30 天预算消耗 |
+| --- | --- | --- | --- |
+| critical | 1h / 5m | 14.4 | 1h 内消耗 2%，约 2 天耗尽 |
+| critical | 6h / 30m | 6 | 6h 内消耗 5%，约 5 天耗尽 |
+| warning | 1d / 2h | 3 | 1d 内消耗 10%，约 10 天耗尽 |
+| warning | 3d / 6h | 1 | 3d 内消耗 10%，按此速率 30 天恰好耗尽 |
+
+长窗口判断是否真的在消耗预算，短窗口确认问题仍在发生，恢复后告警数分钟内解除。长窗口内请求少于 100 次时不告警，低流量关键业务需另配成功事件或端到端探测告警。快速消耗时 critical 先触发，warning 需持续 15m；Alertmanager 可用 critical 抑制同 app 的 warning。错误比例规则 `app:server_error_ratio:rate5m|30m|1h|2h|6h|1d|3d` 只统计 `foundation="true"` 的目标，无请求时无值；面板可直接引用。延迟 SLO 需要按业务阈值对齐直方图桶边界，模板暂不提供。
 
 ## Recording rules
 

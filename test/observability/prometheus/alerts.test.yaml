@@ -826,3 +826,76 @@ tests:
             exp_annotations:
               summary: K8s Job 运行超过 1 小时仍未结束
               runbook: observability/troubleshooting.md#foundationjobrunningtoolong
+  - name: SLO 快速消耗触发 critical，低流量与健康应用不告警
+    interval: 1m
+    input_series:
+      # api：每分钟 1000 次、2% 5xx，消耗率 20 倍。
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="api",code="200"}
+        values: 0+980x30
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="api",code="500"}
+        values: 0+20x30
+      # tiny：全部失败但每分钟 1 次，长窗口不足 100 次，不告警。
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="tiny",code="500"}
+        values: 0+1x30
+      # healthy：0.05% 5xx，低于预算。
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="healthy",code="200"}
+        values: 0+1999x30
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="healthy",code="500"}
+        values: 0+1x30
+    promql_expr_test:
+      - expr: foundation:slo_error_budget:ratio
+        eval_time: 10m
+        exp_samples:
+          - labels: 'foundation:slo_error_budget:ratio'
+            value: 0.001
+      - expr: app:server_error_ratio:rate5m{app="api"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:server_error_ratio:rate5m{env="prod",cluster="c1",namespace="apps",app="api"}'
+            value: 0.02
+      - expr: app:server_error_ratio:rate5m{app="healthy"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app:server_error_ratio:rate5m{env="prod",cluster="c1",namespace="apps",app="healthy"}'
+            value: 0.0005
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FoundationSLOBurnRateCritical
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: api
+              severity: critical
+            exp_annotations:
+              summary: 应用 5xx 快速消耗可用性错误预算（按当前速率数天内耗尽 30 天预算）
+              runbook: observability/troubleshooting.md#foundationsloburnrate
+      # warning 需持续 15m，快速消耗时由 critical 先通知。
+      - eval_time: 10m
+        alertname: FoundationSLOBurnRateWarning
+        exp_alerts: []
+  - name: SLO 慢速消耗只触发 warning
+    interval: 1m
+    input_series:
+      # slow：每分钟 1000 次、0.4% 5xx，消耗率 4 倍：超过 1d/2h 的 3 倍，低于 critical 的 6 倍。
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="slow",code="200"}
+        values: 0+996x240
+      - series: server_requests_code_total{foundation="true",env="prod",cluster="c1",namespace="apps",app="slow",code="500"}
+        values: 0+4x240
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: FoundationSLOBurnRateCritical
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: FoundationSLOBurnRateWarning
+        exp_alerts:
+          - exp_labels:
+              env: prod
+              cluster: c1
+              namespace: apps
+              app: slow
+              severity: warning
+            exp_annotations:
+              summary: 应用 5xx 持续消耗可用性错误预算，按当前速率 30 天内耗尽
+              runbook: observability/troubleshooting.md#foundationsloburnrate
