@@ -144,7 +144,7 @@ flowchart TD
 
 ## 业务缓存与接入指南
 
-`NewCacheMetrics(provider, "products")` 提供固定缓存类别的 Hit/Miss/Error/Load 记录。只有业务层知道“有效命中”和“实际回源”，它不自动操作 Redis、不改变缓存一致性或并发策略。命中率使用 hit/(hit+miss)，访问错误单独统计；Load 记录实际回源次数、结果及秒单位耗时。对象只持有 instrument 与不可变名称，没有单独 cleanup。
+`NewCacheMetrics(provider, "products")` 提供固定缓存类别的 Hit/Miss/Error/Load 记录。只有业务层知道“有效命中”和“实际回源”，它不自动操作 Redis、不改变缓存一致性或并发策略；需要完整旁路缓存时使用 [`pkg/cache`](../cache/README.md)，它按同样口径自动记录。命中率使用 hit/(hit+miss)，访问错误单独统计；Load 记录实际回源次数、结果及秒单位耗时。对象只持有 instrument 与不可变名称，没有单独 cleanup。
 
 Provider 默认 Go collector 之外额外启用 `/cpu/classes/gc/total:cpu-seconds` 与 `/sched/latencies:seconds`，用于 GC CPU 估计开销和调度等待分布；保留现有默认 Go/Process 指标，不导出全部 runtime 指标。不同平台的 process 指标可能不同，缺失不补零。
 

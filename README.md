@@ -18,7 +18,7 @@
 | 服务端 | [`server`](pkg/server/README.md) | HTTP/gRPC/WebSocket、默认中间件链（错误归一化、限流、超时、校验、访问日志）、`/healthz` `/readyz` `/metrics`、gRPC 健康检查与就绪联动、平滑停机 |
 | 客户端 | [`client`](pkg/client/README.md)、[`registry`](pkg/registry/README.md) | 具名 HTTP/gRPC 客户端、服务发现、超时预算传播、热更新与租约式借用；Consul 注册发现 |
 | 错误 | [`errors`](pkg/errors/README.md) | 带业务码的结构化错误，HTTP/gRPC 双向转换，兼容 v1 错误；错误堆栈仅在非生产环境返回 |
-| 数据 | [`database`](pkg/database/README.md)、[`redis`](pkg/redis/README.md)、[`oss`](pkg/oss/README.md)、[`lock`](pkg/lock/README.md) | GORM 具名连接与事务、连接池热更新、Redis 连接管理、对象存储、分布式锁 |
+| 数据 | [`database`](pkg/database/README.md)、[`redis`](pkg/redis/README.md)、[`cache`](pkg/cache/README.md)、[`oss`](pkg/oss/README.md)、[`lock`](pkg/lock/README.md) | GORM 具名连接与事务、连接池热更新、Redis 连接管理、旁路缓存（防击穿/雪崩/穿透）、对象存储、分布式锁 |
 | 消息与任务 | [`kafka`](pkg/kafka/README.md)、[`queue`](pkg/queue/README.md)、[`job`](pkg/job/README.md) | Kafka 生产消费与重试/死信、持久化任务队列（Redis / 数据库）、Cron 定时任务与并发策略 |
 | 可观测性 | [`metrics`](pkg/metrics/README.md)、[`tracing`](pkg/tracing/README.md)、[`observability`](observability/README.md) | OpenTelemetry 指标与链路、Prometheus 暴露、`app_ready` 就绪指标、Grafana 面板与告警规则 |
 | 工具 | [`env`](pkg/env/README.md)、[`validation`](pkg/validation/README.md)、[`crypto`](pkg/crypto/README.md)、[`compress`](pkg/compress/readme.md)、[`totp`](pkg/totp/README.md)、[`utils`](pkg/utils/README.md)、[`gormscope`](pkg/gormscope/README.md) | 运行环境、输入校验、加解密、压缩、一次性验证码、集合工具、GORM 查询条件 |
