@@ -92,6 +92,8 @@ type cronOptions struct {
 	maxPendingRuns int
 	// delayOverflowHandler 等待满额时的同步通知；可能并发调用，nil 仅告警并跳过。
 	delayOverflowHandler func(context.Context, DelayOverflow) error
+	// clusterLock 非 nil 时每次触发先取得集群锁，见 WithClusterLock。
+	clusterLock *clusterLock
 }
 
 // RunImmediately 显式设置首次 Start 且任务启用时是否立即执行，可用 false 覆盖 Task 默认值。

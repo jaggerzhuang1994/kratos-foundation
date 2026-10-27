@@ -1,6 +1,6 @@
 # Job
 
-`pkg/job` 声明 Cron、Once 和 Daemon 任务。`bootstrap.Spec.Job()` 使用 Wire 共享的 job.Spec；`bootstrap.NewJobBootstrap` 注入应用的 config.Manager，构造 Manager 并登记 Runtime。Job 只提供本进程内、同一 Manager 中同一注册名称的并发控制；不同 Manager 和进程互不协调。
+`pkg/job` 声明 Cron、Once 和 Daemon 任务。`bootstrap.Spec.Job()` 使用 Wire 共享的 job.Spec；`bootstrap.NewJobBootstrap` 注入应用的 config.Manager，构造 Manager 并登记 Runtime。Job 默认只提供本进程内、同一 Manager 中同一注册名称的并发控制，不同 Manager 和进程互不协调；多副本部署需要每次触发只执行一次的 Cron 使用 [集群单例](#集群单例)。
 
 ## 声明与优先级
 
@@ -207,6 +207,24 @@ flowchart TD
 Cron 注册执行上下文时，还通过 `log.WithKv` 追加 `job=注册名`，保留父 Context 的日志字段与取消信号。Task、业务中间件及最终 ErrorHandler 使用 `logger.WithContext(ctx)` 时会自动携带该字段；父 Context 不会被修改，后续调度变更继续复用此任务上下文。
 
 共享 Grafana 组件面板、指标名称与采集边界见 [组件指标说明](../../observability/components.md)。
+
+## 集群单例
+
+多副本部署时，同一 Cron 默认在每个副本上都会执行。`WithClusterLock(locker, key, ttl)` 让共享同一 `lock.Locker`（通常是 `contrib/lock/redis`）的所有实例每次触发只执行一次：
+
+```go
+locker, err := redislock.NewDefault(redisManager) // contrib/lock/redis
+spec.Job().RegisterCron("settle", "@every 1m", task,
+    job.WithConcurrentPolicy(job.SkipIfRunning),
+    job.WithClusterLock(locker, "orders:job:settle", 20*time.Second))
+```
+
+- 触发时先过本地并发策略，再 `TryLock`；拿到租约的实例执行，其余实例跳过本轮，记 `job_triggers_skipped_total{reason="cluster_locked"}` 和 DEBUG `job.trigger.skipped`，不计一次执行。
+- 执行期间每 `ttl/3` 续租；续租失败说明租约已被他人取得，任务 Context 以 `job cluster lock lost` 为原因取消，记录 WARN `job.cluster_lock.lost`，本轮结果带该错误交给 `WithErrorHandler`。任务必须响应 Context 取消。
+- 执行结束后**不主动释放**：租约保留到 TTL 自然过期，吸收副本间的时钟偏差，防止另一实例在同一触发点稍晚再执行一次。因此 `ttl` 应大于副本间可能的时钟偏差、小于调度间隔，且不小于 1s；执行时长超过调度间隔时，下一轮会在租约续期期间被跳过。
+- `key` 为空时使用 `job:<任务名>`；多个应用共享同一 Redis 时应带上应用名，避免同名任务互相阻塞。
+- 取锁出错（如 Redis 不可用）时本轮不执行并返回错误，宁可漏跑一轮也不在无锁状态下多实例执行；需要“至少执行一次”的任务应自行设计补偿。
+- 锁只保证互斥执行，不保证恰好一次：持有者在续租失败前已执行的外部副作用不会回滚，业务仍需幂等。
 
 ## 集成测试与边界用法
 

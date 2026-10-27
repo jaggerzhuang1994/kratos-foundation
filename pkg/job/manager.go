@@ -171,7 +171,15 @@ func newManager(
 				return nil, fmt.Errorf("parse cron job %q: %w", definition.name, err)
 			}
 			gate := newExecutionGate(log, definition.name, resolved, definition.cron.delayOverflowHandler, admissionMetrics)
-			jobMiddlewares := append([]Middleware{gate.middleware}, baseMiddlewares...)
+			jobMiddlewares := []Middleware{gate.middleware}
+			if clusterLock := definition.cron.clusterLock; clusterLock != nil {
+				// 先过本地并发准入再取集群锁；未取得锁的触发不进入观测链，不记一次执行。
+				if err := clusterLock.validate(definition.name); err != nil {
+					return nil, fmt.Errorf("cron job %q: %w", definition.name, err)
+				}
+				jobMiddlewares = append(jobMiddlewares, clusterLock.middleware(log, definition.name, admissionMetrics))
+			}
+			jobMiddlewares = append(jobMiddlewares, baseMiddlewares...)
 			manager.cronJobs = append(manager.cronJobs, scheduledJob{
 				managedJob:   newManagedJob(definition.name, definition.job, jobMiddlewares),
 				scheduleSpec: schedule, base: base, resolved: resolved, gate: gate,
