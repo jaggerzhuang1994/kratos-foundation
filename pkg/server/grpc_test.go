@@ -221,7 +221,67 @@ func TestGRPCNullConfigUsesServiceRegistration(t *testing.T) {
 
 // 未配置 server.grpc 时也能构造 keepalive 放宽策略，不访问 nil 配置。
 func TestGRPCServerOptionsWithoutGRPCConfig(t *testing.T) {
-	if opts := newGRPCServerOptions(&config_pb.Server{}, nil, NewSpec()); len(opts) == 0 {
+	if opts := newGRPCServerOptions(&config_pb.Server{}, nil, NewSpec(), newRuntimeTestLogger(t)); len(opts) == 0 {
 		t.Fatal("no gRPC server options")
+	}
+}
+
+// panickingWatchServer 的流式 Watch 直接 panic，用于验证流式接口的恢复。
+type panickingWatchServer struct {
+	*health.Server
+}
+
+func (panickingWatchServer) Watch(*healthpb.HealthCheckRequest, healthpb.Health_WatchServer) error {
+	panic("watch handler bug")
+}
+
+// Kratos 的流拦截器不把中间件链套在流处理器外，流式 panic 必须由 recoverStreams 恢复为 500，而不是终止进程。
+func TestIntegrationGRPCStreamPanicIsRecovered(t *testing.T) {
+	listener := bufconn.Listen(1 << 20)
+	t.Cleanup(func() { _ = listener.Close() })
+	spec := NewSpec()
+	spec.GRPC().Option(kratosgrpc.Listener(listener), kratosgrpc.CustomHealth(),
+		kratosgrpc.Endpoint(&url.URL{Scheme: "grpc", Host: "integration"})).Register(func(srv GRPCServer) error {
+		healthpb.RegisterHealthServer(srv, panickingWatchServer{Server: health.NewServer()})
+		return nil
+	})
+	runtime, cleanup, err := NewRuntime(testconfig.New(t, "server", &config_pb.Server{Http: &config_pb.HttpServerOption{Disable: boolp(true)}}), newRuntimeTestLogger(t),
+		testMetricsProvider{registry: prometheus.NewRegistry()},
+		runtimeTestTracingProvider{provider: tracenoop.NewTracerProvider()}, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	_, grpcServer := runtime.Servers()
+	finished := make(chan error, 1)
+	go func() { finished <- grpcServer.Start(t.Context()) }()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), runtimeTestTimeout)
+		defer cancel()
+		if err := grpcServer.Stop(ctx); err != nil {
+			t.Error(err)
+		}
+		<-finished
+	})
+	connection, err := grpc.NewClient("passthrough:///integration",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = connection.Close() })
+	ctx, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+	defer cancel()
+	stream, err := healthpb.NewHealthClient(connection).Watch(ctx, &healthpb.HealthCheckRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stream.Recv()
+	if restored := foundationerrors.FromError(err); restored.Code != 500 || restored.Reason != "UNKNOWN" {
+		t.Fatalf("stream panic error = %v (%+v)", err, restored)
+	}
+	// 服务仍可用：同一连接上的一元调用照常返回。
+	if _, err := healthpb.NewHealthClient(connection).Check(ctx, &healthpb.HealthCheckRequest{}); err != nil {
+		t.Fatalf("unary call after stream panic: %v", err)
 	}
 }

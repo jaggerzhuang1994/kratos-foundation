@@ -149,3 +149,20 @@ func tracingMiddleware(provider jobTracing) Middleware {
 		}
 	}
 }
+
+// guardErrorHandler 隔离业务 ErrorHandler 的 panic：它在调度器或任务协程中调用，未恢复的 panic 会终止进程。
+// nil 保持 nil，由组装层使用默认错误日志。
+func guardErrorHandler(log moduleLog, handler func(context.Context, string, error)) func(context.Context, string, error) {
+	if handler == nil {
+		return nil
+	}
+	return func(ctx context.Context, name string, err error) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.WithContext(ctx).With("event", "job.error_handler.panicked", "job", name, "panic_type", fmt.Sprintf("%T", recovered)).
+					Error("job error handler panicked")
+			}
+		}()
+		handler(ctx, name, err)
+	}
+}

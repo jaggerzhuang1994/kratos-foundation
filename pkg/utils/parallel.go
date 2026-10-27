@@ -2,10 +2,25 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"runtime/debug"
 
 	"golang.org/x/sync/errgroup"
 )
+
+// ErrTaskPanicked 表示并行任务 panic；返回的错误包装它并携带 panic 值与堆栈。
+var ErrTaskPanicked = errors.New("parallel task panicked")
+
+// runTask 在任务协程内恢复 panic：协程中的 panic 无法被调用方的恢复中间件捕获，会直接终止进程。
+func runTask(ctx context.Context, fn func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("%w: %v\n%s", ErrTaskPanicked, recovered, debug.Stack())
+		}
+	}()
+	return fn(ctx)
+}
 
 // Parallel 使用后台 context 并行执行任务，等待全部任务返回，并返回首个错误。
 func Parallel(fns ...func(ctx2 context.Context) (err error)) error {
@@ -13,13 +28,14 @@ func Parallel(fns ...func(ctx2 context.Context) (err error)) error {
 }
 
 // ParallelWithContext 并行执行任务；首个错误会取消派生 context，但仍等待全部任务返回。
+// 任务 panic 转为包装 ErrTaskPanicked 的错误，按首个错误处理。
 func ParallelWithContext(ctx context.Context, fns ...func(ctx2 context.Context) (err error)) error {
 	// 任务需响应取消并自行返回；Wait 不会强制终止忽略 context 的任务。
 	g, ctx2 := errgroup.WithContext(ctx)
 	for i := range fns {
 		fn := fns[i]
 		g.Go(func() error {
-			return fn(ctx2)
+			return runTask(ctx2, fn)
 		})
 	}
 	return g.Wait()
@@ -27,7 +43,7 @@ func ParallelWithContext(ctx context.Context, fns ...func(ctx2 context.Context) 
 
 // ParallelWithLimit 使用单次调用内的固定 worker 池，最多同时执行 workers 个任务。
 // workers 必须为正数，任务必须非 nil；首个错误或取消会停止分发，已运行任务需自行响应取消。
-// 函数等待所有 worker 退出，不恢复任务 panic，不为业务共享数据提供同步。
+// 函数等待所有 worker 退出，不为业务共享数据提供同步。任务 panic 转为包装 ErrTaskPanicked 的错误。
 func ParallelWithLimit(ctx context.Context, workers int, fns ...func(context.Context) error) error {
 	if workers <= 0 {
 		return fmt.Errorf("parallel workers must be positive")
@@ -52,7 +68,7 @@ func ParallelWithLimit(ctx context.Context, workers int, fns ...func(context.Con
 					if err := workerCtx.Err(); err != nil {
 						return err
 					}
-					if err := fn(workerCtx); err != nil {
+					if err := runTask(workerCtx, fn); err != nil {
 						return err
 					}
 				}

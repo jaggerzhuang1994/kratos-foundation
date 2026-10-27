@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -73,7 +74,14 @@ func (c *consumer) Consume(ctx context.Context, handler DeliveryHandler) error {
 	group, groupCtx := errgroup.WithContext(ctx)
 	for index := 0; index < c.config.Concurrency; index++ {
 		instance := consumerInstance(c.config, index)
-		group.Go(func() error {
+		group.Go(func() (err error) {
+			// 直接调用 Consume 的 DeliveryHandler 在消费协程中执行；panic 转为 Consume 的错误并停止消费，
+			// 未提交的记录由下次启动重新投递，不让进程崩溃。经 ConsumerRuntime 的业务处理器另有逐条恢复。
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					err = fmt.Errorf("kafka consumer %s panicked: %v\n%s", instance, recovered, debug.Stack())
+				}
+			}()
 			return c.consume(groupCtx, instance, handler)
 		})
 	}

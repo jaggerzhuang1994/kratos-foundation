@@ -11,6 +11,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	stdgrpc "google.golang.org/grpc"
 )
 
 // normalizeErrors 统一传输错误，在访问日志关闭时仍保留一次服务端故障诊断。
@@ -58,6 +59,27 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 			}()
 			return next(ctx, req)
 		}
+	}
+}
+
+// recoverStreams 恢复 gRPC 流式处理器的 panic。Kratos 的流拦截器不把中间件链套在流处理器外，
+// recoverRequests 覆盖不到流式接口；grpc-go 也不恢复处理器 panic，未恢复时整个进程退出。
+func recoverStreams(logger log.Logger) stdgrpc.StreamServerInterceptor {
+	return func(srv any, stream stdgrpc.ServerStream, info *stdgrpc.StreamServerInfo, handler stdgrpc.StreamHandler) (err error) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				stack := string(debug.Stack())
+				logger.WithContext(stream.Context()).With(
+					"event", "server.request.panic.recovered",
+					"transport", "grpc",
+					"operation", info.FullMethod,
+					"panic_type", fmt.Sprintf("%T", recovered),
+					"stack", log.DebugOnly(stack),
+				).Error("request panic recovered")
+				err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithMetadata(map[string]string{"err_stack": stack})
+			}
+		}()
+		return handler(srv, stream)
 	}
 }
 

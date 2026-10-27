@@ -951,3 +951,30 @@ func TestNewProducerWithObservability(t *testing.T) {
 	cleanup()
 	cleanup()
 }
+
+// 直接调用 Consume 时 DeliveryHandler panic 转为 Consume 错误，未提交的记录在下次消费时重放。
+func TestExternalKafkaConsumeHandlerPanicReturnsError(t *testing.T) {
+	factory, logger, topic := externalKafkaFactory(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	producer, cleanup, err := NewProducer(factory, ProducerConfig{Connection: "external", Topic: topic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := producer.Publish(ctx, &Message{Body: []byte("payload")}); err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := NewConsumer(factory, logger, ConsumerConfig{Connection: "external", Topic: topic, Group: topic, Instance: topic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := consumer.Consume(ctx, func(context.Context, Delivery) error { panic("handler bug") }); err == nil || !strings.Contains(err.Error(), "panicked: handler bug") {
+		t.Fatalf("Consume error = %v", err)
+	}
+	var replay string
+	failure := errors.New("stop after replay")
+	if err := consumer.Consume(ctx, func(_ context.Context, d Delivery) error { replay = string(d.Message.Body); return failure }); !errors.Is(err, failure) || replay != "payload" {
+		t.Fatalf("replay err=%v body=%q", err, replay)
+	}
+}

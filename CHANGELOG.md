@@ -59,6 +59,8 @@
 
 ### Fixed
 
+- **gRPC 流式接口的 panic 会终止进程**：Kratos 的流拦截器不把中间件链套在流处理器外，grpc-go 也不恢复处理器 panic。现登记最外层恢复拦截器，把 panic 恢复为 500 `UNKNOWN` 并记录 `server.request.panic.recovered`；同时修正多个流拦截器逐个登记时互相替换的问题（Kratos `grpc.StreamInterceptor` 每次调用整体替换）。业务再传入 `grpc.StreamInterceptor` 仍会整体替换框架的流拦截器。
+- 后台协程中的业务代码 panic 不再终止进程：`utils.Parallel*` 任务 panic 转为包装 `utils.ErrTaskPanicked` 的错误；配置轮询中自定义配置源 panic 时保留上一份快照（`config.poll.panicked`）；Job `ErrorHandler` panic 只记录 `job.error_handler.panicked`；直接调用 `kafka.Consumer.Consume` 时 DeliveryHandler panic 转为 Consume 错误，未提交记录下次重放；客户端后台构建 panic 转为构建失败；Server 停机附加动作 panic 转为停止错误。
 - `cache.Cache.Get` 的回源函数 panic 时不再让进程崩溃（singleflight 会在独立协程中重新 panic），改为在每个等待的调用方协程中以原值重新 panic，由请求、任务或队列的恢复中间件处理。
 - 数据库 Queue 的 SKIP LOCKED 探测把上报 MySQL 8 版本号的 TiDB 视为不支持，沿用条件更新领取。
 - 告警 FoundationAppNotReady 与预聚合 `app:readiness:ready` 在按实例分组前把 `pod_name`（ACK 默认采集标签）补成 `pod`；此前只有 `pod_name` 时所有实例被并成一组，单个实例未就绪会被其他实例掩盖。

@@ -88,6 +88,13 @@ func (m *manager) run(ctx context.Context, interval time.Duration) {
 }
 
 func (m *manager) poll() {
+	// 轮询在后台协程中执行，自定义配置源 panic 时保留上一份快照，下一周期继续，不终止进程。
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.WithModule("config").With("event", "config.poll.panicked", "panic_type", fmt.Sprintf("%T", recovered)).
+				Error("config poll panicked; keeping previous")
+		}
+	}()
 	var next map[string]any
 	if err := m.backend.Scan(&next); err != nil {
 		log.WithModule("config").With("event", "config.snapshot.rejected", "error", err).

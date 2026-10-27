@@ -472,3 +472,17 @@ func TestPollingScanFailureLogsWarningAndRetainsSnapshot(t *testing.T) {
 		t.Fatalf("snapshot=%v event=%v", m.snapshot, event)
 	}
 }
+
+type panickingBackend struct{ kratosconfig.Config }
+
+func (panickingBackend) Scan(any) error { panic("source bug") }
+
+// 轮询在后台协程中执行，自定义配置源 panic 时保留上一份快照，不终止进程。
+func TestPollRecoversBackendPanic(t *testing.T) {
+	previous := map[string]any{"key": 1}
+	m := &manager{backend: panickingBackend{}, snapshot: previous}
+	m.poll()
+	if m.snapshot["key"] != 1 {
+		t.Fatalf("snapshot = %v, want previous snapshot", m.snapshot)
+	}
+}

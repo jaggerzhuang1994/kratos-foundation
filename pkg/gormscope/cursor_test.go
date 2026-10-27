@@ -186,3 +186,15 @@ func TestCursorScopesRejectKeyShapeValueCountAndDecodeErrors(t *testing.T) {
 		}
 	}
 }
+
+// 游标来自客户端，任意内容只能被拒绝或转成参数化条件，不能 panic。
+func FuzzScopeFromSortKeyHandlesUntrustedCursor(f *testing.F) {
+	f.Add("1700000000000000000|42|abc")
+	f.Add("x|1e1000000|")
+	f.Add("||||")
+	keys := SortKeys{TimeDescSortKey("created_at"), NumberAscSortKey("id"), StringAscSortKey("name")}
+	db := openTestDB(f)
+	f.Fuzz(func(t *testing.T, cursor string) {
+		_ = ScopeFromSortKey(&cursor, keys, "|")(db.Session(&gorm.Session{DryRun: true})).Find(&[]map[string]any{})
+	})
+}

@@ -600,7 +600,7 @@ flowchart TD
     M([安全 500])
 ```
 
-Kratos `grpc.Middleware` 只应用于 unary 调用；本包额外在 gRPC 流建立时恢复 `request_debug`，没有将整条 unary 中间件链扩展到流。通过 `GRPC().Option(grpc.StreamInterceptor(...))` 登记的业务 stream interceptor 须自行提供需要的鉴权、panic 恢复、截止时间及观测边界。
+Kratos `grpc.Middleware` 只应用于 unary 调用；本包额外为 gRPC 流登记两个 stream interceptor：最外层把流处理器的 panic 恢复为 500 `UNKNOWN` 并记录 `server.request.panic.recovered`（grpc-go 不恢复处理器 panic，未恢复时整个进程退出），以及在流建立时恢复 `request_debug`；没有将整条 unary 中间件链扩展到流。Kratos 的 `grpc.StreamInterceptor` 会整体替换已登记的流拦截器，通过 `GRPC().Option(grpc.StreamInterceptor(...))` 登记业务 stream interceptor 时上述两个也被替换，须自行提供 panic 恢复、鉴权、截止时间及观测边界。
 
 服务端与客户端指标使用归一化后的 HTTP 状态计数，保留 422 等非标准 gRPC 映射的状态；指标观察不改变业务调用方收到的原始错误。
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	stdgrpc "google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -51,6 +52,7 @@ func newGRPCServerOptions(
 	config componentConfig,
 	middlewares middlewareSet,
 	spec *Spec,
+	logger log.Logger,
 ) grpcServerOptions {
 	conf := config.GetGrpc()
 	var opts grpcServerOptions
@@ -93,9 +95,13 @@ func newGRPCServerOptions(
 			debugOverrides = append(debugOverrides, entry)
 		}
 	}
+	// Kratos 的 StreamInterceptor 每次调用整体替换已登记的流拦截器，必须一次传入全部。
+	// 恢复拦截器在最外层，包住其后的拦截器与流处理器；业务再传入 StreamInterceptor 会整体替换它们。
+	streamInterceptors := []stdgrpc.StreamServerInterceptor{recoverStreams(logger)}
 	for _, debug := range debugEntries.build(debugOverrides) {
-		opts = append(opts, grpc.StreamInterceptor(requestdebug.StreamServer(debug)))
+		streamInterceptors = append(streamInterceptors, requestdebug.StreamServer(debug))
 	}
+	opts = append(opts, grpc.StreamInterceptor(streamInterceptors...))
 	opts = append(opts, spec.grpc.options...)
 	opts = append(opts, grpc.Middleware(middlewares.build(spec.grpc.middlewares)...))
 	return opts

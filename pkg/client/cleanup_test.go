@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -448,5 +449,16 @@ func TestFactoryRejectsInvalidCleanupBudget(t *testing.T) {
 		if err == nil {
 			t.Fatalf("accepted cleanup timeout %v", duration)
 		}
+	}
+}
+
+// 后台构建 panic（如业务注入的中间件）转为构建失败交给等待者，不终止进程。
+func TestFactoryBuildPanicBecomesAcquireError(t *testing.T) {
+	builder := &fakeBuilder{buildFn: func(context.Context, clientSpec) (clientResult, error) { panic("middleware bug") }}
+	clientFactory, cleanup := newFactoryWithoutSubscription(t, builder)
+	defer cleanup()
+	_, _, _, err := clientFactory.AcquireClient(context.Background(), "orders")
+	if err == nil || !strings.Contains(err.Error(), "build client panicked: middleware bug") {
+		t.Fatalf("AcquireClient error = %v", err)
 	}
 }

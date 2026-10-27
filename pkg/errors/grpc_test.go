@@ -264,3 +264,20 @@ func TestGRPCStatusOmitsStackInProduction(t *testing.T) {
 		t.Fatalf("production status leaked diagnostics or lost identity: code=%d reason=%s stack=%q", remote.Code, remote.Reason, remote.ErrStack())
 	}
 }
+
+// 对端 gRPC 错误详情不可信：任意 reason 与元数据（含 http_data、err_stack）只能还原为错误，不能 panic。
+func FuzzFromErrorHandlesUntrustedStatus(f *testing.F) {
+	f.Add(uint32(13), "msg", "REASON", "http_data", `{"a":1}`)
+	f.Add(uint32(3), "", "", "http_code", "abc")
+	f.Add(uint32(2), "m", "R", "err_stack", "\x00")
+	f.Fuzz(func(t *testing.T, code uint32, message, reason, key, value string) {
+		st, err := status.New(codes.Code(code%20), message).WithDetails(&errdetails.ErrorInfo{Reason: reason, Metadata: map[string]string{key: value}})
+		if err != nil {
+			return
+		}
+		if restored := FromError(st.Err()); restored == nil {
+			t.Fatal("FromError returned nil for a non-nil status")
+		}
+		_ = Normalize(st.Err())
+	})
+}

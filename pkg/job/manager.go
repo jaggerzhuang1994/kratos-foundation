@@ -92,6 +92,7 @@ func NewManager(
 	}
 	options := newManagerOptions(spec)
 	jobLogger := newJobLog(logger, options)
+	options.ErrorHandler = guardErrorHandler(jobLogger, options.ErrorHandler)
 	middlewares, admissionMetrics, err := newMiddlewaresWithMetrics(
 		jobLogger,
 		options,

@@ -696,3 +696,19 @@ func waitUntil(t *testing.T, condition func() bool) {
 		}
 	}
 }
+
+// 业务 ErrorHandler 在调度器或任务协程中调用，panic 只记录日志，不终止进程。
+func TestGuardErrorHandlerRecoversPanics(t *testing.T) {
+	if guardErrorHandler(testModuleLog(t), nil) != nil {
+		t.Fatal("nil handler must stay nil so the default logger applies")
+	}
+	called := false
+	handler := guardErrorHandler(testModuleLog(t), func(context.Context, string, error) {
+		called = true
+		panic("handler bug")
+	})
+	handler(context.Background(), "report", errors.New("failed"))
+	if !called {
+		t.Fatal("guarded handler was not called")
+	}
+}

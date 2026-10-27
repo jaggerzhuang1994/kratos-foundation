@@ -798,3 +798,13 @@ func TestIntegrationApplicationStartupRollbackManagementListener(t *testing.T) {
 	cleanup()
 	cleanup()
 }
+
+// 附加停机动作在独立协程中执行，panic 转为停止错误，底层服务仍然停止。
+func TestStopTogetherRecoversAlongsidePanic(t *testing.T) {
+	server := &testServer{}
+	runtime := &stopRuntime{Server: server, alongside: func(context.Context) error { panic("stop bug") }}
+	err := runtime.stopTogether(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "server stop action panicked") || server.stops != 1 {
+		t.Fatalf("stopTogether err=%v stops=%d", err, server.stops)
+	}
+}

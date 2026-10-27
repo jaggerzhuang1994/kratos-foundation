@@ -100,7 +100,7 @@ func NewRuntime(
 	if err != nil {
 		return fail(err)
 	}
-	grpcOptions := newGRPCServerOptions(config, middlewares, spec)
+	grpcOptions := newGRPCServerOptions(config, middlewares, spec, logger)
 	grpcServer, err := newGRPCServer(config, grpcOptions, spec, health)
 	if err != nil {
 		return fail(err)
@@ -288,7 +288,15 @@ func (s *stopRuntime) stopTogether(ctx context.Context) error {
 		return s.Server.Stop(ctx)
 	}
 	alongside := make(chan error, 1)
-	go func() { alongside <- s.alongside(ctx) }()
+	go func() {
+		// 附加停机动作在独立协程中执行，panic 转为停止错误，不让进程跳过其余停机步骤直接退出。
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				alongside <- fmt.Errorf("server stop action panicked with %T", recovered)
+			}
+		}()
+		alongside <- s.alongside(ctx)
+	}()
 	err := s.Server.Stop(ctx)
 	return errors.Join(<-alongside, err)
 }

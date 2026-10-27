@@ -264,3 +264,17 @@ func TestParallelMapCancellation(t *testing.T) {
 		}
 	})
 }
+
+// 任务在独立协程中执行，panic 必须转为错误，否则调用方的恢复中间件捕获不到，进程直接退出。
+func TestParallelRecoversTaskPanics(t *testing.T) {
+	boom := func(context.Context) error { panic("task bug") }
+	for name, run := range map[string]func() error{
+		"context": func() error { return ParallelWithContext(context.Background(), boom) },
+		"limit":   func() error { return ParallelWithLimit(context.Background(), 2, boom) },
+	} {
+		err := run()
+		if !errors.Is(err, ErrTaskPanicked) || !strings.Contains(err.Error(), "task bug") {
+			t.Errorf("%s: err = %v, want ErrTaskPanicked with panic value", name, err)
+		}
+	}
+}

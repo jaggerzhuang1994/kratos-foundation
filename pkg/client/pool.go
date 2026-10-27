@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync/atomic"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -184,12 +185,23 @@ func (f *factory) closeVersion(name string, version *clientVersion) {
 	f.closeAndLog(retired)
 }
 
+// safeBuild 在构建协程中恢复 panic（如业务注入的中间件或 Dial 选项），转为构建失败，
+// 等待者照常收到错误，进程不因后台构建 panic 退出。
+func (f *factory) safeBuild(ctx context.Context, spec clientSpec) (result clientResult, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result, err = clientResult{}, fmt.Errorf("build client panicked: %v\n%s", recovered, debug.Stack())
+		}
+	}()
+	return f.builder.build(ctx, spec)
+}
+
 func (f *factory) runBuild(slot *clientSlot, call *buildCall, ctx context.Context) {
 	defer f.endActivity()
 
 	version := call.version
 	buildCancel := call.cancel
-	result, buildErr := f.builder.build(ctx, version.spec)
+	result, buildErr := f.safeBuild(ctx, version.spec)
 	if buildErr == nil {
 		buildErr = result.validate()
 	}

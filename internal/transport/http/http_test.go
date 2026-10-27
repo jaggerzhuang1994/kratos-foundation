@@ -282,3 +282,23 @@ func TestEncoderPreservesGRPCDiagnosticsOutsideProduction(t *testing.T) {
 		t.Fatalf("production response leaked diagnostics: %s", recorder.Body.String())
 	}
 }
+
+// 下游错误响应体与头部不可信：任意状态码与正文都只能解码为错误，不能 panic。
+func FuzzDecoderHandlesUntrustedResponses(f *testing.F) {
+	f.Add(500, `{"code":500,"reason":"X","message":"m","metadata":{"a":"b"},"data":{"n":1}}`)
+	f.Add(422, `{"code":42201,"metadata":{"err_stack":"s","http_data":"[1,"}}`)
+	f.Add(404, `not json`)
+	f.Fuzz(func(t *testing.T, status int, body string) {
+		if status < 100 || status > 999 {
+			status = 500
+		}
+		response := &http.Response{StatusCode: status, Status: strconv.Itoa(status), Header: http.Header{"X-A": {body}}, Body: io.NopCloser(strings.NewReader(body))}
+		if err := Decoder()(context.Background(), response); status >= 200 && status <= 299 {
+			if err != nil {
+				t.Fatalf("2xx decoded as error: %v", err)
+			}
+		} else if err == nil {
+			t.Fatal("non-2xx decoded as success")
+		}
+	})
+}
