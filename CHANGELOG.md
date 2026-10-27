@@ -4,6 +4,20 @@
 
 ## 计划中
 
+### 升级风险
+
+- **服务改为按服务名注册**：注册中心的服务名由 Server 实际承载的 proto 服务推导（proto 所在目录名），不再使用 `APP_NAME` / 可执行文件名；每个服务名只挂载承载它的端点，未在 proto 声明的手写路由等入口归入应用名并告警。Queue、Cron 等不承载业务服务的进程不再注册。客户端按同一规则解析，按目录名约定（`api/<service_name>/*.proto` 与二进制同名）的项目名字不变。
+- **删除 `app.endpoints` 与 `app.Spec.AddEndpoints` / `bootstrap.Spec.AddEndpoints`**：注册端点只来自 Server 的 Endpointer，对外地址与监听地址不同时改用 `server.http.endpoint` / `server.grpc.endpoint`。`app.metadata`、`app.registry` 的字段编号随之调整，配置按字段名解析不受影响；残留的 `app.endpoints` 被忽略。
+- **删除服务选项 `kratos_foundation_client.client_name` 及 `kratos_foundation_client/client.proto`**：服务名只由 proto 所在目录推导（顶层文件取文件名），客户端插件与服务注册共用同一规则；import 该文件的 proto 需删除 import 与选项后重新生成，连接名不同时用 `NewXxxWithConnName` 指定。
+- **proto 位于 `v1`、`v2beta1` 这类版本目录时客户端生成与服务注册失败**：版本目录名无法区分服务，需改为 `api/<service_name>/*.proto` 布局。
+- **管理端口运行时实现 `Endpointer`**：`server.Runtime.ManagementServers()` 的运行时改为公布端点并声明 `app.RegistrationExempt`，App 不注册它们；自行组装、直接按 `Endpointer` 收集注册地址的代码需同时判断 `RegistrationExempt`。
+
+### Added
+
+- `pkg/servicename`：proto service 到服务名的唯一推导规则（目录名 → 文件名 → Go 包名，版本名报错），客户端插件、服务注册与网关共用；`IsFramework` 识别健康检查、反射、channelz 与 `kratos.api.Metadata`。
+- 按服务名注册多个实例：一个进程承载多个服务名时分别注册，实例元数据带 `app_name` / `process_id`；任一实例注册失败时整体回滚。见 [注册名与端点](pkg/app/README.md#注册名与端点)。
+- `app.ServiceNamer` / `app.RegistrationExempt`：Runtime 汇报承载的服务名、声明不参与服务注册的可选接口；`server.Runtime` 的业务 HTTP/gRPC Server 按路由与已注册服务收集服务名，见 [服务名收集](pkg/server/README.md#服务名收集)。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

@@ -22,12 +22,7 @@ app:
   registrar_timeout: 10s
   # 停机超时时间，建议大于 server.stop_delay 并预留清理时间，支持热更新 [默认: 30s]
   stop_timeout: 30s
-  # 服务注册端点；省略时使用 Server 导出的业务端点 [需重启]
-  # endpoints:
-  #   - scheme: http
-  #     host: my-service.example.com:8000
-  #   - scheme: grpc
-  #     host: my-service.example.com:9000
+  # 服务按 proto 目录推导的服务名注册，端点来自 Server；对外地址不同时用 server.http.endpoint / server.grpc.endpoint 覆盖
   # 注册到 Kratos ServiceInstance.Metadata；与 registry.instances.<name>.options.registry.tags 分开配置 [需重启]
   # metadata:
   #   version: v1.0.0

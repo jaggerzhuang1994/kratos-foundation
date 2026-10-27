@@ -91,9 +91,6 @@
         "stop_timeout": {
           "$ref": "#/definitions/.kratos_foundation_pb.App.stop_timeout"
         },
-        "endpoints": {
-          "$ref": "#/definitions/.kratos_foundation_pb.App.endpoints"
-        },
         "metadata": {
           "$ref": "#/definitions/.kratos_foundation_pb.App.metadata"
         },
@@ -106,14 +103,6 @@
         "registry"
       ],
       "description": "App 只有 stop_timeout 支持热更新，其余字段在构造 Kratos App 时固定。"
-    },
-    ".kratos_foundation_pb.App.endpoints": {
-      "items": {
-        "$ref": "#/definitions/.kratos_foundation_pb.Endpoint",
-        "description": "app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）。[需重启]"
-      },
-      "type": "array",
-      "description": "app暴露出去的端点（服务注册的端点，如果为空，则使用server导出的endpoint注册到服务中心）。[需重启]"
     },
     ".kratos_foundation_pb.App.metadata": {
       "additionalProperties": {

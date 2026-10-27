@@ -36,6 +36,8 @@
 | `server.middleware.timeout` | `server.deadline`（`fallback_timeout` / `max_timeout` / `min_budget`），语义不同，勿机械改名 |
 | 顶层 `metrics`、`queue`、旧 `job` 字段 | 显式构造；指标端点用 `server.http.metrics`，定时任务用 `job.cron` |
 | `app.disable_registrar` | `registry.instances.<name>.driver: "null"` |
+| `app.endpoints`、`Spec.AddEndpoints` | 删除；注册端点来自 Server，对外地址用 `server.http.endpoint` / `server.grpc.endpoint` 覆盖 |
+| 服务选项 `kratos_foundation_client.client_name` | 删除；服务名只由 proto 目录推导（`api/<service_name>/*.proto`），按需用 `NewXxxWithConnName` 指定连接名 |
 | `redis.connections.*.disable_indentity` | `disable_identity` |
 | `database.connections.*.replicas/datas/trace_resolver_mode`、`redis.*.read_only` | 删除 |
 

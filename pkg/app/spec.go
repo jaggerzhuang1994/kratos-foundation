@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"net/url"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -36,8 +35,6 @@ type Spec struct {
 	logger kratoslog.Logger
 	// metadata 保存应用元数据快照，同名键以后登记值为准。
 	metadata map[string]string
-	// endpoints 保存对外端点；URL 对象共享，调用方须保持只读。
-	endpoints []*url.URL
 	// serviceRegistrationDisabled 仅关闭本应用的服务注册，不影响服务发现。
 	serviceRegistrationDisabled bool
 	// signals 保存触发应用停止的系统信号。
@@ -68,8 +65,6 @@ type appSnapshot struct {
 	logger kratoslog.Logger
 	// metadata 保存应用元数据快照，同名键以后登记值为准。
 	metadata map[string]string
-	// endpoints 保存对外端点；URL 对象共享，调用方须保持只读。
-	endpoints []*url.URL
 	// serviceRegistrationDisabled 仅关闭本应用的服务注册，不影响服务发现。
 	serviceRegistrationDisabled bool
 	// signals 保存触发应用停止的系统信号。
@@ -144,14 +139,6 @@ func (s *Spec) AddMetadata(metadata map[string]string) {
 	maps.Copy(s.metadata, metadata)
 }
 
-// AddEndpoints 追加对外端点，调用方须保持 URL 对象只读。
-func (s *Spec) AddEndpoints(endpoints ...*url.URL) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.checkMutable()
-	s.endpoints = append(s.endpoints, endpoints...)
-}
-
 // DisableServiceRegistration 关闭本应用的服务注册与注销，适用于一次性 Job。
 // 默认不关闭；须在 NewApp 前调用，冻结后调用会 panic(ErrSpecFrozen)。
 // 不跳过 Registrar provider 的构造，也不关闭服务器或客户端服务发现。
@@ -212,7 +199,6 @@ func (s *Spec) freeze(base context.Context) (appSnapshot, error) {
 		appInfo:                     s.appInfo,
 		logger:                      s.logger,
 		metadata:                    maps.Clone(s.metadata),
-		endpoints:                   append([]*url.URL(nil), s.endpoints...),
 		signals:                     append([]os.Signal(nil), s.signals...),
 		beforeStart:                 append([]HookFunc(nil), s.beforeStart...),
 		afterStart:                  append([]HookFunc(nil), s.afterStart...),

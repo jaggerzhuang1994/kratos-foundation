@@ -23,7 +23,7 @@ func TestUnifiedSpecSharesHooksAndFreeze(t *testing.T) {
 		t.Fatal("bootstrap did not retain the injected domain Specs")
 	}
 	if got := spec.AddContext(func(ctx context.Context) context.Context { return ctx }).
-		AddMetadata(map[string]string{"blueprint": "ready"}).AddEndpoints().AddSignals().
+		AddMetadata(map[string]string{"blueprint": "ready"}).AddSignals().
 		AfterStart().BeforeStop().AfterStop().DisableServiceRegistration(); got != spec.Spec {
 		t.Fatal("chain returned a different Spec")
 	}

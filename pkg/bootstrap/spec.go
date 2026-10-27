@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"net/url"
 	"os"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/app"
@@ -94,12 +93,6 @@ func (s *Spec) AddContext(decorate app.ContextDecorator) *Spec {
 // AddMetadata 追加应用元数据。
 func (s *Spec) AddMetadata(metadata map[string]string) *Spec {
 	s.application.AddMetadata(metadata)
-	return s
-}
-
-// AddEndpoints 追加对外公布的端点地址。
-func (s *Spec) AddEndpoints(endpoints ...*url.URL) *Spec {
-	s.application.AddEndpoints(endpoints...)
 	return s
 }
 

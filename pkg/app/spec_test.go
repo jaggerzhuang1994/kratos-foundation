@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"net/url"
 	"os"
 	"strings"
 	"syscall"
@@ -113,24 +112,13 @@ func TestFreezeMergesAppInfoMetadataBeforeExplicitMetadata(t *testing.T) {
 
 func TestFreezeSnapshotIsolatedFromRegistrationInputs(t *testing.T) {
 	metadata := map[string]string{"key": "original"}
-	firstEndpoint, err := url.Parse("http://127.0.0.1:8000")
-	if err != nil {
-		t.Fatal(err)
-	}
-	secondEndpoint, err := url.Parse("http://127.0.0.1:9000")
-	if err != nil {
-		t.Fatal(err)
-	}
-	endpoints := []*url.URL{firstEndpoint}
 	signals := []os.Signal{syscall.SIGTERM}
 
 	spec := NewSpec()
 	spec.AddMetadata(metadata)
-	spec.AddEndpoints(endpoints...)
 	spec.AddSignals(signals...)
 
 	metadata["key"] = "changed"
-	endpoints[0] = secondEndpoint
 	signals[0] = os.Interrupt
 
 	snapshot, err := spec.freeze(context.Background())
@@ -139,9 +127,6 @@ func TestFreezeSnapshotIsolatedFromRegistrationInputs(t *testing.T) {
 	}
 	if got := snapshot.metadata["key"]; got != "original" {
 		t.Fatalf("metadata = %q, want original", got)
-	}
-	if len(snapshot.endpoints) != 1 || snapshot.endpoints[0] != firstEndpoint {
-		t.Fatalf("endpoints = %#v, want first endpoint", snapshot.endpoints)
 	}
 	if len(snapshot.signals) != 1 || snapshot.signals[0] != syscall.SIGTERM {
 		t.Fatalf("signals = %#v, want SIGTERM", snapshot.signals)
@@ -154,10 +139,6 @@ func TestSpecRejectsContributionsAfterFreeze(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoint, err := url.Parse("http://127.0.0.1:8000")
-	if err != nil {
-		t.Fatal(err)
-	}
 	tests := []struct {
 		name string
 		call func()
@@ -169,7 +150,6 @@ func TestSpecRejectsContributionsAfterFreeze(t *testing.T) {
 			spec.AddContext(func(ctx context.Context) context.Context { return ctx })
 		}},
 		{name: "metadata", call: func() { spec.AddMetadata(map[string]string{"key": "value"}) }},
-		{name: "endpoints", call: func() { spec.AddEndpoints(endpoint) }},
 		{name: "service registration", call: spec.DisableServiceRegistration},
 		{name: "signals", call: func() { spec.AddSignals() }},
 		{name: "before start", call: func() { spec.BeforeStart(func(context.Context) error { return nil }) }},

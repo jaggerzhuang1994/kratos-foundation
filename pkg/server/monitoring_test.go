@@ -123,7 +123,7 @@ func TestMonitoringRejectsInvalidAddressesAndSharedPaths(t *testing.T) {
 	}
 }
 
-func TestManagementHTTPRunsAndStopsWithoutDiscoveryEndpoint(t *testing.T) {
+func TestManagementHTTPRunsAndStopsExemptFromRegistration(t *testing.T) {
 	config := proto.CloneOf(defaultConfig)
 	config.Http.Disable, config.Grpc.Disable = proto.Bool(true), proto.Bool(true)
 	config.Http.Metrics.Addr = proto.String("127.0.0.1:0")
@@ -138,10 +138,10 @@ func TestManagementHTTPRunsAndStopsWithoutDiscoveryEndpoint(t *testing.T) {
 	if len(servers) != 1 {
 		t.Fatalf("servers=%d", len(servers))
 	}
-	if _, ok := servers[0].(transport.Endpointer); ok {
-		t.Fatal("management port exposed for service discovery")
+	if exempt, ok := servers[0].(interface{ RegistrationExempt() bool }); !ok || !exempt.RegistrationExempt() {
+		t.Fatal("management port is not exempt from service registration")
 	}
-	endpoint, err := runtime.management[0].Endpoint()
+	endpoint, err := servers[0].(transport.Endpointer).Endpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestManagementBindFailureIsReturned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	management := &managementRuntime{Server: withStopLifecycle(extras[0], 0, nil, configuredHealth(config, NewSpec()))}
+	management := newManagementRuntime(withStopLifecycle(extras[0], 0, nil, configuredHealth(config, NewSpec())))
 	if err := management.Start(context.Background()); err == nil || !errors.Is(err, syscall.EADDRINUSE) {
 		t.Fatalf("bind error=%v", err)
 	}

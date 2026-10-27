@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,8 +43,6 @@ type App struct {
 	beforeStart, afterStart, beforeStop, afterStop []HookFunc
 	// signals 是触发停止的系统信号。
 	signals []os.Signal
-	// endpoints 是显式端点（配置在前、Spec 在后）；为空时从 Runtime 的 Endpoint 解析。
-	endpoints []*url.URL
 	// registrar 为 nil 表示不注册服务。
 	registrar registry.Registrar
 	// registrarTimeout 约束单次注册和注销。
@@ -73,11 +70,13 @@ type App struct {
 
 	// mu 保护注册状态、已解析端点和失败汇总；外部调用均在锁外执行。
 	mu sync.Mutex
-	// instance 是 Run 解析出的服务实例，Endpoint 读取其端点。
-	instance *registry.ServiceInstance
-	// registered、deregistered 保证注销最多执行一次，并覆盖注册期间到达的停止请求。
-	registered, deregistered bool
-	// deregisterErr 保存注销结果，参与最终错误汇总。
+	// endpoints 是 Run 从可注册 Runtime 解析出的全部端点，Endpoint 读取；解析前为 nil。
+	endpoints []string
+	// registered 按注册成功顺序保存实例；deregisteredCount 之前的实例已注销，保证每个实例最多注销一次，
+	// 并覆盖注册期间到达的停止请求。
+	registered        []*registry.ServiceInstance
+	deregisteredCount int
+	// deregisterErr 汇总注销结果，参与最终错误汇总。
 	deregisterErr error
 	// failures 按发生顺序保存真实故障；仅取消的错误与停机噪声不计入。
 	failures []error
@@ -121,10 +120,6 @@ func NewApp(
 	} else {
 		application.logger = kratoslog.With(snapshot.logger, append([]any{"module", "app"}, identity...)...)
 	}
-	for _, endpoint := range config.GetEndpoints() {
-		application.endpoints = append(application.endpoints, &url.URL{Scheme: endpoint.GetScheme(), Host: endpoint.GetHost()})
-	}
-	application.endpoints = append(application.endpoints, snapshot.endpoints...)
 	if snapshot.serviceRegistrationDisabled {
 		application.logEvent(application.parent, kratoslog.LevelDebug, "app.registration.disabled", "service registration disabled")
 	} else {
@@ -177,14 +172,14 @@ func (a *App) Version() string { return a.version }
 // Metadata 返回合并后应用元数据的副本。
 func (a *App) Metadata() map[string]string { return maps.Clone(a.metadata) }
 
-// Endpoint 返回 Run 解析出的服务端点；Run 解析端点之前返回 nil。
+// Endpoint 返回 Run 从可注册 Runtime 解析出的全部端点；Run 解析端点之前返回 nil。
 func (a *App) Endpoint() []string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.instance == nil {
+	if a.endpoints == nil {
 		return nil
 	}
-	return slices.Clone(a.instance.Endpoints)
+	return slices.Clone(a.endpoints)
 }
 
 // logEvent 使用稳定事件名组织生命周期；msg 与其它领域日志保持同一可读格式。

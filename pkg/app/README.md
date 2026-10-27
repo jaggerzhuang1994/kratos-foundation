@@ -45,7 +45,7 @@ flowchart TD
 
 ## Spec 约束
 
-`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会 panic(app.ErrSpecFrozen)。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会 panic(app.ErrSpecFrozen)。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。所有公开登记方法均无返回值；AppInfo 和 Logger 是单例贡献，重复登记会 panic；Registrar 是独立的构造依赖，不保存在 Spec 中。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `bootstrap.NewApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、端点、信号或 Hook。冻结后的空参数写入同样会 panic，Ready 仍可正常读取。
+`RegisterRuntime(runtime)` 无需名称，按登记顺序保留全部 Runtime，不对同一实例去重；调用方应保证 Runtime 实例非 nil，登记时不作 nil 校验，冻结后的登记会 panic(app.ErrSpecFrozen)。重复登记可能导致重复启动，同一实例应只登记一次。`AddContext(decorate)` 无需名称，按登记顺序执行全部 ContextDecorator，重复登记也会重复执行；调用方应保证装饰函数非 nil，冻结后的新贡献会 panic(app.ErrSpecFrozen)。装饰函数返回 nil Context 时，错误包含从 1 开始的登记序号。所有公开登记方法均无返回值；AppInfo 和 Logger 是单例贡献，重复登记会 panic；Registrar 是独立的构造依赖，不保存在 Spec 中。组装层通过最终 `bootstrap.StartupReady` 屏障调用 `bootstrap.NewApp`，后者调用 `app.NewApp` 冻结 Spec；之后不能再注册 Runtime、Context、元数据、信号或 Hook。冻结后的空参数写入同样会 panic，Ready 仍可正常读取。
 
 登记与冻结继续使用同一互斥锁保护共享状态；发生 panic 时 defer 释放锁，不留下半次登记。ContextDecorator 仍在锁外执行。`NewApp` 继续返回构造错误，包括重复消费 Spec 的 ErrSpecFrozen、缺失依赖和装饰函数返回 nil Context；这与公开登记方法的 panic 契约不同。
 
@@ -60,6 +60,20 @@ flowchart TD
 默认 provider 仍要求有效的具名实例。共享注册中心资源仍由原 provider 的 cleanup 释放。
 
 需要由配置关闭时，将 `app.registry` 指向内置 `driver: "null"` 的实例，默认 provider 会返回 nil Registrar；可让客户端继续选择其他实例的发现能力。该选择需重启，完整示例及实例边界见 [Registry 配置关闭注册](../registry/README.md#通过配置关闭服务注册)。
+
+### 注册名与端点
+
+注册端点只来自 Runtime：按登记顺序查询实现了 `Endpointer` 的 Runtime，跳过 `RegistrationExempt()` 为 true 的（如管理端口）。对外地址与监听地址不同时，用 `server.http.endpoint` / `server.grpc.endpoint` 按 Server 覆盖。`App.Endpoint()` 返回全部可注册端点。
+
+实例按 [`servicename`](../servicename/README.md) 规则推导的服务名注册，每个服务名只挂载承载它的端点：
+
+- Runtime 汇报的未映射入口（如未在 proto 声明的手写路由）与未实现 `ServiceNamer` 的 Runtime 归入应用名（`APP_NAME` 或可执行文件名），并输出 WARN `app.registration.unmapped`；
+- 没有业务服务的端点（如只有框架服务的 gRPC Server）不注册，Queue、Cron 等没有端点的进程不注册任何实例；
+- 服务名推导失败（如 proto 位于版本目录）时启动失败。
+
+服务名等于应用名的实例使用应用实例 ID，其余为 `<应用实例 ID>@<服务名>`；每个实例的元数据在应用元数据之外带 `app_name` 与 `process_id`（`app.MetadataAppName`、`app.MetadataProcessID`），同一进程的实例取值相同。注册前输出 INFO `app.registration.planned`，列出每个实例的名字与端点。
+
+实例按应用名在前、其余按名字排序依次注册；任一实例注册失败时注销已注册的实例再返回错误，注册中心不会残留部分名字。停止时注销全部已注册实例，每个实例最多注销一次，注销错误逐个参与最终汇总。
 
 ```mermaid
 flowchart TD
@@ -154,7 +168,7 @@ flowchart TD
 
 ### 启动前资源回滚
 
-`Run` 在 `BeforeStart` 之前解析 Runtime 的 Endpoint（配置或 Spec 声明了显式端点时不查询 Runtime）；此时可能已经打开监听，但尚未调用 `Start`。解析失败时进入统一停止，`BeforeStart` 的失败、已取消的父 Context 和启动前停止请求也使用相同路径。先广播 stopping 并执行一次 `BeforeStop`，再按冻结时的 Runtime 登记顺序逆序调用可选的 `AbortStartup`，全部回滚后才执行一次 `AfterStop`。遍历完整的原始 Runtime 列表，包括当前解析失败的端点和还未查询的端点；未实现该可选方法的普通 Runtime 不会被调用 `Stop`。
+`Run` 在 `BeforeStart` 之前解析 Runtime 的 Endpoint；此时可能已经打开监听，但尚未调用 `Start`。解析失败时进入统一停止，`BeforeStart` 的失败、已取消的父 Context 和启动前停止请求也使用相同路径。先广播 stopping 并执行一次 `BeforeStop`，再按冻结时的 Runtime 登记顺序逆序调用可选的 `AbortStartup`，全部回滚后才执行一次 `AfterStop`。遍历完整的原始 Runtime 列表，包括当前解析失败的端点和还未查询的端点；未实现该可选方法的普通 Runtime 不会被调用 `Stop`。
 
 回滚 Context 保留父上下文值和应用身份（`kratos.FromContext`），脱离原取消状态，并为整轮逆序回滚设置首次停止时冻结的 `app.stop_timeout` 预算。一个回滚失败或预算到期后，仍调用其余回滚方法并汇总错误；实现须响应取消，App 不能强制终止永久阻塞的回调。原始启动错误、停止钩子错误和回滚错误通过 `errors.Join` 保留，启动前父 Context 已取消仍返回 `context.Canceled`。本路径返回错误；回滚结果使用 app.startup.aborted / app.startup.abort.failed，最终启动故障由 app.stopped 汇总。
 
@@ -246,7 +260,7 @@ flowchart TD
 
 ### App 的同步边界
 
-停止请求、停止前钩子分别由 `stopOnce`、`beginStopOnce` 保证只执行一次；`stopping` 与 `ready` 为原子状态，Ready 探针不取锁。`mu` 只保护已注册实例、注销状态与故障列表，外部注册中心调用、钩子和 Runtime 调用均在锁外执行。注册完成与并发停止通过“写 registered 后读 stopping / 写 stopping 后读 registered”的顺序保证至少一方执行注销，`deregistered` 标记保证注销最多一次。
+停止请求、停止前钩子分别由 `stopOnce`、`beginStopOnce` 保证只执行一次；`stopping` 与 `ready` 为原子状态，Ready 探针不取锁。`mu` 只保护已注册实例、注销状态与故障列表，外部注册中心调用、钩子和 Runtime 调用均在锁外执行。每个实例注册成功后与并发停止通过“记录实例后读 stopping / 写 stopping 后读已注册实例”的顺序保证至少一方执行注销，已注销位置标记保证每个实例最多注销一次。
 
 ```mermaid
 flowchart TD

@@ -462,7 +462,7 @@ flowchart TD
 
 未映射的入口由服务注册归入应用名并告警。Kratos 原生 `Handle`、`HandleFunc`、`HandlePrefix` 注册的路由不带方法，`WalkRoute` 无法枚举：业务登记过 HTTP 路由却一条都枚举不到时，整体记为未映射；和可枚举的路由混用时，这些原生路由随同一 endpoint 暴露但不会单独告警。手写路由优先使用 `HandleRoute`。
 
-proto 位于 `v1` 这类版本目录导致的推导失败不在组装期中断启动，作为 `ServiceNames` 的错误交给服务注册处理。`server.assembled` 日志带 `http_services` 与 `grpc_services`，DEBUG 级 `server.endpoint.registered` 逐条带 `service_name`（框架端点与未映射路由为空）。
+proto 位于 `v1` 这类版本目录导致的推导失败不在组装期中断启动，作为 `ServiceNames` 的错误交给服务注册，由 App 在注册前启动失败。`server.assembled` 日志带 `http_services` 与 `grpc_services`，DEBUG 级 `server.endpoint.registered` 逐条带 `service_name`（框架端点与未映射路由为空）。
 
 ## 监控端点监听地址
 
@@ -536,8 +536,8 @@ WebSocket 升级请求没有请求体，帧数据经接管的连接传输，不�
 HTTPBuilder 不再提供 Health/HealthChecks，HealthConfig 不再作为公共 API 暴露，部署参数统一由配置管理。
 
 `NewServerBootstrap` 自动登记全部监听。手工组装保留 `Runtime.Servers()` 的业务 HTTP/gRPC
-返回值，并额外登记 `Runtime.ManagementServers()` 中的运行时。管理运行时不实现 Endpointer，
-避免管理地址进入业务服务发现；不能将它们当作业务服务地址发布。监听在 Start 时创建，错误通过
+返回值，并额外登记 `Runtime.ManagementServers()` 中的运行时。管理运行时实现 Endpointer 便于诊断，
+同时声明 `RegistrationExempt`，App 不会把管理地址注册进业务服务发现；不能将它们当作业务服务地址发布。监听在 Start 时创建，错误通过
 现有 App 运行时传播；Stop 先撤销就绪，再按现有停机策略释放监听，构造期不打开 socket。
 
 ```mermaid

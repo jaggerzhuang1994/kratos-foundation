@@ -73,7 +73,7 @@ Boot 不得依赖 ServerBootstrap、JobBootstrap 或 RuntimeBootstrap，否则�
 
 配置源应在提供 Spec 的构造函数中声明，供 NewConfigManager 使用。领域 Builder 是共享可变声明，应在 Boot 返回前完成修改；组件构造后修改蓝图不会重建已有资源。
 
-`Configuration`、`RegisterRuntime`、`RegisterKafkaConsumer`、`AddContext`、`AddMetadata`、`AddEndpoints`、`AddSignals` 和全部 Hook 方法返回同一个 `*bootstrap.Spec`，可链式调用；Http/Grpc/Health/Job 仍返回对应领域 Builder。保留 nil 配置 loader 校验和底层 app.Spec 冻结后的写入保护。配置加载和资源构造的实际失败继续返回 error，由 Wire 逆序释放已成功构造的资源。
+`Configuration`、`RegisterRuntime`、`RegisterKafkaConsumer`、`AddContext`、`AddMetadata`、`AddSignals` 和全部 Hook 方法返回同一个 `*bootstrap.Spec`，可链式调用；Http/Grpc/Health/Job 仍返回对应领域 Builder。保留 nil 配置 loader 校验和底层 app.Spec 冻结后的写入保护。配置加载和资源构造的实际失败继续返回 error，由 Wire 逆序释放已成功构造的资源。
 
 `NewRuntimeBootstrap(serverBootstrap, jobBootstrap)` 仅返回 `RuntimeBootstrap`，汇合组件完成标记；它不暂存、登记或重放 Runtime。`spec.RegisterRuntime` 直接调用共享 `app.Spec.RegisterRuntime`，因此自定义 Runtime 在业务调用当下登记，早于后续构造的服务器和任务。App 仍并发启动 Runtime，登记顺序不表示启动完成顺序。服务器资源由 NewServerBootstrap 的 cleanup 释放。
 
@@ -226,7 +226,7 @@ Manager 已采用官方配置语义，不再提供 ConfigObservability collector
 
 NewServerBootstrap 同时登记业务监听与 `Runtime.ManagementServers()` 返回的独立监控监听；管理端口不加入业务服务发现。地址复用规则见 [server 监控监听配置](../server/README.md#监控端点监听地址)。
 
-业务 Spec 显式开放组件声明、AddContext、AddMetadata、AddEndpoints、AddSignals 和四个生命周期钩子。
+业务 Spec 显式开放组件声明、AddContext、AddMetadata、AddSignals 和四个生命周期钩子。
 app.Spec 由私有字段持有，不再通过匿名嵌入暴露 RegisterAppInfo、RegisterLogger 或 Ready；
 Queue Worker 和 Kafka ConsumerRuntime 可使用 RegisterRuntime()、RegisterKafkaConsumer() 声明，其他运行时使用 RegisterRuntime()。各 provider 按需直接注入相同的领域 Spec。
 

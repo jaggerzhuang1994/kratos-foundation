@@ -69,14 +69,21 @@ func newRegistrarTestApp(t testing.TB, registrar registry.Registrar, snapshot ap
 	application := newTestApp(t, snapshot, newStaticStopPolicy(time.Second))
 	application.registrar = registrar
 	application.registrarTimeout = 100 * time.Millisecond
-	application.instance = &registry.ServiceInstance{ID: "registered"}
 	return application
+}
+
+// registrarTestInstance 是注册协调测试使用的只读实例。
+var registrarTestInstance = &registry.ServiceInstance{ID: "registered"}
+
+// registrarTestInstances 返回只含 registrarTestInstance 的注册列表。
+func registrarTestInstances() []*registry.ServiceInstance {
+	return []*registry.ServiceInstance{registrarTestInstance}
 }
 
 func TestRegisterAndStopDeregisterStoredInstanceOnce(t *testing.T) {
 	underlying := new(registrarCallFake)
 	application := newRegistrarTestApp(t, underlying, appSnapshot{})
-	if err := application.register(application.instance); err != nil {
+	if err := application.register(registrarTestInstances()); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -91,8 +98,8 @@ func TestRegisterAndStopDeregisterStoredInstanceOnce(t *testing.T) {
 	underlying.mu.Lock()
 	deregistered := underlying.deregistered
 	underlying.mu.Unlock()
-	if deregistered != application.instance {
-		t.Fatalf("Deregister used instance %p, want registered instance %p", deregistered, application.instance)
+	if deregistered != registrarTestInstance {
+		t.Fatalf("Deregister used instance %p, want registered instance %p", deregistered, registrarTestInstance)
 	}
 }
 
@@ -128,7 +135,7 @@ func TestRegisterSkipsRegistrationAfterStopRequested(t *testing.T) {
 	underlying := new(registrarCallFake)
 	application := newRegistrarTestApp(t, underlying, appSnapshot{})
 	application.requestStop()
-	if err := application.register(application.instance); !errors.Is(err, errAppStopping) {
+	if err := application.register(registrarTestInstances()); !errors.Is(err, errAppStopping) {
 		t.Fatalf("late registration = %v, want stopping signal", err)
 	}
 	if registerCalls, deregisterCalls := underlying.calls(); registerCalls != 0 || deregisterCalls != 0 {
@@ -153,7 +160,7 @@ func TestRegisterCompensatesWhenStopArrivesDuringRegister(t *testing.T) {
 	}
 	application := newRegistrarTestApp(t, underlying, appSnapshot{})
 	result := make(chan error, 1)
-	go func() { result <- application.register(application.instance) }()
+	go func() { result <- application.register(registrarTestInstances()) }()
 	receiveSignal(t, registerEntered, "registrar Register entry")
 	// Stop 在注册返回前执行，此时尚未注册，注销由注册完成后的补偿完成。
 	if err := application.Stop(); err != nil {
@@ -177,7 +184,7 @@ func TestRegisterAndConcurrentStopDeregisterExactlyOnce(t *testing.T) {
 		underlying := new(registrarCallFake)
 		application := newRegistrarTestApp(t, underlying, appSnapshot{})
 		var wg sync.WaitGroup
-		wg.Go(func() { _ = application.register(application.instance) })
+		wg.Go(func() { _ = application.register(registrarTestInstances()) })
 		wg.Go(func() { _ = application.Stop() })
 		wg.Wait()
 		registerCalls, deregisterCalls := underlying.calls()

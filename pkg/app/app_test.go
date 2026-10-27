@@ -398,6 +398,11 @@ type applicationStopRequestRuntime struct {
 	release <-chan struct{}
 }
 
+// Endpoint 让 applicationStopRequestRuntime 成为可注册 Runtime。
+func (r *applicationStopRequestRuntime) Endpoint() (*url.URL, error) {
+	return &url.URL{Scheme: "http", Host: "127.0.0.1:8000"}, nil
+}
+
 func (r *applicationStopRequestRuntime) Start(context.Context) error {
 	<-r.release
 	return ErrStopRequested
@@ -435,6 +440,11 @@ func (r *applicationRuntime) Stop(context.Context) error {
 	r.mu.Unlock()
 	r.stopOne.Do(func() { close(r.stopped) })
 	return stopErr
+}
+
+// Endpoint 让 applicationRuntime 成为可注册 Runtime；未汇报服务名，注册时归入应用名。
+func (r *applicationRuntime) Endpoint() (*url.URL, error) {
+	return &url.URL{Scheme: "grpc", Host: "127.0.0.1:9000"}, nil
 }
 
 func (r *applicationRuntime) counts() (int, int) {
@@ -516,19 +526,15 @@ func TestNewApplicationRunsSuccessfulLifecycleWithRegistration(t *testing.T) {
 	spec.BeforeStop(func(context.Context) error { calls.add("before-stop"); return nil })
 	spec.AfterStop(func(context.Context) error { calls.add("after-stop"); return nil })
 	registrar := new(registrarCallFake)
-	spec.AddEndpoints(&url.URL{Scheme: "http", Host: "127.0.0.1:8000"})
 
 	runtime := newApplicationRuntime()
 	registerApplicationRuntime(t, spec, runtime)
+	spec.RegisterRuntime(&endpointTestServer{endpoint: &url.URL{Scheme: "http", Host: "127.0.0.1:8000"}})
 	config := applicationTestConfig()
 	config.Metadata = map[string]string{
 		"identity": "static",
 		"static":   "true",
 	}
-	config.Endpoints = []*config_pb.Endpoint{{
-		Scheme: "grpc",
-		Host:   "127.0.0.1:9000",
-	}}
 	app, err := NewApp(
 		context.Background(),
 		spec,

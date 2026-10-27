@@ -15,7 +15,6 @@ type Config = *config_pb.App
 var defaultConfig = &config_pb.App{
 	RegistrarTimeout: durationpb.New(10 * time.Second),
 	StopTimeout:      durationpb.New(30 * time.Second),
-	Endpoints:        nil,
 	Metadata:         nil,
 }
 

@@ -31,7 +31,7 @@ type Runtime struct {
 	management []*httpRuntime
 	// httpServer、grpcServer 是附加停机策略后的业务服务；禁用的协议为 nil。
 	httpServer, grpcServer transport.Server
-	// managementServers 是附加停机策略、且不暴露 Endpointer 的独立管理监听。
+	// managementServers 是附加停机策略、声明 RegistrationExempt 的独立管理监听。
 	managementServers []transport.Server
 	// stopDelay 撤销就绪状态后等待流量退出的时长。
 	stopDelay time.Duration
@@ -154,7 +154,7 @@ func NewRuntime(
 		runtime.grpcServer = withServiceNames(withStopLifecycle(grpcServer, stopDelay, nil, nil), grpcNames)
 	}
 	for _, srv := range management {
-		runtime.managementServers = append(runtime.managementServers, &managementRuntime{Server: withStopLifecycle(srv, stopDelay, nil, health)})
+		runtime.managementServers = append(runtime.managementServers, newManagementRuntime(withStopLifecycle(srv, stopDelay, nil, health)))
 	}
 	return runtime, sync.OnceFunc(func() {
 		health.stopped.Store(true)
@@ -328,22 +328,30 @@ func (s *stopRuntime) AbortStartup(ctx context.Context) error {
 	return nil
 }
 
-// ManagementServers 返回独立监控监听的运行时；不实现 Endpointer，避免注册成业务发现地址。
+// ManagementServers 返回独立监控监听的运行时；它们实现 Endpointer 便于诊断，并声明 RegistrationExempt，不会注册成业务发现地址。
 // 使用 NewServerBootstrap 时内部自动登记；手工组装须与 Servers 返回值一起登记。重复调用返回同一实例。
 func (r *Runtime) ManagementServers() []transport.Server {
 	return slices.Clone(r.managementServers)
 }
 
-// managementRuntime 仅公开启停能力，阻止管理端口进入服务注册的 endpoint 列表。
+// managementRuntime 包装独立管理监听：公布端点但声明不参与服务注册，管理端口不会进入服务注册的 endpoint 列表。
 type managementRuntime struct {
 	// Server 被委托启停的管理服务。
 	transport.Server
+	// Endpointer 公布管理监听地址，只用于诊断。
+	transport.Endpointer
+}
+
+// newManagementRuntime 包装管理监听；底层服务总是实现 Endpointer。
+func newManagementRuntime(server transport.Server) *managementRuntime {
+	endpointer, _ := server.(transport.Endpointer)
+	return &managementRuntime{Server: server, Endpointer: endpointer}
 }
 
 // RegistrationExempt 声明管理端口不参与服务注册。
 func (s *managementRuntime) RegistrationExempt() bool { return true }
 
-// AbortStartup 保留管理监听的回滚能力，同时仍不暴露 Endpointer。
+// AbortStartup 保留管理监听的回滚能力。
 func (s *managementRuntime) AbortStartup(ctx context.Context) error {
 	return s.Server.(interface{ AbortStartup(context.Context) error }).AbortStartup(ctx)
 }

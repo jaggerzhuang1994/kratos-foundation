@@ -11,8 +11,6 @@ import (
 	"time"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/registry"
-	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
 	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
@@ -45,7 +43,7 @@ func (a *App) Run() error {
 		}
 	}()
 
-	instance, err := a.buildInstance()
+	instances, err := a.buildInstances()
 	if err != nil {
 		return a.abortStartup(err)
 	}
@@ -63,7 +61,7 @@ func (a *App) Run() error {
 	}
 
 	starts := a.startRuntimes()
-	startupErr := a.register(instance)
+	startupErr := a.register(instances)
 	if startupErr == nil {
 		startupErr = a.runAfterStart(a.runCtx)
 	}
@@ -75,32 +73,6 @@ func (a *App) Run() error {
 	}
 	<-a.stoppingSignal
 	return a.shutdown(starts, false)
-}
-
-// buildInstance 解析服务实例；有显式端点时不查询 Runtime，否则按登记顺序查询 Endpointer。
-func (a *App) buildInstance() (*registry.ServiceInstance, error) {
-	endpoints := make([]string, 0, len(a.endpoints))
-	for _, endpoint := range a.endpoints {
-		endpoints = append(endpoints, endpoint.String())
-	}
-	if len(endpoints) == 0 {
-		for _, runtime := range a.runtimes {
-			endpointer, ok := runtime.(transport.Endpointer)
-			if !ok {
-				continue
-			}
-			endpoint, err := endpointer.Endpoint()
-			if err != nil {
-				return nil, err
-			}
-			endpoints = append(endpoints, endpoint.String())
-		}
-	}
-	instance := &registry.ServiceInstance{ID: a.id, Name: a.name, Version: a.version, Metadata: a.metadata, Endpoints: endpoints}
-	a.mu.Lock()
-	a.instance = instance
-	a.mu.Unlock()
-	return instance, nil
 }
 
 // startRuntimes 并发启动全部 Runtime；任何 Start 返回非 nil 都会请求统一停止。
