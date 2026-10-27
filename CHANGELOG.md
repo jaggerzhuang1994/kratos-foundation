@@ -6,6 +6,9 @@
 
 ### 升级风险
 
+- **`/metrics` 与健康检查默认改到独立管理端口 `0.0.0.0:8001`**：`server.http.metrics.addr` / `health.addr` 省略时不再挂在业务 HTTP 上（此前默认复用业务端口，`/metrics` 会随业务端口对外暴露），与业务部署模板的 management 端口一致；业务 HTTP 关闭的 Worker 也默认有健康检查与指标端点。仍需挂在业务端口的应用把两项显式设为 `""`；K8s 探针与 ServiceMonitor 指向 8001。
+- **业务 HTTP 默认限制请求体 32 MiB**：超过返回 413 `REQUEST_BODY_TOO_LARGE`。文件上传等大请求在 `server.http.request_body.routes` 中按路径放大或设为 0（不限制）。
+- **SQL 日志默认隐去参数值（prod / 未开调试的 pre）**：`database.gorm.logger.parameterized_queries` 未配置时按环境取默认值，与错误堆栈的诊断出口约束一致；local/dev/test 仍记录完整 SQL。需要生产完整参数的排查显式设为 `false`。
 - **事务内不能再切换数据库连接**：同一 Manager 的事务 Context 中用 `database.UseConnection` 选择另一个已存在连接（含在其上嵌套 `Transaction`）返回 `database.ErrConnectionInTransaction`；此前会静默沿用事务所在连接，把数据写进错误的库。选择事务所在连接仍复用事务。依赖旧行为的代码需改为在事务外访问其他连接。
 - **gRPC 服务端默认放宽 keepalive 检测**：允许客户端最短 10s 一次 ping，且允许无活动 RPC 时 ping（gRPC 原生为 5min 且需活动流），可用 `server.grpc.keepalive_min_time` / `keepalive_permit_without_stream` 调整。业务自行传入 Kratos `grpc.Options` 会整体替换该设置。
 - **Queue Worker 遇到存储故障不再退出**：领取、确认、释放、失败持久化时的数据库或 Redis 故障（断连、`storage_timeout` 超时、主从切换、损坏记录）改为在循环内按 500ms 起倍增、上限 30s 退避重试，记录 `WARN queue.storage.retrying`，恢复后记录 `INFO queue.storage.recovered`；此前会记录 `ERROR queue.storage.failed` 并让整个应用停机重启。`queue_consumer_runtime_failures_total` 仍按每次故障累加，FoundationQueueRuntimeFailure 告警口径不变；依赖“存储故障即重启 Pod”的部署需改为按该告警处理。Store 返回不满足契约的领取结果仍会退出。
@@ -13,6 +16,10 @@
 ### Added
 
 - 业务 HTTP Server 默认 `server.http.read_header_timeout` 10s 与 `idle_timeout` 120s（Kratos 原生不设连接级超时，存在慢速请求头占用连接的风险），可配置。
+- 业务 HTTP 请求体上限 `server.http.request_body`：默认 32 MiB，`routes` 按精确 path 或最长 prefix 覆盖（文件上传接口放大，0 表示不限制）；声明长度超限直接 413，分块传输在读取时截断，Bind 与业务读取超限都返回 413 `REQUEST_BODY_TOO_LARGE`。WebSocket 升级请求与 gRPC 不受影响。
+- `pkg/observability.Observability`：`queue.Observability` 与 `kafka.Observability` 改为它的类型别名，同一个值可直接传给 Queue、Kafka 与 Outbox，已有字面量与 `queue.NewObservability` 写法不变。
+- `kafka.NewProducerWithObservability(factory, config, obs)`：一步创建带指标、链路与日志的 Producer，等价于 `NewProducer` + `NewManagedProducer`。
+- `database.AutoMigrate(ctx, manager, models...)`：固定在主库迁移，配置 `read_replicas` 时不会因 Migrator 的存在性检查落到副本而重复建表。
 - `bootstrap.Spec.HTTP()` / `GRPC()`，与 `server.Spec` 命名一致；原 `Http()` / `Grpc()` 保留为兼容别名。
 - `client.AcquireHTTP` / `client.AcquireGRPC`：按协议租用客户端，只返回一个客户端，协议与配置不符时返回 `client.ErrProtocolMismatch`；`Factory.AcquireClient` 不变。
 - `job.WithClusterLock(locker, key, ttl)`：Cron 在共享同一 `lock.Locker` 的多个副本间每次触发只执行一次；未取得租约的实例跳过本轮（`job_triggers_skipped_total{reason="cluster_locked"}`），执行期间每 ttl/3 续租，续租失败取消本次执行，执行结束后租约保留到 TTL 过期以吸收时钟偏差。见 [集群单例](pkg/job/README.md#集群单例)。

@@ -30,6 +30,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/lock"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	foundationredis "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/redis"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/server"
@@ -147,11 +148,11 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 			return nil, cleanup, err
 		}
 		// 依赖可能晚于应用就绪，建表重试有界；失败交给 Kubernetes 重启。
-		// 配置了只读副本时迁移必须走主库：Migrator 的存在性检查是 SELECT，会被分发到副本。
+		// 配置了只读副本时迁移必须走主库：database.AutoMigrate 固定在主库检查与建表。
 		var migrateErr error
 		for range 30 {
-			ctx, cancel := context.WithTimeout(database.UsePrimary(context.Background()), 5*time.Second)
-			migrateErr = db.Connection(ctx).AutoMigrate(&order{})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			migrateErr = database.AutoMigrate(ctx, db, &order{})
 			if migrateErr == nil {
 				migrateErr = outboxRepo.Migrate(ctx)
 			}
@@ -165,25 +166,23 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 			return nil, cleanup, fmt.Errorf("migrate orders: %w", migrateErr)
 		}
 	}
-	obs := kafka.Observability{Logger: s.logger, Metrics: provider, Tracing: tracer}
-	queueObs := queue.Observability{Logger: s.logger, Metrics: provider, Tracing: tracer}
+	// 同一份观测依赖可直接传给 Kafka、Queue 与 Outbox。
+	obs := observability.New(s.logger, tracer, provider)
 	if role == roleAPI || role == roleWorker {
 		topic := eventTopic
 		if role == roleWorker {
 			topic = deadTopic
 		}
-		raw, release, createErr := kafka.NewProducer(kafkaFactory, kafka.ProducerConfig{Connection: "main", Topic: topic})
+		producer, release, createErr := kafka.NewProducerWithObservability(kafkaFactory, kafka.ProducerConfig{Connection: "main", Topic: topic}, obs)
 		if createErr != nil {
 			return nil, cleanup, createErr
 		}
 		releases = append(releases, release)
-		if s.producer, err = kafka.NewManagedProducer(topic, raw, obs); err != nil {
-			return nil, cleanup, err
-		}
+		s.producer = producer
 	}
 	if role == roleAPI {
 		// 下单事件经事务外盒发布：与订单同一事务写入，提交后由本 Pod 的 Relay 发布；多 Pod 经 SKIP LOCKED 分摊。
-		if s.outbox, err = outbox.New("order-outbox", databasequeue.NewStore(outboxRepo), queueObs); err != nil {
+		if s.outbox, err = outbox.New("order-outbox", databasequeue.NewStore(outboxRepo), obs); err != nil {
 			return nil, cleanup, err
 		}
 		if s.relay, err = s.outbox.Relay(outbox.RelayConfig{
@@ -199,7 +198,7 @@ func newShop(db database.Manager, redisManager foundationredis.Manager, kafkaFac
 			if createErr != nil {
 				return nil, cleanup, createErr
 			}
-			q, createErr := queue.NewQueue(queue.Definition[string]{Queue: name, Version: 1, Codec: textCodec{}}, store, queueObs)
+			q, createErr := queue.NewQueue(queue.Definition[string]{Queue: name, Version: 1, Codec: textCodec{}}, store, obs)
 			if createErr != nil {
 				return nil, cleanup, createErr
 			}
