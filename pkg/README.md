@@ -47,6 +47,7 @@
 | [`oss`](oss/README.md) | 对象存储资源与操作契约 | M3 Manager + M2 契约 | Manager 延迟创建并缓存 bucket；具体驱动在 contrib；符合 Driver Registry 条件 |
 | [`client`](client/README.md) | HTTP/gRPC 客户端工厂与共享租用 | M3 Factory + M4 调用租约 | Factory cleanup 管理整体资源；每次 `AcquireClient` 还要调用自己的 release |
 | [`kafka`](kafka/README.md) | Kafka 客户端、消息生产和消费 | M3 Factory + M4 组件 + M5 Runtime | `NewClientFactory` 创建客户端工厂；`NewProducer`、`NewConsumer` 显式构造，`ConsumerRuntime` 管理消费生命周期 |
+| [`kafka/outbox`](kafka/outbox/README.md) | Kafka 事务外盒 | M4 组件 + M5 Runtime | `Write` 在业务事务内写待发消息，`Relay` 是 queue.Worker，借用数据库 Store 与 Producer |
 | [`queue`](queue/README.md) | 持久化任务、延迟和重试 | M2 契约 + M4 组件 + M5 Runtime | `Queue[T]` 提供 Post，`Worker[T]` 管理消费；`Observability` 直接复用应用观测依赖；Redis Store 或业务 Database Repo 显式注入，资源由组装层释放 |
 | [`job`](job/README.md) | 任务声明、热更新调度和本进程并发策略 | M5 Runtime | `job.Manager` 拥有任务、调度器和配置订阅的生命周期 |
 | [`server`](server/README.md) | HTTP/gRPC 服务装配 | M5 Runtime | `server.Runtime` 是聚合对象；登记 `Servers()` 与 `ManagementServers()` 返回值；业务及管理 HTTP 监听归 Runtime 持有，启动前失败回滚 |

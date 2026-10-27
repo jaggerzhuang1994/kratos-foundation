@@ -83,7 +83,7 @@ func CreateOrder(ctx context.Context, tx database.TransactionManager, orders Ord
 
 必须检查外层 Transaction 的最终返回值；Post 返回 nil 及成功指标只表示投递调用成功，不表示事务已提交。事务 Context 不能逃逸回调，也不能拿来启动 Worker。事务应只包含短时本地写入，避免网络调用、长任务或等待 Worker；数据库事务结束时释放相应行锁，失败/超时回滚业务和任务。不同连接、Redis Store 或另开独立事务的 Insert 不满足该保证；提交响应丢失仍是结果不确定，需要业务唯一键及对账。
 
-任务表由 Worker 直接消费时，这是事务性任务表，可承担 Outbox 的持久待办职责。如果 Handler 把记录发布到 Kafka/其他外部系统，则它是典型 Outbox relay。两种方式均不保证外部副作用 exactly-once：业务执行成功后、Ack 前崩溃仍会重投，需要下游幂等；默认有限重试，失败记录仍需监控和人工处理。
+任务表由 Worker 直接消费时，这是事务性任务表，可承担 Outbox 的持久待办职责。如果 Handler 把记录发布到 Kafka/其他外部系统，则它是典型 Outbox relay；发布到 Kafka 可直接使用 [pkg/kafka/outbox](../../../pkg/kafka/outbox/README.md)。两种方式均不保证外部副作用 exactly-once：业务执行成功后、Ack 前崩溃仍会重投，需要下游幂等；默认有限重试，失败记录仍需监控和人工处理。
 
 ```mermaid
 flowchart TD

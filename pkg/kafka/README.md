@@ -160,6 +160,8 @@ flowchart TD
     N --> O([返回驱动错误])
 ```
 
+需要与数据库事务一起提交的消息使用 [事务外盒 pkg/kafka/outbox](outbox/README.md)：业务在事务内写外盒，提交后由 Relay 通过 ManagedProducer 发布。
+
 ## 消费消息
 
 `Consumer` 只有一个入口：`Consume(context.Context, kafka.DeliveryHandler)`。驱动通过 `Delivery` 把消息或解码错误交给运行时；业务只编写 `kafka.Handler`。不存在本包的 `Plan`、`Manager`、`Driver`、`Binding` 或 `Worker` API，也不应通过隐式发现注册消费者。

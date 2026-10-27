@@ -48,6 +48,11 @@ if ! FOUNDATION_TEST_QUEUE_MYSQL_DSN="$FOUNDATION_TEST_MYSQL_DSN" go test -race 
     cat "$output/queue-gorm.txt"
     exit 1
 fi
+# Kafka 外盒在同一隔离 MySQL 与 Kafka 上验证事务写入、Relay 发布与回滚不发布。
+if ! FOUNDATION_TEST_QUEUE_MYSQL_DSN="$FOUNDATION_TEST_MYSQL_DSN" go test -race -count=1 -timeout=3m -run '^TestExternal' ./pkg/kafka/outbox > "$output/kafka-outbox.txt" 2>&1; then
+    cat "$output/kafka-outbox.txt"
+    exit 1
+fi
 # 基准串行运行且不带 race/pprof，避免仪器开销污染批量比较。
 if [ "$functional_only" = true ]; then
     printf 'External functional and race checks passed.\n'
