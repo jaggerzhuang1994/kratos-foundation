@@ -343,6 +343,38 @@
                       "FoundationJobRunningTooLong": {
                         "text": "K8s Job 运行超过 1 小时仍未结束",
                         "index": 22
+                      },
+                      "FoundationSLOBurnRateCritical": {
+                        "text": "应用 5xx 快速消耗可用性错误预算（按当前速率数天内耗尽 30 天预算）",
+                        "index": 23
+                      },
+                      "FoundationSLOBurnRateWarning": {
+                        "text": "应用 5xx 持续消耗可用性错误预算，按当前速率 30 天内耗尽",
+                        "index": 24
+                      },
+                      "FoundationLatencySLOBurnRateCritical": {
+                        "text": "应用慢请求（>1s）快速消耗延迟错误预算（按当前速率数天内耗尽 30 天预算）",
+                        "index": 25
+                      },
+                      "FoundationLatencySLOBurnRateWarning": {
+                        "text": "应用慢请求（>1s）持续消耗延迟错误预算，按当前速率 30 天内耗尽",
+                        "index": 26
+                      },
+                      "FoundationDownstreamHighErrorRate": {
+                        "text": "下游 调用 5xx 比例超过 5%",
+                        "index": 27
+                      },
+                      "FoundationDownstreamHighLatency": {
+                        "text": "下游 调用 P99 超过 1s",
+                        "index": 28
+                      },
+                      "FoundationPanicRecovered": {
+                        "text": "应用恢复了 panic，请求或运行时可能已失败",
+                        "index": 29
+                      },
+                      "FoundationConfigRejected": {
+                        "text": "配置更新被拒绝，应用仍在使用旧配置",
+                        "index": 30
                       }
                     }
                   },
@@ -352,7 +384,7 @@
                       "pattern": ".*",
                       "result": {
                         "text": "—",
-                        "index": 23
+                        "index": 31
                       }
                     }
                   }

@@ -442,48 +442,49 @@ groups:
           / (sum by (env, cluster, namespace, app) (rate(server_requests_code_total{foundation="true"}[3d])) > 0)
       # 延迟 SLO：默认 99% 的请求在 1s 内完成（预算 0.01）。阈值必须是已有直方图桶边界，调整时同时修改下列规则的 le，
       # 统一秒单位桶见 pkg/metrics README（0.25、0.5、1、2.5 等）；慢请求比例 = 1 - 阈值桶 / 全部请求。
+      # Prometheus 3 把 le 规范为浮点写法（"1.0"），2.x 保留导出原文（"1"），匹配两种写法。
       - record: foundation:slo_latency_budget:ratio
         expr: vector(0.01)
       - record: app:server_slow_ratio:rate5m
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[5m]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[5m]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[5m])) > 0)
           )
       - record: app:server_slow_ratio:rate30m
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[30m]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[30m]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[30m])) > 0)
           )
       - record: app:server_slow_ratio:rate1h
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[1h]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[1h]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[1h])) > 0)
           )
       - record: app:server_slow_ratio:rate2h
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[2h]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[2h]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[2h])) > 0)
           )
       - record: app:server_slow_ratio:rate6h
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[6h]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[6h]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[6h])) > 0)
           )
       - record: app:server_slow_ratio:rate1d
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[1d]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[1d]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[1d])) > 0)
           )
       - record: app:server_slow_ratio:rate3d
         expr: |
           1 - (
-            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="1"}[3d]))
+            sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le=~"1|1\\.0"}[3d]))
             / (sum by (env, cluster, namespace, app) (rate(server_requests_seconds_bucket{foundation="true",le="+Inf"}[3d])) > 0)
           )
       - alert: FoundationSLOBurnRateCritical

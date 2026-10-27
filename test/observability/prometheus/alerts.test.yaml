@@ -902,8 +902,8 @@ tests:
   - name: 延迟 SLO 快速消耗触发 critical
     interval: 1m
     input_series:
-      # verysl：20% 请求超过 1s，消耗率 20 倍。
-      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="verysl",le="1"}
+      # verysl：20% 请求超过 1s，消耗率 20 倍；le 用 Prometheus 3 规范后的浮点写法 "1.0"。
+      - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="verysl",le="1.0"}
         values: 0+800x30
       - series: server_requests_seconds_bucket{foundation="true",env="prod",cluster="c1",namespace="apps",app="verysl",le="+Inf"}
         values: 0+1000x30

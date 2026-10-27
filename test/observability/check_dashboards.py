@@ -431,7 +431,7 @@ def fleet_fixture_tests(fleet):
     slo_labels = {'foundation': 'true', 'namespace': 'apps', 'app': 'slo', 'pod': 'slo-0'}
     slo = [input_series('server_requests_code_total', dict(slo_labels, code='200'), '0+998x10'),
            input_series('server_requests_code_total', dict(slo_labels, code='500'), '0+2x10'),
-           input_series('server_requests_seconds_bucket', dict(slo_labels, le='1'), '0+500x10'),
+           input_series('server_requests_seconds_bucket', dict(slo_labels, le='1.0'), '0+500x10'),
            input_series('server_requests_seconds_bucket', dict(slo_labels, le='+Inf'), '0+1000x10')]
     # 无错误样本时比例为 0；无流量时比例不出值，不能把空闲服务显示成 0% 错误。
     idle = [input_series('server_requests_code_total', {'namespace': 'apps', 'app': 'api', 'pod': 'api-0', 'code': '200'}, '0+60x10'),
@@ -745,6 +745,12 @@ def main():
         for t in p.get('targets', []):
             raw = {m for m in re.findall(r'([a-zA-Z_:][a-zA-Z0-9_:]*)\{', t['expr']) if ':' not in m} - {'ALERTS', 'ALERTS_FOR_STATE'}
             assert not raw, f'平台总览「{p["title"]}」直接查询原始指标: {raw}'
+    # 当前告警表的说明列由 alerts.yaml 的 summary 生成，新增告警必须同步映射。
+    alert_panel = next(p for p in panels(fleet) if p['id'] == 12)
+    summary_mapping = next(o for o in alert_panel['fieldConfig']['overrides'] if o['matcher'].get('options') == '说明')['properties'][0]['value'][0]['options']
+    alert_names = set(re.findall(r'- alert: (\w+)', (ROOT / 'prometheus/alerts.yaml').read_text()))
+    assert set(summary_mapping) == alert_names, f'告警表说明映射与 alerts.yaml 不一致: {set(summary_mapping) ^ alert_names}'
+    assert not any('{{' in item['text'] for item in summary_mapping.values()), '说明映射是静态文本，不能包含告警模板'
     # 多查询合并的表格按标签对齐行；裸选择器（含比较过滤）保留 __name__，各查询的 __name__ 不同会把同一对象拆成多行。
     bare = re.compile(r'^\s*[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?(\s*(==|!=|>=|<=|>|<)\s*[-\d.]+)?\s*$')
     for d in dashboards:
