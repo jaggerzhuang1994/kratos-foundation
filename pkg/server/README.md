@@ -385,6 +385,8 @@ flowchart TD
 
 启用 gRPC 时默认注册标准 `grpc.health.v1.Health` 服务，与 HTTP 探针共享同一就绪状态，替代 Kratos 在 Start 后即报 `SERVING` 的内置实现：`Check` 的空服务名与已注册的业务服务名在应用就绪、未停机且 readiness 依赖检查全部通过时返回 `SERVING`，否则返回 `NOT_SERVING`；服务名 `liveness` 只表示进程存活，恒为 `SERVING`；未知服务名返回 `NotFound`。`Watch` 立即推送当前状态，之后每秒重新评估并只在变化时推送，它只反映应用就绪与停机，不执行依赖检查，避免大量客户端订阅时周期性探测依赖。配置 `server.grpc.custom_health=true` 或业务已自行注册健康服务（例如经原生 `CustomHealth` option）时，Foundation 不注册。K8s 可用原生 gRPC 探针：readiness 使用空服务名，liveness 使用 `liveness`。
 
+gRPC Server 默认放宽客户端 keepalive 检测：允许最短 10s 一次 ping，且允许没有进行中 RPC 时 ping（gRPC 原生为 5min 且需活动流），使开启 keepalive 的客户端不会因 `too_many_pings` 被断开。可用 `server.grpc.keepalive_min_time` 与 `server.grpc.keepalive_permit_without_stream` 调整，需重启生效。该设置通过 Kratos `grpc.Options` 传入，业务自行传入 `grpc.Options` 会整体替换它，需要时一并设置 `keepalive.EnforcementPolicy`。
+
 `bootstrap.NewServerBootstrap` 自动绑定 `app.Spec.Ready`：Kratos 进入 AfterStart 且 Foundation 的 AfterStart hook 全部成功才就绪，收到停机
 请求立即不就绪，不等待 `stop_delay`。直接使用 Runtime 时，必须在启动前调用
 `runtime.SetReadinessSource(readyFunc)`；未绑定时 `/readyz` 保持 503。Runtime.Stop 或 Wire cleanup

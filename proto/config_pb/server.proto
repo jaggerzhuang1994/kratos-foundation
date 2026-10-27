@@ -101,4 +101,9 @@ message GrpcServerOption {
   optional bool custom_health = 5;
   // disableReflection 是否禁用服务反射
   optional bool disable_reflection = 6;
+  // 允许客户端 keepalive ping 的最短间隔，默认 10s（gRPC 原生默认 5min）；更频繁的 ping 以
+  // too_many_pings 关闭连接。[需重启]
+  optional google.protobuf.Duration keepalive_min_time = 7 [(validate.rules).duration = {gt: {}}];
+  // 是否允许没有进行中 RPC 时的 keepalive ping，默认 true（gRPC 原生默认 false）。[需重启]
+  optional bool keepalive_permit_without_stream = 8;
 }

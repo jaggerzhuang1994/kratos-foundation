@@ -10,6 +10,9 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/reconnect"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/keepalive"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
 func grpcReconnectOption() grpc.DialOption {
@@ -19,6 +22,22 @@ func grpcReconnectOption() grpc.DialOption {
 	return grpc.WithConnectParams(grpc.ConnectParams{
 		Backoff: policy, MinConnectTimeout: 5 * time.Second,
 	})
+}
+
+// grpcKeepaliveOptions 仅在配置 keepalive_time 时开启客户端 ping；未配置时沿用 gRPC 默认（不发送）。
+// 对方服务端的 keepalive 最短间隔必须不大于 keepalive_time，否则连接被以 too_many_pings 关闭。
+func grpcKeepaliveOptions(config *config_pb.GrpcClientOption) []grpc.DialOption {
+	if config.GetKeepaliveTime() == nil {
+		return nil
+	}
+	params := keepalive.ClientParameters{Time: config.GetKeepaliveTime().AsDuration(), Timeout: 10 * time.Second, PermitWithoutStream: true}
+	if config.KeepaliveTimeout != nil {
+		params.Timeout = config.GetKeepaliveTimeout().AsDuration()
+	}
+	if config.KeepalivePermitWithoutStream != nil {
+		params.PermitWithoutStream = config.GetKeepalivePermitWithoutStream()
+	}
+	return []grpc.DialOption{grpc.WithKeepaliveParams(params)}
 }
 
 func newHTTPClientTransport(ctx context.Context, secure bool) (http.RoundTripper, *tls.Config, func()) {

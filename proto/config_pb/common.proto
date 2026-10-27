@@ -4,6 +4,7 @@ option go_package = "github.com/jaggerzhuang1994/kratos-foundation/v2/proto/krat
 package kratos_foundation_pb;
 
 import "google/protobuf/duration.proto";
+import "validate/validate.proto";
 
 // 端点配置
 message Endpoint {
@@ -100,6 +101,23 @@ message Middleware {
       // 设置统计窗口的时间长度。默认值3s
       optional google.protobuf.Duration window = 4;
     }
+  }
+
+  // 客户端失败重试，默认关闭。只重试服务不可用（503 / gRPC Unavailable，熔断打开除外），
+  // 不重试超时与业务错误；全部尝试共享同一截止时间，剩余预算不足以等待退避时停止。
+  // HTTP 只重试 GET/HEAD/OPTIONS（无请求体可安全重放）；gRPC 只重试 operations 中列出的方法。
+  // 重试只适用于幂等接口，非幂等写入不要列入 operations。
+  message Retry {
+    // 是否启用，默认 false。
+    optional bool enable = 1;
+    // 最多尝试次数（含首次），默认 3，范围 2–5。
+    optional int32 max_attempts = 2 [(validate.rules).int32 = {gte: 2, lte: 5}];
+    // 首次重试前的等待，之后倍增并加随机抖动，默认 100ms。
+    optional google.protobuf.Duration backoff = 3 [(validate.rules).duration = {gt: {}}];
+    // 单次等待上限，默认 1s。
+    optional google.protobuf.Duration max_backoff = 4 [(validate.rules).duration = {gt: {}}];
+    // 允许重试的 gRPC 方法全名（如 /orders.v1.Orders/Get）；HTTP 客户端忽略此项。
+    repeated string operations = 5;
   }
 
   // 请求截止时间控制。未配置 deadline 或 fallback_timeout 时，回退超时默认为 10s。

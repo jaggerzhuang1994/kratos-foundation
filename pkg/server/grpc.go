@@ -3,10 +3,13 @@ package server
 import (
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/requestdebug"
+	stdgrpc "google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
 )
 
 // GRPCServer 是 Foundation service 使用的 Kratos gRPC Server。
@@ -64,6 +67,16 @@ func newGRPCServerOptions(
 		}))
 	}
 	opts = append(opts, grpc.Timeout(0))
+	// gRPC 原生只允许客户端每 5min ping 一次且有活动流时才可 ping，客户端开启 keepalive 后会被以
+	// too_many_pings 断开；默认放宽到 10s 且允许空闲 ping。业务 grpc.Options 会整体替换此设置。
+	enforcement := keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}
+	if conf.KeepaliveMinTime != nil {
+		enforcement.MinTime = conf.GetKeepaliveMinTime().AsDuration()
+	}
+	if conf.KeepalivePermitWithoutStream != nil {
+		enforcement.PermitWithoutStream = conf.GetKeepalivePermitWithoutStream()
+	}
+	opts = append(opts, grpc.Options(stdgrpc.KeepaliveEnforcementPolicy(enforcement)))
 	if conf.GetDisableReflection() {
 		opts = append(opts, grpc.DisableReflection())
 	}

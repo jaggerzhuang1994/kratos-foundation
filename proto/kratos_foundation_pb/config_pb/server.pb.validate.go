@@ -820,6 +820,44 @@ func (m *GrpcServerOption) validate(all bool) error {
 		// no validation rules for DisableReflection
 	}
 
+	if m.KeepaliveMinTime != nil {
+
+		if d := m.GetKeepaliveMinTime(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = GrpcServerOptionValidationError{
+					field:  "KeepaliveMinTime",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := GrpcServerOptionValidationError{
+						field:  "KeepaliveMinTime",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
+	if m.KeepalivePermitWithoutStream != nil {
+		// no validation rules for KeepalivePermitWithoutStream
+	}
+
 	if len(errors) > 0 {
 		return GrpcServerOptionMultiError(errors)
 	}

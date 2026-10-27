@@ -43,6 +43,22 @@ message ClientOption {
   optional Middleware.Deadline deadline = 10;
   // 请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。
   optional Middleware.RequestDebug request_debug = 11;
+  // 失败重试，默认关闭；随 clients 配置重建。
+  optional Middleware.Retry retry = 12;
+  // gRPC 连接参数，仅 GRPC 协议使用；修改后重建连接。
+  optional GrpcClientOption grpc = 13;
+}
+
+// GrpcClientOption 是 gRPC 连接级参数。
+message GrpcClientOption {
+  // 空闲多久后发送 keepalive ping 探测连接，默认不发送。经负载均衡、NAT 或防火墙的长连接
+  // 建议设为 30s，防止空闲连接被中间设备静默断开；不应小于服务端 keepalive_min_time，
+  // 否则服务端以 too_many_pings 关闭连接。Foundation 服务端默认允许最短 10s。
+  optional google.protobuf.Duration keepalive_time = 1 [(validate.rules).duration = {gte: {seconds: 10}}];
+  // ping 等待应答的超时，超时即判定连接断开并重连，默认 10s。
+  optional google.protobuf.Duration keepalive_timeout = 2 [(validate.rules).duration = {gt: {}}];
+  // 没有进行中的 RPC 时是否也发送 ping，默认 true。
+  optional bool keepalive_permit_without_stream = 3;
 }
 
 enum Protocol {

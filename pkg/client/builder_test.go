@@ -34,6 +34,7 @@ import (
 	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type discardLogger struct{}
@@ -969,4 +970,47 @@ func TestFactoryHTTPDiscoveryWatcherLivesUntilClientClose(t *testing.T) {
 	receiveWithin(t, cleanupDone, "cleanup after cached release")
 	receiveWithin(t, watcher.stopped, "HTTP discovery watcher stop")
 	receiveWithin(t, watcher.ctx.Done(), "HTTP discovery watch context cancellation")
+}
+
+// 启用重试后，真实 Kratos HTTP 客户端对 GET 的 503 重放到成功，POST 不重放。
+func TestBuilderHTTPRetriesIdempotentRequests(t *testing.T) {
+	var gets, posts atomic.Int32
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		counter := &gets
+		if r.Method == nethttp.MethodPost {
+			counter = &posts
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if counter.Add(1) <= 2 {
+			w.WriteHeader(nethttp.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"code":503,"reason":"UNAVAILABLE","message":"warming up"}`))
+			return
+		}
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+	result, err := newTestRealBuilder(t, nil).build(t.Context(), newClientSpec("retry", &config_pb.ClientOption{
+		Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL,
+		Retry: &config_pb.Middleware_Retry{Enable: proto.Bool(true), Backoff: durationpb.New(time.Millisecond), MaxBackoff: durationpb.New(time.Millisecond)},
+	}, nil, observability.Defaults{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = result.close() }()
+	if err := result.httpClient.Invoke(t.Context(), nethttp.MethodGet, "/orders/1", nil, &map[string]any{}); err != nil || gets.Load() != 3 {
+		t.Fatalf("GET err=%v attempts=%d", err, gets.Load())
+	}
+	if err := result.httpClient.Invoke(t.Context(), nethttp.MethodPost, "/orders", map[string]any{}, &map[string]any{}); err == nil || posts.Load() != 1 {
+		t.Fatalf("POST err=%v attempts=%d", err, posts.Load())
+	}
+}
+
+// 配置 keepalive_time 才生成客户端 keepalive 选项。
+func TestGRPCKeepaliveOptions(t *testing.T) {
+	if grpcKeepaliveOptions(nil) != nil || grpcKeepaliveOptions(&config_pb.GrpcClientOption{KeepaliveTimeout: durationpb.New(time.Second)}) != nil {
+		t.Fatal("keepalive enabled without keepalive_time")
+	}
+	if len(grpcKeepaliveOptions(&config_pb.GrpcClientOption{KeepaliveTime: durationpb.New(30 * time.Second), KeepalivePermitWithoutStream: proto.Bool(false)})) != 1 {
+		t.Fatal("keepalive option missing")
+	}
 }

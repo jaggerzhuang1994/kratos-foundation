@@ -577,6 +577,72 @@ func (m *ClientOption) validate(all bool) error {
 
 	}
 
+	if m.Retry != nil {
+
+		if all {
+			switch v := interface{}(m.GetRetry()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientOptionValidationError{
+						field:  "Retry",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientOptionValidationError{
+						field:  "Retry",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetRetry()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientOptionValidationError{
+					field:  "Retry",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.Grpc != nil {
+
+		if all {
+			switch v := interface{}(m.GetGrpc()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ClientOptionValidationError{
+						field:  "Grpc",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ClientOptionValidationError{
+						field:  "Grpc",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetGrpc()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ClientOptionValidationError{
+					field:  "Grpc",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return ClientOptionMultiError(errors)
 	}
@@ -653,3 +719,175 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ClientOptionValidationError{}
+
+// Validate checks the field values on GrpcClientOption with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *GrpcClientOption) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GrpcClientOption with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GrpcClientOptionMultiError, or nil if none found.
+func (m *GrpcClientOption) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GrpcClientOption) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.KeepaliveTime != nil {
+
+		if d := m.GetKeepaliveTime(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = GrpcClientOptionValidationError{
+					field:  "KeepaliveTime",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gte := time.Duration(10*time.Second + 0*time.Nanosecond)
+
+				if dur < gte {
+					err := GrpcClientOptionValidationError{
+						field:  "KeepaliveTime",
+						reason: "value must be greater than or equal to 10s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
+	if m.KeepaliveTimeout != nil {
+
+		if d := m.GetKeepaliveTimeout(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = GrpcClientOptionValidationError{
+					field:  "KeepaliveTimeout",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := GrpcClientOptionValidationError{
+						field:  "KeepaliveTimeout",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
+	if m.KeepalivePermitWithoutStream != nil {
+		// no validation rules for KeepalivePermitWithoutStream
+	}
+
+	if len(errors) > 0 {
+		return GrpcClientOptionMultiError(errors)
+	}
+
+	return nil
+}
+
+// GrpcClientOptionMultiError is an error wrapping multiple validation errors
+// returned by GrpcClientOption.ValidateAll() if the designated constraints
+// aren't met.
+type GrpcClientOptionMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GrpcClientOptionMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GrpcClientOptionMultiError) AllErrors() []error { return m }
+
+// GrpcClientOptionValidationError is the validation error returned by
+// GrpcClientOption.Validate if the designated constraints aren't met.
+type GrpcClientOptionValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GrpcClientOptionValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GrpcClientOptionValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GrpcClientOptionValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GrpcClientOptionValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GrpcClientOptionValidationError) ErrorName() string { return "GrpcClientOptionValidationError" }
+
+// Error satisfies the builtin error interface
+func (e GrpcClientOptionValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGrpcClientOption.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GrpcClientOptionValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GrpcClientOptionValidationError{}

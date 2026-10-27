@@ -208,6 +208,32 @@ flowchart TD
 
 `ResolveClient`、`MakeGRPCConn`、`MakeHTTPClient` 已移除：统一使用 `AcquireClient` 并覆盖完整请求周期持有租约。使用 `protoc-gen-kratos-foundation-client-v2` 的项目应更新插件后重新生成客户端，使生成方法显式传入连接名称并在调用完成后 release。
 
+## 失败重试
+
+`clients.<name>.retry` 默认关闭，启用后只重试**服务不可用**：HTTP 503 或 gRPC `Unavailable`（含连接失败），熔断打开（reason `CIRCUITBREAKER`）、超时与业务错误都不重试。
+
+```yaml
+client:
+  clients:
+    orders:
+      retry:
+        enable: true
+        max_attempts: 3        # 含首次，2–5，默认 3
+        backoff: 0.1s          # 首次等待，之后倍增并取 [d/2, d) 抖动，默认 100ms
+        max_backoff: 1s        # 单次等待上限，默认 1s
+        operations:            # 仅 gRPC：允许重试的幂等方法全名
+          - /orders.v1.Orders/Get
+```
+
+- HTTP 只重试 GET/HEAD/OPTIONS：请求体在首次发送时已被读取，POST/PUT 等无法安全重放，也不应被视为幂等；`operations` 对 HTTP 无效。
+- gRPC 只重试 `operations` 列出的方法，未列出即不重试；只列出幂等方法。
+- 全部尝试共享调用方的截止时间（deadline 中间件或上游预算），剩余时间不足以等待下一次退避时直接返回最后一次错误。
+- 重试位于指标、日志与熔断之前：每次尝试都单独计入 `client_requests_*` 并经过熔断判断，熔断打开后停止重试。
+
+## gRPC 连接保活
+
+`clients.<name>.grpc.keepalive_time` 设置后，连接空闲该时长即发送 keepalive ping，`keepalive_timeout`（默认 10s）内无应答判定断开并重连；`keepalive_permit_without_stream` 默认 true。经负载均衡、NAT 或防火墙的长连接建议设为 30s，防止空闲连接被中间设备静默断开。最小值 10s；对端服务端允许的最短 ping 间隔必须不大于该值，Foundation 服务端默认允许 10s（见 [server.grpc.keepalive_min_time](../server/README.md)），其他 gRPC 服务端原生默认 5min，过于频繁的 ping 会被以 `too_many_pings` 关闭。修改后按客户端配置变化重建连接。
+
 ## 模块日志
 
 工厂生命周期日志和 HTTP/gRPC 访问日志使用 module=client，禁用、级别和字段过滤统一由 `log.modules` 热更新；不再提供 `client.log`。单个客户端的 `middleware.logging.disable` 仍可独立关闭访问日志。

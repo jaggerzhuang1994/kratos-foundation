@@ -17,6 +17,7 @@ import (
 	foundationhttp "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/transport/http"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	circuitbreakermiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client/internal/middleware/circuitbreaker"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client/internal/middleware/retry"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/tracing"
@@ -138,7 +139,7 @@ func (b *builder) newGRPCClient(ctx context.Context, spec clientSpec) (*stdgrpc.
 		kratosgrpc.WithTimeout(0),
 		kratosgrpc.WithMiddleware(middlewares...),
 		kratosgrpc.WithUnaryInterceptor(grpcUnavailableContext(spec.name)),
-		kratosgrpc.WithOptions(grpcReconnectOption(), stdgrpc.WithChainStreamInterceptor(requestdebug.StreamClient(spec.middleware.GetRequestDebug()))),
+		kratosgrpc.WithOptions(append([]stdgrpc.DialOption{grpcReconnectOption(), stdgrpc.WithChainStreamInterceptor(requestdebug.StreamClient(spec.middleware.GetRequestDebug()))}, grpcKeepaliveOptions(spec.middleware.GetGrpc())...)...),
 	)
 	return kratosgrpc.DialInsecure(ctx, opts...)
 }
@@ -231,6 +232,8 @@ func (b *builder) newMiddleware(spec clientSpec) ([]middleware.Middleware, error
 		requestdebug.Client(spec.middleware.GetRequestDebug()),
 		tracingmiddleware.Client(b.tracing, spec.middleware.GetTracing()),
 		metadatamiddleware.Client(spec.middleware.GetMetadata()),
+		// 重试在指标、日志与熔断之前，每次尝试都被单独统计并经过熔断判断。
+		retry.Client(spec.middleware.GetRetry()),
 		metricsClient,
 		loggingmiddleware.Client(b.logger, spec.middleware.GetLogging()),
 		circuitbreakermiddleware.Client(spec.middleware.GetCircuitBreaker()),

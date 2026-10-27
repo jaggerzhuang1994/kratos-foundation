@@ -222,6 +222,12 @@
         },
         "request_debug": {
           "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.request_debug"
+        },
+        "retry": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.retry"
+        },
+        "grpc": {
+          "$ref": "#/definitions/.kratos_foundation_pb.ClientOption.grpc"
         }
       },
       "type": "object",
@@ -240,6 +246,10 @@
       "type": "string",
       "description": "discovery 目标使用的 registry.instances 名称；省略或空值继承 client.discovery。"
     },
+    ".kratos_foundation_pb.ClientOption.grpc": {
+      "$ref": "#/definitions/.kratos_foundation_pb.GrpcClientOption",
+      "description": "gRPC 连接参数，仅 GRPC 协议使用；修改后重建连接。"
+    },
     ".kratos_foundation_pb.ClientOption.logging": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Logging"
     },
@@ -257,6 +267,10 @@
     ".kratos_foundation_pb.ClientOption.request_debug": {
       "$ref": "#/definitions/.kratos_foundation_pb.Middleware.RequestDebug",
       "description": "请求级 debug 传播；服务端热更新，客户端随 clients 配置重建。"
+    },
+    ".kratos_foundation_pb.ClientOption.retry": {
+      "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Retry",
+      "description": "失败重试，默认关闭；随 clients 配置重建。"
     },
     ".kratos_foundation_pb.ClientOption.target": {
       "type": "string",
@@ -869,6 +883,35 @@
       "type": "boolean",
       "description": "在异常事件中包含堆栈追踪"
     },
+    ".kratos_foundation_pb.GrpcClientOption": {
+      "properties": {
+        "keepalive_time": {
+          "$ref": "#/definitions/.kratos_foundation_pb.GrpcClientOption.keepalive_time"
+        },
+        "keepalive_timeout": {
+          "$ref": "#/definitions/.kratos_foundation_pb.GrpcClientOption.keepalive_timeout"
+        },
+        "keepalive_permit_without_stream": {
+          "$ref": "#/definitions/.kratos_foundation_pb.GrpcClientOption.keepalive_permit_without_stream"
+        }
+      },
+      "type": "object",
+      "description": "GrpcClientOption 是 gRPC 连接级参数。"
+    },
+    ".kratos_foundation_pb.GrpcClientOption.keepalive_permit_without_stream": {
+      "type": "boolean",
+      "description": "没有进行中的 RPC 时是否也发送 ping，默认 true。"
+    },
+    ".kratos_foundation_pb.GrpcClientOption.keepalive_time": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "空闲多久后发送 keepalive ping 探测连接，默认不发送。经负载均衡、NAT 或防火墙的长连接\n 建议设为 30s，防止空闲连接被中间设备静默断开；不应小于服务端 keepalive_min_time，\n 否则服务端以 too_many_pings 关闭连接。Foundation 服务端默认允许最短 10s。"
+    },
+    ".kratos_foundation_pb.GrpcClientOption.keepalive_timeout": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "ping 等待应答的超时，超时即判定连接断开并重连，默认 10s。"
+    },
     ".kratos_foundation_pb.GrpcServerOption": {
       "properties": {
         "disable": {
@@ -888,6 +931,12 @@
         },
         "disable_reflection": {
           "$ref": "#/definitions/.kratos_foundation_pb.GrpcServerOption.disable_reflection"
+        },
+        "keepalive_min_time": {
+          "$ref": "#/definitions/.kratos_foundation_pb.GrpcServerOption.keepalive_min_time"
+        },
+        "keepalive_permit_without_stream": {
+          "$ref": "#/definitions/.kratos_foundation_pb.GrpcServerOption.keepalive_permit_without_stream"
         }
       },
       "type": "object"
@@ -911,6 +960,15 @@
     ".kratos_foundation_pb.GrpcServerOption.endpoint": {
       "$ref": "#/definitions/.kratos_foundation_pb.Endpoint",
       "description": "对外暴露端点"
+    },
+    ".kratos_foundation_pb.GrpcServerOption.keepalive_min_time": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "允许客户端 keepalive ping 的最短间隔，默认 10s（gRPC 原生默认 5min）；更频繁的 ping 以\n too_many_pings 关闭连接。[需重启]"
+    },
+    ".kratos_foundation_pb.GrpcServerOption.keepalive_permit_without_stream": {
+      "type": "boolean",
+      "description": "是否允许没有进行中 RPC 时的 keepalive ping，默认 true（gRPC 原生默认 false）。[需重启]"
     },
     ".kratos_foundation_pb.GrpcServerOption.network": {
       "type": "string",
@@ -1810,6 +1868,53 @@
     ".kratos_foundation_pb.Middleware.RequestDebug.propagate": {
       "type": "boolean",
       "description": "仅客户端使用；默认 true。对不可信或外部服务可显式设为 false。"
+    },
+    ".kratos_foundation_pb.Middleware.Retry": {
+      "properties": {
+        "enable": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Retry.enable"
+        },
+        "max_attempts": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Retry.max_attempts"
+        },
+        "backoff": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Retry.backoff"
+        },
+        "max_backoff": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Retry.max_backoff"
+        },
+        "operations": {
+          "$ref": "#/definitions/.kratos_foundation_pb.Middleware.Retry.operations"
+        }
+      },
+      "type": "object",
+      "description": "客户端失败重试，默认关闭。只重试服务不可用（503 / gRPC Unavailable，熔断打开除外），\n 不重试超时与业务错误；全部尝试共享同一截止时间，剩余预算不足以等待退避时停止。\n HTTP 只重试 GET/HEAD/OPTIONS（无请求体可安全重放）；gRPC 只重试 operations 中列出的方法。\n 重试只适用于幂等接口，非幂等写入不要列入 operations。"
+    },
+    ".kratos_foundation_pb.Middleware.Retry.backoff": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "首次重试前的等待，之后倍增并加随机抖动，默认 100ms。"
+    },
+    ".kratos_foundation_pb.Middleware.Retry.enable": {
+      "type": "boolean",
+      "description": "是否启用，默认 false。"
+    },
+    ".kratos_foundation_pb.Middleware.Retry.max_attempts": {
+      "type": "integer",
+      "description": "最多尝试次数（含首次），默认 3，范围 2–5。"
+    },
+    ".kratos_foundation_pb.Middleware.Retry.max_backoff": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]{1,9})?s$",
+      "description": "单次等待上限，默认 1s。"
+    },
+    ".kratos_foundation_pb.Middleware.Retry.operations": {
+      "items": {
+        "type": "string",
+        "description": "允许重试的 gRPC 方法全名（如 /orders.v1.Orders/Get）；HTTP 客户端忽略此项。"
+      },
+      "type": "array",
+      "description": "允许重试的 gRPC 方法全名（如 /orders.v1.Orders/Get）；HTTP 客户端忽略此项。"
     },
     ".kratos_foundation_pb.Middleware.Tracing": {
       "properties": {

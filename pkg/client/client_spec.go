@@ -8,6 +8,7 @@ import (
 	metadatamiddleware "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metadata"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/observability"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client/internal/middleware/circuitbreaker"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/client/internal/middleware/retry"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -36,6 +37,8 @@ type clientMiddlewareConfig struct {
 	circuitBreaker *config_pb.Middleware_CircuitBreaker
 	deadline       *config_pb.Middleware_Deadline
 	requestDebug   *config_pb.Middleware_RequestDebug
+	retry          *config_pb.Middleware_Retry
+	grpc           *config_pb.GrpcClientOption
 }
 
 func newClientSpec(name string, option *config_pb.ClientOption, defaults *config_pb.Client, observabilityDefaults observability.Defaults) clientSpec {
@@ -60,6 +63,8 @@ func newClientSpec(name string, option *config_pb.ClientOption, defaults *config
 		circuitBreaker: proto.CloneOf(option.GetCircuitBreaker()),
 		deadline:       proto.CloneOf(option.GetDeadline()),
 		requestDebug:   proto.CloneOf(option.GetRequestDebug()),
+		retry:          proto.CloneOf(option.GetRetry()),
+		grpc:           proto.CloneOf(option.GetGrpc()),
 	}
 	// 缺省 tracing 开关先继承启动快照，再规范化；显式 false 可覆盖全局 true。
 	if middleware.tracing == nil {
@@ -139,6 +144,12 @@ func canonicalizeClientMiddleware(middleware *clientMiddlewareConfig) {
 			middleware.logging = nil
 		}
 	}
+	if retryConfig := middleware.retry; retryConfig != nil && !retryConfig.GetEnable() {
+		middleware.retry = nil
+	}
+	if grpcConfig := middleware.grpc; grpcConfig != nil && proto.Equal(grpcConfig, new(config_pb.GrpcClientOption)) {
+		middleware.grpc = nil
+	}
 	if circuitBreakerConfig := middleware.circuitBreaker; circuitBreakerConfig != nil {
 		if !circuitBreakerConfig.GetEnable() {
 			middleware.circuitBreaker = nil
@@ -165,7 +176,9 @@ func (c *clientMiddlewareConfig) equal(other *clientMiddlewareConfig) bool {
 		proto.Equal(c.logging, other.logging) &&
 		proto.Equal(c.circuitBreaker, other.circuitBreaker) &&
 		proto.Equal(c.deadline, other.deadline) &&
-		proto.Equal(c.requestDebug, other.requestDebug)
+		proto.Equal(c.requestDebug, other.requestDebug) &&
+		proto.Equal(c.retry, other.retry) &&
+		proto.Equal(c.grpc, other.grpc)
 }
 
 func (c *clientMiddlewareConfig) GetMetadata() *config_pb.Middleware_Metadata { return c.metadata }
@@ -181,6 +194,8 @@ func (c *clientMiddlewareConfig) GetDeadline() *config_pb.Middleware_Deadline {
 func (c *clientMiddlewareConfig) GetRequestDebug() *config_pb.Middleware_RequestDebug {
 	return c.requestDebug
 }
+func (c *clientMiddlewareConfig) GetRetry() *config_pb.Middleware_Retry { return c.retry }
+func (c *clientMiddlewareConfig) GetGrpc() *config_pb.GrpcClientOption  { return c.grpc }
 
 func (s clientSpec) useDiscovery() bool {
 	return strings.HasPrefix(s.target, "discovery://")
@@ -220,6 +235,9 @@ func (b *builder) validateConfig(config *config_pb.Client, defaults observabilit
 		}
 		if err := circuitbreaker.Validate(middleware.GetCircuitBreaker()); err != nil {
 			return fmt.Errorf("client %q circuit breaker: %w", name, err)
+		}
+		if err := retry.Validate(middleware.GetRetry()); err != nil {
+			return fmt.Errorf("client %q retry: %w", name, err)
 		}
 	}
 	return nil

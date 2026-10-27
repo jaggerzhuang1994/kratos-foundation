@@ -1157,6 +1157,193 @@ var _ interface {
 	ErrorName() string
 } = Middleware_CircuitBreakerValidationError{}
 
+// Validate checks the field values on Middleware_Retry with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *Middleware_Retry) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Middleware_Retry with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// Middleware_RetryMultiError, or nil if none found.
+func (m *Middleware_Retry) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Middleware_Retry) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Enable != nil {
+		// no validation rules for Enable
+	}
+
+	if m.MaxAttempts != nil {
+
+		if val := m.GetMaxAttempts(); val < 2 || val > 5 {
+			err := Middleware_RetryValidationError{
+				field:  "MaxAttempts",
+				reason: "value must be inside range [2, 5]",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Backoff != nil {
+
+		if d := m.GetBackoff(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = Middleware_RetryValidationError{
+					field:  "Backoff",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := Middleware_RetryValidationError{
+						field:  "Backoff",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
+	if m.MaxBackoff != nil {
+
+		if d := m.GetMaxBackoff(); d != nil {
+			dur, err := d.AsDuration(), d.CheckValid()
+			if err != nil {
+				err = Middleware_RetryValidationError{
+					field:  "MaxBackoff",
+					reason: "value is not a valid duration",
+					cause:  err,
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			} else {
+
+				gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+				if dur <= gt {
+					err := Middleware_RetryValidationError{
+						field:  "MaxBackoff",
+						reason: "value must be greater than 0s",
+					}
+					if !all {
+						return err
+					}
+					errors = append(errors, err)
+				}
+
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return Middleware_RetryMultiError(errors)
+	}
+
+	return nil
+}
+
+// Middleware_RetryMultiError is an error wrapping multiple validation errors
+// returned by Middleware_Retry.ValidateAll() if the designated constraints
+// aren't met.
+type Middleware_RetryMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m Middleware_RetryMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m Middleware_RetryMultiError) AllErrors() []error { return m }
+
+// Middleware_RetryValidationError is the validation error returned by
+// Middleware_Retry.Validate if the designated constraints aren't met.
+type Middleware_RetryValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Middleware_RetryValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Middleware_RetryValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Middleware_RetryValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Middleware_RetryValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Middleware_RetryValidationError) ErrorName() string { return "Middleware_RetryValidationError" }
+
+// Error satisfies the builtin error interface
+func (e Middleware_RetryValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMiddleware_Retry.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Middleware_RetryValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Middleware_RetryValidationError{}
+
 // Validate checks the field values on Middleware_Deadline with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
