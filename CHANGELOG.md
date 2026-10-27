@@ -9,7 +9,10 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**其他**
+
+- ⚠️ 不兼容：**plugins**：add /v2 module suffix for versioned plugin releases（`ded9774`）
+- **client-v2**：depend on kratos-foundation v2.7.0（`d70d8b0`）
 <!-- changelog:auto:end -->
 
 ## v2.7.0（2026-10-27）
@@ -21,6 +24,7 @@
 - **删除服务选项 `kratos_foundation_client.client_name` 及 `kratos_foundation_client/client.proto`**：服务名只由 proto 所在目录推导（顶层文件取文件名），客户端插件与服务注册共用同一规则；import 该文件的 proto 需删除 import 与选项后重新生成，连接名不同时用 `NewXxxWithConnName` 指定。
 - **proto 位于 `v1`、`v2beta1` 这类版本目录时客户端生成与服务注册失败**：版本目录名无法区分服务，需改为 `api/<service_name>/*.proto` 布局。
 - **管理端口运行时实现 `Endpointer`**：`server.Runtime.ManagementServers()` 的运行时改为公布端点并声明 `app.RegistrationExempt`，App 不注册它们；自行组装、直接按 `Endpointer` 收集注册地址的代码需同时判断 `RegistrationExempt`。
+- **生成器子模块改为 `/v2` 模块路径并按版本发布**：`protoc-gen-jsonschema`、`protoc-gen-kratos-foundation-errors-v2`、`protoc-gen-kratos-foundation-client-v2` 的模块路径追加 `/v2`，以子模块 tag `cmd/<plugin>/v2.7.0` 发布（提交 `ded9774`，晚于根模块 tag，提交记录列在后续版本），安装改为 `go install github.com/jaggerzhuang1994/kratos-foundation/cmd/<plugin>/v2@v2.7.0`，二进制名不变。按提交号安装不可用；引用旧路径 `cmd/protoc-gen-jsonschema/...` 的项目保持原伪版本，不会被自动升级。
 
 ### Added
 
@@ -43,6 +47,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.7.0 release notes（`b8d5987`）
 - explain service-name registration in the demo and minimal example（`7668705`）
 <!-- changelog:auto:end -->
 
