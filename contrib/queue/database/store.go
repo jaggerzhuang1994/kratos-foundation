@@ -92,7 +92,9 @@ func (s *Store) Failed(ctx context.Context, limit int) ([]queue.FailedTask, erro
 	}
 	result := make([]queue.FailedTask, 0, len(records))
 	for _, record := range records {
-		if !record.Failed || strings.TrimSpace(record.Task.ID) == "" || strings.TrimSpace(record.Task.MessageVersion) == "" {
+		// 正文损坏的记录只保证 ID，允许消息版本为空。
+		corrupt := record.FailureReason == queue.FailureCorruptPayload
+		if !record.Failed || strings.TrimSpace(record.Task.ID) == "" || (!corrupt && strings.TrimSpace(record.Task.MessageVersion) == "") {
 			return nil, errors.New("database queue repo returned an invalid failure")
 		}
 		result = append(result, queue.FailedTask{Task: record.Task.Clone(), Attempts: record.Attempts, Reason: record.FailureReason, FailedAt: record.FailedAt})

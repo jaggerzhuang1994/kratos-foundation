@@ -39,7 +39,7 @@ database:
 
 已删除读写分离和隐式表路由：迁移时移除 `replicas`、`datas`、`trace_resolver_mode` 配置及 `GormDialector` 类型；配置协议已移除这些字段及 reserved 声明，迁移时应主动清理旧键。删除 `UseRead` / `UseWrite` 调用，将需要访问的其他数据库声明为独立的 `connections` 条目，并用 `UseConnection` 选择。`datas` 原来关联的表不会再自动切换连接。
 
-事务在进入 `Transaction` 时固定数据库连接、GORM 配置和 AES key。回调内使用传入 Context 调用 `Connection` 或嵌套 `Transaction`；同一 Manager 的事务 Context 即使指定另一个已存在连接，也继续使用当前事务。未知连接仍返回 `ErrConnectionUnknown`。事务 Context 仅在回调期间有效。
+事务在进入 `Transaction` 时固定数据库连接、GORM 配置和 AES key。回调内使用传入 Context 调用 `Connection` 或嵌套 `Transaction`；同一 Manager 的事务 Context 再次选择事务所在连接时复用当前事务；选择另一个已存在连接（包括在其上嵌套 `Transaction`）返回 `ErrConnectionInTransaction`，错误中带事务所在连接名，避免数据被静默写进事务所在的库。需要跨库写入时在事务外分别执行，或使用 Queue 等最终一致方案。未知连接仍返回 `ErrConnectionUnknown`。事务 Context 仅在回调期间有效。
 
 ```mermaid
 flowchart TD
@@ -49,7 +49,9 @@ flowchart TD
     C -- 否 --> E{显式连接名称不存在?}
     E -- 是 --> F[返回 ErrConnectionUnknown]
     E -- 否 --> G{Context 含当前 Manager 的事务?}
-    G -- 是 --> H[复用固定事务与配置，只派生请求 Context]
+    G -- 是 --> GC{显式选择了其他连接?}
+    GC -- 是 --> GE([返回 ErrConnectionInTransaction])
+    GC -- 否 --> H[复用固定事务与配置，只派生请求 Context]
     G -- 否 --> I[按显式名称或 default 选择独立 GORM 根实例]
     I --> J[派生绑定请求 Context 的会话]
     H --> K([返回会话])

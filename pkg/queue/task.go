@@ -50,11 +50,15 @@ type FailedTask struct {
 	Task *Task
 	// Attempts 为累计领取次数，包含本次及领取后未执行即崩溃的次数。
 	Attempts int
-	// Reason 为受控失败分类，不包含处理错误原文。
+	// Reason 为受控失败分类，不包含处理错误原文；FailureCorruptPayload 表示存储正文无法解码。
 	Reason string
 	// FailedAt 是最终失败归档时间。
 	FailedAt time.Time
 }
+
+// FailureCorruptPayload 是存储正文损坏、无法解码时的失败分类。此类 FailedTask 只保证
+// Task.ID 与 AvailableAt，MessageVersion、Payload、Headers 可能为空；Retry 后再次领取仍会被隔离。
+const FailureCorruptPayload = "corrupt_payload"
 
 var (
 	// ErrLeaseLost 表示任务已被重新领取或完成，旧领取者不得修改状态。

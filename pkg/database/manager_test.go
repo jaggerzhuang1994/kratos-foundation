@@ -447,18 +447,30 @@ func TestNamedConnectionsKeepConfigurationAndAESBoundToTheirTransaction(t *testi
 		t.Fatalf("explicit false override ignored: %v", err)
 	}
 	err := manager.Transaction(UseConnection(ctx, "archive"), func(txCtx context.Context) error {
-		switched := UseConnection(txCtx, "primary")
 		if err := manager.Connection(UseConnection(txCtx, "missing")).Error; !errors.Is(err, ErrConnectionUnknown) {
 			t.Fatalf("unknown transaction selector=%v", err)
 		}
-		db := manager.Connection(switched)
-		if db.SkipDefaultTransaction || db.AllowGlobalUpdate {
+		// 事务不能跨连接：选择另一个连接直接报错，而不是静默写进当前事务所在的库。
+		if err := manager.Connection(UseConnection(txCtx, "primary")).Error; !errors.Is(err, ErrConnectionInTransaction) || !strings.Contains(err.Error(), `"archive"`) {
+			t.Fatalf("switched connection inside transaction: %v", err)
+		}
+		if err := manager.Transaction(UseConnection(txCtx, "primary"), func(context.Context) error { return nil }); !errors.Is(err, ErrConnectionInTransaction) {
+			t.Fatalf("nested transaction on another connection: %v", err)
+		}
+		db := manager.Connection(UseConnection(txCtx, "archive"))
+		if db.Error != nil || db.SkipDefaultTransaction || db.AllowGlobalUpdate {
 			t.Fatal("transaction inherited another connection's GORM configuration")
 		}
 		return db.Model(&aesMapValuesRecord{}).Where("plain = ?", "archive").Updates(map[string]any{"Secret": "transaction secret"}).Error
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	// 默认连接上的事务里显式选择默认连接名，仍复用同一事务。
+	if err := manager.Transaction(ctx, func(txCtx context.Context) error {
+		return manager.Connection(UseConnection(txCtx, "primary")).Error
+	}); err != nil {
+		t.Fatalf("default connection selected inside its own transaction: %v", err)
 	}
 	for _, tt := range []struct{ name, key, secret string }{{"primary", firstKey, "primary"}, {"archive", secondKey, "transaction secret"}} {
 		pool, _ := manager.connectionFactory.pool(tt.name)

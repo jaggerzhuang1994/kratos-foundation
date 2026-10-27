@@ -114,7 +114,7 @@ func (s *Store) Reserve(ctx context.Context, now time.Time, lease time.Duration)
 	if err := json.Unmarshal([]byte(result.Record.Task), task); err != nil || task.ID != result.ID || task.MessageVersion == "" {
 		// 已取得租约的数据损坏时转入失败集合，保留原始数据供排障，避免不断领取。
 		task.ID = result.ID
-		failErr := s.Fail(ctx, reservation, "corrupt_payload", now)
+		failErr := s.Fail(ctx, reservation, queue.FailureCorruptPayload, now)
 		return nil, errors.Join(errors.New("decode redis task: invalid stored payload"), failErr)
 	}
 	return reservation, nil

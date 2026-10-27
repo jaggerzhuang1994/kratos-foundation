@@ -57,11 +57,32 @@ func TestRepoCorruptPayload(t *testing.T) {
 	if record, err := repo.Claim(ctx, now, now.Add(time.Second), "t2"); err != nil || record != nil {
 		t.Fatalf("quarantine: %v %v", record, err)
 	}
-	if _, err := repo.ListFailed(ctx, 1); err == nil {
-		t.Fatal("corruption hidden")
+	// 损坏的失败行不挡住列表：按 corrupt_payload 返回只含 ID 的记录，同时列出正常失败任务。
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "ok", MessageVersion: "test", AvailableAt: now}, Failed: true, FailureReason: "permanent", FailedAt: now.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := repo.ListFailed(ctx, 10)
+	if err != nil || len(failed) != 2 {
+		t.Fatalf("failed list: %+v %v", failed, err)
+	}
+	if failed[0].Task.ID != "bad" || failed[0].FailureReason != queue.FailureCorruptPayload || failed[0].Task.MessageVersion != "" || !failed[0].Failed || failed[0].FailedAt.IsZero() {
+		t.Fatalf("corrupt failure record: %+v", failed[0])
+	}
+	if failed[1].Task.ID != "ok" || failed[1].Task.MessageVersion != "test" {
+		t.Fatalf("regular failure record: %+v", failed[1])
+	}
+	tasks, err := databasequeue.NewStore(repo).Failed(ctx, 10)
+	if err != nil || len(tasks) != 2 || tasks[0].Reason != queue.FailureCorruptPayload {
+		t.Fatalf("store failed list: %+v %v", tasks, err)
+	}
+	if err := db.Model(&testTask{}).Where("id = ?", "bad").Update("failed_at", nil).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.ListFailed(ctx, 10); err == nil {
+		t.Fatal("corrupt row without failure time accepted")
 	}
 	var stored testTask
-	if err := db.First(&stored).Error; err != nil {
+	if err := db.Where("id = ?", "bad").First(&stored).Error; err != nil {
 		t.Fatal(err)
 	}
 	if string(stored.Data) != "broken" || !stored.Failed || stored.Status != StatusFailed {

@@ -115,6 +115,17 @@ type taskData struct {
 	CreatedAt      time.Time         `json:"created_at"`
 }
 
+// corruptRecord 为正文无法解码的失败行构造最小快照；主键或失败时间缺失仍视为状态损坏。
+func (m *Model) corruptRecord() (*databasequeue.TaskRecord, error) {
+	if strings.TrimSpace(string(m.ID)) == "" || len(m.ID) > 128 || !m.Failed || m.FailedAt == nil {
+		return nil, errors.New("decode queue task: invalid stored state")
+	}
+	return &databasequeue.TaskRecord{
+		Task:     queue.Task{ID: string(m.ID), AvailableAt: m.AvailableAt.UTC()},
+		Attempts: m.Attempts, Failed: true, FailureReason: queue.FailureCorruptPayload, FailedAt: m.FailedAt.UTC(),
+	}, nil
+}
+
 func (m *Model) record() (*databasequeue.TaskRecord, error) {
 	var data taskData
 	if err := json.Unmarshal(m.Data, &data); err != nil {

@@ -53,7 +53,8 @@ func (r *Repo[T]) FailReserved(ctx context.Context, id, token, reason string, at
 	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": reason, "failed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}), "fail", queue.ErrLeaseLost)
 }
 
-// ListFailed 按失败时间和任务 ID 返回独立快照；损坏正文返回错误而不静默跳过。
+// ListFailed 按失败时间和任务 ID 返回独立快照；正文损坏的行不中断列表，按
+// queue.FailureCorruptPayload 返回只含 ID 与时间的记录，既不隐藏损坏也不挡住其他失败任务。
 func (r *Repo[T]) ListFailed(ctx context.Context, limit int) ([]databasequeue.TaskRecord, error) {
 	if limit < 1 || limit > 1000 {
 		return nil, fmt.Errorf("queue failed limit must be between 1 and 1000")
@@ -66,7 +67,9 @@ func (r *Repo[T]) ListFailed(ctx context.Context, limit int) ([]databasequeue.Ta
 	for _, entity := range entities {
 		record, err := entity.QueueModel().record()
 		if err != nil {
-			return nil, err
+			if record, err = entity.QueueModel().corruptRecord(); err != nil {
+				return nil, err
+			}
 		}
 		records = append(records, *record)
 	}

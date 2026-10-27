@@ -46,6 +46,7 @@ func (mgr *manager) Transaction(ctx context.Context, fc func(context.Context) er
 		return errors.New("database SQL transaction options cannot be applied to a nested transaction")
 	}
 	db := mgr.Connection(ctx)
+	root, name := mgr.connectionRoot(ctx)
 	if db.Error != nil {
 		// GORM 继续 Begin 会把 Manager 的连接选择错误与驱动错误拼接，
 		// 但新错误链只保留后者；提前返回才能稳定使用 errors.Is。
@@ -53,7 +54,7 @@ func (mgr *manager) Transaction(ctx context.Context, fc func(context.Context) er
 	}
 
 	run := func(tx *gorm.DB) error {
-		return fc(useTx(ctx, mgr, tx))
+		return fc(useTxOn(ctx, mgr, tx, root, name))
 	}
 	if opt.sqlOptions == nil {
 		return db.Transaction(run)
@@ -69,32 +70,67 @@ type transactionFrame struct {
 	owner *manager
 	// db 仅在当前事务回调期间有效的 GORM 事务。
 	db *gorm.DB
+	// root 与 name 是事务所在连接的 GORM 根实例与连接名，用于拒绝事务内切换到其他连接。
+	root *gorm.DB
+	name string
 	// previous Context 中上一层事务，支持交错嵌套。
 	previous *transactionFrame
 }
 
 // useTx 把当前 Manager 的事务压入 Context 链，以支持多 Manager 交错嵌套。
 func useTx(ctx context.Context, owner *manager, db *gorm.DB) context.Context {
+	return useTxOn(ctx, owner, db, nil, "")
+}
+
+// useTxOn 同 useTx，并记录事务所在连接。
+func useTxOn(ctx context.Context, owner *manager, db, root *gorm.DB, name string) context.Context {
 	previous, _ := ctx.Value(useTxKey{}).(*transactionFrame)
 	return context.WithValue(ctx, useTxKey{}, &transactionFrame{
 		owner:    owner,
 		db:       db,
+		root:     root,
+		name:     name,
 		previous: previous,
 	})
 }
 
 // getTx 找到指定 Manager 在 Context 中最内层的事务。
 func getTx(ctx context.Context, owner *manager) (*gorm.DB, bool) {
+	frame, ok := getTxFrame(ctx, owner)
+	if !ok {
+		return nil, false
+	}
+	return frame.db, true
+}
+
+// getTxFrame 找到指定 Manager 在 Context 中最内层的事务 frame。
+func getTxFrame(ctx context.Context, owner *manager) (*transactionFrame, bool) {
 	// 显式保存前一层 frame，才能在不同 Manager 的事务交错嵌套时，
 	// 找回当前 Manager 自己最内层的事务。
 	frame, _ := ctx.Value(useTxKey{}).(*transactionFrame)
 	for frame != nil {
 		if frame.owner == owner {
-			return frame.db, true
+			return frame, true
 		}
 		frame = frame.previous
 	}
 	return nil, false
+}
+
+// connectionRoot 返回事务将固定的连接：嵌套时沿用外层事务的连接，否则为 Context 选择或默认连接。
+func (mgr *manager) connectionRoot(ctx context.Context) (*gorm.DB, string) {
+	if frame, ok := getTxFrame(ctx, mgr); ok {
+		return frame.root, frame.name
+	}
+	if name, explicit := getConnection(ctx); explicit {
+		return mgr.connections[name], name
+	}
+	for name, db := range mgr.connections {
+		if db == mgr.db {
+			return db, name
+		}
+	}
+	return mgr.db, ""
 }
 
 // UseConnection 为后续数据库调用选择具名连接；已有事务仍固定原连接。

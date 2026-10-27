@@ -9,6 +9,7 @@ import (
 	"time"
 
 	databasequeue "github.com/jaggerzhuang1994/kratos-foundation/v2/contrib/queue/database"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -129,7 +130,7 @@ func (r *Repo[T]) available(db *gorm.DB, now time.Time) *gorm.DB {
 }
 
 func (r *Repo[T]) quarantineValues(now time.Time) map[string]any {
-	return map[string]any{"status": StatusFailed, "failed": true, "failure_reason": "corrupt_payload", "failed_at": timestampCeil(now, r.timestampPrecision), "token": "", "reserved_until": 0}
+	return map[string]any{"status": StatusFailed, "failed": true, "failure_reason": queue.FailureCorruptPayload, "failed_at": timestampCeil(now, r.timestampPrecision), "token": "", "reserved_until": 0}
 }
 
 func claimValues(model *Model, token string, until time.Time) map[string]any {

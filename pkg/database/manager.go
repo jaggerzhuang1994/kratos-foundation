@@ -22,6 +22,10 @@ var ErrManagerClosed = errors.New("database manager is closed")
 // ErrConnectionUnknown 表示 Context 选择了当前 Manager 未配置的具名连接。
 var ErrConnectionUnknown = errors.New("database connection is not configured")
 
+// ErrConnectionInTransaction 表示在某个连接的事务内选择了另一个连接；事务无法跨连接，
+// 静默沿用原事务会把数据写进错误的数据库，因此直接拒绝。
+var ErrConnectionInTransaction = errors.New("database transaction is bound to another connection")
+
 // Manager 提供请求级数据库访问；连接池由 cleanup 统一释放。
 type Manager interface {
 	Connection(context.Context) *gorm.DB
@@ -186,7 +190,8 @@ func (mgr *manager) Connection(ctx context.Context) *gorm.DB {
 		return db
 	}
 	selected := mgr.db
-	if name, explicit := getConnection(ctx); explicit {
+	name, explicit := getConnection(ctx)
+	if explicit {
 		var ok bool
 		selected, ok = mgr.connections[name]
 		if !ok {
@@ -195,9 +200,14 @@ func (mgr *manager) Connection(ctx context.Context) *gorm.DB {
 			return db
 		}
 	}
-	if tx, ok := getTx(ctx, mgr); ok {
+	if frame, ok := getTxFrame(ctx, mgr); ok {
 		// 事务固定已选连接；派生 Context 只更新超时、链路和值，不改变事务所属数据库。
-		return tx.WithContext(ctx)
+		if explicit && selected != frame.root {
+			db := mgr.db.WithContext(ctx)
+			db.Error = fmt.Errorf("%w: %q", ErrConnectionInTransaction, frame.name)
+			return db
+		}
+		return frame.db.WithContext(ctx)
 	}
 	return selected.WithContext(ctx)
 }
