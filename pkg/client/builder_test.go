@@ -989,7 +989,8 @@ func TestBuilderHTTPRetriesIdempotentRequests(t *testing.T) {
 		_, _ = w.Write([]byte("{}"))
 	}))
 	defer server.Close()
-	result, err := newTestRealBuilder(t, nil).build(t.Context(), newClientSpec("retry", &config_pb.ClientOption{
+	builder := newTestRealBuilder(t, nil)
+	result, err := builder.build(t.Context(), newClientSpec("retry", &config_pb.ClientOption{
 		Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL,
 		Retry: &config_pb.Middleware_Retry{Enable: proto.Bool(true), Backoff: durationpb.New(time.Millisecond), MaxBackoff: durationpb.New(time.Millisecond)},
 	}, nil, observability.Defaults{}))
@@ -1002,6 +1003,54 @@ func TestBuilderHTTPRetriesIdempotentRequests(t *testing.T) {
 	}
 	if err := result.httpClient.Invoke(t.Context(), nethttp.MethodPost, "/orders", map[string]any{}, &map[string]any{}); err == nil || posts.Load() != 1 {
 		t.Fatalf("POST err=%v attempts=%d", err, posts.Load())
+	}
+	// 每次尝试计入 client_requests_*，逻辑调用只在重试外层记一次最终结果。
+	attempts, calls := clientCodeCounts(t, builder, "client_requests_code_total"), clientCodeCounts(t, builder, "client_calls_code_total")
+	if attempts["503"] != 3 || attempts["200"] != 1 || calls["200"] != 1 || calls["503"] != 1 {
+		t.Fatalf("attempts=%v calls=%v", attempts, calls)
+	}
+}
+
+func clientCodeCounts(t *testing.T, b *builder, name string) map[string]float64 {
+	t.Helper()
+	families, err := b.metrics.PrometheusGatherer().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]float64{}
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "code" {
+					counts[label.GetValue()] += metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return counts
+}
+
+// 未开启重试时逻辑调用与单次尝试相同，不额外记录 client_calls_*。
+func TestBuilderSkipsCallMetricsWithoutRetry(t *testing.T) {
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, _ *nethttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+	builder := newTestRealBuilder(t, nil)
+	result, err := builder.build(t.Context(), newClientSpec("plain", &config_pb.ClientOption{Protocol: config_pb.Protocol_HTTP.Enum(), Target: server.URL}, nil, observability.Defaults{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = result.close() }()
+	if err := result.httpClient.Invoke(t.Context(), nethttp.MethodGet, "/", nil, &map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	if calls := clientCodeCounts(t, builder, "client_calls_code_total"); len(calls) != 0 || clientCodeCounts(t, builder, "client_requests_code_total")["200"] != 1 {
+		t.Fatalf("calls=%v", calls)
 	}
 }
 

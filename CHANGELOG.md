@@ -19,6 +19,8 @@
 - 业务 HTTP 请求体上限 `server.http.request_body`：默认 32 MiB，`routes` 按精确 path 或最长 prefix 覆盖（文件上传接口放大，0 表示不限制）；声明长度超限直接 413，分块传输在读取时截断，Bind 与业务读取超限都返回 413 `REQUEST_BODY_TOO_LARGE`。WebSocket 升级请求与 gRPC 不受影响。
 - `pkg/observability.Observability`：`queue.Observability` 与 `kafka.Observability` 改为它的类型别名，同一个值可直接传给 Queue、Kafka 与 Outbox，已有字面量与 `queue.NewObservability` 写法不变。
 - `kafka.NewProducerWithObservability(factory, config, obs)`：一步创建带指标、链路与日志的 Producer，等价于 `NewProducer` + `NewManagedProducer`。
+- `server.HandleRoute(method, path, operation, handler)`：注册经过 Foundation 服务端中间件链（恢复、截止时间、限流、日志、指标、链路、错误归一化）的手写 HTTP 路由，处理器通过 `*server.HTTPRequest` 取路径参数、查询参数与绑定请求体，返回值按服务器编码器输出。原生 `Route(...).GET/POST`、`HandleFunc`、`Handle`、`HandlePrefix` 保留，文档标注其不经过中间件。
+- 开启重试的客户端额外上报逻辑调用指标 `client_calls_code_total` / `client_calls_seconds`（重试结束后记一次最终结果与总耗时），新增预聚合 `app_downstream:client_calls:rate5m`、`app_downstream:client_call_errors:rate5m`、`app_downstream:client_calls_seconds_bucket:rate5m`（未上报时退回尝试级）；平台总览与网关详情的按下游表格并列“尝试 5xx”与“调用 5xx（重试后）”。
 - `database.AutoMigrate(ctx, manager, models...)`：固定在主库迁移，配置 `read_replicas` 时不会因 Migrator 的存在性检查落到副本而重复建表。
 - `bootstrap.Spec.HTTP()` / `GRPC()`，与 `server.Spec` 命名一致；原 `Http()` / `Grpc()` 保留为兼容别名。
 - `client.AcquireHTTP` / `client.AcquireGRPC`：按协议租用客户端，只返回一个客户端，协议与配置不符时返回 `client.ErrProtocolMismatch`；`Factory.AcquireClient` 不变。
@@ -39,6 +41,7 @@
 
 ### Changed
 
+- `FoundationDownstreamHighErrorRate` / `FoundationDownstreamHighLatency` 改按逻辑调用（重试后）统计：重试兜住的失败不再告警，延迟包含重试与退避；未开启重试的客户端口径不变。
 - 业务 HTTP 端口不再暴露 `/debug/pprof`：Kratos 把未匹配路由交给 `http.DefaultServeMux`，任何依赖导入 `net/http/pprof` 都会在业务端口上暴露剖析端点；现保留 DefaultServeMux 回退但对 `/debug/pprof` 返回 404，剖析改用 `server.http.pprof` 挂在管理端口。依赖业务端口 pprof 的部署需改用管理端口。
 - Queue `WorkerConfig` 时长约束校验失败时，错误说明违反的具体约束与实际值（此前只有 `invalid queue worker concurrency or timing configuration`）。
 - 数据库 Queue（`contrib/queue/database/gorm`）在 MySQL 8.0.1+ / MariaDB 10.6+ 上改用短事务内按主键 `FOR UPDATE SKIP LOCKED` 领取：并发 Worker 各自锁定不同候选，不再争抢最早的同一行。MySQL 8.4 上 8 并发领取 200 个积压任务的空领取从 1335 次降到个位数。SQLite 与不支持 SKIP LOCKED 的版本保持原条件更新方式；首次领取时读取一次 `SELECT VERSION()`。

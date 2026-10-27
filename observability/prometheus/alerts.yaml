@@ -383,6 +383,20 @@ groups:
         expr: sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_requests_code_total{code=~"5.."}[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
       - record: app_downstream:client_requests_seconds_bucket:rate5m
         expr: sum by (env, cluster, namespace, app, downstream, le) (label_replace(label_replace(rate(client_requests_seconds_bucket[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
+      # 按逻辑调用的下游结果：开启重试的客户端额外上报 client_calls_*（重试结束后只记一次最终结果与总耗时）；
+      # 未开启重试时逻辑调用与单次尝试相同，退回 client_requests_*。告警用这组，面板同时展示尝试级与调用级。
+      - record: app_downstream:client_calls:rate5m
+        expr: |
+          sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_calls_code_total[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
+          or app_downstream:client_requests:rate5m
+      - record: app_downstream:client_call_errors:rate5m
+        expr: |
+          sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_calls_code_total{code=~"5.."}[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
+          or (app_downstream:client_errors:rate5m unless on (env, cluster, namespace, app, downstream) sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_calls_code_total[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+")))
+      - record: app_downstream:client_calls_seconds_bucket:rate5m
+        expr: |
+          sum by (env, cluster, namespace, app, downstream, le) (label_replace(label_replace(rate(client_calls_seconds_bucket[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+"))
+          or (app_downstream:client_requests_seconds_bucket:rate5m unless on (env, cluster, namespace, app, downstream) sum by (env, cluster, namespace, app, downstream) (label_replace(label_replace(rate(client_calls_code_total[5m]), "downstream", "$1", "operation", "(.*)"), "downstream", "$1", "operation", "/?([^/]+)/.+")))
   # 可用性 SLO 的多窗口多消耗率告警（Google SRE Workbook）：消耗率 = 错误比例 / 错误预算。
   # 默认 SLO 99.9%（30 天错误预算 0.1%），只把 5xx 计为错误；调整 SLO 时修改 foundation:slo_error_budget:ratio。
   # 长窗口判断是否真的在消耗预算，短窗口确认仍在发生，恢复后告警尽快解除。
@@ -589,32 +603,33 @@ groups:
         annotations:
           summary: "应用慢请求（>1s）持续消耗延迟错误预算，按当前速率 30 天内耗尽"
           runbook: "observability/troubleshooting.md#foundationlatencysloburnrate"
-  # 单个下游异常：网关或服务调用的某个下游（client_requests，按 operation 推导 downstream）错误率或延迟过高。
-  # 复用 foundation-records 的 app_downstream:* 预聚合；5m 内至少 100 次调用才判断，避免低频调用噪声。
+  # 单个下游异常：网关或服务调用的某个下游（按 operation 推导 downstream）在调用方视角的最终错误率或延迟过高。
+  # 按逻辑调用统计（app_downstream:client_calls*），重试已兜住的失败不告警；尝试级失败率见面板。
+  # 5m 内至少 100 次调用才判断，避免低频调用噪声。
   - name: foundation-downstream
     rules:
       - alert: FoundationDownstreamHighErrorRate
         expr: |
           (
-            (app_downstream:client_errors:rate5m or 0 * app_downstream:client_requests:rate5m)
-            / (app_downstream:client_requests:rate5m > 0)
+            (app_downstream:client_call_errors:rate5m or 0 * app_downstream:client_calls:rate5m)
+            / (app_downstream:client_calls:rate5m > 0)
           ) > 0.05
-          and app_downstream:client_requests:rate5m * 300 >= 100
+          and app_downstream:client_calls:rate5m * 300 >= 100
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "下游 {{ $labels.downstream }} 调用 5xx 比例超过 5%"
+          summary: "下游 {{ $labels.downstream }} 调用（重试后）5xx 比例超过 5%"
           runbook: "observability/troubleshooting.md#foundationdownstreamhigherrorrate"
       - alert: FoundationDownstreamHighLatency
         expr: |
-          histogram_quantile(0.99, app_downstream:client_requests_seconds_bucket:rate5m) > 1
-          and on (env, cluster, namespace, app, downstream) app_downstream:client_requests:rate5m * 300 >= 100
+          histogram_quantile(0.99, app_downstream:client_calls_seconds_bucket:rate5m) > 1
+          and on (env, cluster, namespace, app, downstream) app_downstream:client_calls:rate5m * 300 >= 100
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "下游 {{ $labels.downstream }} 调用 P99 超过 1s"
+          summary: "下游 {{ $labels.downstream }} 调用（含重试）P99 超过 1s"
           runbook: "observability/troubleshooting.md#foundationdownstreamhigherrorrate"
   # 原先只有日志的异常：log_events_total{event} 由 bootstrap.NewMetricsBootstrap 按事件名计数（WARN 及以上、
   # 事件名以 .rejected / .panicked / .panic.recovered 结尾，计数不受日志级别影响）。

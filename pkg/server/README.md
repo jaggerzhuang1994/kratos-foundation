@@ -161,7 +161,26 @@ flowchart TD
 
 ### 自定义 HTTP 端点
 
-回调接收或其他不适合 Protocol Buffers 绑定的 HTTP 接口通过 `HandleHTTP` 声明，再交给现有 `HTTP().Register`。handler 返回 `(reply, error)`：成功 reply 使用当前 HTTP Server 配置的 ResponseEncoder，错误经过服务端错误边界后使用当前 ErrorEncoder。Foundation 默认 ErrorEncoder 会统一输出业务错误并隐藏未知服务端错误；业务通过 HTTP ServerOption 覆盖编码器后，以覆盖后的配置为准。`nil, nil` 由 ResponseEncoder 处理，Kratos 默认实现产生 `200` 空响应。
+不适合 Protocol Buffers 绑定的手写接口（回调、Webhook、简单内部接口）首选 `HandleRoute`：它与生成式接口走同一条服务端中间件链（panic 恢复、截止时间、限流、元数据、访问日志、请求指标、链路、错误归一化），operation 可自定义，处理器拿到 `ctx` 与 `*server.HTTPRequest`：
+
+```go
+spec.HTTP().Register(server.HandleRoute(http.MethodPost, "/orders/{id}/cancel", "/orders.v1.Orders/Cancel",
+    func(ctx context.Context, req *server.HTTPRequest) (any, error) {
+        var body struct {
+            Reason string `json:"reason"`
+        }
+        if err := req.Bind(&body); err != nil { // 按 Content-Type 解码，受 request_body 上限约束
+            return nil, err
+        }
+        return orders.Cancel(ctx, req.PathParam("id"), body.Reason, req.Query("source"))
+    }))
+```
+
+`HTTPRequest` 内嵌中间件替换后的 `*http.Request`（其 Context 与 `ctx` 相同），另提供 `PathParam`、`Query`、`Bind`、`BindQuery`。operation 为空时使用路径模板；返回值与错误的编码规则同下文 `HandleHTTP`。
+
+> **原生路由不经过中间件**：在 `Register` 回调里直接调用 Kratos 原生 API（`srv.Route("/").GET/POST/Handle`、`srv.HandleFunc`、`srv.Handle`、`srv.HandlePrefix`）注册的路由不执行 Foundation 服务端中间件链，没有 panic 恢复、截止时间、限流、访问日志、请求指标、链路与错误归一化，除非处理器自行调用 `ctx.Middleware`。仅在确实需要完全自行处理请求（如反向代理、静态文件）时使用，并自行承担这些能力。
+
+回调接收或其他不适合 Protocol Buffers 绑定的 HTTP 接口也可以通过 `HandleHTTP` 声明，再交给现有 `HTTP().Register`。handler 返回 `(reply, error)`：成功 reply 使用当前 HTTP Server 配置的 ResponseEncoder，错误经过服务端错误边界后使用当前 ErrorEncoder。Foundation 默认 ErrorEncoder 会统一输出业务错误并隐藏未知服务端错误；业务通过 HTTP ServerOption 覆盖编码器后，以覆盖后的配置为准。`nil, nil` 由 ResponseEncoder 处理，Kratos 默认实现产生 `200` 空响应。
 
 需要自行设置状态码、Header、流式输出、文件下载，或像上传限流一样必须向 `http.MaxBytesReader` 传入 ResponseWriter 时，使用 `HandleHTTPWriter`。该模式在 handler 成功返回后不会再次调用 ResponseEncoder；如果 handler 返回错误且尚未发送响应，错误仍进入相同的 ErrorEncoder。handler 一旦写入响应，后续错误编码通常无法替换已发送的状态或正文，因此应在首次写响应前完成所有可能失败的操作。
 

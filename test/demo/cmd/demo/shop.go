@@ -257,23 +257,18 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, s *shop) (b
 	}
 	switch s.role {
 	case roleAPI:
-		spec.HTTP().Register(func(srv server.HTTPServer) error {
-			route(srv, http.MethodPost, "/orders", "/shop.Orders/Create", s.createOrder)
-			route(srv, http.MethodGet, "/orders/{id}", "/shop.Orders/Get", s.getOrder)
-			return nil
-		})
+		spec.HTTP().Register(
+			server.HandleRoute(http.MethodPost, "/orders", "/shop.Orders/Create", s.createOrder),
+			server.HandleRoute(http.MethodGet, "/orders/{id}", "/shop.Orders/Get", s.getOrder),
+		)
 		spec.RegisterRuntime(s.relay)
 	case roleInventory:
-		spec.HTTP().Register(func(srv server.HTTPServer) error {
-			route(srv, http.MethodGet, "/stock/{sku}", "/shop.Inventory/Stock", s.stock)
-			return nil
-		})
+		spec.HTTP().Register(server.HandleRoute(http.MethodGet, "/stock/{sku}", "/shop.Inventory/Stock", s.stock))
 	case roleGateway:
-		spec.HTTP().Register(func(srv server.HTTPServer) error {
-			route(srv, http.MethodPost, "/api/orders", "/gateway.Orders/Create", s.proxyCreate)
-			route(srv, http.MethodGet, "/api/orders/{id}", "/gateway.Orders/Get", s.proxyGet)
-			return nil
-		})
+		spec.HTTP().Register(
+			server.HandleRoute(http.MethodPost, "/api/orders", "/gateway.Orders/Create", s.proxyCreate),
+			server.HandleRoute(http.MethodGet, "/api/orders/{id}", "/gateway.Orders/Get", s.proxyGet),
+		)
 	case roleCron:
 		// 两个副本共享 Redis 锁，每次触发只执行一次；另一副本记 job_triggers_skipped_total{reason="cluster_locked"}。
 		spec.Job().RegisterCron("reconcile-orders", "@every 15s", job.TaskFunc(s.reconcile), job.WithClusterLock(s.locker, "shop:job:reconcile-orders", 10*time.Second))
@@ -301,27 +296,8 @@ func boot(_ bootstrap.InfrastructureBootstrap, spec *bootstrap.Spec, s *shop) (b
 	return bootstrap.Bootstrap{}, nil
 }
 
-// route 注册手写路由：固定 operation，并经过默认中间件链产生访问日志与请求指标。
-func route(srv server.HTTPServer, method, path, operation string, handler func(context.Context, map[string]string) (any, error)) {
-	srv.Route("/").Handle(method, path, func(ctx kratoshttp.Context) error {
-		kratoshttp.SetOperation(ctx, operation)
-		params := map[string]string{}
-		for key, values := range ctx.Vars() {
-			params[key] = values[0]
-		}
-		for key, values := range ctx.Request().URL.Query() {
-			params[key] = values[0]
-		}
-		result, err := ctx.Middleware(func(ctx context.Context, _ any) (any, error) { return handler(ctx, params) })(ctx, nil)
-		if err != nil {
-			return err
-		}
-		return ctx.Result(http.StatusOK, result)
-	})
-}
-
-func (s *shop) createOrder(ctx context.Context, params map[string]string) (any, error) {
-	sku := params["sku"]
+func (s *shop) createOrder(ctx context.Context, req *server.HTTPRequest) (any, error) {
+	sku := req.Query("sku")
 	if sku == "" {
 		sku = fmt.Sprintf("sku-%02d", rand.IntN(20))
 	}
@@ -372,8 +348,8 @@ func (s *shop) createOrder(ctx context.Context, params map[string]string) (any, 
 }
 
 // getOrder 走旁路缓存；未命中时从只读副本回源，不存在的订单缓存 30 秒。
-func (s *shop) getOrder(ctx context.Context, params map[string]string) (any, error) {
-	id := params["id"]
+func (s *shop) getOrder(ctx context.Context, req *server.HTTPRequest) (any, error) {
+	id := req.PathParam("id")
 	item, err := s.cache.Get(ctx, id, func(ctx context.Context) (order, error) {
 		var item order
 		err := s.db.Connection(ctx).First(&item, "id = ?", id).Error
@@ -392,7 +368,7 @@ func (s *shop) getOrder(ctx context.Context, params map[string]string) (any, err
 }
 
 // stock 模拟下游库存服务：常规 5–80ms，4% 慢于 1s（触发延迟 SLO），5% 暂时不可用，0.5% panic（被框架恢复）。
-func (s *shop) stock(ctx context.Context, params map[string]string) (any, error) {
+func (s *shop) stock(ctx context.Context, req *server.HTTPRequest) (any, error) {
 	if rand.IntN(1000) < 5 {
 		panic("demo: inventory handler bug")
 	}
@@ -408,15 +384,15 @@ func (s *shop) stock(ctx context.Context, params map[string]string) (any, error)
 	if rand.IntN(100) < 5 {
 		return nil, foundationerrors.New(http.StatusServiceUnavailable, "STOCK_UNAVAILABLE", "inventory temporarily unavailable")
 	}
-	return map[string]int{params["sku"]: 10 + rand.IntN(90)}, nil
+	return map[string]int{req.PathParam("sku"): 10 + rand.IntN(90)}, nil
 }
 
-func (s *shop) proxyCreate(ctx context.Context, params map[string]string) (any, error) {
-	return s.proxy(ctx, http.MethodPost, "/orders?sku="+params["sku"], "/shop.Orders/Create")
+func (s *shop) proxyCreate(ctx context.Context, req *server.HTTPRequest) (any, error) {
+	return s.proxy(ctx, http.MethodPost, "/orders?sku="+req.Query("sku"), "/shop.Orders/Create")
 }
 
-func (s *shop) proxyGet(ctx context.Context, params map[string]string) (any, error) {
-	return s.proxy(ctx, http.MethodGet, "/orders/"+params["id"], "/shop.Orders/Get")
+func (s *shop) proxyGet(ctx context.Context, req *server.HTTPRequest) (any, error) {
+	return s.proxy(ctx, http.MethodGet, "/orders/"+req.PathParam("id"), "/shop.Orders/Get")
 }
 
 func (s *shop) proxy(ctx context.Context, method, path, operation string) (any, error) {

@@ -15,6 +15,10 @@ import (
 )
 
 // HTTPServer 是 Foundation endpoint 使用的 Kratos HTTP Server。
+//
+// 在 Register 回调里直接调用它的原生方法（Route(...).GET/POST/Handle、HandleFunc、Handle、HandlePrefix）注册的路由
+// 不经过 Foundation 服务端中间件链：没有 panic 恢复、截止时间、限流、访问日志、请求指标、链路与错误归一化，
+// 除非处理器自行调用 ctx.Middleware。手写路由优先使用 HandleRoute（或 HandleHTTP / HandleHTTPWriter）。
 type HTTPServer = *http.Server
 
 // HTTPHandler 处理一条自定义 HTTP 路由；返回值由服务器配置的响应或错误编码器输出。
@@ -26,7 +30,8 @@ type HTTPHandler func(*nethttp.Request) (any, error)
 type HTTPWriterHandler func(nethttp.ResponseWriter, *nethttp.Request) error
 
 // HandleHTTP 创建一条自定义 HTTP 路由注册回调。
-// 它自动执行服务端中间件链，并统一编码 handler 返回值。
+// 它自动执行服务端中间件链，并统一编码 handler 返回值；operation 固定为 path 模板。
+// 需要自定义 operation、读取路径参数或绑定请求体时使用 HandleRoute。
 func HandleHTTP(method, path string, handler HTTPHandler) HTTPEndpoint {
 	if handler == nil {
 		return nil

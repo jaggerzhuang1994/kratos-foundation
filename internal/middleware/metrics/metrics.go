@@ -20,6 +20,9 @@ const (
 	meterName                  = "github.com/jaggerzhuang1994/kratos-foundation/v2/internal/middleware/metrics"
 	serverSecondsHistogramName = "server_requests_seconds"
 	clientSecondsHistogramName = "client_requests_seconds"
+	// clientCallsCounterName 与 clientCallsSecondsHistogramName 按逻辑调用统计：重试结束后只记一次最终结果与总耗时。
+	clientCallsCounterName          = "client_calls_code_total"
+	clientCallsSecondsHistogramName = "client_calls_seconds"
 )
 
 // Server 创建使用应用私有 Meter 的服务端指标中间件。
@@ -50,6 +53,19 @@ func Client(provider metrics.Provider, config Config) (middleware.Middleware, er
 		metrics2.DefaultClientRequestsCounterName,
 		clientSecondsHistogramName,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return withStatusCode(metrics2.Client(opts...)), nil
+}
+
+// ClientCalls 创建按逻辑调用统计的客户端指标中间件，安装在重试之外：一次调用无论重试几次只记一次最终结果，
+// 反映调用方实际感受到的失败率与耗时；client_requests_* 仍按每次尝试统计下游健康。标签与 client_requests_* 相同。
+func ClientCalls(provider metrics.Provider, config Config) (middleware.Middleware, error) {
+	if config.GetDisable() {
+		return nil, nil
+	}
+	opts, err := newOpts(provider, clientCallsCounterName, clientCallsSecondsHistogramName)
 	if err != nil {
 		return nil, err
 	}

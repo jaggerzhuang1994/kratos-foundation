@@ -4726,9 +4726,17 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(sum by (env,cluster,namespace,app,downstream) (app_downstream:client_call_errors:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}) or 0 * sum by (env,cluster,namespace,app,downstream) (app_downstream:client_calls:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"})) / (sum by (env,cluster,namespace,app,downstream) (app_downstream:client_calls:rate5m{namespace=~\"${namespace}\",app=~\"${app}\"}) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
-      "description": "下游由 operation 推导：gRPC 风格 /pkg.Service/Method 取服务名，其余保留完整 operation。",
+      "description": "下游由 operation 推导：gRPC 风格 /pkg.Service/Method 取服务名，其余保留完整 operation。 尝试 5xx 按每次尝试统计，反映下游健康；调用 5xx（重试后）按逻辑调用统计，是调用方实际失败率，单下游告警使用它。未开启重试的客户端两列相同。",
       "fieldConfig": {
         "defaults": {
           "noValue": "无下游调用",
@@ -4794,7 +4802,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5xx比例"
+              "options": "尝试 5xx"
             },
             "properties": [
               {
@@ -4866,6 +4874,44 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "调用 5xx（重试后）"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -4909,9 +4955,10 @@
               "downstream": 2,
               "Value #A": 3,
               "Value #B": 4,
-              "Value #C": 5,
-              "env": 6,
-              "cluster": 7
+              "Value #D": 5,
+              "Value #C": 6,
+              "env": 7,
+              "cluster": 8
             },
             "renameByName": {
               "env": "环境",
@@ -4920,8 +4967,9 @@
               "app": "应用",
               "downstream": "下游",
               "Value #A": "RPS",
-              "Value #B": "5xx比例",
-              "Value #C": "P99"
+              "Value #B": "尝试 5xx",
+              "Value #C": "P99",
+              "Value #D": "调用 5xx（重试后）"
             }
           }
         }

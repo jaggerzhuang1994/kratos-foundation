@@ -11,6 +11,8 @@ import (
 )
 
 // HTTPEndpoint 在 HTTPServer 上注册一组应用路由。
+// Protocol Buffers 生成的注册函数与 HandleRoute / HandleHTTP / HandleHTTPWriter 经过服务端中间件链；
+// 回调里直接用 Kratos 原生 API（srv.Route(...)、srv.HandleFunc 等）注册的路由不经过，见 HTTPServer。
 type HTTPEndpoint func(HTTPServer) error
 
 // GRPCService 在 GRPCServer 上注册一个应用服务。

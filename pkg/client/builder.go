@@ -226,12 +226,20 @@ func (b *builder) newMiddleware(spec clientSpec) ([]middleware.Middleware, error
 	if err != nil {
 		return nil, fmt.Errorf("create client metrics middleware: %w", err)
 	}
+	var callMetrics middleware.Middleware
+	if spec.middleware.GetRetry().GetEnable() {
+		if callMetrics, err = metricsmiddleware.ClientCalls(b.metrics, spec.middleware.GetMetrics()); err != nil {
+			return nil, fmt.Errorf("create client call metrics middleware: %w", err)
+		}
+	}
 
 	middlewares := []middleware.Middleware{
 		deadlinemiddleware.Client(deadlineStore),
 		requestdebug.Client(spec.middleware.GetRequestDebug()),
 		tracingmiddleware.Client(b.tracing, spec.middleware.GetTracing()),
 		metadatamiddleware.Client(spec.middleware.GetMetadata()),
+		// 开启重试时在重试外层按逻辑调用统计一次（client_calls_*），供告警与 SLO；未开启时与单次尝试相同，不重复记录。
+		callMetrics,
 		// 重试在指标、日志与熔断之前，每次尝试都被单独统计并经过熔断判断。
 		retry.Client(spec.middleware.GetRetry()),
 		metricsClient,

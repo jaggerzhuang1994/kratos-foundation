@@ -60,7 +60,7 @@ FoundationSLOBurnRateCritical / FoundationSLOBurnRateWarning 表示 5xx 正在�
 
 ## FoundationDownstreamHighErrorRate
 
-FoundationDownstreamHighErrorRate / FoundationDownstreamHighLatency 指向某个调用方对某个下游（`downstream` 由 client operation 推导，gRPC 取服务名）的 5xx 或 P99 异常。到[网关详情](dashboards.md)按下游查看错误与非 2xx 原因，确认是下游自身故障（下游的 HighServerErrorRate、AppNotReady 同时触发）还是调用方连接池、熔断或重试配置导致；客户端重试只对幂等调用开启，见 [pkg/client 失败重试](../pkg/client/README.md#失败重试)。
+FoundationDownstreamHighErrorRate / FoundationDownstreamHighLatency 指向某个调用方对某个下游（`downstream` 由 client operation 推导，gRPC 取服务名）的 5xx 或 P99 异常。到[网关详情](dashboards.md)按下游查看错误与非 2xx 原因，确认是下游自身故障（下游的 HighServerErrorRate、AppNotReady 同时触发）还是调用方连接池、熔断或重试配置导致；告警按逻辑调用（重试后）统计，重试兜住的瞬时失败不会触发；面板上“尝试 5xx”明显高于“调用 5xx（重试后）”说明下游在抖动但重试仍能兜住。客户端重试只对幂等调用开启，见 [pkg/client 失败重试](../pkg/client/README.md#失败重试)。
 
 ## FoundationPanicRecovered
 

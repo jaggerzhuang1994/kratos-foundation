@@ -542,7 +542,9 @@ def platform_fixture_tests(fleet):
         checks.append(fixture_check(fleet, 61, expected, target=ref))
     for ref, expected in [('A', [(dict(gw, downstream=orders), 1), (dict(gw, downstream=health), 1)]),
                           ('B', [(dict(gw, downstream=orders), .5), (dict(gw, downstream=health), 0)]),
-                          ('C', [(dict(gw, downstream=orders), .99)])]:
+                          ('C', [(dict(gw, downstream=orders), .99)]),
+                          # 未上报 client_calls_* 时调用级比例退回尝试级。
+                          ('D', [(dict(gw, downstream=orders), .5), (dict(gw, downstream=health), 0)])]:
         checks.append(fixture_check(fleet, 62, expected, target=ref))
     # exporter 未接入：数据库 / Redis / Kafka 区为空（显示“未接入”），K8s 与消费者已接入时异常计数补 0。
     unconnected = [input_series('kube_pod_info', {'namespace': 'apps', 'pod': 'api-0'}, '1+0x10'),

@@ -1031,9 +1031,17 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_calls_code_total{namespace=~\"${namespace}\",app=~\"${app}\",operation=~\"${client_operation}\",code=~\"5..\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) or 0 * sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_calls_code_total{namespace=~\"${namespace}\",app=~\"${app}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\"))) / (sum by (namespace,app,downstream) (label_replace(label_replace(rate(client_calls_code_total{namespace=~\"${namespace}\",app=~\"${app}\",operation=~\"${client_operation}\"}[$__rate_interval]), \"downstream\", \"$1\", \"operation\", \"(.*)\"), \"downstream\", \"$1\", \"operation\", \"/?([^/]+)/.+\")) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
-      "description": "下游由 client operation 推导：gRPC 风格 /pkg.Service/Method 取服务名，其余保留完整 operation。Client.Do 原始调用不经过指标中间件。",
+      "description": "下游由 client operation 推导：gRPC 风格 /pkg.Service/Method 取服务名，其余保留完整 operation。Client.Do 原始调用不经过指标中间件。 调用 5xx（重试后）只对开启重试的客户端有值（client_calls_*）；未开启重试时显示“—”，以尝试 5xx 为准。",
       "fieldConfig": {
         "defaults": {
           "noValue": "无下游调用",
@@ -1081,7 +1089,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5xx比例"
+              "options": "尝试 5xx"
             },
             "properties": [
               {
@@ -1153,6 +1161,44 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "调用 5xx（重试后）"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -1196,15 +1242,17 @@
               "downstream": 2,
               "Value #A": 3,
               "Value #B": 4,
-              "Value #C": 5
+              "Value #D": 5,
+              "Value #C": 6
             },
             "renameByName": {
               "namespace": "命名空间",
               "app": "网关",
               "downstream": "下游",
               "Value #A": "RPS",
-              "Value #B": "5xx比例",
-              "Value #C": "P99"
+              "Value #B": "尝试 5xx",
+              "Value #C": "P99",
+              "Value #D": "调用 5xx（重试后）"
             }
           }
         }

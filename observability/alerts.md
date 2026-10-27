@@ -15,8 +15,8 @@
 | FoundationSLOBurnRateWarning | 消耗率：1d 与 2h 均 >3，或 3d 与 6h 均 >1；长窗口请求至少 100 | 15m | 按当前速率 30 天内耗尽，当天处理 |
 | FoundationLatencySLOBurnRateCritical（critical） | 慢请求（>1s）比例的消耗率，窗口与倍数同可用性 SLO | 2m | 延迟预算数天内耗尽 |
 | FoundationLatencySLOBurnRateWarning | 同上，慢速消耗 | 15m | 延迟预算 30 天内耗尽 |
-| FoundationDownstreamHighErrorRate | 单个下游（`downstream`）调用 5xx >5%，5m 调用至少 100 | 5m | 该下游服务、熔断与重试配置 |
-| FoundationDownstreamHighLatency | 单个下游调用 P99 >1s，5m 调用至少 100 | 10m | 下游慢接口、连接池与网络 |
+| FoundationDownstreamHighErrorRate | 单个下游（`downstream`）逻辑调用（重试后）5xx >5%，5m 调用至少 100；未开启重试时即每次请求 | 5m | 该下游服务、熔断与重试配置 |
+| FoundationDownstreamHighLatency | 单个下游逻辑调用（含重试与退避）P99 >1s，5m 调用至少 100 | 10m | 下游慢接口、连接池与网络 |
 | FoundationPanicRecovered | 5m 内有 panic 被恢复（`log_events_total` 的 `*.panicked` / `*.panic.recovered`） | 立即 | 按 event 与 trace 查日志中的 panic 类型与堆栈 |
 | FoundationConfigRejected | 15m 内有配置或策略热更新被拒绝（`*.rejected`，不含 Kafka 发布与 WebSocket 消息拒绝） | 立即 | 应用仍在用旧配置，修正配置后重新下发 |
 | FoundationNodeCPUHigh | 应用所在机器 CPU >90% | 15m | 机器进程分布、竞争 |

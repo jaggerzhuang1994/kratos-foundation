@@ -983,7 +983,7 @@ tests:
               downstream: orders.v1.Orders
               severity: warning
             exp_annotations:
-              summary: 下游 orders.v1.Orders 调用 5xx 比例超过 5%
+              summary: 下游 orders.v1.Orders 调用（重试后）5xx 比例超过 5%
               runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate
       - eval_time: 16m
         alertname: FoundationDownstreamHighLatency
@@ -996,7 +996,7 @@ tests:
               downstream: orders.v1.Orders
               severity: warning
             exp_annotations:
-              summary: 下游 orders.v1.Orders 调用 P99 超过 1s
+              summary: 下游 orders.v1.Orders 调用（含重试）P99 超过 1s
               runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate
   - name: panic 恢复与配置拒绝告警，含首次出现的计数器
     interval: 1m
@@ -1034,3 +1034,39 @@ tests:
             exp_annotations:
               summary: 配置更新被拒绝（client.config.rejected），应用仍在使用旧配置
               runbook: observability/troubleshooting.md#foundationconfigrejected
+  - name: 下游告警按逻辑调用：重试兜住的失败不告警，调用级失败告警
+    interval: 1m
+    input_series:
+      # svc 调用 stock：每次尝试 10% 503，但开启重试后逻辑调用每分钟 600 次、全部成功。
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Stock/Get",code="200"}
+        values: 0+600x20
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Stock/Get",code="503"}
+        values: 0+66x20
+      - series: client_calls_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Stock/Get",code="200"}
+        values: 0+600x20
+      # svc 调用 pay：重试也救不回，逻辑调用 10% 失败。
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Pay/Charge",code="503"}
+        values: 0+180x20
+      - series: client_requests_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Pay/Charge",code="200"}
+        values: 0+540x20
+      - series: client_calls_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Pay/Charge",code="503"}
+        values: 0+60x20
+      - series: client_calls_code_total{env="prod",cluster="c1",namespace="apps",app="svc",operation="/shop.Pay/Charge",code="200"}
+        values: 0+540x20
+    promql_expr_test:
+      # 有调用级数据但没有 5xx 时，错误比例为 0，不能退回尝试级的 10%。
+      - expr: round((app_downstream:client_call_errors:rate5m or 0 * app_downstream:client_calls:rate5m) / app_downstream:client_calls:rate5m, 0.001)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",cluster="c1",namespace="apps",app="svc",downstream="shop.Stock"}'
+            value: 0
+          - labels: '{env="prod",cluster="c1",namespace="apps",app="svc",downstream="shop.Pay"}'
+            value: 0.1
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FoundationDownstreamHighErrorRate
+        exp_alerts:
+          - exp_labels: {env: prod, cluster: c1, namespace: apps, app: svc, downstream: shop.Pay, severity: warning}
+            exp_annotations:
+              summary: 下游 shop.Pay 调用（重试后）5xx 比例超过 5%
+              runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate

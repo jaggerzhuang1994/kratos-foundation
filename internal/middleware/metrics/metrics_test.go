@@ -43,6 +43,16 @@ func TestRequestDurationHistogramUsesPrometheusBaseName(t *testing.T) {
 			},
 			prefix: "client_requests_seconds",
 		},
+		{
+			name: "client calls",
+			newContext: func(ctx context.Context) context.Context {
+				return transport.NewClientContext(ctx, new(kratoshttp.Transport))
+			},
+			newMetric: func(provider foundationmetrics.Provider) (middleware.Middleware, error) {
+				return ClientCalls(provider, nil)
+			},
+			prefix: "client_calls_seconds",
+		},
 	}
 
 	for _, test := range tests {

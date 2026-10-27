@@ -11,7 +11,7 @@
 | 分区 | 当前指标与额外筛选 | 启用方式与边界 |
 | --- | --- | --- |
 | Server | server_requests_code_total、server_requests_seconds；operation/kind | Foundation HTTP/gRPC unary 指标中间件；不保证覆盖 panic、前置 Deadline 拒绝、直接 ResponseWriter 写出的状态码；gRPC Stream、WebSocket 生命周期不在此统计内 |
-| Client | client_requests_code_total、client_requests_seconds；operation/kind | 使用 Foundation Client Factory 且 middleware.metrics.disable 未开启；HTTP 只有 Invoke 经过指标中间件，直接 Do 绕过；gRPC Stream、任意 net/http 或第三方 SDK 不自动覆盖 |
+| Client | client_requests_code_total、client_requests_seconds（每次尝试）；开启重试时另有 client_calls_code_total、client_calls_seconds（逻辑调用）；operation/kind | 使用 Foundation Client Factory 且 middleware.metrics.disable 未开启；HTTP 只有 Invoke 经过指标中间件，直接 Do 绕过；gRPC Stream、任意 net/http 或第三方 SDK 不自动覆盖 |
 | Database | go_sql_*、database_sql_operations_total、database_sql_operation_duration_seconds；db_name | NewManager 注入 Provider，database.metrics.disable 未开启；池指标覆盖已创建连接池，SQL 指标来自 GORM 回调，含回调处理，不覆盖原生 sql.DB、事务控制语句或游标后续扫描 |
 | Redis | db_client_connections_*；redis_connection/pool_name/state/type/status | Redis Manager 创建 client 且 redis.metrics.disable 未开启；redisotel v9.17.2 观察应用客户端，不是 Redis server；建连与命令/pipeline 分开 |
 | Cache | business_cache_lookups_total、business_cache_loads_total、business_cache_load_duration_seconds；cache_name | 业务调用 metrics.NewCacheMetrics 的 Hit/Miss/Error/Load；不能从 Redis 连接池复用推导缓存命中率 |
