@@ -21,19 +21,30 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaults.healthCheckIntervalSeconds != 10 || defaults.deregisterCriticalAfterSeconds != 600 || defaults.disableHealthCheck || defaults.disableHeartbeat {
+	if defaults.healthCheckIntervalSeconds != 5 || defaults.deregisterCriticalAfterSeconds != 600 || defaults.disableHealthCheck || defaults.disableHeartbeat ||
+		defaults.disableGRPCHealthCheck || defaults.failuresBeforeCritical != 2 {
 		t.Fatalf("defaults = %#v", defaults)
 	}
-	value := &config_pb.RegistrarOptions{DisableHealthCheck: proto.Bool(true), DisableHeartbeat: proto.Bool(true), HealthcheckInternal: durationpb.New(2 * time.Second), DeregisterCriticalServiceAfter: durationpb.New(5 * time.Second), Tags: []string{"blue", "api"}}
+	value := &config_pb.RegistrarOptions{DisableHealthCheck: proto.Bool(true), DisableHeartbeat: proto.Bool(true), HealthcheckInternal: durationpb.New(2 * time.Second), DeregisterCriticalServiceAfter: durationpb.New(5 * time.Second), Tags: []string{"blue", "api"},
+		DisableGrpcHealthCheck: proto.Bool(true), FailuresBeforeCritical: proto.Int32(1)}
 	got, err := loadConfig(testPolicyConfig(t, "registry", value))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.disableHealthCheck || !got.disableHeartbeat || got.healthCheckIntervalSeconds != 2 || got.deregisterCriticalAfterSeconds != 5 {
+	if !got.disableHealthCheck || !got.disableHeartbeat || got.healthCheckIntervalSeconds != 2 || got.deregisterCriticalAfterSeconds != 5 ||
+		!got.disableGRPCHealthCheck || got.failuresBeforeCritical != 1 {
 		t.Fatalf("override = %#v", got)
 	}
 	if len(got.tags) != 2 || got.tags[0] != "blue" {
 		t.Fatalf("tags = %#v", got.tags)
+	}
+}
+
+func TestLoadConfigRejectsFailuresBeforeCriticalBelowOne(t *testing.T) {
+	for _, failures := range []int32{0, -1} {
+		if _, err := loadConfig(testPolicyConfig(t, "registry", &config_pb.RegistrarOptions{FailuresBeforeCritical: proto.Int32(failures)})); err == nil {
+			t.Fatalf("failures_before_critical=%d accepted", failures)
+		}
 	}
 }
 

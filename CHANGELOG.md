@@ -4,6 +4,15 @@
 
 ## 计划中
 
+### 升级风险
+
+- **Consul 注册的 gRPC 端点改用 gRPC 健康检查**：原 TCP 检查改为由 Consul 调用实例的 `grpc.health.v1.Health/Check`，结果与 `/readyz` 一致。应用未就绪、停机中或 readiness 依赖检查失败时，实例在 Consul 中为 critical，服务发现不再返回它；readiness 检查中只应保留“缺少它整个服务都不可用”的依赖。启用心跳时该检查不参与自动注销，依赖恢复后实例立即重新可见。需要旧行为时设置 `registry.instances.<name>.options.registry.disable_grpc_health_check: true`。业务自行注册 gRPC 健康服务（`server.grpc.custom_health`）时，Consul 结果取决于业务实现。
+- **Consul 健康检查与心跳默认间隔由 10s 改为 5s**：TTL 随之由 20s 改为 10s，Consul agent 收到的心跳与检查请求加倍；端点检查默认连续失败 2 次才判定 critical（`failures_before_critical`，原为 1 次）。显式配置 `healthcheck_internal` 的应用不受影响。
+
+### Added
+
+- **registry/consul**：`options.registry.disable_grpc_health_check` 与 `options.registry.failures_before_critical`。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

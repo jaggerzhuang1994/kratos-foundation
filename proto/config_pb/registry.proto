@@ -18,17 +18,21 @@ message RegistryInstance {
 
 // RegistrarOptions 是 Consul 驱动 options.registry 的启动配置。
 message RegistrarOptions {
-  // 是否禁用健康检查【默认false】
+  // 是否禁用端点健康检查（gRPC 健康检查与 TCP 检查）【默认false】
   optional bool disable_health_check = 1;
   // 是否禁用心跳【默认false】
   optional bool disable_heartbeat = 2;
-  // 健康检查间隔【默认10s】
+  // 健康检查与心跳间隔，TTL 为其两倍【默认5s】
   optional google.protobuf.Duration healthcheck_internal = 3;
-  // deregisterCriticalServiceAfter【默认600s】
+  // 检查持续异常多久后由 Consul 自动注销实例；启用心跳时 gRPC 健康检查不参与自动注销【默认600s】
   optional google.protobuf.Duration deregister_critical_service_after = 4;
   // 注册到 Consul 服务实例的标签，用于 Consul 侧分类、查询和 tag 过滤。
   // 标签不会自动写入 Kratos ServiceInstance.Metadata。
   repeated string tags = 5;
+  // 是否让 gRPC 端点退回 TCP 检查；默认使用 grpc.health.v1 检查，结果与应用就绪状态一致【默认false】
+  optional bool disable_grpc_health_check = 6;
+  // 端点健康检查连续失败多少次后判定为 critical，至少为 1【默认2】
+  optional int32 failures_before_critical = 7;
 }
 
 // Discovery 是 Consul 驱动 options.discovery 的启动配置。

@@ -50,6 +50,9 @@ services:
   consul:
     image: hashicorp/consul:1.21.3
     command: agent -dev -client=0.0.0.0
+    # gRPC 健康检查由 Consul 主动访问测试进程启动的 gRPC 服务
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:18500:8500"
     mem_limit: 256m

@@ -33,12 +33,19 @@ export FOUNDATION_TEST_DOCKER_PROJECT="$project"
 export FOUNDATION_TEST_KAFKA_ADDR=127.0.0.1:19092
 export FOUNDATION_TEST_REDIS_ADDR=127.0.0.1:16379
 export FOUNDATION_TEST_CONSUL_ADDR=127.0.0.1:18500
+# 注册测试的 gRPC 健康检查由容器内 Consul 访问宿主机：Docker Desktop 可直接访问回环地址；
+# Linux 的 host-gateway 指向 docker0 网关，测试服务只监听该地址，不暴露到其他网卡。
+export FOUNDATION_TEST_CONSUL_CHECK_HOST=host.docker.internal
+if [ "$(uname -s)" = Linux ]; then
+    FOUNDATION_TEST_CONSUL_CHECK_LISTEN="$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'):0"
+    export FOUNDATION_TEST_CONSUL_CHECK_LISTEN
+fi
 # 仅用于 compose 中的隔离数据库；不读取开发者现有 MySQL 的凭据。
 export FOUNDATION_TEST_MYSQL_DSN='root:foundation-local-test-only@tcp(127.0.0.1:13306)/foundation_test?parseTime=true&timeout=2s&readTimeout=5s&writeTimeout=5s'
 compose ps > "$output/services.txt"
 go version > "$output/toolchain.txt"
 if ! go test -race -count=1 -timeout=3m -run '^Test(External|StoreRedis|StatsRedis)' -v \
-    ./pkg/kafka ./pkg/cache ./contrib/queue/redis ./contrib/database/mysql ./contrib/lock/redis ./pkg/redis ./contrib/config/consul \
+    ./pkg/kafka ./pkg/cache ./contrib/queue/redis ./contrib/database/mysql ./contrib/lock/redis ./pkg/redis ./contrib/config/consul ./contrib/registry/consul \
     > "$output/functional.txt" 2>&1; then
     cat "$output/functional.txt"
     exit 1

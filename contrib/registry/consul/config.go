@@ -13,11 +13,15 @@ import (
 )
 
 type registryConfig struct {
-	// disableHealthCheck 控制是否省略 TCP 健康检查，默认 false。
+	// disableHealthCheck 控制是否省略端点健康检查（gRPC 与 TCP），默认 false。
 	disableHealthCheck bool
+	// disableGRPCHealthCheck 控制 gRPC 端点是否退回 TCP 检查，默认 false（使用 grpc.health.v1）。
+	disableGRPCHealthCheck bool
+	// failuresBeforeCritical 指定端点检查连续失败多少次后判定为 critical，默认 2，至少为 1。
+	failuresBeforeCritical int
 	// disableHeartbeat 控制是否关闭 TTL 心跳检查与后台续报，默认 false。
 	disableHeartbeat bool
-	// healthCheckIntervalSeconds 指定检查及心跳间隔，默认 10 秒，必须为正整数秒；TTL 为其两倍。
+	// healthCheckIntervalSeconds 指定检查及心跳间隔，默认 5 秒，必须为正整数秒；TTL 为其两倍。
 	healthCheckIntervalSeconds int
 	// deregisterCriticalAfterSeconds 指定持续异常后自动注销的等待秒数，默认 600，必须为正整数秒。
 	deregisterCriticalAfterSeconds int
@@ -30,8 +34,10 @@ func loadConfig(config config.Reader) (registryConfig, error) {
 	defaults := &config_pb.RegistrarOptions{
 		DisableHealthCheck:             proto.Bool(false),
 		DisableHeartbeat:               proto.Bool(false),
-		HealthcheckInternal:            durationpb.New(10 * time.Second),
+		HealthcheckInternal:            durationpb.New(5 * time.Second),
 		DeregisterCriticalServiceAfter: durationpb.New(10 * time.Minute),
+		DisableGrpcHealthCheck:         proto.Bool(false),
+		FailuresBeforeCritical:         proto.Int32(2),
 	}
 	effective := new(config_pb.RegistrarOptions)
 	if err := config.Load("registry", effective, defaults); err != nil {
@@ -53,6 +59,10 @@ func loadConfig(config config.Reader) (registryConfig, error) {
 	if err != nil {
 		return registryConfig{}, err
 	}
+	failures := effective.GetFailuresBeforeCritical()
+	if failures < 1 {
+		return registryConfig{}, fmt.Errorf("consul registry failures before critical must be at least 1, got %d", failures)
+	}
 	tags, err := validateTags(effective.GetTags())
 	if err != nil {
 		return registryConfig{}, err
@@ -60,6 +70,8 @@ func loadConfig(config config.Reader) (registryConfig, error) {
 	return registryConfig{
 		disableHealthCheck:             effective.GetDisableHealthCheck(),
 		disableHeartbeat:               effective.GetDisableHeartbeat(),
+		disableGRPCHealthCheck:         effective.GetDisableGrpcHealthCheck(),
+		failuresBeforeCritical:         int(failures),
 		healthCheckIntervalSeconds:     healthCheckSeconds,
 		deregisterCriticalAfterSeconds: deregisterSeconds,
 		tags:                           tags,

@@ -407,6 +407,14 @@ func (m *RegistrarOptions) validate(all bool) error {
 
 	}
 
+	if m.DisableGrpcHealthCheck != nil {
+		// no validation rules for DisableGrpcHealthCheck
+	}
+
+	if m.FailuresBeforeCritical != nil {
+		// no validation rules for FailuresBeforeCritical
+	}
+
 	if len(errors) > 0 {
 		return RegistrarOptionsMultiError(errors)
 	}

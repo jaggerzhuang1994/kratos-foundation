@@ -230,9 +230,16 @@ registry:
       driver: consul
       options:
         registry:
+          # 端点健康检查：gRPC 端点默认按 grpc.health.v1（与 /readyz 一致）检查，未就绪实例从发现中移除 [默认: false]
           disable_health_check: false
+          # true 时 gRPC 端点退回 TCP 检查 [默认: false]
+          disable_grpc_health_check: false
+          # 端点检查连续失败多少次判定为 critical [默认: 2]
+          failures_before_critical: 2
           disable_heartbeat: false
-          healthcheck_internal: 10s
+          # 端点检查与心跳间隔，TTL 为其两倍 [默认: 5s]
+          healthcheck_internal: 5s
+          # 进程退出或卡死后多久自动注销；就绪失败不会触发注销 [默认: 600s]
           deregister_critical_service_after: 600s
           tags: [region=local]
         discovery:

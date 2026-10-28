@@ -146,7 +146,7 @@ func (r *registrar) stop(ctx context.Context, id string) error {
 // serviceRegistration 保留 SDK 的端点和检查映射，持有独立快照用于缺失后的重新登记。
 func (r *registrar) serviceRegistration(service *registry.ServiceInstance) (*api.AgentServiceRegistration, error) {
 	addresses := make(map[string]api.ServiceAddress, len(service.Endpoints))
-	checks := make([]string, 0, len(service.Endpoints))
+	checks := make([]endpointCheck, 0, len(service.Endpoints))
 	for _, endpoint := range service.Endpoints {
 		parsed, err := url.Parse(endpoint)
 		if err != nil {
@@ -160,7 +160,7 @@ func (r *registrar) serviceRegistration(service *registry.ServiceInstance) (*api
 				return nil, fmt.Errorf("invalid service endpoint port %q: %w", text, err)
 			}
 		}
-		checks = append(checks, net.JoinHostPort(parsed.Hostname(), strconv.FormatUint(port, 10)))
+		checks = append(checks, endpointCheck{scheme: parsed.Scheme, address: net.JoinHostPort(parsed.Hostname(), strconv.FormatUint(port, 10))})
 		addresses[parsed.Scheme] = api.ServiceAddress{Address: endpoint, Port: int(port)}
 	}
 	payload := &api.AgentServiceRegistration{
@@ -168,16 +168,32 @@ func (r *registrar) serviceRegistration(service *registry.ServiceInstance) (*api
 		Tags: append([]string{"version=" + service.Version}, r.config.tags...), TaggedAddresses: addresses,
 	}
 	if len(checks) > 0 {
-		host, port, _ := net.SplitHostPort(checks[0])
+		host, port, _ := net.SplitHostPort(checks[0].address)
 		payload.Address = host
 		payload.Port, _ = strconv.Atoi(port)
 	}
 	critical := fmt.Sprintf("%ds", r.config.deregisterCriticalAfterSeconds)
 	if !r.config.disableHealthCheck {
-		for _, address := range checks {
+		interval := fmt.Sprintf("%ds", r.config.healthCheckIntervalSeconds)
+		for _, check := range checks {
+			if check.scheme == "grpc" && !r.config.disableGRPCHealthCheck {
+				// grpc.health.v1 与应用就绪一致：未就绪时实例变为 critical、被发现过滤，恢复后重新可见。
+				// 进程存活由心跳负责自动注销，就绪失败不注销，避免依赖长时间故障时实例被移除；
+				// 关闭心跳时没有其他检查兜底，才让该检查参与自动注销。
+				grpcCheck := &api.AgentServiceCheck{
+					Name: "gRPC health " + check.address, GRPC: check.address, Interval: interval, Timeout: "5s",
+					FailuresBeforeCritical: r.config.failuresBeforeCritical,
+				}
+				if r.config.disableHeartbeat {
+					grpcCheck.DeregisterCriticalServiceAfter = critical
+				}
+				payload.Checks = append(payload.Checks, grpcCheck)
+				continue
+			}
 			payload.Checks = append(payload.Checks, &api.AgentServiceCheck{
-				TCP: address, Interval: fmt.Sprintf("%ds", r.config.healthCheckIntervalSeconds),
+				TCP: check.address, Interval: interval,
 				DeregisterCriticalServiceAfter: critical, Timeout: "5s",
+				FailuresBeforeCritical: r.config.failuresBeforeCritical,
 			})
 		}
 	}
@@ -188,4 +204,12 @@ func (r *registrar) serviceRegistration(service *registry.ServiceInstance) (*api
 		})
 	}
 	return payload, nil
+}
+
+// endpointCheck 是一个注册端点的协议与健康检查地址。
+type endpointCheck struct {
+	// scheme 端点协议，grpc 端点使用 gRPC 健康检查。
+	scheme string
+	// address 检查目标 host:port。
+	address string
 }
