@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.8.0（2026-10-27）
+
 ### 升级风险
 
 - **Consul 注册的 gRPC 端点改用 gRPC 健康检查**：原 TCP 检查改为由 Consul 调用实例的 `grpc.health.v1.Health/Check`，结果与 `/readyz` 一致。应用未就绪、停机中或 readiness 依赖检查失败时，实例在 Consul 中为 critical，服务发现不再返回它；readiness 检查中只应保留“缺少它整个服务都不可用”的依赖。启用心跳时该检查不参与自动注销，依赖恢复后实例立即重新可见。需要旧行为时设置 `registry.instances.<name>.options.registry.disable_grpc_health_check: true`。业务自行注册 gRPC 健康服务（`server.grpc.custom_health`）时，Consul 结果取决于业务实现。
@@ -18,6 +28,15 @@
 ### 提交记录
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**新增**
+
+- **database**：add PrimaryCheck readiness check for the primary database（`c2c0741`）
+- ⚠️ 不兼容：**registry/consul**：follow readiness with a gRPC health check（`1151528`）
+
+**文档**
+
+- **changelog**：note versioned plugin releases for v2.7.0（`68e2f90`）
 
 **其他**
 
