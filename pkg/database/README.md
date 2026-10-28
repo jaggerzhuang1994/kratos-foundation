@@ -121,6 +121,18 @@ flowchart TD
     V -- 成功 --> W([完成])
 ```
 
+## 就绪检查
+
+`database.PrimaryCheck(manager, connection)` 返回 `func(context.Context) error`，可直接作为 `server.ReadinessCheck` 的检查函数，由业务在 bootstrap 中按需注册（框架不默认注册）：
+
+```go
+spec.Health().Checks(server.ReadinessCheck{Name: "database", Check: database.PrimaryCheck(manager, "")})
+```
+
+- `connection` 为空时检查默认连接，否则检查同名具名连接；名称不存在时返回包装 `ErrConnectionUnknown` 的错误，Manager 关闭后返回 `ErrManagerClosed`。
+- 每次检查在主库执行 `SELECT 1`，配置了 `read_replicas` 时不访问副本；超时由就绪检查的 Context 决定（默认一轮 1 秒），检查本身不重试。
+- 就绪失败会让实例停止接收流量（K8s 摘除、Consul 服务发现过滤），只在主库不可用时整个服务都无法工作时注册；所有实例共享同一主库，主库故障时所有实例同时不可见。
+
 ## AES 字段
 
 Model 使用 `AESDecryptString` / `AESDecryptBytes` 声明加密字段。普通结构体写入由 serializer 加密；`Model(...).Create` 或 `Updates` 使用 map 时，插件按 Model 字段信息包装原生 serializer，在 SQL 绑定时加密，包括 `[]map[string]any` 及指针包装。插件复制 map 与批量切片，不向调用方原值写回密文或自增 ID。批量副本使用 GORM RETURNING 支持的切片指针形态，兼容自增主键及显式 Returning。Updates 保留 Model 的主键反射和明文回写，Returning 按 AES 字段类型解密。读取使用当前连接的 key 解密；缺少 key 的 AES 字段写入返回 `ErrAESConfigMissing`，不会把该批数据写入数据库。

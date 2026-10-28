@@ -12,6 +12,7 @@
 ### Added
 
 - **registry/consul**：`options.registry.disable_grpc_health_check` 与 `options.registry.failures_before_critical`。
+- **database**：`database.PrimaryCheck(manager, connection)`，在主库执行 `SELECT 1` 的就绪检查函数，由业务在 bootstrap 中通过 `spec.Health().Checks` 按需注册。
 
 <!-- changelog:auto:start -->
 ### 提交记录

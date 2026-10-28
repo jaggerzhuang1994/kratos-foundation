@@ -442,9 +442,12 @@ gRPC Server 默认放宽客户端 keepalive 检测：允许最短 10s 一次 pin
 也会关闭就绪状态。`/healthz` 仅证明 HTTP 处理路径仍能响应，不代表所有后台任务正常。
 
 ```go
-// 前置条件：spec 来自 bootstrap.NewSpec 或 server.NewSpec，sqlDB 由业务存储层提供。
-spec.Health().Checks(server.ReadinessCheck{Name: "database", Check: sqlDB.PingContext})
+// 前置条件：spec 来自 bootstrap.NewSpec 或 server.NewSpec，manager 为 database.Manager。
+// database.PrimaryCheck 在主库执行 SELECT 1；其他依赖传入任意 func(context.Context) error。
+spec.Health().Checks(server.ReadinessCheck{Name: "database", Check: database.PrimaryCheck(manager, "")})
 ```
+
+就绪检查失败会让实例停止接收流量：K8s 把 Pod 标为未就绪，Consul 驱动的 gRPC 健康检查让实例从服务发现中消失。框架不默认注册任何依赖检查，由业务在 bootstrap 中按需添加。
 
 省略部署配置时使用默认路径和一秒总检查期限；`server.http.health.disable: true` 关闭端点。Checks 按顺序
 执行，只注册接收业务流量必需的依赖。检查函数必须支持 Context、可并发调用、无写入副作用；
