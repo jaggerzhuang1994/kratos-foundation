@@ -36,6 +36,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.8.0 release notes（`ef73678`）
 - **changelog**：note versioned plugin releases for v2.7.0（`68e2f90`）
 
 **其他**
