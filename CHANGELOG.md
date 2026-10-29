@@ -32,6 +32,7 @@
 
 **新增**
 
+- **server**：configurable WebSocket write timeout（`351081d`）
 - ⚠️ 不兼容：**job**：drain running cron calls on shutdown（`1b38c48`）
 - ⚠️ 不兼容：**queue,server**：drain workers and notify WebSocket clients on shutdown（`9da96cc`）
 
@@ -41,6 +42,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.10.0 release notes（`9d5ebec`）
 - **changelog**：refresh commit records after v2.9.0（`7d35a48`）
 <!-- changelog:auto:end -->
 
