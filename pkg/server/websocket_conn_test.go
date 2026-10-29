@@ -556,6 +556,69 @@ func TestWebSocketCloseWaitsForInFlightMessages(t *testing.T) {
 	}
 }
 
+// shutdownWebSocketHandler 在 OnMessage 中阻塞到连接 Context 取消，并记录 OnShutdown 与 OnClose 的观察结果。
+type shutdownWebSocketHandler struct {
+	started  chan struct{}
+	shutdown chan error
+	closed   chan struct{}
+	panics   bool
+}
+
+func (h *shutdownWebSocketHandler) OnMessage(client WebSocketConn, _ []byte, _ MessageType) {
+	h.started <- struct{}{}
+	<-client.Request().Context().Done()
+}
+
+func (h *shutdownWebSocketHandler) OnShutdown(ctx context.Context, client WebSocketConn) {
+	if client.Request().Context().Err() == nil {
+		h.shutdown <- errors.New("connection context not canceled before OnShutdown")
+		return
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		h.shutdown <- errors.New("OnShutdown context has no stop budget")
+		return
+	}
+	h.shutdown <- client.SendText("bye")
+	if h.panics {
+		panic("shutdown failed")
+	}
+}
+
+func (h *shutdownWebSocketHandler) OnClose(WebSocketConn) { h.closed <- struct{}{} }
+
+// 停机时先取消连接 Context，OnShutdown 仍能发送最后的消息，随后发送 1001 并在读循环退出后执行 OnClose；
+// 默认单槽位下读循环正等待在途消息，Context 取消不能让它提前关闭连接。
+func TestWebSocketShutdownNotifiesBeforeGoingAway(t *testing.T) {
+	for _, panics := range []bool{false, true} {
+		t.Run(fmt.Sprintf("panics=%v", panics), func(t *testing.T) {
+			handler := &shutdownWebSocketHandler{started: make(chan struct{}, 1), shutdown: make(chan error, 1), closed: make(chan struct{}, 1), panics: panics}
+			peer, hub := startConfiguredWebSocket(t, handler, WebSocketConfig{})
+			if err := peer.WriteMessage(websocket.TextMessage, []byte("request")); err != nil {
+				t.Fatal(err)
+			}
+			receiveRuntimeValue(t, handler.started)
+
+			ctx, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+			defer cancel()
+			stopped := make(chan error, 1)
+			go func() { stopped <- hub.stop(ctx) }()
+			if err := receiveRuntimeValue(t, handler.shutdown); err != nil {
+				t.Fatal(err)
+			}
+			if _, message, err := peer.ReadMessage(); err != nil || string(message) != "bye" {
+				t.Fatalf("shutdown message %q %v", message, err)
+			}
+			if _, _, err := peer.ReadMessage(); !websocket.IsCloseError(err, websocket.CloseGoingAway) {
+				t.Fatalf("close frame %v", err)
+			}
+			receiveRuntimeValue(t, handler.closed)
+			if err := receiveRuntimeValue(t, stopped); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func startConfiguredWebSocket(t *testing.T, handler any, config WebSocketConfig) (*websocket.Conn, *websocketHub) {
 	t.Helper()
 	spec := NewSpec()

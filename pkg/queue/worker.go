@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
@@ -157,6 +158,12 @@ type Worker[T any] struct {
 	onFailed func(context.Context, FailureEvent) error
 	// renewer 在 RenewLease 开启时为 Store 的续租能力，否则为 nil。
 	renewer LeaseRenewer
+	// aborted 在排空预算耗尽时取消；Start 通过 AfterFunc 把它转为执行 Context 的取消。
+	aborted context.Context
+	// abort 取消 aborted。
+	abort context.CancelFunc
+	// abortOnce 确保中止日志只记录一次。
+	abortOnce sync.Once
 }
 
 // newWorker 复制 Handler 表并校验执行窗口，构造阶段不调用 Store。
@@ -188,11 +195,12 @@ func newWorker[T any](config workerConfig, store Store, handlers map[string]task
 			return nil, errors.New("queue store does not support lease renewal")
 		}
 	}
-	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner(), renewer: renewer}, nil
+	aborted, abort := context.WithCancel(context.Background())
+	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner(), renewer: renewer, aborted: aborted, abort: abort}, nil
 }
 
 // Start 阻塞运行所有领取循环；存储瞬时故障在循环内退避重试，只有 Store 违反契约时取消同实例其他循环并返回错误。
-// 同一实例只能启动一次；Stop 先于 Start 时直接返回 nil。
+// 同一实例只能启动一次；Stop 先于 Start 时直接返回 nil。在途 Handler 只在 ctx 取消或 Stop 排空超时时被取消。
 func (w *Worker[T]) Start(ctx context.Context) error {
 	err := w.runner.Run(ctx, func(runCtx context.Context) error {
 		// 生命周期事件每个实例只输出一次，不能依赖高频任务日志判断 Worker 是否启动。
@@ -204,9 +212,14 @@ func (w *Worker[T]) Start(ctx context.Context) error {
 			<-runCtx.Done()
 			return nil
 		}
+		// 停止信号只结束领取（runCtx）；在途任务使用独立的执行 Context，与 HTTP Shutdown 一样先排空。
+		execCtx, cancelExec := context.WithCancel(ctx)
+		defer cancelExec()
+		unwatch := context.AfterFunc(w.aborted, cancelExec)
+		defer unwatch()
 		group, groupCtx := errgroup.WithContext(runCtx)
 		for range w.config.Concurrency {
-			group.Go(func() error { return w.run(groupCtx) })
+			group.Go(func() error { return w.run(groupCtx, execCtx) })
 		}
 		if err := group.Wait(); err != nil {
 			w.telemetry.RecordRuntimeFailure(ctx, w.config.Queue, w.config.Name)
@@ -221,9 +234,29 @@ func (w *Worker[T]) Start(ctx context.Context) error {
 	return err
 }
 
-// Stop 幂等发出停止信号并等待 Handler 与存储操作退出；等待受 ctx 控制。
+// Stop 幂等停止领取新任务，并等待在途 Handler 执行完成及确认（排空）。
+// ctx 带截止时间时，排空最多持续到截止时间前 StorageTimeout；超时后取消在途 Handler，
+// 并用剩余的 StorageTimeout 立即释放其任务供重新领取。全部循环在 ctx 结束前退出时返回 nil，否则返回 ctx 的错误。
 func (w *Worker[T]) Stop(ctx context.Context) error {
+	drainCtx, cancel := w.drainContext(ctx)
+	err := w.runner.Stop(drainCtx)
+	cancel()
+	if err == nil {
+		return nil
+	}
+	w.abortOnce.Do(func() {
+		w.log.WithContext(ctx).Warnw("event", "queue.worker.drain_aborted", "msg", "worker drain timed out; canceling tasks", "queue", w.config.Queue, "worker", w.config.Name)
+		w.abort()
+	})
 	return w.runner.Stop(ctx)
+}
+
+// drainContext 为排空预留 StorageTimeout，确保中止后释放任务的存储操作仍在调用方预算内完成。
+func (w *Worker[T]) drainContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if deadline, ok := ctx.Deadline(); ok {
+		return context.WithDeadline(ctx, deadline.Add(-w.config.StorageTimeout))
+	}
+	return context.WithCancel(ctx)
 }
 
 // 存储瞬时故障（断连、超时、主从切换）按倍增退避重试，不退出 Worker；
@@ -236,7 +269,8 @@ const (
 // errInvalidReservation 表示 Store 实现返回了不满足契约的领取结果，属于实现缺陷，不重试。
 var errInvalidReservation = errors.New("queue store returned an invalid reservation")
 
-func (w *Worker[T]) run(ctx context.Context) error {
+// run 用 ctx 控制领取与等待，用 execCtx 执行已领取的任务；ctx 取消后不再领取，但当前任务继续执行完。
+func (w *Worker[T]) run(ctx, execCtx context.Context) error {
 	failures := 0
 	var backoff time.Duration
 	for {
@@ -248,14 +282,14 @@ func (w *Worker[T]) run(ctx context.Context) error {
 		reservation, err := w.store.Reserve(operationCtx, now.UTC(), w.config.Lease)
 		cancel()
 		if err == nil && reservation != nil {
-			err = w.execute(ctx, reservation, now)
+			err = w.execute(execCtx, reservation, now)
 			if err != nil && errtree.Only(err, ErrLeaseLost) {
 				w.log.WithContext(ctx).Warnw("event", "queue.lease.lost", "msg", "task lease lost", "queue", w.config.Queue, "worker", w.config.Name, "task.id", reservation.Task.ID)
 				err = nil
 			}
 		}
 		if ctx.Err() != nil {
-			// 停止期间的存储结果不再重试，未确认任务由租约恢复。
+			// 停止后不再重试存储故障，未确认任务由租约恢复。
 			return nil
 		}
 		if errors.Is(err, errInvalidReservation) {

@@ -39,6 +39,8 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	}()
 	handler := w.handlers[task.MessageVersion]
 	var handlerErr error
+	// interrupted 标记 Handler 因执行 Context 取消（排空超时或 Start 的 ctx 取消）而未完成。
+	interrupted := false
 	cause := "handler_error"
 	switch {
 	case reservation.Attempts > w.retry.MaxAttempts:
@@ -59,6 +61,7 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		if handlerCtx.Err() != nil {
 			handlerErr = handlerCtx.Err()
 		}
+		interrupted = handlerErr != nil && ctx.Err() != nil
 		cancel()
 	}
 	// 分类只包含框架可识别的原因，不输出 Handler 错误原文。
@@ -72,13 +75,14 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		cause = "validation_error"
 	}
 	w.telemetry.RecordAttempt(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts, handlerErr, time.Since(started))
-	// 应用停止时不使用取消的上下文改写租约；由持久化租约超时恢复。
-	if err := ctx.Err(); err != nil {
-		executionResult = "stopped"
-		return err
-	}
-	operationCtx, cancel := context.WithTimeout(spanCtx, w.config.StorageTimeout)
+	// 存储操作脱离执行 Context 的取消：排空期间完成或被中止的任务都要在 StorageTimeout 内写回结果。
+	operationCtx, cancel := context.WithTimeout(context.WithoutCancel(spanCtx), w.config.StorageTimeout)
 	defer cancel()
+	if interrupted {
+		// 停机中止不是执行失败：立即释放供其他实例重新领取，不等租约到期，也不按失败退避。
+		executionResult = "stopped"
+		return w.store.Release(operationCtx, reservation, time.Now().UTC())
+	}
 	result := "success"
 	var err error
 	switch {

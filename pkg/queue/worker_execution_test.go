@@ -82,11 +82,17 @@ func TestExecutionTimeoutAndCancellation(t *testing.T) {
 		if err = worker.execute(context.Background(), r, time.Now()); err != nil || !released {
 			t.Fatalf("timeout %v released=%v", err, released)
 		}
+		// 执行 Context 被取消（停机中止）时立即释放，不按失败退避。
+		var releasedAt time.Time
+		store.release = func(_ context.Context, _ *Reservation, at time.Time) error {
+			released, releasedAt = true, at
+			return nil
+		}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		released = false
-		if err = worker.execute(ctx, r, time.Now()); !errors.Is(err, context.Canceled) || released {
-			t.Fatalf("cancel %v released=%v", err, released)
+		if err = worker.execute(ctx, r, time.Now()); err != nil || !released || !releasedAt.Equal(time.Now().UTC()) {
+			t.Fatalf("cancel %v released=%v at %v", err, released, releasedAt)
 		}
 		logs := strings.Join(obs.Logger.(*testLog).events, "\n")
 		if !strings.Contains(logs, "resultstopped") || !strings.Contains(logs, "duration") {

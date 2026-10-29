@@ -314,7 +314,7 @@ spec.HTTP().WebSocketWithConfig("/ws", handler, server.WebSocketConfig{
 
 连接结束会先取消 `WebSocketConn.Request().Context()` 并关闭底层连接，再等待已经进入 `OnMessage` 的任务退出，最后调用 `OnClose`。业务回调必须监听连接 Context 或具有自己的有限超时；若回调永久阻塞，框架无法强制终止 goroutine，停机预算到期后虽然会强制关闭 socket 并返回错误，但该连接的 `OnClose` 和 hub 移除仍要等回调实际结束。
 
-WebSocket 的 `OnHandshake` 接收中间件派生的上下文，包含身份、metadata 和握手截止时间。升级成功后，`WebSocketConn.Request().Context()` 保留这些上下文值，同时脱离 HTTP 握手请求的取消和截止时间；连接关闭时取消。`OnConnect`、`OnMessage`、`OnError` 和 `OnClose` 均可通过 `Request()` 读取这些值。正常关闭及停机强制中断会先取消连接上下文，读循环退出时的 `OnClose` 看到已取消状态。应用如需连接最大存活时间，应自行按业务策略调用 `Close()`。
+WebSocket 的 `OnHandshake` 接收中间件派生的上下文，包含身份、metadata 和握手截止时间。升级成功后，`WebSocketConn.Request().Context()` 保留这些上下文值，同时脱离 HTTP 握手请求的取消和截止时间；连接关闭时取消。`OnConnect`、`OnMessage`、`OnError`、`OnShutdown` 和 `OnClose` 均可通过 `Request()` 读取这些值。正常关闭及停机强制中断会先取消连接上下文，读循环退出时的 `OnClose` 看到已取消状态。应用如需连接最大存活时间，应自行按业务策略调用 `Close()`。
 
 ```mermaid
 flowchart TD
@@ -373,12 +373,15 @@ flowchart TD
 
 WebSocket 读失败会结束该连接；写失败后也会关闭已不可复用的连接，使阻塞的读循环退出并执行既有 OnClose 与 hub 清理。关闭发生在释放写锁之后，不会自锁。其他连接与服务监听继续运行，重新连接由客户端发起。
 
-服务停机时会并发关闭已有 WebSocket 连接，发送 1001 Going Away 关闭帧提示客户端重连到其他实例（业务主动 `Close()` 仍为 1000）。WebSocket 关闭与 HTTP `Shutdown` 并行执行、共享调用方传入的同一预算：已升级连接不受 `http.Server.Shutdown` 跟踪，卡住的业务回调只拖住 WebSocket 部分，不会推迟 HTTP 停止接收新连接或挤占在途普通请求的优雅完成时间。预算耗尽后直接关闭底层 socket，以打断仍在进行的读写；读循环随后仍按原有路径执行一次 OnClose 和 hub 清理。客户端应带随机退避重连，避免全部连接同时断开后集中重连到剩余实例。
+服务停机时会并发关闭已有 WebSocket 连接：先取消该连接的 `Request().Context()` 通知业务停止长任务，再调用可选的 `OnShutdown(ctx, client)`，返回后发送 1001 Going Away 关闭帧提示客户端重连到其他实例（业务主动 `Close()` 仍为 1000），读循环退出、在途 `OnMessage` 结束后执行 `OnClose`，全部连接完成后 stop 才返回。`OnShutdown` 中连接 Context 已取消但仍可 `Send` 最后的业务消息（如“服务重启，请重连”）或回滚会话状态；`ctx` 为停机预算，预算耗尽时底层连接被强制关闭，此后的发送失败。它只在停机时调用，业务 `Close()`、读写失败等关闭不调用；所有连接并发调用，实现须并发安全并及时返回，panic 记录为 `ERROR server.websocket.panic.recovered stage=on_shutdown` 后继续发送关闭帧。WebSocket 关闭与 HTTP `Shutdown` 并行执行、共享调用方传入的同一预算：已升级连接不受 `http.Server.Shutdown` 跟踪，卡住的业务回调只拖住 WebSocket 部分，不会推迟 HTTP 停止接收新连接或挤占在途普通请求的优雅完成时间。预算耗尽后直接关闭底层 socket，以打断仍在进行的读写；读循环随后仍按原有路径执行一次 OnClose 和 hub 清理。客户端应带随机退避重连，避免全部连接同时断开后集中重连到剩余实例。
 
 ```mermaid
 flowchart TD
-    A[stop 接收已有连接快照] --> B[每条连接启动一个正常关闭 goroutine]
-    B --> C[关闭结果写入按连接数缓冲的 channel]
+    A[stop 接收已有连接快照] --> B[每条连接启动一个关闭 goroutine]
+    B --> B1[取消连接 Context]
+    B1 --> B2[调用 OnShutdown 可发送最后消息]
+    B2 --> B3[发送 1001 并关闭连接]
+    B3 --> C[关闭结果写入按连接数缓冲的 channel]
     C --> D{全部关闭且读循环退出?}
     D -->|是| E[汇总关闭结果并返回]
     D -->|Context 到期| F[直接关闭每条底层 socket]
@@ -388,7 +391,7 @@ flowchart TD
     I --> J[执行 OnClose 并从 hub 移除连接]
 ```
 
-框架可以用底层连接关闭打断网络读写，但不能强制终止业务实现的 `OnConnect`、`OnMessage`、`OnError` 或 `OnClose`；这些回调必须自行及时返回。并行端点的在途 `OnMessage` 会观察到连接 Context 取消，全部退出后才执行 `OnClose`。缓冲结果 channel 保证停机超时返回后，已启动的关闭 goroutine 不会因上报结果再次阻塞。
+框架可以用底层连接关闭打断网络读写，但不能强制终止业务实现的 `OnConnect`、`OnMessage`、`OnError`、`OnShutdown` 或 `OnClose`；这些回调必须自行及时返回。并行端点的在途 `OnMessage` 会观察到连接 Context 取消，全部退出后才执行 `OnClose`。缓冲结果 channel 保证停机超时返回后，已启动的关闭 goroutine 不会因上报结果再次阻塞。
 
 ## 截止时间
 

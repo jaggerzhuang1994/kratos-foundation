@@ -158,30 +158,124 @@ func TestWorkerLeaseConflictAndStoredOutcome(t *testing.T) {
 	}
 }
 
-func TestWorkerStopDeadline(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
+// Stop 停止领取但等待在途任务执行完并确认；排空在截止时间前 StorageTimeout 超时后取消 Handler 并立即释放任务。
+func TestWorkerStopDrainsInFlightTasks(t *testing.T) {
+	// drainWorker 启动一个只领取一次就执行 handler 的 Worker，返回领取次数、确认与释放记录。
+	type record struct {
+		reserves   int
+		acked      bool
+		releasedAt time.Time
+	}
+	drainWorker := func(t *testing.T, handler taskHandler) (*Worker[*Task], *record, <-chan error, *testLog) {
+		t.Helper()
 		obs, _ := testObservability(t)
-		entered := make(chan struct{})
-		release := make(chan struct{})
-		store := &storeStub{reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
-			return &Reservation{Task: &Task{MessageVersion: "x"}, Token: "t", Attempts: 1}, nil
-		}}
-		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q"}, store, map[string]taskHandler{"x": func(context.Context, *Task) error { close(entered); <-release; return nil }}, obs)
+		got := &record{}
+		store := &storeStub{
+			reserve: func(context.Context, time.Time, time.Duration) (*Reservation, error) {
+				got.reserves++
+				return &Reservation{Task: &Task{MessageVersion: "x"}, Token: "t", Attempts: 1}, nil
+			},
+			ack: func(ctx context.Context, _ *Reservation) error {
+				got.acked = ctx.Err() == nil
+				return nil
+			},
+			release: func(_ context.Context, _ *Reservation, at time.Time) error {
+				got.releasedAt = at
+				return nil
+			},
+		}
+		w, err := newWorker[*Task](workerConfig{Name: "w", Queue: "q", Timeout: time.Minute, StorageTimeout: time.Second}, store, map[string]taskHandler{"x": handler}, obs)
 		if err != nil {
 			t.Fatal(err)
 		}
 		done := make(chan error, 1)
 		go func() { done <- w.Start(context.Background()) }()
-		<-entered
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err = w.Stop(ctx); !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("stop %v", err)
-		}
-		close(release)
-		if err = <-done; err != nil {
-			t.Fatal(err)
-		}
+		return w, got, done, obs.Logger.(*testLog)
+	}
+
+	t.Run("completes in-flight task", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			entered, unblock := make(chan struct{}), make(chan struct{})
+			var handlerErr error
+			w, got, done, logs := drainWorker(t, func(ctx context.Context, _ *Task) error {
+				close(entered)
+				<-unblock
+				handlerErr = ctx.Err()
+				return nil
+			})
+			<-entered
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			stopped := make(chan error, 1)
+			go func() { stopped <- w.Stop(ctx) }()
+			synctest.Wait()
+			close(unblock)
+			if err := <-stopped; err != nil {
+				t.Fatal(err)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			if handlerErr != nil || !got.acked || !got.releasedAt.IsZero() || got.reserves != 1 {
+				t.Fatalf("drain did not complete task: handler=%v record=%+v", handlerErr, got)
+			}
+			if strings.Contains(strings.Join(logs.events, "\n"), "queue.worker.drain_aborted") {
+				t.Fatal("drain reported abort")
+			}
+		})
+	})
+
+	t.Run("aborts and releases before deadline", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			entered := make(chan struct{})
+			w, got, done, logs := drainWorker(t, func(ctx context.Context, _ *Task) error {
+				close(entered)
+				<-ctx.Done()
+				return ctx.Err()
+			})
+			<-entered
+			began := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := w.Stop(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			// 中止发生在截止时间前一个 StorageTimeout，任务不等租约到期、不按失败退避，立即可被重新领取。
+			if got.acked || got.reserves != 1 || !got.releasedAt.Equal(began.Add(9*time.Second).UTC()) {
+				t.Fatalf("aborted task record=%+v began=%v", got, began)
+			}
+			if !strings.Contains(strings.Join(logs.events, "\n"), "WARN eventqueue.worker.drain_aborted") {
+				t.Fatalf("missing abort log: %v", logs.events)
+			}
+		})
+	})
+
+	t.Run("handler ignoring cancellation exceeds budget", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			entered, unblock := make(chan struct{}), make(chan struct{})
+			w, got, done, _ := drainWorker(t, func(context.Context, *Task) error {
+				close(entered)
+				<-unblock
+				return nil
+			})
+			<-entered
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := w.Stop(ctx); !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("stop %v", err)
+			}
+			close(unblock)
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			// Handler 迟于中止返回成功也按中止处理，交由重新领取，避免确认已被取消的执行。
+			if got.acked || got.releasedAt.IsZero() {
+				t.Fatalf("late task record=%+v", got)
+			}
+		})
 	})
 }
 

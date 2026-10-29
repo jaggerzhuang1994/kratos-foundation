@@ -96,7 +96,7 @@ flowchart TD
 
 **租约续期**：`WorkerConfig.RenewLease=true` 时，Handler 执行期间每 `Lease/3` 调用一次 `LeaseRenewer.RenewLease` 把租约延长到当前时间加 `Lease`，`Timeout` 不再受 `Lease` 限制，`Lease` 须大于 3×`StorageTimeout`，零值默认 max(30s, 3×StorageTimeout+1s)。这样长任务可以用短租约，进程崩溃后任务在一个租约内即被重新领取，而不必把租约设得比最长任务还长。续租遇到存储错误记录 `WARN queue.lease.renew_failed` 并在下一周期重试；返回 `ErrLeaseLost`（租约已过期并被他人领取）时记录 `WARN queue.lease.lost` 并取消 Handler Context，随后的确认同样以租约丢失处理。要求 Store 实现 `LeaseRenewer` 且 `CanRenewLease()` 为 true，否则构造失败：Redis Store 与数据库 Store（框架 gorm Repo）均支持，自定义数据库 Repo 需实现 `database.LeaseRepo`。续租不能阻止不响应取消的 Handler 在租约丢失后继续运行，业务仍需幂等。
 
-Start 阻塞运行且实例只能启动一次。进入消费阶段记录一次 `INFO event=queue.worker.started`，包含 queue、worker、concurrency 和 processing_enabled；运行退出时记录一次 `INFO event=queue.worker.stopped`。空队列轮询不写 Info，逐次成功由指标统计。Stop 幂等取消领取和 Handler，等待受调用 Context 限制；停止过程中未确认任务由租约到期恢复。领取或确认时的存储故障（断连、存储操作超时、主从切换、损坏记录）不退出 Worker：该循环记录 `WARN queue.storage.retrying`（字段 failures、retry_after、error）并累加 `queue_consumer_runtime_failures_total`，按 500ms 起倍增、上限 30s 退避后重试，恢复后记录一次 `INFO queue.storage.recovered`；未确认的任务由租约到期重新领取，不把存储失败当作成功确认。只有 Store 返回不满足契约的领取结果（实现缺陷）时，Worker 记录 `ERROR queue.storage.failed` 并退出，交由应用统一停机。持续的存储故障由 FoundationQueueRuntimeFailure 告警暴露。损坏记录的隔离与修复方式见对应 Store 文档。
+Start 阻塞运行且实例只能启动一次。进入消费阶段记录一次 `INFO event=queue.worker.started`，包含 queue、worker、concurrency 和 processing_enabled；运行退出时记录一次 `INFO event=queue.worker.stopped`。空队列轮询不写 Info，逐次成功由指标统计。Stop 采用与 HTTP `Shutdown` 对等的**排空式停机**：立即停止领取新任务，在途 Handler 的 Context 不取消、继续执行到完成并正常确认、重试或归档，确认等存储操作脱离执行 Context 的取消、各自受 `StorageTimeout` 约束。Stop 的 ctx 带截止时间时（应用停机为 `app.stop_timeout`），排空最多持续到截止时间前一个 `StorageTimeout`；仍未完成时记录一次 `WARN queue.worker.drain_aborted`，取消在途 Handler 的 Context，并用剩余的 `StorageTimeout` 把这些任务立即释放为可领取（不按失败退避，已消耗的领取次数不退还），无需等待租约到期。全部循环在 ctx 结束前退出时 Stop 返回 nil，否则返回 ctx 的错误；不响应取消的 Handler 迟于中止返回成功也按中止释放。进程被强制终止（SIGKILL、OOM）时未确认任务仍由租约到期恢复，Handler 必须幂等。应用的 `app.stop_timeout` 应不小于最长任务的 `Timeout` + `StorageTimeout`，部署终止宽限期须再大于它。领取或确认时的存储故障（断连、存储操作超时、主从切换、损坏记录）不退出 Worker：该循环记录 `WARN queue.storage.retrying`（字段 failures、retry_after、error）并累加 `queue_consumer_runtime_failures_total`，按 500ms 起倍增、上限 30s 退避后重试，恢复后记录一次 `INFO queue.storage.recovered`；未确认的任务由租约到期重新领取，不把存储失败当作成功确认。只有 Store 返回不满足契约的领取结果（实现缺陷）时，Worker 记录 `ERROR queue.storage.failed` 并退出，交由应用统一停机。持续的存储故障由 FoundationQueueRuntimeFailure 告警暴露。损坏记录的隔离与修复方式见对应 Store 文档。
 
 ```mermaid
 flowchart TD
@@ -122,7 +122,8 @@ flowchart TD
     M -- 成功 --> N[按token确认完成 由后端删除或保留]
     M -- 可重试错误或超时 --> O[按token释放 写下次可执行时间]
     M -- 永久失败或次数耗尽 --> R
-    M -- 应用取消 --> PS[DEBUG queue.task.execution.finished result=stopped duration]
+    M -- 排空超时中止 --> PR[按token立即释放 不退避]
+    PR --> PS[DEBUG queue.task.execution.finished result=stopped duration]
     PS --> Z
     N -- 成功 --> P[DEBUG queue.task.execution.finished result=success duration]
     O -- 成功 --> Q[WARN Worker queue.task.retry_scheduled]

@@ -172,7 +172,8 @@ func (h *websocketHub) serve(client *websocketClient) bool {
 	return true
 }
 
-// stop 拒绝新连接、以 1001 Going Away 关闭现有连接并等待所有读循环退出。
+// stop 拒绝新连接，并发地对现有连接取消 Context、执行 OnShutdown、发送 1001 Going Away 并关闭，
+// 等待所有读循环与 OnClose 退出。
 func (h *websocketHub) stop(ctx context.Context) error {
 	h.mu.Lock()
 	h.stopping = true
@@ -190,7 +191,7 @@ func (h *websocketHub) stop(ctx context.Context) error {
 	closeResults := make(chan error, len(clients))
 	for _, client := range clients {
 		go func() {
-			closeResults <- client.closeGoingAway()
+			closeResults <- client.shutdown(ctx)
 		}()
 	}
 
@@ -243,4 +244,11 @@ type OnMessageHandler interface {
 // OnCloseHandler 在连接读循环退出后调用一次。
 type OnCloseHandler interface {
 	OnClose(client WebSocketConn)
+}
+
+// OnShutdownHandler 在服务停机关闭连接前调用一次：连接 Context 已取消，但仍可 Send 最后的业务消息，
+// 返回后框架发送 1001 关闭帧，读循环退出后再调用 OnClose。ctx 为停机预算，预算耗尽时底层连接被强制关闭；
+// 业务主动 Close、读写失败等非停机关闭不会调用。并发对所有连接调用，实现须并发安全并及时返回。
+type OnShutdownHandler interface {
+	OnShutdown(ctx context.Context, client WebSocketConn)
 }

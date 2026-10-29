@@ -61,6 +61,8 @@ type websocketClient struct {
 	onCloseHandler OnCloseHandler
 	// onErrorHandler 连接异常回调。
 	onErrorHandler OnErrorHandler
+	// onShutdownHandler 服务停机关闭连接前的回调。
+	onShutdownHandler OnShutdownHandler
 
 	// writeLock 串行化连接写入，满足底层单写者约束。
 	writeLock sync.Mutex
@@ -68,6 +70,11 @@ type websocketClient struct {
 	closeOnce sync.Once
 	// closeErr 首次关闭连接的错误结果。
 	closeErr error
+	// closing 在连接开始关闭时关闭，通知读循环停止等待消息槽位；与连接 Context 分离，
+	// 使停机时先取消 Context 也不会让读循环提前关闭连接、吞掉 OnShutdown 的发送与 1001 关闭帧。
+	closing chan struct{}
+	// closingOnce 确保 closing 只关闭一次。
+	closingOnce sync.Once
 	// messageHandlers 归属当前连接的在途消息处理任务，确保 OnClose 不与其并发。
 	messageHandlers sync.WaitGroup
 }
@@ -87,6 +94,7 @@ func upgrade(
 	onMessageHandler, _ := handler.(OnMessageHandler)
 	onCloseHandler, _ := handler.(OnCloseHandler)
 	onErrorHandler, _ := handler.(OnErrorHandler)
+	onShutdownHandler, _ := handler.(OnShutdownHandler)
 
 	if onHandshakeHandler != nil {
 		err = onHandshakeHandler.OnHandshake(request)
@@ -112,16 +120,18 @@ func upgrade(
 	// 取消生命周期；仅在升级成功后创建，失败路径没有待释放的连接上下文。
 	ctx, cancel := context.WithCancel(context.WithoutCancel(request.Context()))
 	client = &websocketClient{
-		Logger:           log,
-		request:          request.WithContext(ctx),
-		conn:             conn,
-		maxMessageBytes:  maxMessageBytes,
-		messageSlots:     make(chan struct{}, maxInFlightMessages),
-		cancel:           cancel,
-		onConnectHandler: onConnectHandler,
-		onMessageHandler: onMessageHandler,
-		onCloseHandler:   onCloseHandler,
-		onErrorHandler:   onErrorHandler,
+		Logger:            log,
+		request:           request.WithContext(ctx),
+		conn:              conn,
+		maxMessageBytes:   maxMessageBytes,
+		messageSlots:      make(chan struct{}, maxInFlightMessages),
+		cancel:            cancel,
+		closing:           make(chan struct{}),
+		onConnectHandler:  onConnectHandler,
+		onMessageHandler:  onMessageHandler,
+		onCloseHandler:    onCloseHandler,
+		onErrorHandler:    onErrorHandler,
+		onShutdownHandler: onShutdownHandler,
 	}
 
 	return client, nil
@@ -184,7 +194,7 @@ func (c *websocketClient) resolve() {
 		if c.onMessageHandler != nil {
 			select {
 			case c.messageSlots <- struct{}{}:
-			case <-c.request.Context().Done():
+			case <-c.closing:
 				return
 			}
 		}
@@ -229,6 +239,38 @@ func (c *websocketClient) Close() error {
 	return c.close(websocket.CloseNormalClosure)
 }
 
+// shutdown 在服务停机时先取消连接 Context 通知业务停止，再调用 OnShutdown（此时仍可发送消息），
+// 最后发送 1001 关闭帧并关闭连接；OnShutdown 收到的 ctx 为停机预算。
+func (c *websocketClient) shutdown(ctx context.Context) error {
+	// 无效连接没有可取消的上下文，直接交给 close 报告错误。
+	if c.conn != nil {
+		c.cancel()
+		if c.onShutdownHandler != nil {
+			c.invokeShutdown(ctx)
+		}
+	}
+	return c.closeGoingAway()
+}
+
+// invokeShutdown 隔离 OnShutdown 的 panic，保证后续仍发送关闭帧并释放连接。
+func (c *websocketClient) invokeShutdown(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil && c.Logger != nil {
+			c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_shutdown", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("websocket handler panic recovered")
+		}
+	}()
+	c.onShutdownHandler.OnShutdown(ctx, c)
+}
+
+// markClosing 通知读循环连接已开始关闭。
+func (c *websocketClient) markClosing() {
+	c.closingOnce.Do(func() {
+		if c.closing != nil {
+			close(c.closing)
+		}
+	})
+}
+
 // closeGoingAway 在服务停机时发送 1001 关闭帧，提示客户端重连到其他实例。
 func (c *websocketClient) closeGoingAway() error {
 	return c.close(websocket.CloseGoingAway)
@@ -242,6 +284,7 @@ func (c *websocketClient) close(code int) error {
 			return
 		}
 		// 有效连接在 upgrade 中持有取消函数；先通知业务退出，再等待已有写操作。
+		c.markClosing()
 		c.cancel()
 		c.writeLock.Lock()
 		defer c.writeLock.Unlock()
@@ -262,6 +305,7 @@ func (c *websocketClient) close(code int) error {
 // abort 直接关闭底层连接，用于停机预算耗尽时打断正在进行的读写。读循环仍负责
 // 执行统一的 closeOnce 和 OnClose；net.Conn.Close 可与 Gorilla 的读写并发调用。
 func (c *websocketClient) abort() error {
+	c.markClosing()
 	c.cancel()
 	return c.conn.Close()
 }
