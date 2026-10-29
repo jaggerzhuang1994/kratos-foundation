@@ -34,6 +34,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.9.0 release notes（`d5cc05a`）
 - **changelog**：refresh commit records after v2.8.0（`9603aca`）
 <!-- changelog:auto:end -->
 
