@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.10.0（2026-10-29）
+
 ### 升级风险
 
 - **队列 Worker 停机改为排空式**：`Worker.Stop` 不再立即取消在途 Handler，而是停止领取并等待其完成和确认；Stop 的 ctx 截止前一个 `StorageTimeout` 仍未完成时才取消 Handler，并立即释放任务供重新领取（原为等待租约到期）。应用停机耗时可能变长，最长到 `app.stop_timeout`；依赖“停机立即取消 Handler”的业务需确认 `app.stop_timeout` 与部署终止宽限期足够覆盖最长任务。新增日志 `WARN queue.worker.drain_aborted`。
@@ -19,7 +29,18 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- ⚠️ 不兼容：**job**：drain running cron calls on shutdown（`1b38c48`）
+- ⚠️ 不兼容：**queue,server**：drain workers and notify WebSocket clients on shutdown（`9da96cc`）
+
+**修复**
+
+- **server**：skip OnShutdown for connections already closing（`ab62010`）
+
+**文档**
+
+- **changelog**：refresh commit records after v2.9.0（`7d35a48`）
 <!-- changelog:auto:end -->
 
 ## v2.9.0（2026-10-29）
