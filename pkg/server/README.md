@@ -310,6 +310,8 @@ spec.HTTP().WebSocketWithConfig("/ws", handler, server.WebSocketConfig{
 
 `MaxMessageBytes=0` 使用默认值，`-1` 显式恢复不限制消息大小的旧行为，小于 `-1` 在 Spec 校验时拒绝。这是端点构造期配置，不来自 YAML，也不热更新。超限数据不会交给 `OnMessage`；框架尝试发送 1009 关闭帧，记录 `WARN event=server.websocket.message.rejected, reason=size_limit`，将包含 `websocket.ErrReadLimit` 的错误交给已提供的 `OnError`，随后按原有关闭路径执行 `OnClose`。网络已失效时不保证对端收到关闭帧。大文件建议通过上传接口或应用层分片传输。
 
+`WriteTimeout` 限制每次 `Send` 写入一帧的时间，0 使用默认 **1s**，负数在 Spec 校验时拒绝；超时视为写失败并关闭连接。大消息或慢速移动网络可适当调大。
+
 `MaxInFlightMessages=0` 使用默认值 **1**，因此旧注册入口和未显式配置的端点仍按接收顺序串行执行 `OnMessage`；负数在 Spec 校验时拒绝。大于 1 时，同一连接最多并发执行对应数量的消息处理任务，不同连接仍各自独立。达到上限后读循环暂停读取，依靠 TCP/WebSocket 背压限制继续进入进程的消息，不额外维护无界业务队列。并行模式只保证消息按线路顺序读取，不保证 `OnMessage` 完成或响应写入顺序；handler、其共享依赖及连接级业务状态必须支持并发访问，需要严格顺序的协议应保持默认值 1。框架继续用连接写锁串行写帧，但锁获取顺序不等于消息接收顺序。
 
 连接结束会先取消 `WebSocketConn.Request().Context()` 并关闭底层连接，再等待已经进入 `OnMessage` 的任务退出，最后调用 `OnClose`。业务回调必须监听连接 Context 或具有自己的有限超时；若回调永久阻塞，框架无法强制终止 goroutine，停机预算到期后虽然会强制关闭 socket 并返回错误，但该连接的 `OnClose` 和 hub 移除仍要等回调实际结束。

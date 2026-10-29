@@ -61,6 +61,8 @@ type websocketClient struct {
 	onCloseHandler OnCloseHandler
 	// onErrorHandler 连接异常回调。
 	onErrorHandler OnErrorHandler
+	// writeTimeout 单次 Send 的写入截止时长。
+	writeTimeout time.Duration
 	// onShutdownHandler 服务停机关闭连接前的回调。
 	onShutdownHandler OnShutdownHandler
 
@@ -88,6 +90,7 @@ func upgrade(
 	handler any,
 	maxMessageBytes int64,
 	maxInFlightMessages int,
+	writeTimeout time.Duration,
 ) (client *websocketClient, err error) {
 	onHandshakeHandler, _ := handler.(OnHandshakeHandler)
 	onConnectHandler, _ := handler.(OnConnectHandler)
@@ -111,6 +114,9 @@ func upgrade(
 	if maxMessageBytes == 0 {
 		maxMessageBytes = defaultWebSocketMaxMessageBytes
 	}
+	if writeTimeout == 0 {
+		writeTimeout = writeWait
+	}
 	if maxInFlightMessages == 0 {
 		maxInFlightMessages = defaultWebSocketMaxInFlightMessages
 	}
@@ -125,6 +131,7 @@ func upgrade(
 		conn:              conn,
 		maxMessageBytes:   maxMessageBytes,
 		messageSlots:      make(chan struct{}, maxInFlightMessages),
+		writeTimeout:      writeTimeout,
 		cancel:            cancel,
 		closing:           make(chan struct{}),
 		onConnectHandler:  onConnectHandler,
@@ -333,7 +340,7 @@ func (c *websocketClient) Send(messageType MessageType, data []byte) error {
 	err := func() error {
 		c.writeLock.Lock()
 		defer c.writeLock.Unlock()
-		if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+		if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
 			return fmt.Errorf("set websocket write deadline: %w", err)
 		}
 		return c.conn.WriteMessage(int(messageType), data)

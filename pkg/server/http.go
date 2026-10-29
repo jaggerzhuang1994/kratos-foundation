@@ -126,6 +126,7 @@ func newHTTPServer(
 				endpoint.handler,
 				endpoint.maxMessageBytes,
 				endpoint.maxInFlightMessages,
+				endpoint.writeTimeout,
 				endpoint.upgrader...,
 			)
 		}

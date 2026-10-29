@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
@@ -92,6 +93,8 @@ type WebSocketConfig struct {
 	MaxMessageBytes int64
 	// MaxInFlightMessages 限制单连接并发处理的消息数；0 使用默认值 1，负数无效。
 	MaxInFlightMessages int
+	// WriteTimeout 限制单次 Send 写入一帧的时间；0 使用默认 1s，负数无效。大消息或慢速客户端可适当调大。
+	WriteTimeout time.Duration
 }
 
 type websocketEndpoint struct {
@@ -99,6 +102,8 @@ type websocketEndpoint struct {
 	maxMessageBytes int64
 	// maxInFlightMessages 单连接同时执行的 OnMessage 数量；0 使用默认值 1。
 	maxInFlightMessages int
+	// writeTimeout 单次 Send 的写入截止时长；0 使用默认 1s。
+	writeTimeout time.Duration
 	// path WebSocket 握手路由路径，须以 / 开头且不可重复。
 	path string
 	// handler 非 nil 业务对象，须至少实现一种受支持的 WebSocket 回调接口。
@@ -169,6 +174,9 @@ func (s *Spec) Validate() error {
 		}
 		if endpoint.maxInFlightMessages < 0 {
 			return fmt.Errorf("websocket path %q max in-flight messages must be non-negative", endpoint.path)
+		}
+		if endpoint.writeTimeout < 0 {
+			return fmt.Errorf("websocket path %q write timeout must be non-negative", endpoint.path)
 		}
 		if len(endpoint.upgrader) > 1 {
 			return fmt.Errorf(
@@ -265,6 +273,7 @@ func (s *httpSpec) WebSocketWithConfig(path string, handler any, config WebSocke
 	endpoint := s.registrations[len(s.registrations)-1].websocket
 	endpoint.maxMessageBytes = config.MaxMessageBytes
 	endpoint.maxInFlightMessages = config.MaxInFlightMessages
+	endpoint.writeTimeout = config.WriteTimeout
 	return s
 }
 
@@ -287,6 +296,7 @@ func (s *httpSpec) WebSocketMethodWithConfig(fullMethod string, handler any, con
 	endpoint := s.registrations[len(s.registrations)-1].websocket
 	endpoint.maxMessageBytes = config.MaxMessageBytes
 	endpoint.maxInFlightMessages = config.MaxInFlightMessages
+	endpoint.writeTimeout = config.WriteTimeout
 	return s
 }
 

@@ -23,6 +23,7 @@
 ### Added
 
 - **server**：`OnShutdownHandler`，停机关闭连接前回调，连接 Context 已取消但仍可发送最后的消息，返回后再发送 1001 Going Away。
+- **server**：`WebSocketConfig.WriteTimeout`，单次 `Send` 写入超时，0 保持默认 1s。
 
 <!-- changelog:auto:start -->
 ### 提交记录

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestNewSpecHasValidZeroValue(t *testing.T) {
@@ -91,6 +92,9 @@ func TestSpecValidateRejectsBadWebSocketDefinitions(t *testing.T) {
 		}},
 		{"negative in-flight message limit", func(s *Spec) {
 			s.HTTP().WebSocketWithConfig("/ws", testSocketHandler{}, WebSocketConfig{MaxInFlightMessages: -1})
+		}},
+		{"negative write timeout", func(s *Spec) {
+			s.HTTP().WebSocketWithConfig("/ws", testSocketHandler{}, WebSocketConfig{WriteTimeout: -time.Second})
 		}},
 		{"two upgraders", func(s *Spec) { s.HTTP().WebSocket("/ws", testSocketHandler{}, Upgrader{}, Upgrader{}) }},
 	}

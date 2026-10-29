@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	log2 "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/transport"
@@ -67,6 +68,7 @@ func (s *websocketServer) Handle(
 	handler any,
 	maxMessageBytes int64,
 	maxInFlightMessages int,
+	writeTimeout time.Duration,
 	optionalUpgrader ...Upgrader,
 ) {
 	if s.router == nil {
@@ -103,6 +105,7 @@ func (s *websocketServer) Handle(
 				handler,
 				maxMessageBytes,
 				maxInFlightMessages,
+				writeTimeout,
 			)
 			if err != nil {
 				// 错误继续交给请求边界归类；此处只保留升级阶段诊断，避免重复告警。
