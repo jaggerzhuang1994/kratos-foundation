@@ -27,6 +27,8 @@ type executionGate struct {
 	mu sync.Mutex
 	// disabled 是否拒绝新的调用准入，已排队调用不重新检查。
 	disabled bool
+	// draining 停机排空中：拒绝新调用并放弃等待中的调用，已准入的调用继续执行。
+	draining bool
 	// policy 后续触发使用的并发策略。
 	policy ConcurrentPolicy
 	// limit Delay 等待容量；负数表示不限制。
@@ -57,6 +59,18 @@ func (g *executionGate) update(config cronConfig) {
 	g.disabled, g.policy, g.limit = config.disabled, config.policy, config.pending
 }
 
+// drain 进入停机排空：后续触发与等待中的调用均不再执行，唤醒等待者让其退出。
+func (g *executionGate) drain() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.draining {
+		return
+	}
+	g.draining = true
+	close(g.changed)
+	g.changed = make(chan struct{})
+}
+
 func (g *executionGate) middleware(next Handler) Handler {
 	return func(ctx context.Context) error {
 		admitted, err := g.acquire(ctx)
@@ -73,6 +87,11 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		g.mu.Unlock()
 		return false, err
+	}
+	if g.draining {
+		g.mu.Unlock()
+		g.metrics.reportSkipped(ctx, g.name, "stopping")
+		return false, nil
 	}
 	// 禁用与准入共用现有锁，阻止尚未移除的调度条目发起新调用；已排队调用不重查开关。
 	if g.disabled {
@@ -114,6 +133,14 @@ func (g *executionGate) acquire(ctx context.Context) (bool, error) {
 			g.metrics.reportPending(ctx, g.name, -1)
 			g.metrics.reportWait(ctx, g.name, "canceled", time.Since(waitStarted))
 			return false, err
+		}
+		if g.draining {
+			// 停机时放弃尚未开始的等待，只排空已经准入的调用。
+			g.pending--
+			g.mu.Unlock()
+			g.metrics.reportPending(ctx, g.name, -1)
+			g.metrics.reportWait(ctx, g.name, "canceled", time.Since(waitStarted))
+			return false, nil
 		}
 		if g.running == 0 {
 			g.pending--

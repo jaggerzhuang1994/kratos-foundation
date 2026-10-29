@@ -5,7 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
+
+// cronDrainAbortReserve 是排空中止后留给 Cron 任务响应取消、释放集群锁的预算上限。
+const cronDrainAbortReserve = time.Second
 
 // Start 启动任务，父 Context 取消时开始统一收敛。
 func (m *Manager) Start(parent context.Context) error {
@@ -23,6 +27,9 @@ func (m *Manager) Start(parent context.Context) error {
 	m.workers.Add(1)
 	ctx, cancel := context.WithCancel(parent)
 	m.cancel = cancel
+	// Cron 执行上下文不随停机取消，只在排空超时或父 Context 取消时取消。
+	cronCtx, abortCron := context.WithCancel(parent)
+	m.abortCron = abortCron
 	m.mu.Unlock()
 
 	if err := parent.Err(); err != nil {
@@ -35,7 +42,7 @@ func (m *Manager) Start(parent context.Context) error {
 		m.beginShutdown()
 		return err
 	}
-	onceDone, daemonErrors, launched := m.startJobs(ctx)
+	onceDone, daemonErrors, launched := m.startJobs(ctx, cronCtx)
 	m.workers.Done()
 	if !launched {
 		return nil
@@ -69,10 +76,19 @@ func (m *Manager) Start(parent context.Context) error {
 	}
 }
 
-// Stop 幂等取消任务，并以传入 Context 限制等待时间。
+// Stop 幂等停止任务：Cron 不再触发并排空已准入的调用，单次和常驻任务立即取消。
+// 排空在传入 Context 截止前预留 cronDrainAbortReserve 时中止，取消仍在执行的 Cron 调用。
 func (m *Manager) Stop(ctx context.Context) error {
 	m.beginShutdown()
 
+	drainCtx, cancel := drainContext(ctx)
+	defer cancel()
+	select {
+	case <-m.done:
+		return nil
+	case <-drainCtx.Done():
+	}
+	m.abortDrain(ctx)
 	select {
 	case <-m.done:
 		return nil
@@ -81,26 +97,62 @@ func (m *Manager) Stop(ctx context.Context) error {
 	}
 }
 
+// drainContext 在调用方截止时间前预留取消收尾预算；无截止时间时与调用方一致。
+func drainContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return context.WithCancel(ctx)
+	}
+	reserve := min(cronDrainAbortReserve, time.Until(deadline)/2)
+	return context.WithDeadline(ctx, deadline.Add(-reserve))
+}
+
+// abortDrain 取消仍在执行的 Cron 调用，只记录一次中止日志。
+func (m *Manager) abortDrain(ctx context.Context) {
+	m.abortOnce.Do(func() {
+		m.mu.Lock()
+		abort := m.abortCron
+		cronStarted := m.cronStarted
+		m.mu.Unlock()
+		if abort == nil {
+			return
+		}
+		if cronStarted {
+			m.log.WithContext(ctx).With("event", "job.cron.drain_aborted").Warn("cron drain timed out; canceling running jobs")
+		}
+		abort()
+	})
+}
+
 // beginShutdown 只发出取消信号，避免不响应 Context 的任务反向阻塞 Start。
 func (m *Manager) beginShutdown() {
 	m.stopOnce.Do(func() {
 		m.mu.Lock()
 		m.stopping = true
 		cancel := m.cancel
+		abortCron := m.abortCron
 		unsubscribe := m.unsubscribe
 		cronStarted := m.cronStarted
 		m.mu.Unlock()
 		if unsubscribe != nil {
 			unsubscribe()
 		}
+		// 先关闭准入再停调度器：已派发但尚未准入的触发和 Delay 等待都不再执行。
+		for _, cronJob := range m.cronJobs {
+			cronJob.gate.drain()
+		}
 		if cancel != nil {
 			cancel()
 		}
 		go func() {
 			if cronStarted {
+				// 底层调度器停止后不再触发，并等待已经开始的调用返回。
 				m.cron.stop()
 			}
 			m.workers.Wait()
+			if abortCron != nil {
+				abortCron()
+			}
 			close(m.done)
 		}()
 	})
@@ -108,7 +160,7 @@ func (m *Manager) beginShutdown() {
 
 // startJobs 在同一状态锁内登记 worker，确保停止开始后不会再出现新的 WaitGroup.Add。
 func (m *Manager) startJobs(
-	ctx context.Context,
+	ctx, cronCtx context.Context,
 ) (onceDone <-chan error, daemonErrors <-chan error, launched bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -125,7 +177,7 @@ func (m *Manager) startJobs(
 			// 启动时禁用也消耗首次启动机会，后续启用不得补跑 immediate。
 			plan = nil
 		}
-		m.cron.schedule(ctx, cronJob.name, cronJob.job, plan)
+		m.cron.schedule(cronCtx, cronJob.name, cronJob.job, plan)
 	}
 	if len(m.cronJobs) > 0 {
 		m.cronStarted = true

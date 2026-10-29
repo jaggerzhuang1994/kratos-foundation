@@ -7,6 +7,7 @@
 ### 升级风险
 
 - **队列 Worker 停机改为排空式**：`Worker.Stop` 不再立即取消在途 Handler，而是停止领取并等待其完成和确认；Stop 的 ctx 截止前一个 `StorageTimeout` 仍未完成时才取消 Handler，并立即释放任务供重新领取（原为等待租约到期）。应用停机耗时可能变长，最长到 `app.stop_timeout`；依赖“停机立即取消 Handler”的业务需确认 `app.stop_timeout` 与部署终止宽限期足够覆盖最长任务。新增日志 `WARN queue.worker.drain_aborted`。
+- **Cron 停机改为排空式**：`job.Manager.Stop` 不再立即取消正在执行的 Cron 调用，而是停止触发、放弃 Delay 等待中的调用，并等待已准入的调用完成；Stop 的 ctx 截止前 `min(1s, 剩余预算/2)` 仍未完成时才取消。应用停机耗时可能变长，最长到 `app.stop_timeout`；Once 和 Daemon 仍立即取消。新增日志 `WARN job.cron.drain_aborted` 与跳过原因 `job_triggers_skipped_total{reason="stopping"}`。
 - **WebSocket 停机先取消连接 Context**：停机时连接 Context 在发送 1001 之前取消（原为与关闭同时），在途 `OnMessage` 会更早观察到取消。
 
 ### Added

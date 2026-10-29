@@ -36,8 +36,12 @@ type Manager struct {
 	daemonJobs []*managedJob
 	// mu 保护启停状态与周期配置更新。
 	mu sync.Mutex
-	// cancel 停止时取消所有任务的运行上下文。
+	// cancel 停止时取消单次和常驻任务的运行上下文。
 	cancel context.CancelFunc
+	// abortCron 排空预算耗尽时取消 Cron 执行上下文；正常停机不调用。
+	abortCron context.CancelFunc
+	// abortOnce 确保排空中止日志只记录一次。
+	abortOnce sync.Once
 	// cronStarted 周期调度器是否已实际启动。
 	cronStarted bool
 	// started 是否已经执行首次 Start，防止重复启动。

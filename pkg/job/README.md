@@ -95,12 +95,20 @@ flowchart TD
  W --> E3
  E3 --> K([Stop 或父 Context 取消])
  K --> M[状态锁内标记停止 取出取消函数 释放锁]
- M --> N[锁外取消订阅和任务 通知调度控制循环退出]
- N --> O[等待执行和等待中的任务退出]
- O -- 超过 Stop Context --> P([返回超时 收敛继续])
+ M --> N[锁外取消订阅 关闭 Cron 准入 放弃 Delay 等待 取消 Once/Daemon 通知调度控制循环退出]
+ N --> O[调度器不再触发 等待已准入的 Cron 调用完成]
+ O -- 截止前预留期仍未完成 --> O1[WARN job.cron.drain_aborted 取消 Cron 执行 Context]
+ O1 -- 超过 Stop Context --> P([返回超时 收敛继续])
+ O1 -- 完成 --> Q
  O -- 完成 --> Q([结束])
  Z --> Q
 ```
+
+### 停机排空
+
+Stop（或 App 停机）后 Cron 进入排空：调度器不再触发，即使到点也不执行新一轮；Delay 策略中尚未开始的等待调用直接放弃（`job_wait_duration_seconds{result="canceled"}`），停机瞬间才到达准入的触发计入 `job_triggers_skipped_total{reason="stopping"}`。已经准入的调用不取消 Context，继续执行到结束。Stop 的 Context 有截止时间时，排空最多进行到截止前 `min(1s, 剩余预算/2)`；仍未结束的调用记录 `WARN event=job.cron.drain_aborted` 后被取消，余下时间留给任务响应取消和释放集群锁。Stop 的 Context 没有截止时间时一直等待。父 Context 取消仍立即取消所有任务。
+
+Once 和 Daemon 不排空，停机时立即取消 Context。由 App 管理时排空预算即 `app.stop_timeout`，需大于最长 Cron 执行时间。
 
 ## Delay 容量
 

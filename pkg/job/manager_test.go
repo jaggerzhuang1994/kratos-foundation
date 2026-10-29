@@ -526,7 +526,10 @@ func TestIntegrationJobMixedLifecycle(t *testing.T) {
 					t.Fatalf("parent cancellation = %v", err)
 				}
 			}
-			if err := manager.Stop(context.Background()); err != nil {
+			// Cron 调用排空式停机，不响应取消前不会结束；以短预算触发排空中止。
+			stopCtx, cancelStop := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancelStop()
+			if err := manager.Stop(stopCtx); err != nil {
 				t.Fatal(err)
 			}
 			if !stopParent {

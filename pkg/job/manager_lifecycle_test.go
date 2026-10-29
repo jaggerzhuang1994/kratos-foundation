@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -334,7 +335,7 @@ func TestManagerStartJobsRefusesWorkAfterShutdownBegins(t *testing.T) {
 	if err := manager.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if onceDone, daemonErrors, launched := manager.startJobs(context.Background()); launched || onceDone != nil || daemonErrors != nil {
+	if onceDone, daemonErrors, launched := manager.startJobs(context.Background(), context.Background()); launched || onceDone != nil || daemonErrors != nil {
 		t.Fatalf("startJobs after Stop = (%v, %v, %t)", onceDone, daemonErrors, launched)
 	}
 }
@@ -376,6 +377,82 @@ func TestManagerStopHonorsContextWhileUncooperativeTaskFinishes(t *testing.T) {
 	if err := waitForValue(t, startDone); err != nil {
 		t.Fatalf("Start error = %v", err)
 	}
+}
+
+func TestManagerStopDrainsRunningCron(t *testing.T) {
+	t.Run("completes running call", func(t *testing.T) {
+		started := make(chan struct{}, 1)
+		release := make(chan struct{})
+		finished := make(chan error, 1)
+		var runs atomic.Int32
+		spec := NewSpec()
+		spec.RegisterCron("drain", "@every 10ms", TaskFunc(func(ctx context.Context) error {
+			if runs.Add(1) > 1 {
+				return nil
+			}
+			started <- struct{}{}
+			<-release
+			finished <- ctx.Err()
+			return nil
+		}), RunImmediately(true))
+		manager := newTestManager(t, spec)
+		go func() { _ = manager.Start(context.Background()) }()
+		waitFor(t, started)
+
+		stopCtx, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelStop()
+		stopped := make(chan error, 1)
+		go func() { stopped <- manager.Stop(stopCtx) }()
+		select {
+		case err := <-stopped:
+			t.Fatalf("Stop returned %v before running cron finished", err)
+		case <-time.After(50 * time.Millisecond):
+		}
+		close(release)
+		if err := waitForValue(t, finished); err != nil {
+			t.Fatalf("running cron context = %v, want not canceled", err)
+		}
+		if err := waitForValue(t, stopped); err != nil {
+			t.Fatal(err)
+		}
+		if got := runs.Load(); got != 1 {
+			t.Fatalf("cron runs = %d, want no trigger after Stop", got)
+		}
+	})
+
+	t.Run("aborts before deadline", func(t *testing.T) {
+		logger, path := testFileFoundationLogger(t)
+		started := make(chan struct{}, 1)
+		spec := NewSpec()
+		spec.RegisterCron("stuck", "@hourly", TaskFunc(func(ctx context.Context) error {
+			started <- struct{}{}
+			<-ctx.Done()
+			return ctx.Err()
+		}), RunImmediately(true))
+		_, tracingProvider, metricsProvider := newTestObservability(t)
+		manager, err := NewManager(logger, spec, tracingProvider, metricsProvider, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() { _ = manager.Start(context.Background()) }()
+		waitFor(t, started)
+
+		stopCtx, cancelStop := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancelStop()
+		if err := manager.Stop(stopCtx); err != nil {
+			t.Fatalf("Stop error = %v, want nil after abort", err)
+		}
+		if stopCtx.Err() != nil {
+			t.Fatal("Stop consumed the whole budget instead of reserving abort time")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "job.cron.drain_aborted") {
+			t.Fatalf("drain abort was not logged: %s", data)
+		}
+	})
 }
 
 func TestManagerReportsOnceFailuresWithoutStoppingApplication(t *testing.T) {

@@ -153,6 +153,45 @@ func (r *admissionMetricsRecorder) waitResult(result string) int {
 	return r.waits[result]
 }
 
+func TestExecutionGateDrainKeepsRunningAndDropsPending(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		metrics := &admissionMetricsRecorder{}
+		gate := newExecutionGate(testModuleLog(t), "drain", cronConfig{policy: DelayIfRunning, pending: 1}, nil, metrics)
+		release := make(chan struct{})
+		var runs atomic.Int32
+		run := gate.middleware(func(ctx context.Context) error {
+			runs.Add(1)
+			<-release
+			return ctx.Err()
+		})
+		running := make(chan error, 1)
+		pending := make(chan error, 1)
+		go func() { running <- run(context.Background()) }()
+		synctest.Wait()
+		go func() { pending <- run(context.Background()) }()
+		synctest.Wait()
+
+		gate.drain()
+		synctest.Wait()
+		if err := <-pending; err != nil {
+			t.Fatalf("pending call after drain = %v, want nil", err)
+		}
+		if err := run(context.Background()); err != nil {
+			t.Fatalf("new call after drain = %v, want nil", err)
+		}
+		close(release)
+		if err := <-running; err != nil {
+			t.Fatalf("running call = %v, want completed without cancellation", err)
+		}
+		if got := runs.Load(); got != 1 {
+			t.Fatalf("runs = %d, want only the admitted call", got)
+		}
+		if metrics.pendingValue() != 0 || metrics.waitResult("canceled") != 1 || metrics.skippedReason("stopping") != 1 {
+			t.Fatalf("metrics pending=%d canceled=%d stopping=%d", metrics.pendingValue(), metrics.waitResult("canceled"), metrics.skippedReason("stopping"))
+		}
+	})
+}
+
 func TestDelayPendingCapacityThroughManager(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
