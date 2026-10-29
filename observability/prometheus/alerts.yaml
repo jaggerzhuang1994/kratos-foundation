@@ -9,10 +9,9 @@ groups:
         annotations:
           summary: "应用指标采集失败"
           runbook: "observability/troubleshooting.md#foundationtargetdown"
-      # 应用目标的 Pod 标签可能是 pod（仓库 ServiceMonitor）或 pod_name（ACK 默认），按实例分组前统一补成 pod，
-      # 否则只有 pod_name 时所有实例被并成一组，单个实例未就绪会被其他实例掩盖。
+      # 按实例分组依赖采集端附加的 pod 标签；缺少 pod 时所有实例被并成一组，单个实例未就绪会被其他实例掩盖。
       - alert: FoundationAppNotReady
-        expr: max by (env, cluster, namespace, app, pod) (label_replace(app_ready{foundation="true"}, "pod", "$1", "pod_name", "(.+)")) == 0
+        expr: max by (env, cluster, namespace, app, pod) (app_ready{foundation="true"}) == 0
         for: 5m
         labels:
           severity: warning
@@ -282,15 +281,14 @@ groups:
         expr: count by (env, cluster, namespace, app) (app_ready)
       # 同时满足生命周期就绪（app_ready）与最近一次 readiness 探测通过（server_readiness_status，含依赖检查）的实例数，
       # 与 K8s 是否给该 Pod 分流量一致；未上报 server_readiness_status 的实例（未配置探针或旧版本）按 app_ready 计。
-      # 按实例关联前把 pod_name（ACK 默认）补成 pod，与 FoundationAppNotReady 一致。
       - record: app:readiness:ready
         expr: |
           sum by (env, cluster, namespace, app) (
-            label_replace(app_ready, "pod", "$1", "pod_name", "(.+)")
+            app_ready
             * on (env, cluster, namespace, app, pod) group_left ()
             (
-              max by (env, cluster, namespace, app, pod) (label_replace(server_readiness_status, "pod", "$1", "pod_name", "(.+)"))
-              or max by (env, cluster, namespace, app, pod) (label_replace(app_ready, "pod", "$1", "pod_name", "(.+)"))
+              max by (env, cluster, namespace, app, pod) (server_readiness_status)
+              or max by (env, cluster, namespace, app, pod) (app_ready)
             )
           )
       - record: app:consumer_messages:rate5m
@@ -401,6 +399,54 @@ groups:
   # 可用性 SLO 的多窗口多消耗率告警（Google SRE Workbook）：消耗率 = 错误比例 / 错误预算。
   # 默认 SLO 99.9%（30 天错误预算 0.1%），只把 5xx 计为错误；调整 SLO 时修改 foundation:slo_error_budget:ratio。
   # 长窗口判断是否真的在消耗预算，短窗口确认仍在发生，恢复后告警尽快解除。
+  # 容器资源按应用预聚合，供应用面板直接按 app 筛选。cAdvisor 与 kube-state-metrics 只有 namespace/pod/container，
+  # 借应用自报的 app_ready 补 app：只覆盖 Foundation 应用；ECI 等虚拟节点没有 kubelet cAdvisor，CPU/内存无结果。
+  # 先按对象取 max 去掉重复采集的副本；组内规则顺序求值，pod:app:info 须排在最前。
+  - name: foundation-container
+    rules:
+      # 取近 1h 最后一次 app_ready：进程崩溃重启（CrashLoopBackOff）期间 app_ready 中断，重启与 OOM 仍能关联到应用。
+      # Pod 名唯一，保留旧映射不会串到其他应用。
+      - record: pod:app:info
+        expr: group by (env, cluster, namespace, pod, app) (last_over_time(app_ready[1h]))
+      - record: app_container:container_cpu_usage_seconds:rate5m
+        expr: |
+          max by (env, cluster, namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!="",container!="POD"}[5m]))
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      # 被 CFS 限流的周期占比；接近 1 说明 CPU limit 过紧，会直接拉高接口延迟。
+      - record: app_container:container_cpu_cfs_throttled:ratio_rate5m
+        expr: |
+          (
+            max by (env, cluster, namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total{container!="",container!="POD"}[5m]))
+            / max by (env, cluster, namespace, pod, container) (rate(container_cpu_cfs_periods_total{container!="",container!="POD"}[5m]))
+          )
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      # Working Set 是 kubelet 判定 OOM 与驱逐的口径；RSS 与 Go 堆对比用于区分堆与堆外内存。
+      - record: app_container:container_memory_working_set_bytes:max
+        expr: |
+          max by (env, cluster, namespace, pod, container) (container_memory_working_set_bytes{container!="",container!="POD"})
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      - record: app_container:container_memory_rss:max
+        expr: |
+          max by (env, cluster, namespace, pod, container) (container_memory_rss{container!="",container!="POD"})
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      # resource 为 cpu（核）或 memory（字节）；未设置的容器没有对应序列，面板不计算占比。
+      - record: app_container:kube_pod_container_resource_requests:max
+        expr: |
+          max by (env, cluster, namespace, pod, container, resource) (kube_pod_container_resource_requests{resource=~"cpu|memory"})
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      - record: app_container:kube_pod_container_resource_limits:max
+        expr: |
+          max by (env, cluster, namespace, pod, container, resource) (kube_pod_container_resource_limits{resource=~"cpu|memory"})
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      - record: app_container:kube_pod_container_status_restarts:increase1h
+        expr: |
+          max by (env, cluster, namespace, pod, container) (increase(kube_pod_container_status_restarts_total[1h]))
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
+      # 最近一次终止原因为 OOMKilled 的容器（值为 1）；不是窗口内 OOM 次数。
+      - record: app_container:kube_pod_container_last_terminated_oomkilled:info
+        expr: |
+          max by (env, cluster, namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1)
+          * on (env, cluster, namespace, pod) group_left (app) pod:app:info
   - name: foundation-slo
     rules:
       - record: foundation:slo_error_budget:ratio

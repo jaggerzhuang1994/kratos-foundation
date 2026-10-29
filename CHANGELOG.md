@@ -4,6 +4,15 @@
 
 ## 计划中
 
+### 升级风险
+
+- **框架端点不再计入 `server_requests_*`**：`grpc.health.v1.Health`、gRPC 反射、channelz 与 `kratos.api.Metadata` 的请求改记到 `server_framework_requests_code_total` / `server_framework_requests_seconds`，标签相同。Consul gRPC 健康检查等探测流量不再抬高业务 QPS、拉低延迟分位数和稀释错误率；依赖这些请求的自定义面板或告警需改查新指标，升级后业务 QPS 会下降、错误率与 P95 可能上升，属于口径修正。
+- **规则不再识别 `pod_name`**：`FoundationAppNotReady` 与 `app:readiness:ready` 直接按 `pod` 标签区分实例，不再把 `pod_name` 补成 `pod`。只附加 `pod_name` 的采集配置（如 ACK 托管 Prometheus 默认）须增加 `pod` 标签，否则同一应用的实例会被并成一组。
+
+### Added
+
+- **observability**：`foundation-container` 规则组，把 cAdvisor 与 kube-state-metrics 的容器 CPU、限流、内存、request/limit、重启与 OOM 按 `app` 预聚合，见 [告警规则](observability/alerts.md#容器资源)。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

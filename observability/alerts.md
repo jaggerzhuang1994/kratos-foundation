@@ -49,7 +49,7 @@
 | `app:server_requests:rate5m` / `app:server_errors:rate5m` | 请求与 5xx 速率 |
 | `app:server_requests_seconds_bucket:rate5m` | 保留 `le` 的延迟桶速率，用于求 P95 |
 | `app:app_ready:ready` / `app:app_ready:instances` | 就绪实例数与上报实例数 |
-| `app:readiness:ready`（与 FoundationAppNotReady 一样，按实例关联前把 `pod_name` 补成 `pod`，ACK 默认标签与仓库 ServiceMonitor 均可用） | 同时满足 `app_ready=1` 与最近一次 readiness 探测通过（`server_readiness_status`，含依赖检查）的实例数；未上报探测结果的实例按 `app_ready` 计。平台总览的“不可用 / 未全部就绪”与健康表使用它，告警仍按 `app_ready` |
+| `app:readiness:ready`（与 FoundationAppNotReady 一样按 `pod` 标签区分实例，采集端须附加 `pod`） | 同时满足 `app_ready=1` 与最近一次 readiness 探测通过（`server_readiness_status`，含依赖检查）的实例数；未上报探测结果的实例按 `app_ready` 计。平台总览的“不可用 / 未全部就绪”与健康表使用它，告警仍按 `app_ready` |
 | `app:consumer_messages:rate5m` / `app:consumer_failures:rate5m` | 消费速率与失败速率，`consumer_type` 区分 queue 与 kafka；失败含 Queue `failed`/`storage_error`、Kafka `error`/`dead_lettered` |
 | `app:job_failures:increase1h` | 近 1h Job 失败次数 |
 | `app:queue_oldest_ready_age:max` | 采集成功且年龄已知的最老就绪任务年龄 |
@@ -62,6 +62,28 @@
 | `group:kafka_consumergroup_lag:sum` / `queue:queue_oldest_ready_age:max` | 消费组 Topic Lag（与 KafkaLagHigh 同口径）；按队列的最老就绪任务 |
 | `app:dead_letters:rate5m` | Kafka 死信投递与 Queue 失败任务归档速率，`consumer_type` 区分 |
 | `app_downstream:client_requests:rate5m` / `app_downstream:client_errors:rate5m` / `app_downstream:client_requests_seconds_bucket:rate5m` | 按下游的出站请求、5xx 与延迟桶；`downstream` 由 operation 推导，gRPC 风格取服务名 |
+
+请求类规则只统计 `server_requests_*`。健康检查、反射、`kratos.api.Metadata` 等框架端点由服务端指标中间件记入独立的 `server_framework_requests_code_total` / `server_framework_requests_seconds`，不进入 QPS、错误率、延迟与 SLO 预算。
+
+### 容器资源
+
+`foundation-container` 组把 kubelet cAdvisor 与 kube-state-metrics 的容器指标按应用预聚合，标签为 env/cluster/namespace/app/pod/container，应用面板直接按 `app` 筛选，无需再关联 `kube_pod_info`。
+
+| 规则 | 含义 |
+| --- | --- |
+| `pod:app:info` | Pod 到应用的映射，取近 1h 最后一次 `app_ready` 的 namespace/pod/app；进程崩溃重启期间 `app_ready` 中断，映射仍保留，重启与 OOM 能关联到应用 |
+| `app_container:container_cpu_usage_seconds:rate5m` | 容器 CPU 使用（核） |
+| `app_container:container_cpu_cfs_throttled:ratio_rate5m` | 被 CFS 限流的周期占比，接近 1 说明 CPU limit 过紧 |
+| `app_container:container_memory_working_set_bytes:max` / `app_container:container_memory_rss:max` | Working Set（kubelet 判定 OOM 与驱逐的口径）与 RSS |
+| `app_container:kube_pod_container_resource_requests:max` / `app_container:kube_pod_container_resource_limits:max` | 容器 request / limit，`resource` 为 `cpu`（核）或 `memory`（字节）；未设置时无序列 |
+| `app_container:kube_pod_container_status_restarts:increase1h` | 近 1h 重启次数 |
+| `app_container:kube_pod_container_last_terminated_oomkilled:info` | 最近一次终止原因为 OOMKilled 的容器，不是窗口内 OOM 次数 |
+
+占 limit 比例在查询时计算，例如 `app_container:container_cpu_usage_seconds:rate5m / on (env, cluster, namespace, pod, container) group_left () app_container:kube_pod_container_resource_limits:max{resource="cpu"}`。前提：
+
+- 采集端为应用目标、cAdvisor 与 kube-state-metrics 附加一致的 env/cluster，应用目标附加 `pod`；
+- cAdvisor 至少保留 `container_cpu_usage_seconds_total`、`container_cpu_cfs_periods_total`、`container_cpu_cfs_throttled_periods_total`、`container_memory_working_set_bytes`、`container_memory_rss`；
+- 只覆盖上报 `app_ready` 的 Foundation 应用；ECI 等虚拟节点没有 kubelet cAdvisor，CPU 与内存无结果，request/limit、重启仍来自 kube-state-metrics。
 
 ## 尚不代表的保证
 

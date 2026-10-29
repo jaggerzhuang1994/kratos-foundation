@@ -148,3 +148,64 @@ func TestMetricsPreserveErrorStatusAndOriginalError(t *testing.T) {
 		}
 	}
 }
+
+// operationTransport 是只提供 operation 的服务端 transport，用于模拟 gRPC 调用。
+type operationTransport struct {
+	*kratoshttp.Transport
+	operation string
+}
+
+func (t operationTransport) Kind() transport.Kind { return transport.KindGRPC }
+func (t operationTransport) Operation() string    { return t.operation }
+
+func TestServerSplitsFrameworkOperations(t *testing.T) {
+	tests := []struct {
+		operation string
+		want      string
+	}{
+		{operation: "/grpc.health.v1.Health/Check", want: "server_framework_requests_code_total"},
+		{operation: "/kratos.api.Metadata/ListServices", want: "server_framework_requests_code_total"},
+		{operation: "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo", want: "server_framework_requests_code_total"},
+		{operation: "/wallet.v1.Wallet/GetBalance", want: "server_requests_code_total"},
+		// 业务服务与框架服务同名前缀时不能误判。
+		{operation: "/grpc.health.v1.HealthExtra/Check", want: "server_requests_code_total"},
+		{operation: "/api/orders", want: "server_requests_code_total"},
+		{operation: "", want: "server_requests_code_total"},
+	}
+	for _, test := range tests {
+		t.Run(test.operation, func(t *testing.T) {
+			provider, cleanup, err := foundationmetrics.NewProvider(appinfo.New("test"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(cleanup)
+			metric, err := Server(provider, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := transport.NewServerContext(context.Background(), operationTransport{Transport: new(kratoshttp.Transport), operation: test.operation})
+			if _, err := metric(func(context.Context, any) (any, error) { return nil, nil })(ctx, nil); err != nil {
+				t.Fatal(err)
+			}
+			families, err := provider.PrometheusGatherer().Gather()
+			if err != nil {
+				t.Fatal(err)
+			}
+			counted := map[string]float64{}
+			for _, family := range families {
+				for _, sample := range family.GetMetric() {
+					if sample.GetCounter() != nil {
+						counted[family.GetName()] += sample.GetCounter().GetValue()
+					}
+				}
+			}
+			other := "server_requests_code_total"
+			if test.want == other {
+				other = "server_framework_requests_code_total"
+			}
+			if counted[test.want] != 1 || counted[other] != 0 {
+				t.Fatalf("%s=%v %s=%v, want only %s counted", test.want, counted[test.want], other, counted[other], test.want)
+			}
+		})
+	}
+}

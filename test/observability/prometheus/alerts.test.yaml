@@ -30,27 +30,6 @@ tests:
       - eval_time: 6m
         alertname: FoundationAppUnavailable
         exp_alerts: []
-  - name: 只有 pod_name 标签（ACK 默认）时仍按实例告警
-    interval: 1m
-    input_series:
-      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod_name="worker-1"}
-        values: "0x10"
-      - series: app_ready{foundation="true",env="prod",cluster="c1",namespace="apps",app="worker",pod_name="worker-2"}
-        values: "1x10"
-    alert_rule_test:
-      - eval_time: 6m
-        alertname: FoundationAppNotReady
-        exp_alerts:
-          - exp_labels:
-              env: prod
-              cluster: c1
-              namespace: apps
-              app: worker
-              pod: worker-1
-              severity: warning
-            exp_annotations:
-              summary: 应用实例持续未就绪（启动未完成、依赖不可用或停机卡住）
-              runbook: observability/troubleshooting.md#foundationappnotready
   - name: 全部实例未就绪触发服务不可用
     interval: 1m
     input_series:
@@ -557,14 +536,14 @@ tests:
         values: 0x15
       - series: app_ready{env="prod",namespace="apps",app="web",pod="web-1"}
         values: 1x15
-      # 只有 pod_name 时同样按实例关联：acme-0 探测失败、acme-1 就绪，不能被合并成整体失败。
-      - series: app_ready{env="prod",namespace="apps",app="acme",pod_name="acme-0"}
+      # 按实例关联：acme-0 探测失败、acme-1 就绪，不能被合并成整体失败。
+      - series: app_ready{env="prod",namespace="apps",app="acme",pod="acme-0"}
         values: 1x15
-      - series: server_readiness_status{env="prod",namespace="apps",app="acme",pod_name="acme-0"}
+      - series: server_readiness_status{env="prod",namespace="apps",app="acme",pod="acme-0"}
         values: 0x15
-      - series: app_ready{env="prod",namespace="apps",app="acme",pod_name="acme-1"}
+      - series: app_ready{env="prod",namespace="apps",app="acme",pod="acme-1"}
         values: 1x15
-      - series: server_readiness_status{env="prod",namespace="apps",app="acme",pod_name="acme-1"}
+      - series: server_readiness_status{env="prod",namespace="apps",app="acme",pod="acme-1"}
         values: 1x15
       - series: queue_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",queue_destination="emails",queue_consumer="mailer",queue_result="success"}
         values: 0+48x15
@@ -1070,3 +1049,102 @@ tests:
             exp_annotations:
               summary: 下游 shop.Pay 调用（重试后）5xx 比例超过 5%
               runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate
+  - name: 容器资源按 Pod 关联应用，并在进程中断期间保留映射
+    interval: 1m
+    input_series:
+      # api-0 在 5m 后进程崩溃，app_ready 中断；api-1 正常。job-0 不是 Foundation 应用，不应出现。
+      - series: app_ready{env="prod",namespace="apps",app="api",pod="api-0",container="api"}
+        values: "1x5"
+      - series: app_ready{env="prod",namespace="apps",app="api",pod="api-1",container="api"}
+        values: "1x10"
+      - series: container_cpu_usage_seconds_total{env="prod",namespace="apps",pod="api-0",container="api",instance="node-a"}
+        values: "0+30x10"
+      - series: container_cpu_usage_seconds_total{env="prod",namespace="apps",pod="api-1",container="api",instance="node-b"}
+        values: "0+60x10"
+      # 同一容器被另一个采集任务重复抓取，去副本后不能翻倍。
+      - series: container_cpu_usage_seconds_total{env="prod",namespace="apps",pod="api-1",container="api",instance="node-b",job="kubelet"}
+        values: "0+60x10"
+      # Pod 沙箱与空 container 不计入。
+      - series: container_cpu_usage_seconds_total{env="prod",namespace="apps",pod="api-1",container="POD",instance="node-b"}
+        values: "0+600x10"
+      - series: container_cpu_usage_seconds_total{env="prod",namespace="apps",pod="api-1",container="",instance="node-b"}
+        values: "0+600x10"
+      - series: container_cpu_usage_seconds_total{env="prod",namespace="apps",pod="job-0",container="job",instance="node-a"}
+        values: "0+60x10"
+      - series: container_cpu_cfs_periods_total{env="prod",namespace="apps",pod="api-1",container="api",instance="node-b"}
+        values: "0+600x10"
+      - series: container_cpu_cfs_throttled_periods_total{env="prod",namespace="apps",pod="api-1",container="api",instance="node-b"}
+        values: "0+150x10"
+      - series: container_memory_working_set_bytes{env="prod",namespace="apps",pod="api-1",container="api",instance="node-b"}
+        values: "268435456x10"
+      - series: container_memory_rss{env="prod",namespace="apps",pod="api-1",container="api",instance="node-b"}
+        values: "201326592x10"
+      - series: kube_pod_container_resource_limits{env="prod",namespace="apps",pod="api-1",container="api",resource="cpu",unit="core"}
+        values: "2x10"
+      - series: kube_pod_container_resource_limits{env="prod",namespace="apps",pod="api-1",container="api",resource="memory",unit="byte"}
+        values: "536870912x10"
+      - series: kube_pod_container_resource_limits{env="prod",namespace="apps",pod="api-1",container="api",resource="ephemeral_storage",unit="byte"}
+        values: "1073741824x10"
+      - series: kube_pod_container_resource_requests{env="prod",namespace="apps",pod="api-1",container="api",resource="cpu",unit="core"}
+        values: "0.5x10"
+      - series: kube_pod_container_status_restarts_total{env="prod",namespace="apps",pod="api-0",container="api"}
+        values: "0 0 0 0 0 0 1 2 3 3 3"
+      - series: kube_pod_container_status_last_terminated_reason{env="prod",namespace="apps",pod="api-0",container="api",reason="OOMKilled"}
+        values: "0 0 0 0 0 0 1 1 1 1 1"
+      - series: kube_pod_container_status_last_terminated_reason{env="prod",namespace="apps",pod="api-1",container="api",reason="Completed"}
+        values: "1x10"
+    promql_expr_test:
+      - expr: app_container:container_cpu_usage_seconds:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:container_cpu_usage_seconds:rate5m{env="prod",namespace="apps",app="api",pod="api-0",container="api"}'
+            value: 0.5
+          - labels: 'app_container:container_cpu_usage_seconds:rate5m{env="prod",namespace="apps",app="api",pod="api-1",container="api"}'
+            value: 1
+      - expr: app_container:container_cpu_cfs_throttled:ratio_rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:container_cpu_cfs_throttled:ratio_rate5m{env="prod",namespace="apps",app="api",pod="api-1",container="api"}'
+            value: 0.25
+      - expr: app_container:container_memory_working_set_bytes:max
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:container_memory_working_set_bytes:max{env="prod",namespace="apps",app="api",pod="api-1",container="api"}'
+            value: 268435456
+      - expr: app_container:container_memory_rss:max
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:container_memory_rss:max{env="prod",namespace="apps",app="api",pod="api-1",container="api"}'
+            value: 201326592
+      - expr: app_container:kube_pod_container_resource_limits:max
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:kube_pod_container_resource_limits:max{env="prod",namespace="apps",app="api",pod="api-1",container="api",resource="cpu"}'
+            value: 2
+          - labels: 'app_container:kube_pod_container_resource_limits:max{env="prod",namespace="apps",app="api",pod="api-1",container="api",resource="memory"}'
+            value: 536870912
+      - expr: app_container:kube_pod_container_resource_requests:max
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:kube_pod_container_resource_requests:max{env="prod",namespace="apps",app="api",pod="api-1",container="api",resource="cpu"}'
+            value: 0.5
+      # CPU 占 limit 比例：面板按 namespace/pod/container 关联用量与 limit。
+      - expr: |
+          app_container:container_cpu_usage_seconds:rate5m
+          / on (env, cluster, namespace, pod, container) group_left ()
+          app_container:kube_pod_container_resource_limits:max{resource="cpu"}
+        eval_time: 10m
+        exp_samples:
+          - labels: '{env="prod",namespace="apps",app="api",pod="api-1",container="api"}'
+            value: 0.5
+      # api-0 的 app_ready 在 5m 后中断，重启与 OOM 仍关联到 api。
+      - expr: app_container:kube_pod_container_status_restarts:increase1h
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:kube_pod_container_status_restarts:increase1h{env="prod",namespace="apps",app="api",pod="api-0",container="api"}'
+            value: 3
+      - expr: app_container:kube_pod_container_last_terminated_oomkilled:info
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:kube_pod_container_last_terminated_oomkilled:info{env="prod",namespace="apps",app="api",pod="api-0",container="api"}'
+            value: 1
