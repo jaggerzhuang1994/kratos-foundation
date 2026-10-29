@@ -148,10 +148,12 @@ flowchart TD
     K -- 成功 --> L[Repo按token确认完成 依配置删除或保留终态]
     K -- 可重试 --> M[Repo按token释放并排期]
     K -- 最终失败 --> N[Repo按token保存失败]
+    K -- 停机排空超时中止 --> V[Repo按token立即释放 不退避]
+    V --> C
     K -- 崩溃 --> O[租约到期后重新Claim]
     O --> C
     C & L & M & N -- 存储故障 --> P[Worker ERROR queue.storage.failed]
-    C & L & M & N -- 应用Context取消 --> U([停止 未确认租约到期恢复])
+    C -- 停机 --> U([停止领取 在途任务排空后退出])
     L & M & N -- 旧token --> Q[Worker WARN queue.lease.lost]
     L -- 成功 --> R[Worker DEBUG queue.task.execution.finished result=success duration]
     M -- 成功 --> S[Worker WARN queue.task.retry_scheduled]

@@ -39,7 +39,7 @@ Job 原始任务标签名是 `job`，与 Prometheus 目标 job 冲突。模板�
 - Queue 的 consumer_messages 是一次领取完成状态处理的结果，retry 表示安排后续持久重试，storage_error 表示状态落库失败；再次领取会再次计数，不是去重消息数或跨领取的最终业务结果。消息耗时包含本次执行、状态落库和同步失败通知，不包含持久化重试等待。attempt 耗时包含准入判断、处理器选择、解码/校验和实际 Handler；超限或缺处理器时也可能记录而未调用 Handler，排除状态落库。两种 P95 并排对照；停止取消可能在状态处理前退出而不记录消息结果/耗时。
 - Kafka 消息耗时包含本进程 Handler 重试、退避等待和死信处理，与单次 Handler 尝试 P95 并排；不包含消息拉取或位点提交，Handler 成功不能证明提交成功。生产计数按消息、耗时按调用；当前批量失败可能将整批记为失败，不是精确的 Broker 确认失败消息数。Queue failed_tasks 的 success 表示归档成功，Kafka dead_letters 的 success 表示死信投递成功；均不是任务处理成功或积压。
 - Queue 组件页保留观察器视角：同一 Store 的 Pod 快照不能相加；统计成功与年龄可用性用状态时间线区分成功、失败/未知和缺失。队列与 Kafka 详情的共享库存区按逻辑 Store/队列查看全局库存。同名队列须指向同一 Store，不同 Store 使用不同逻辑名称；Redis ready 候选超过 1000 时年龄未知，不能解释为零等待。
-- Job running/pending 使用阶梯图；完成、跳过和失败用所选窗口 `increase` 表，适合低频任务，结果可能非整数。disabled/already_running/pending_full 不进入 Handler，不属于执行失败。当前执行取消归入 failure，Daemon 返回 nil 归入 success；success 不能证明守护任务仍运行。最后成功时间尚无专门 Gauge。
+- Job running/pending 使用阶梯图；完成、跳过和失败用所选窗口 `increase` 表，适合低频任务，结果可能非整数。disabled/already_running/pending_full/stopping 不进入 Handler，不属于执行失败。当前执行取消归入 failure，Daemon 返回 nil 归入 success；success 不能证明守护任务仍运行。最后成功时间尚无专门 Gauge。
 - Lock 获取耗时包含底层等待与重试，TryLock contended 是正常竞争；timeout 无法单独区分竞争与 Redis 超时。持有时长仅在成功 Unlock 返回时采样，不覆盖过期、释放失败或进程崩溃，不能生成可信的当前持有数量。
 - OSS Reader 字节按实际消费记录，预读/重放重复计数，不是物理网络流量；Get 完整流结果需 Close 后才产生。
 - Runtime 将 RSS、Go Sys、Heap Alloc 组合，并单列堆/栈/GC 明细；这些值有重叠，不能直接相加。GC 频率与估计 CPU 用各自单位，平均 STW 只由 Summary sum/count 计算。FD 打开/上限与逐进程最忙利用率并排；无平台指标或上限时不补零。VMS 是虚拟地址空间，不是物理内存。
@@ -76,7 +76,7 @@ flowchart TD
 | SQL 慢操作 | database_sql_slow_operations_total、database_sql_slow_threshold_seconds | 有效 GORM slow_threshold，默认 200ms；0s 禁用。按连接/操作统计，无 SQL 文本标签，计数不等于日志行数，见 [Database 文档](../pkg/database/README.md) |
 | Kafka Lag | kafka_consumergroup_lag | 可选 Kafka exporter 与抓取配置；队列与 Kafka 详情按 Kafka 集群、消费组、Broker Topic/分区展示。应用处理区的 kafka_topic 变量筛选应用逻辑目的地，Lag 区的 broker_topic 筛选物理 Topic，不能直接互换；Broker 磁盘/ISR 仍需独立采集 |
 | Queue 库存 | queue_tasks、queue_oldest_ready_age_seconds、queue_stats_collection_success、queue_stats_oldest_ready_known | 显式 queue.RegisterStats；数据库聚合可能扫描队列表，按规模设置超时与采集频率；Redis 只读 Lua 要求 context_timeout_enabled:true。共享快照以 max 去重，不累加，采集失败与年龄未知分别观察 |
-| Job 调度 | job_triggers_skipped_total、job_pending、job_wait_duration_seconds | 本进程 gate 的 disabled、already_running、pending_full 与 admitted/canceled 等待结果；不提供跨进程启用状态、协调器或续租语义 |
+| Job 调度 | job_triggers_skipped_total、job_pending、job_wait_duration_seconds | 本进程 gate 的 disabled、already_running、pending_full、stopping 与 admitted/canceled 等待结果；不提供跨进程启用状态、协调器或续租语义 |
 | 健康探测 | probe_success 等 | 外部 blackbox 目标需配置实际服务端点；无探测数据保持未接入，不由应用 up 推断业务健康 |
 | Kubernetes | Pod working set、CPU throttling、重启、OOM、期望/就绪副本 | kubelet/cAdvisor 与 kube-state-metrics；普通服务没有这些概念 |
 

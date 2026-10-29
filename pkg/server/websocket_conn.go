@@ -244,8 +244,10 @@ func (c *websocketClient) Close() error {
 func (c *websocketClient) shutdown(ctx context.Context) error {
 	// 无效连接没有可取消的上下文，直接交给 close 报告错误。
 	if c.conn != nil {
+		closing := c.isClosing()
 		c.cancel()
-		if c.onShutdownHandler != nil {
+		// 业务 Close 或读写失败已开始关闭的连接不再回调，避免向已关闭连接发送。
+		if c.onShutdownHandler != nil && !closing {
 			c.invokeShutdown(ctx)
 		}
 	}
@@ -260,6 +262,16 @@ func (c *websocketClient) invokeShutdown(ctx context.Context) {
 		}
 	}()
 	c.onShutdownHandler.OnShutdown(ctx, c)
+}
+
+// isClosing 报告连接是否已经开始关闭。
+func (c *websocketClient) isClosing() bool {
+	select {
+	case <-c.closing:
+		return true
+	default:
+		return false
+	}
 }
 
 // markClosing 通知读循环连接已开始关闭。

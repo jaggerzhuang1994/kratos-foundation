@@ -619,6 +619,31 @@ func TestWebSocketShutdownNotifiesBeforeGoingAway(t *testing.T) {
 	}
 }
 
+func TestWebSocketShutdownSkipsClosingConnection(t *testing.T) {
+	handler := &shutdownWebSocketHandler{started: make(chan struct{}, 1), shutdown: make(chan error, 1), closed: make(chan struct{}, 1)}
+	peer, hub := startConfiguredWebSocket(t, handler, WebSocketConfig{})
+	if err := peer.WriteMessage(websocket.TextMessage, []byte("request")); err != nil {
+		t.Fatal(err)
+	}
+	receiveRuntimeValue(t, handler.started)
+	hub.mu.Lock()
+	for client := range hub.clients {
+		// 模拟业务关闭已开始、尚未从 hub 移除的窗口。
+		client.markClosing()
+	}
+	hub.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(t.Context(), runtimeTestTimeout)
+	defer cancel()
+	if err := hub.stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertNoRuntimeValue(t, handler.shutdown)
+	if _, _, err := peer.ReadMessage(); !websocket.IsCloseError(err, websocket.CloseGoingAway) {
+		t.Fatalf("close frame %v", err)
+	}
+}
+
 func startConfiguredWebSocket(t *testing.T, handler any, config WebSocketConfig) (*websocket.Conn, *websocketHub) {
 	t.Helper()
 	spec := NewSpec()
