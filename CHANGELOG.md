@@ -42,6 +42,7 @@
 
 **文档**
 
+- **changelog**：refresh v2.10.0 release notes（`9fdc4f9`）
 - **changelog**：prepare v2.10.0 release notes（`9d5ebec`）
 - **changelog**：refresh commit records after v2.9.0（`7d35a48`）
 <!-- changelog:auto:end -->
