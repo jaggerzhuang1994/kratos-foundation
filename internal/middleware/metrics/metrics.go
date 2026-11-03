@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	kratoserrors "github.com/go-kratos/kratos/v2/errors"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/servicename"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // Config 是指标中间件对应的 protobuf 配置类型。
@@ -67,22 +65,12 @@ func splitFramework(business, framework middleware.Middleware) middleware.Middle
 		businessHandler := business(next)
 		frameworkHandler := framework(next)
 		return func(ctx context.Context, req any) (any, error) {
-			if info, ok := transport.FromServerContext(ctx); ok && isFrameworkOperation(info.Operation()) {
+			if info, ok := transport.FromServerContext(ctx); ok && servicename.IsFrameworkOperation(info.Operation()) {
 				return frameworkHandler(ctx, req)
 			}
 			return businessHandler(ctx, req)
 		}
 	}
-}
-
-// isFrameworkOperation 从 gRPC 风格的 operation（/pkg.Service/Method）取出服务全名判断；HTTP 路由等其他格式一律视为业务。
-func isFrameworkOperation(operation string) bool {
-	operation, ok := strings.CutPrefix(operation, "/")
-	if !ok {
-		return false
-	}
-	service, _, ok := strings.Cut(operation, "/")
-	return ok && servicename.IsFramework(protoreflect.FullName(service))
 }
 
 // Client 创建使用应用私有 Meter 的客户端指标中间件。

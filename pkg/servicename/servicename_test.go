@@ -132,3 +132,23 @@ func TestIsFrameworkExcludesStandardServices(t *testing.T) {
 		t.Fatal("business service reported as framework service")
 	}
 }
+
+func TestIsFrameworkOperationParsesGRPCOperations(t *testing.T) {
+	tests := []struct {
+		operation string
+		want      bool
+	}{
+		{"/grpc.health.v1.Health/Check", true},
+		{"/kratos.api.Metadata/ListServices", true},
+		{"/wallet_service.WalletService/Get", false},
+		{"grpc.health.v1.Health/Check", false},
+		{"/grpc.health.v1.Health", false},
+		{"/healthz", false},
+		{"", false},
+	}
+	for _, test := range tests {
+		if got := IsFrameworkOperation(test.operation); got != test.want {
+			t.Errorf("IsFrameworkOperation(%q) = %v, want %v", test.operation, got, test.want)
+		}
+	}
+}

@@ -76,6 +76,17 @@ func IsFramework(service protoreflect.FullName) bool {
 	return ok
 }
 
+// IsFrameworkOperation 从 gRPC 风格的 operation（/pkg.Service/Method）取出服务全名判断是否为框架服务；
+// HTTP 路由等其他格式一律视为业务。
+func IsFrameworkOperation(operation string) bool {
+	operation, ok := strings.CutPrefix(operation, "/")
+	if !ok {
+		return false
+	}
+	service, _, ok := strings.Cut(operation, "/")
+	return ok && IsFramework(protoreflect.FullName(service))
+}
+
 // goPackageName 按 protoc-gen-go 的规则从 go_package 推导 Go 包名，仅在目录名和文件名都不可用时作为兜底。
 func goPackageName(file protoreflect.FileDescriptor) string {
 	options, ok := file.Options().(*descriptorpb.FileOptions)

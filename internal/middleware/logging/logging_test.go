@@ -223,3 +223,45 @@ func TestAccessLogsOmitBodiesAndErrorDetails(t *testing.T) {
 		}
 	}
 }
+
+type testGRPCTransport struct {
+	operation string
+}
+
+func (*testGRPCTransport) Kind() transport.Kind            { return transport.KindGRPC }
+func (*testGRPCTransport) Endpoint() string                { return "grpc://localhost" }
+func (t *testGRPCTransport) Operation() string             { return t.operation }
+func (*testGRPCTransport) RequestHeader() transport.Header { return nil }
+func (*testGRPCTransport) ReplyHeader() transport.Header   { return nil }
+
+func TestServerFrameworkSuccessLogsAtDebug(t *testing.T) {
+	logger, path := newTestLogger(t)
+	server := Server(logger, nil)
+	tests := []struct {
+		name      string
+		operation string
+		err       error
+		wantLog   bool
+	}{
+		{name: "health success", operation: "/grpc.health.v1.Health/Check"},
+		{name: "health failure", operation: "/grpc.health.v1.Health/Check", err: errors.New("not serving"), wantLog: true},
+		{name: "business success", operation: "/wallet_service.WalletService/Get", wantLog: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := transport.NewServerContext(context.Background(), &testGRPCTransport{operation: test.operation})
+			_, _ = server(func(context.Context, any) (any, error) { return nil, test.err })(ctx, nil)
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(string(after[len(before):]), "operation="+test.operation); got != test.wantLog {
+				t.Fatalf("info access log written=%v, want %v: %s", got, test.wantLog, after[len(before):])
+			}
+		})
+	}
+}

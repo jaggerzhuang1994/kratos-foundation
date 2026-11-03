@@ -12,6 +12,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/servicename"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
 
@@ -73,6 +74,7 @@ func deadlineFields() []any {
 
 // accessLog 只记录请求结果摘要，不读取请求或响应正文，也不重复输出错误堆栈。
 // 完整服务端故障由常驻错误边界记录，关闭访问日志不会关闭故障诊断。
+// 服务端框架端点（健康检查、反射等）成功时降为 Debug：注册中心与探针高频轮询会淹没业务日志，失败仍按 Info 输出。
 func accessLog(logger log.Logger, client bool) middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -89,7 +91,11 @@ func accessLog(logger log.Logger, client bool) middleware.Middleware {
 				operation = info.Operation()
 				kind = info.Kind().String()
 			}
-			logger.WithContext(ctx).Infow(
+			write := logger.WithContext(ctx).Infow
+			if !client && err == nil && servicename.IsFrameworkOperation(operation) {
+				write = logger.WithContext(ctx).Debugw
+			}
+			write(
 				// 事件名带 server/client 前缀，与各领域事件一样可按前缀归类。
 				"event", component+".request.completed",
 				"transport", kind, // grpc/http，与错误边界日志的字段名一致
