@@ -12,6 +12,30 @@
 - 无新增提交
 <!-- changelog:auto:end -->
 
+## v2.10.1（2026-11-03）
+
+### 升级风险
+
+- **框架端点成功请求的访问日志降为 DEBUG**：`grpc.health.v1.Health`、gRPC 反射、channelz 与 `kratos.api.Metadata` 的服务端 `server.request.completed` 在成功时改为 DEBUG，Consul gRPC 健康检查不再按秒刷 INFO 日志；失败仍按 INFO 输出。依赖 INFO 级健康检查访问日志的排查或告警需改用 DEBUG 级别或 `server_framework_requests_*` 指标。
+
+### Added
+
+- **servicename**：`IsFrameworkOperation`，按 gRPC operation（`/pkg.Service/Method`）判断是否为框架服务。
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**修复**
+
+- **logging**：log successful framework endpoint requests at debug（`3fed58d`）
+
+**文档**
+
+- **changelog**：refresh commit records after v2.10.0（`4aeac9d`）
+<!-- changelog:auto:end -->
+
 ## v2.10.0（2026-10-29）
 
 ### 升级风险
