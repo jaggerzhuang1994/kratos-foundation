@@ -92,7 +92,7 @@ func TestSQLMetricsManagerOperations(t *testing.T) {
 					}
 					for key := range labels {
 						switch key {
-						case "db_name", "operation", "result", "service_name", "service_version", "service_instance_id":
+						case "db_name", "operation", "result":
 						default:
 							t.Errorf("unexpected label %q", key)
 						}

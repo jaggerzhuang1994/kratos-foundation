@@ -204,6 +204,7 @@ func newWorker[T any](config workerConfig, store Store, handlers map[string]task
 func (w *Worker[T]) Start(ctx context.Context) error {
 	err := w.runner.Run(ctx, func(runCtx context.Context) error {
 		// 生命周期事件每个实例只输出一次，不能依赖高频任务日志判断 Worker 是否启动。
+		w.telemetry.InitConsumer(ctx, w.config.Queue, w.config.Name)
 		w.log.WithContext(ctx).Infow("event", "queue.worker.started", "msg", "queue worker started", "queue", w.config.Queue, "worker", w.config.Name, "concurrency", w.config.Concurrency, "processing_enabled", !w.disabled)
 		defer w.log.WithContext(ctx).Infow("event", "queue.worker.stopped", "msg", "queue worker stopped", "queue", w.config.Queue, "worker", w.config.Name)
 		if w.disabled {

@@ -183,3 +183,43 @@ func TestTelemetryRecordsMessageRetryDeadLetterRuntimeAndProducer(t *testing.T) 
 		t.Fatalf("producer duration = count %d sum %v, want count 1 sum 1", sample.histogramCount, sample.histogramSum)
 	}
 }
+
+func TestInitConsumerWritesZeroForKnownResults(t *testing.T) {
+	value, _, provider := newTelemetryForTest(t)
+	value.InitConsumer(context.Background(), "orders", "group", true)
+	value.InitConsumer(context.Background(), "audit", "group", false)
+	for _, check := range []struct {
+		family      string
+		destination string
+		result      string
+	}{
+		{"kafka_consumer_runtime_failures_total", "orders", "error"},
+		{"kafka_consumer_retries_total", "orders", "scheduled"},
+		{"kafka_consumer_dead_letters_total", "orders", "success"},
+		{"kafka_consumer_dead_letters_total", "orders", "error"},
+		{"kafka_consumer_runtime_failures_total", "audit", "error"},
+	} {
+		sample := findTelemetryMetricSample(t, provider, check.family, map[string]string{
+			"kafka_destination": check.destination, "kafka_consumer": "group", "kafka_result": check.result,
+		})
+		if sample.counter != 0 {
+			t.Fatalf("%s{destination=%s,result=%s} = %v, want 0", check.family, check.destination, check.result, sample.counter)
+		}
+	}
+	families, err := provider.PrometheusGatherer().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != "kafka_consumer_dead_letters_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "kafka_destination" && label.GetValue() == "audit" {
+					t.Fatalf("dead-letter series initialized without dead-letter destination: %v", metric)
+				}
+			}
+		}
+	}
+}

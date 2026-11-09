@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	instrumentationNameJob    = "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
-	metricLabelJob            = "job"
+	instrumentationNameJob = "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/job"
+	// metricLabelJobName 任务名标签。不用 job：它与 Prometheus 的采集任务标签冲突，抓取后会被改名为 exported_job。
+	metricLabelJobName        = "job_name"
 	metricLabelStatus         = "status"
 	metricLabelReason         = "reason"
 	metricLabelResult         = "result"
@@ -29,6 +30,7 @@ const (
 
 type jobMetrics interface {
 	jobAdmissionMetrics
+	initJob(context.Context, string)
 	reportStart(context.Context)
 	reportDone(context.Context, error, time.Duration)
 }
@@ -99,31 +101,43 @@ func newJobMetricsProvider(provider foundationmetrics.Provider, enabled bool) (j
 	return result, nil
 }
 
+// jobAttributes 返回任务名标签 job_name 及额外标签。
+func jobAttributes(name string, extra ...attribute.KeyValue) metric.MeasurementOption {
+	attributes := make([]attribute.KeyValue, 0, len(extra)+1)
+	attributes = append(attributes, attribute.String(metricLabelJobName, name))
+	return metric.WithAttributes(append(attributes, extra...)...)
+}
+
+// initJob 在注册时为已知标签组合写入 0：没有序列时面板显示无数据，increase(...) > 0 类告警也会漏掉第一次失败。
+func (provider *jobMetricsProvider) initJob(ctx context.Context, name string) {
+	if provider.disabled {
+		return
+	}
+	for _, status := range []string{"success", "failure"} {
+		provider.jobRunsTotal.Add(ctx, 0, jobAttributes(name, attribute.String(metricLabelStatus, status)))
+	}
+	provider.jobRunning.Add(ctx, 0, jobAttributes(name))
+}
+
 func (provider *jobMetricsProvider) reportSkipped(ctx context.Context, name, reason string) {
 	if provider.disabled {
 		return
 	}
-	provider.jobTriggersSkippedTotal.Add(ctx, 1, metric.WithAttributes(
-		attribute.String(metricLabelJob, name),
-		attribute.String(metricLabelReason, reason),
-	))
+	provider.jobTriggersSkippedTotal.Add(ctx, 1, jobAttributes(name, attribute.String(metricLabelReason, reason)))
 }
 
 func (provider *jobMetricsProvider) reportPending(ctx context.Context, name string, delta int64) {
 	if provider.disabled {
 		return
 	}
-	provider.jobPending.Add(ctx, delta, metric.WithAttributes(attribute.String(metricLabelJob, name)))
+	provider.jobPending.Add(ctx, delta, jobAttributes(name))
 }
 
 func (provider *jobMetricsProvider) reportWait(ctx context.Context, name, result string, duration time.Duration) {
 	if provider.disabled {
 		return
 	}
-	provider.jobWaitDurationSeconds.Record(ctx, duration.Seconds(), metric.WithAttributes(
-		attribute.String(metricLabelJob, name),
-		attribute.String(metricLabelResult, result),
-	))
+	provider.jobWaitDurationSeconds.Record(ctx, duration.Seconds(), jobAttributes(name, attribute.String(metricLabelResult, result)))
 }
 
 func (provider *jobMetricsProvider) reportStart(ctx context.Context) {
@@ -134,7 +148,7 @@ func (provider *jobMetricsProvider) reportStart(ctx context.Context) {
 	if name == "" {
 		return
 	}
-	provider.jobRunning.Add(ctx, 1, metric.WithAttributes(attribute.String(metricLabelJob, name)))
+	provider.jobRunning.Add(ctx, 1, jobAttributes(name))
 }
 
 func (provider *jobMetricsProvider) reportDone(ctx context.Context, err error, duration time.Duration) {
@@ -149,13 +163,10 @@ func (provider *jobMetricsProvider) reportDone(ctx context.Context, err error, d
 	if err != nil {
 		status = "failure"
 	}
-	attributes := metric.WithAttributes(
-		attribute.String(metricLabelJob, name),
-		attribute.String(metricLabelStatus, status),
-	)
+	attributes := jobAttributes(name, attribute.String(metricLabelStatus, status))
 	provider.jobRunsTotal.Add(ctx, 1, attributes)
 	provider.jobDurationSeconds.Record(ctx, duration.Seconds(), attributes)
-	provider.jobRunning.Add(ctx, -1, metric.WithAttributes(attribute.String(metricLabelJob, name)))
+	provider.jobRunning.Add(ctx, -1, jobAttributes(name))
 }
 
 type jobTracing interface {

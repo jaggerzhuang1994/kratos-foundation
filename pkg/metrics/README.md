@@ -119,7 +119,7 @@ metrics:
 
 - **时机**：成功、Runtime 失败、启动回滚都会执行 AfterStop，因此三种结果都会推送；此时全部 Runtime 已退出、`app_ready=0`，Provider 由 Wire cleanup 在 `Run` 返回后关闭，推送仍能采集完整数据。钩子按登记顺序执行，晚于 MetricsBootstrap 登记的业务 AfterStop 中记录的指标不会包含在本次推送中。
 - **失败边界**：推送受 `timeout` 约束；连接失败、超时或 Pushgateway 非 2xx 只记录 WARN `metrics.push.failed`（字段 `push_job`、`duration`、`error`），钩子返回 nil，不改变 `Run` 结果和退出码。成功记录 INFO `metrics.push.completed`。不重试：一次性进程退出后没有后续机会，重试只会延长退出。
-- **分组与标签**：分组键只有 `job`，不带 pod 或实例 ID，避免每次运行在 Pushgateway 留下一组永不过期的序列；同一 job 的并发进程会互相覆盖，需要区分时为每个脚本配置不同 `job`。PUT 替换同组上一次结果。指标自身的 `job` 标签（如 `job_runs_total` 的任务名）推送时改为 `exported_job`——Pushgateway 分组独占 `job`，`client_golang/push` 会拒绝含 `job` 标签的指标；改名与 Prometheus `honorLabels=false` 抓取时的规则一致，`/metrics` 抓取不受影响。地址中的 `user:password@` 转为 Basic Auth。
+- **分组与标签**：分组键只有 `job`，不带 pod 或实例 ID，避免每次运行在 Pushgateway 留下一组永不过期的序列；同一 job 的并发进程会互相覆盖，需要区分时为每个脚本配置不同 `job`。PUT 替换同组上一次结果。指标自身的 `job` 标签（框架指标已不使用，业务指标自带时）推送时改为 `exported_job`——Pushgateway 分组独占 `job`，`client_golang/push` 会拒绝含 `job` 标签的指标；改名与 Prometheus `honorLabels=false` 抓取时的规则一致，`/metrics` 抓取不受影响。地址中的 `user:password@` 转为 Basic Auth。
 - **适用范围**：建议只对 `IsOneShot()` 的进程开启，按部署（K8s Job/CronJob 的配置）启用即可。常驻服务继续由 Prometheus 抓取，开启只会在每次停机时多一次推送，并留下可能过期的分组。Pushgateway 抓取需 `honorLabels: true`。
 
 推送数据描述**最近一次运行**，查询时按“最近一次” gauge 理解：`push_time_seconds` 即最近运行时间（`job_last_run_timestamp_seconds` 语义），最近一次无失败时它也是最近成功时间（`job_last_success_timestamp_seconds`），单任务进程的 `job_duration_seconds_sum` 即本次耗时（`job_last_duration_seconds`）。对 Pushgateway 序列不要使用 `increase`，查询示例与 K8s Job 告警见 [一次性脚本与 CronJob 告警](../../observability/alerts.md#一次性脚本与-cronjob-告警)。框架不额外导出这三个 gauge。

@@ -4,16 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"sync"
 
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/otelattr"
-	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/appinfo"
 	foundationmetrics "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/metrics"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	"go.opentelemetry.io/otel/attribute"
 )
 
 var prometheusLabelNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -31,10 +27,11 @@ type metricsCollector struct {
 }
 
 // newMetricsCollector 为所有具名连接注册应用侧连接池指标。
+// 指标只带 database.metrics.labels 常量标签，不附加 service_name、service_instance_id 等资源属性：
+// 实例 ID 每个进程不同，作为标签会让每次重启都换一整套序列；服务身份由采集侧的 app/pod 标签表达，与其他组件一致。
 func newMetricsCollector(
 	connectionFactory *connectionFactory,
 	config *config_pb.Database,
-	appInfo appinfo.AppInfo,
 	metricsProvider foundationmetrics.Provider,
 ) (*metricsCollector, error) {
 	conf := config.GetMetrics()
@@ -45,10 +42,7 @@ func newMetricsCollector(
 	if baseRegisterer == nil {
 		return nil, errors.New("database metrics Prometheus registerer is nil")
 	}
-	labels, err := mergeMetricLabels(
-		conf.GetLabels(),
-		otelattr.ServiceAttributes(appInfo),
-	)
+	labels, err := validateMetricLabels(conf.GetLabels())
 	if err != nil {
 		return nil, err
 	}
@@ -90,12 +84,9 @@ func (c *metricsCollector) unregisterDBStats() {
 	c.dbStats = nil
 }
 
-// mergeMetricLabels 合并用户标签与应用身份，并拒绝隐式覆盖和保留标签。
-func mergeMetricLabels(
-	configLabels map[string]string,
-	appAttrs []attribute.KeyValue,
-) (map[string]string, error) {
-	labels := make(map[string]string, len(configLabels)+len(appAttrs))
+// validateMetricLabels 复制用户配置的常量标签，并拒绝非法名称和固定维度标签。
+func validateMetricLabels(configLabels map[string]string) (map[string]string, error) {
+	labels := make(map[string]string, len(configLabels))
 	for key, value := range configLabels {
 		if !prometheusLabelNamePattern.MatchString(key) {
 			return nil, fmt.Errorf("database metrics label name %q is invalid", key)
@@ -104,16 +95,6 @@ func mergeMetricLabels(
 			return nil, fmt.Errorf("database metrics label name %q is reserved", key)
 		}
 		labels[key] = value
-	}
-	for _, attr := range appAttrs {
-		key := strings.ReplaceAll(string(attr.Key), ".", "_")
-		if _, exists := labels[key]; exists {
-			return nil, fmt.Errorf(
-				"database metrics label name %q conflicts with application identity",
-				key,
-			)
-		}
-		labels[key] = attr.Value.AsString()
 	}
 	return labels, nil
 }

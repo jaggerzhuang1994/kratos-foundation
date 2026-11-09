@@ -97,8 +97,12 @@ groups:
         annotations:
           summary: "Queue 消费运行时出现故障"
           runbook: "observability/troubleshooting.md#组件告警"
+      # 任务名标签为 job_name；v2.10.1 及以前只有 job（抓取后为 exported_job），label_replace 补齐后旧版本应用也带任务名。
       - alert: FoundationJobFailure
-        expr: sum by (env,cluster,namespace,app,exported_job) (increase(job_runs_total{foundation="true",status="failure"}[5m])) > 0
+        expr: |
+          sum by (env,cluster,namespace,app,job_name) (
+            label_replace(increase(job_runs_total{foundation="true",status="failure"}[5m]), "job_name", "$1", "exported_job", "(.+)")
+          ) > 0
         labels:
           severity: warning
         annotations:
@@ -400,14 +404,21 @@ groups:
   # 默认 SLO 99.9%（30 天错误预算 0.1%），只把 5xx 计为错误；调整 SLO 时修改 foundation:slo_error_budget:ratio。
   # 长窗口判断是否真的在消耗预算，短窗口确认仍在发生，恢复后告警尽快解除。
   # 容器资源按应用预聚合，供应用面板直接按 app 筛选。cAdvisor 与 kube-state-metrics 只有 namespace/pod/container，
-  # 借应用自报的 app_ready 补 app：只覆盖 Foundation 应用；ECI 等虚拟节点没有 kubelet cAdvisor，CPU/内存无结果。
+  # 用 Pod 标签 app.kubernetes.io/name 补 app（kube-state-metrics 的 kube_pod_labels，需在 metricLabelsAllowlist 放开
+  # pods=[app.kubernetes.io/name]）；ECI 等虚拟节点没有 kubelet cAdvisor，CPU/内存无结果。
   # 先按对象取 max 去掉重复采集的副本；组内规则顺序求值，pod:app:info 须排在最前。
   - name: foundation-container
     rules:
-      # 取近 1h 最后一次 app_ready：进程崩溃重启（CrashLoopBackOff）期间 app_ready 中断，重启与 OOM 仍能关联到应用。
-      # Pod 名唯一，保留旧映射不会串到其他应用。
+      # Pod 到应用的映射以 kube_pod_labels 为准：只要 Pod 存在就有，进程从没起来过（CrashLoopBackOff、启动即 OOM）
+      # 的 Pod 也能关联到应用。kube_pod_labels 没有该 Pod（未放开标签或 Pod 未打标签）时，退回近 1h 最后一次 app_ready；
+      # or on (...) 保证同一 Pod 只取一个来源，两边 app 不一致时以 Pod 标签为准，不会产生重复映射。
       - record: pod:app:info
-        expr: group by (env, cluster, namespace, pod, app) (last_over_time(app_ready[1h]))
+        expr: |
+          group by (env, cluster, namespace, pod, app) (
+            label_replace(kube_pod_labels{label_app_kubernetes_io_name!=""}, "app", "$1", "label_app_kubernetes_io_name", "(.+)")
+          )
+          or on (env, cluster, namespace, pod)
+          group by (env, cluster, namespace, pod, app) (last_over_time(app_ready[1h]))
       - record: app_container:container_cpu_usage_seconds:rate5m
         expr: |
           max by (env, cluster, namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!="",container!="POD"}[5m]))

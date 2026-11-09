@@ -21,12 +21,14 @@ grafana:
       folderAnnotation: grafana_folder
       provider:
         foldersFromFilesStructure: true
-# 一次性脚本与 CronJob 告警（alerts.yaml 的 foundation-kubernetes-jobs 组）读取 kube-state-metrics。
-# kube-state-metrics 默认不导出资源标签；放开 app.kubernetes.io/name 后，kube_job_labels/kube_cronjob_labels
-# 才带 label_app_kubernetes_io_name，告警据此补出 app 标签用于路由。只放开这一个低基数标签，不使用 [*]。
-# Job 的标签取自 Job 自身 metadata（CronJob 为 jobTemplate.metadata.labels），只写在 Pod 模板上不会生效。
+# 一次性脚本与 CronJob 告警（alerts.yaml 的 foundation-kubernetes-jobs 组）与容器资源规则（pod:app:info）读取 kube-state-metrics。
+# kube-state-metrics 默认不导出资源标签；放开 app.kubernetes.io/name 后，kube_job_labels/kube_cronjob_labels/kube_pod_labels
+# 才带 label_app_kubernetes_io_name，规则据此补出 app 标签。只放开这一个低基数标签，不使用 [*]。
+# Job 的标签取自 Job 自身 metadata（CronJob 为 jobTemplate.metadata.labels），只写在 Pod 模板上不会生效；
+# pods 取 Pod 自身标签，即 Deployment/StatefulSet 的 Pod 模板标签。
 kube-state-metrics:
   metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/name]
     - jobs=[app.kubernetes.io/name]
     - cronjobs=[app.kubernetes.io/name]
   prometheus:

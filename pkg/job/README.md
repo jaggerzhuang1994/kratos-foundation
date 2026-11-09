@@ -116,7 +116,9 @@ Once 和 Daemon 不排空，停机时立即取消 Context。由 App 管理时排
 
 `WithDelayOverflowHandler(func(context.Context, job.DelayOverflow) error)` 可注入满额通知，事件含 Name、Policy、MaxPendingRuns。回调在锁外同步调用，不占执行名额；可能并发发生，业务负责并发安全、超时和去重。回调成功仍跳过本轮，错误或 panic 转换结果交给 Cron ErrorHandler；框架不重试。配置热更新不替换此回调。
 
-启用 Job 指标时，准入 gate 额外暴露以下低基数指标：`job_triggers_skipped_total{job,reason}` 统计 `disabled`、`already_running`、`pending_full`、`stopping`（停机排空期间到达）等未准入触发；`job_pending{job}` 表示 Delay 策略当前等待数量；`job_wait_duration_seconds{job,result}` 在等待结束时按 `admitted` 或 `canceled` 记录耗时。它们不等同于任务执行失败，只有真正进入 Handler 的调用才计入 `job_runs_total`、`job_duration_seconds` 和 `job_running`。Prometheus 默认抓取会把任务标签 `job` 重命名为 `exported_job`。
+启用 Job 指标时，准入 gate 额外暴露以下低基数指标：`job_triggers_skipped_total{job_name,reason}` 统计 `disabled`、`already_running`、`pending_full`、`stopping`（停机排空期间到达）等未准入触发；`job_pending{job_name}` 表示 Delay 策略当前等待数量；`job_wait_duration_seconds{job_name,result}` 在等待结束时按 `admitted` 或 `canceled` 记录耗时。它们不等同于任务执行失败，只有真正进入 Handler 的调用才计入 `job_runs_total`、`job_duration_seconds` 和 `job_running`。Manager 构造时为每个已注册任务写入 `job_runs_total{status="success|failure"}` 与 `job_running` 的 0 值，面板能区分“没接入”和“没发生”，`increase(...) > 0` 告警也不会漏掉第一次失败。
+
+任务名标签为 `job_name`。v2.10.1 及以前用的是 `job`，与 Prometheus 采集任务标签冲突，抓取后被改名为 `exported_job`；现已不再上报，查询请改用 `job_name`。
 
 ```mermaid
 flowchart TD

@@ -162,7 +162,7 @@ def main():
     for metric, label, expected in [
         ('server_requests_code_total','operation', {'/example.Components/Run','/example.Components/Catalog','/example.Components/Inventory'}),
         ('client_requests_code_total','operation', {'/example.Greeting/Hello','/example.Components/Catalog','/example.Components/Inventory'}),
-        ('job_runs_total','exported_job', {'redis-heartbeat','cache-size','cache-ttl'}),
+        ('job_runs_total','job_name', {'redis-heartbeat','cache-size','cache-ttl'}),
         ('queue_consumer_messages_total','queue_consumer', {'components-demo','email-worker','report-worker'}),
     ]:
         observed = {s['metric'].get(label) for s in after if s['metric'].get('__name__') == metric and float(s['value'][1]) > 0}

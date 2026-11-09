@@ -4,6 +4,13 @@
 
 ## 计划中
 
+### 升级风险
+
+- **数据库指标去掉服务身份常量标签**：`go_sql_*`（连接池）与 `database_sql_*`（GORM 操作）不再带 `service_name`、`service_instance_id`、`service_version`，只保留 `db_name`、`operation`、`result` 与 `database.metrics.labels`。`service_instance_id` 每个进程不同，原先每次重启或发布都会换一整套序列、曲线在发布前后断开。按这三个标签筛选或分组的查询、面板和告警需改用采集侧的 `app` / `pod`；`database.metrics.labels` 现在允许使用这三个名字。
+- **`pod:app:info` 改以 `kube_pod_labels` 为准**：Pod 到应用的映射取 kube-state-metrics 的 `label_app_kubernetes_io_name`，持续 CrashLoopBackOff、从未上报 `app_ready` 的 Pod 也能关联到应用，`app_container:*` 重启 / OOM 规则不再漏掉它们；该 Pod 没有这个标签时退回原来的近 1h `app_ready`。需要在 kube-state-metrics 的 `metricLabelsAllowlist` 增加 `pods=[app.kubernetes.io/name]`（示例 values 已更新），未放开时行为与原来相同。放开后覆盖所有带该标签的 Pod，不再只限 Foundation 应用；Pod 标签与应用指标 `app` 不一致时以 Pod 标签为准。
+- **Job 任务名标签改为 `job_name`，不再上报 `job`**：原标签 `job` 与 Prometheus 采集任务标签冲突，抓取后被改名为 `exported_job`。`job_runs_total`、`job_duration_seconds`、`job_running`、`job_triggers_skipped_total`、`job_pending`、`job_wait_duration_seconds` 现在只带 `job_name`，查询 `exported_job` 的面板、告警与 Alertmanager 路由 / 静默需改为 `job_name`。Foundation 面板与规则已改用 `job_name`；`FoundationJobFailure` 告警标签由 `exported_job` 变为 `job_name`，规则用 `label_replace` 从旧版本应用的 `exported_job` 补齐；v2.10.1 及以前的应用在 Foundation 面板上任务名显示为空。Pushgateway 推送仍会把业务指标自带的 `job` 标签改为 `exported_job`。
+- **低频计数器启动时初始化为 0**：Queue Worker 启动时写入 `queue_consumer_runtime_failures_total`、`queue_consumer_retries_total`、`queue_consumer_failed_tasks_total`，Kafka ConsumerRuntime 启动时写入 `kafka_consumer_runtime_failures_total`、`kafka_consumer_retries_total`（配置死信时还有 `kafka_consumer_dead_letters_total`），Job Manager 为每个任务写入 `job_runs_total{status="success|failure"}` 与 `job_running` 的 0 值。从未发生时由“无数据”变为 0，`increase(...) > 0` 类告警不再漏掉第一次；按“序列是否存在”判断是否发生过的查询需改为判断取值。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

@@ -110,6 +110,7 @@ func newConsumerRuntime(
 // Start 启动消费循环；同一实例只允许调用一次，停止信号或启动 Context 取消均会终止底层 Consumer。
 func (r *ConsumerRuntime) Start(ctx context.Context) error {
 	err := r.runner.Run(ctx, func(runCtx context.Context) error {
+		r.telemetry.InitConsumer(ctx, r.config.Destination, r.config.Name, r.config.DeadLetter != nil)
 		r.logEvent(ctx, logInfo, "kafka.consumer.started", "kafka consumer started")
 		err := r.consumer.Consume(runCtx, r.handleDelivery)
 		// 先于检查错误内容快照取消状态：只有 Consume 返回时运行 Context 已被 Stop 或启动

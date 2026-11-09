@@ -265,12 +265,16 @@ tests:
             exp_annotations:
               summary: "Queue 消费运行时出现故障"
               runbook: observability/troubleshooting.md#组件告警
-  - name: FoundationJobFailure 保留组件身份且区分环境
+  - name: FoundationJobFailure 保留组件身份且区分环境，兼容只有 exported_job 的旧版本
     interval: 1m
     input_series:
-      - series: "job_runs_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",exported_job=\"cleanup\",status=\"failure\"}"
+      # 新版本只上报 job_name。
+      - series: "job_runs_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",job_name=\"cleanup\",status=\"failure\"}"
         values: "0+1x10"
-      - series: "job_runs_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",exported_job=\"cleanup\",status=\"failure\"}"
+      # v2.10.1 及以前只有 exported_job。
+      - series: "job_runs_total{env=\"prod\",cluster=\"c1\",namespace=\"apps\",app=\"billing\",foundation=\"true\",exported_job=\"settle\",status=\"failure\"}"
+        values: "0+1x10"
+      - series: "job_runs_total{env=\"dev\",cluster=\"c1\",namespace=\"apps\",app=\"orders\",foundation=\"true\",job_name=\"cleanup\",status=\"failure\"}"
         values: "0x10"
     alert_rule_test:
       - eval_time: 3m
@@ -281,7 +285,17 @@ tests:
               cluster: "c1"
               namespace: "apps"
               app: "orders"
-              exported_job: "cleanup"
+              job_name: "cleanup"
+              severity: "warning"
+            exp_annotations:
+              summary: "Job 执行失败"
+              runbook: observability/troubleshooting.md#组件告警
+          - exp_labels:
+              env: "prod"
+              cluster: "c1"
+              namespace: "apps"
+              app: "billing"
+              job_name: "settle"
               severity: "warning"
             exp_annotations:
               summary: "Job 执行失败"
@@ -551,7 +565,7 @@ tests:
         values: 0+12x15
       - series: kafka_consumer_messages_total{env="prod",namespace="apps",app="worker",pod="w-0",kafka_destination="events",kafka_consumer="sync",kafka_result="dead_lettered"}
         values: 0+6x15
-      - series: job_runs_total{env="prod",namespace="apps",app="cron",pod="c-0",exported_job="cleanup",status="failure"}
+      - series: job_runs_total{env="prod",namespace="apps",app="cron",pod="c-0",job_name="cleanup",status="failure"}
         values: 0+1x15
       - series: queue_oldest_ready_age_seconds{env="prod",namespace="apps",app="worker",pod="w-0",instance="a",queue_destination="emails"}
         values: 30x15
@@ -1049,6 +1063,52 @@ tests:
             exp_annotations:
               summary: 下游 shop.Pay 调用（重试后）5xx 比例超过 5%
               runbook: observability/troubleshooting.md#foundationdownstreamhigherrorrate
+  - name: 持续崩溃、从未上报 app_ready 的 Pod 由 kube_pod_labels 关联应用
+    interval: 1m
+    input_series:
+      # scan-0 一直 CrashLoopBackOff，从未上报 app_ready；kube-state-metrics 两个副本都导出了它的 Pod 标签。
+      - series: kube_pod_labels{env="prod",namespace="chain",pod="scan-0",label_app_kubernetes_io_name="scan",instance="ksm-a"}
+        values: "1x10"
+      - series: kube_pod_labels{env="prod",namespace="chain",pod="scan-0",label_app_kubernetes_io_name="scan",instance="ksm-b"}
+        values: "1x10"
+      # api-0 两个来源都有且 app 不同：以 Pod 标签为准，只产生一条映射。
+      - series: kube_pod_labels{env="prod",namespace="apps",pod="api-0",label_app_kubernetes_io_name="api"}
+        values: "1x10"
+      - series: app_ready{env="prod",namespace="apps",app="api-legacy",pod="api-0",container="api"}
+        values: "1x10"
+      # legacy-0 没有 app.kubernetes.io/name 标签：退回 app_ready。nolabel-0 两边都没有，不关联。
+      - series: kube_pod_labels{env="prod",namespace="apps",pod="legacy-0",label_app_kubernetes_io_name=""}
+        values: "1x10"
+      - series: app_ready{env="prod",namespace="apps",app="legacy",pod="legacy-0",container="legacy"}
+        values: "1x10"
+      - series: kube_pod_labels{env="prod",namespace="apps",pod="nolabel-0"}
+        values: "1x10"
+      - series: kube_pod_container_status_restarts_total{env="prod",namespace="chain",pod="scan-0",container="scan"}
+        values: "0+2x10"
+      - series: kube_pod_container_status_restarts_total{env="prod",namespace="apps",pod="nolabel-0",container="x"}
+        values: "0+1x10"
+      - series: kube_pod_container_status_last_terminated_reason{env="prod",namespace="chain",pod="scan-0",container="scan",reason="OOMKilled"}
+        values: "1x10"
+    promql_expr_test:
+      - expr: pod:app:info
+        eval_time: 10m
+        exp_samples:
+          - labels: 'pod:app:info{env="prod",namespace="chain",pod="scan-0",app="scan"}'
+            value: 1
+          - labels: 'pod:app:info{env="prod",namespace="apps",pod="api-0",app="api"}'
+            value: 1
+          - labels: 'pod:app:info{env="prod",namespace="apps",pod="legacy-0",app="legacy"}'
+            value: 1
+      - expr: app_container:kube_pod_container_status_restarts:increase1h
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:kube_pod_container_status_restarts:increase1h{env="prod",namespace="chain",app="scan",pod="scan-0",container="scan"}'
+            value: 20
+      - expr: app_container:kube_pod_container_last_terminated_oomkilled:info
+        eval_time: 10m
+        exp_samples:
+          - labels: 'app_container:kube_pod_container_last_terminated_oomkilled:info{env="prod",namespace="chain",app="scan",pod="scan-0",container="scan"}'
+            value: 1
   - name: 容器资源按 Pod 关联应用，并在进程中断期间保留映射
     interval: 1m
     input_series:

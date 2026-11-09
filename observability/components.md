@@ -17,14 +17,16 @@
 | Cache | business_cache_lookups_total、business_cache_loads_total、business_cache_load_duration_seconds；cache_name | 业务调用 metrics.NewCacheMetrics 的 Hit/Miss/Error/Load；不能从 Redis 连接池复用推导缓存命中率 |
 | Kafka | kafka_producer_*、kafka_consumer_*；kafka_destination/kafka_consumer/kafka_result | 使用包提供的 Producer/Runtime 并注入 Observability 的 Metrics/Tracing；原生 SDK 调用不在封装业务计数内，提交和自动恢复结果尚无独立指标 |
 | Queue | queue_producer_*、queue_consumer_*；queue_destination/queue_consumer/queue_result | 使用 Queue/Worker 并注入 Observability；派发、领取执行、处理尝试、重试、失败归档、运行时故障分别观察；库存另需显式 RegisterStats |
-| Job | job_runs_total、job_duration_seconds、job_running、job_triggers_skipped_total、job_pending、job_wait_duration_seconds；exported_job/status/reason/result | Manager 注入 Provider；默认启用，可由 job.WithMetrics(false) 关闭。执行结果与准入跳过、等待分开解释 |
+| Job | job_runs_total、job_duration_seconds、job_running、job_triggers_skipped_total、job_pending、job_wait_duration_seconds；job_name/status/reason/result | Manager 注入 Provider；默认启用，可由 job.WithMetrics(false) 关闭。执行结果与准入跳过、等待分开解释 |
 | Lock | lock_operations_total、lock_operation_duration_seconds、lock_released_hold_duration_seconds；lock_name/operation/result | 构造时显式 lock.WithMetrics 包装原 Locker 后注入业务，见 [Lock 文档](../pkg/lock/README.md) |
 | OSS | oss_requests_total、oss_request_duration_seconds、oss_transferred_bytes_total、oss_streams_total、oss_stream_duration_seconds；bucket/operation/result | 显式 oss.WithMetrics 包装 Manager；请求与完整流分开，下载流 Close 后才统计完成结果 |
 | Runtime | Go/Process collector 与额外 GC CPU、调度直方图 | Provider 默认采集；FD 等 Process 指标的平台支持不同，缺失保持无数据 |
 
 Redis 的 redis_connection 标签保留配置连接身份，区分多个 client 共用地址的样本。旧序列没有该标签，按 All 可查看旧数据，按具体连接只展示带该身份的数据。多个进程排障时，先按 Pod/Container 定位，再切换视图比较。
 
-Job 原始任务标签名是 `job`，与 Prometheus 目标 job 冲突。模板统一 `honor_labels: false`，任务名成为 `exported_job`；不要改成 honor_labels=true 迁就图表，否则可能破坏目标身份。顶层 operation 筛选只影响 Server 和 Client；其他组件按自己的操作维度展示。
+Job 任务名标签为 `job_name`。v2.10.1 及以前用的是 `job`，与 Prometheus 目标 job 冲突，`honor_labels: false` 抓取后成为 `exported_job`；现已不再上报。面板与规则统一用 `job_name`，旧版本应用的任务名在面板上显示为空（FoundationJobFailure 用 `label_replace` 从 `exported_job` 补齐）。不要改成 honor_labels=true 迁就图表，否则可能破坏目标身份。
+
+低频结果的计数器在启动时按已知标签组合写入 0：Queue Worker / Kafka ConsumerRuntime 启动时初始化运行时故障、重试和失败归档（Kafka 为配置了死信时的死信投递）结果；Job Manager 构造时初始化每个任务的 `job_runs_total{status="success|failure"}` 与 `job_running`。面板据此区分“没接入”（无序列）和“没发生”（0）。顶层 operation 筛选只影响 Server 和 Client；其他组件按自己的操作维度展示。
 
 ## 展示方式与口径
 

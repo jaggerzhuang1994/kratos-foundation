@@ -261,7 +261,7 @@ GORM tracing 插件只记录 trace，不向全局 OpenTelemetry MeterProvider �
 | `database_sql_slow_operations_total` | Counter | 回调链耗时严格超过有效慢操作阈值的次数 |
 | `database_sql_slow_threshold_seconds` | Gauge | 每个连接构造时采用的 GORM 慢操作阈值（秒）；0 表示关闭慢操作判断 |
 
-操作次数、耗时和慢操作次数使用固定标签 `db_name`、`operation`（`create/update/delete/query/row/raw`）和 `result`（`success/error/not_found`）；阈值仅使用 `db_name`。全部指标复用应用身份与 `database.metrics.labels` 常量标签。自定义标签不得使用 `db_name`、`operation` 或 `result`；指标不包含 SQL、参数、表名或错误文本。计数与耗时仅在观察到相应事件后输出时间序列；从未发生慢操作时，慢计数序列尚不存在。
+操作次数、耗时和慢操作次数使用固定标签 `db_name`、`operation`（`create/update/delete/query/row/raw`）和 `result`（`success/error/not_found`）；阈值仅使用 `db_name`。全部指标只附加 `database.metrics.labels` 常量标签，不带 `service_name`、`service_instance_id`、`service_version` 等资源属性（实例 ID 每个进程不同，会让每次重启都换一整套序列），服务身份由采集侧的 `app`、`pod` 标签表达。自定义标签不得使用 `db_name`、`operation` 或 `result`；指标不包含 SQL、参数、表名或错误文本。计数与耗时仅在观察到相应事件后输出时间序列；从未发生慢操作时，慢计数序列尚不存在。
 
 慢操作沿用 `database.gorm.logger.slow_threshold`，省略时默认为 **200ms**；`database.connections.<name>.gorm.logger.slow_threshold` 显式设置时完整替换全局阈值，包括 `0s`（关闭该连接的慢操作判断）。负值在构造期校验失败。只有有效阈值大于零、且回调耗时严格大于该阈值时才增加慢计数，等于阈值不计入。阈值在构造期读取，不热更新。慢计数仍按 `success/error/not_found` 分类，不受 GORM 日志级别影响，默认 `SILENT` 也会统计；它不是慢日志输出条数，GORM 日志的错误优先分支和计时边界可能与回调指标不同。
 

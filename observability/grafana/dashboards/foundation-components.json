@@ -220,9 +220,9 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(job_running{${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",namespace=~\"${namespace}\",container=~\"${container}\"}, exported_job)",
+        "definition": "label_values(job_running{${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",namespace=~\"${namespace}\",container=~\"${container}\"}, job_name)",
         "query": {
-          "query": "label_values(job_running{${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",namespace=~\"${namespace}\",container=~\"${container}\"}, exported_job)",
+          "query": "label_values(job_running{${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",namespace=~\"${namespace}\",container=~\"${container}\"}, job_name)",
           "refId": "task_name"
         },
         "refresh": 2,
@@ -2337,18 +2337,18 @@
             "w": 12,
             "h": 8
           },
-          "description": "job 标签在 honor_labels=false 抓取下重命名为 exported_job。running 已进入执行，pending 是 DelayIfRunning 中等待准入的调用。",
+          "description": "任务名标签为 job_name；v2.10.1 及以前的应用只有 job_name，任务名显示为空。running 已进入执行，pending 是 DelayIfRunning 中等待准入的调用。",
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (${view:raw},namespace,app,exported_job) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} running · {{${view:raw}}}",
+              "expr": "sum by (${view:raw},namespace,app,job_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} running · {{${view:raw}}}",
               "range": true
             },
             {
               "refId": "B",
-              "expr": "sum by (${view:raw},namespace,app,exported_job) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(job_pending{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} pending · {{${view:raw}}}",
+              "expr": "sum by (${view:raw},namespace,app,job_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(job_pending{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\"}, \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} pending · {{${view:raw}}}",
               "range": true
             }
           ],
@@ -2414,14 +2414,14 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "histogram_quantile(0.95, sum by (${view:raw},namespace,app,le,exported_job) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(job_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")))",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} · {{${view:raw}}}",
+              "expr": "histogram_quantile(0.95, sum by (${view:raw},namespace,app,le,job_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(job_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")))",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} · {{${view:raw}}}",
               "range": true
             },
             {
               "refId": "B",
-              "expr": "histogram_quantile(0.95, sum by (${view:raw},namespace,app,le,exported_job,result) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(job_wait_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")))",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} wait/{{result}} · {{${view:raw}}}",
+              "expr": "histogram_quantile(0.95, sum by (${view:raw},namespace,app,le,job_name,result) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(rate(job_wait_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\"}[$__rate_interval]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")))",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} wait/{{result}} · {{${view:raw}}}",
               "range": true
             }
           ],
@@ -2529,20 +2529,20 @@
             "w": 24,
             "h": 9
           },
-          "description": "所选窗口increase估算完成与跳过次数，可能非整数；未运行的任务不补零。status=success/failure；现有实现把执行中context取消记为failure，Daemon返回nil记为success，success不能证明守护任务仍在运行。disabled/already_running/pending_full是未进入Handler的跳过。job标签在honor_labels=false采集时使用exported_job。",
+          "description": "所选窗口increase估算完成与跳过次数，可能非整数；未运行的任务不补零。status=success/failure；现有实现把执行中context取消记为failure，Daemon返回nil记为success，success不能证明守护任务仍在运行。disabled/already_running/pending_full是未进入Handler的跳过。任务名标签为job_name，v2.10.1及以前的应用只有job_name，任务名显示为空。",
           "targets": [
             {
               "refId": "A",
-              "expr": "label_replace(sum by (${view:raw},namespace,app,exported_job,status) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")), \"event\", \"完成\", \"exported_job\", \".*\")",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} / {{status}} · {{${view:raw}}}",
+              "expr": "label_replace(sum by (${view:raw},namespace,app,job_name,status) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")), \"event\", \"完成\", \"job_name\", \".*\")",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} / {{status}} · {{${view:raw}}}",
               "range": false,
               "instant": true,
               "format": "table"
             },
             {
               "refId": "B",
-              "expr": "label_replace(sum by (${view:raw},namespace,app,exported_job,reason) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(job_triggers_skipped_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")), \"event\", \"跳过\", \"exported_job\", \".*\")",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} skipped/{{reason}} · {{${view:raw}}}",
+              "expr": "label_replace(sum by (${view:raw},namespace,app,job_name,reason) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(job_triggers_skipped_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\")), \"event\", \"跳过\", \"job_name\", \".*\")",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} skipped/{{reason}} · {{${view:raw}}}",
               "range": false,
               "instant": true,
               "format": "table"
@@ -2675,7 +2675,7 @@
                   "view_instance": "实例（Pod IP）",
                   "namespace": "命名空间",
                   "app": "应用",
-                  "exported_job": "任务",
+                  "job_name": "任务",
                   "status": "完成结果",
                   "reason": "跳过原因",
                   "event": "事件",
@@ -2689,7 +2689,7 @@
                   "view_instance": 3,
                   "namespace": 4,
                   "app": 5,
-                  "exported_job": 6,
+                  "job_name": 6,
                   "status": 7,
                   "reason": 8,
                   "event": 9,
@@ -2730,8 +2730,8 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (${view:raw},namespace,app,exported_job) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",exported_job=~\"${task_name}\",status=\"failure\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}} · {{${view:raw}}}",
+              "expr": "sum by (${view:raw},namespace,app,job_name) (label_join(label_replace(label_replace(label_join(label_join(((label_replace(increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\",job_name=~\"${task_name}\",status=\"failure\"}[$__range]), \"pod\", \"$1\", \"${app_pod_label:raw}\", \"(.+)\")) * on (namespace,pod) group_left(node,pod_ip) (max by (namespace,pod,node,pod_ip) (kube_pod_info{namespace=~\"${namespace}\",pod=~\"${pod}\",node=~\"${node}\"}))), \"view_pod\", \" / \", \"pod\"), \"view_container\", \" / \", \"pod\", \"container\"), \"view_node\", \"$1\", \"node\", \"(.*)\"), \"view_node\", \"未调度\", \"node\", \"^$\"), \"view_instance\", \" / \", \"pod\", \"pod_ip\"))",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}} · {{${view:raw}}}",
               "range": false,
               "instant": true,
               "format": "table"
@@ -2791,7 +2791,7 @@
                   "view_instance": "实例（Pod IP）",
                   "namespace": "命名空间",
                   "app": "应用",
-                  "exported_job": "任务",
+                  "job_name": "任务",
                   "Value": "失败次数（估算）"
                 }
               }

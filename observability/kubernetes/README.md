@@ -95,6 +95,7 @@ flowchart TD
 
 - kube-state-metrics 已部署并被同一 Prometheus 抓取；[kube-prometheus-values.yaml](kube-prometheus-values.yaml) 给出 `metricLabelsAllowlist` 与 env/cluster relabelings 示例，合并到现有 values 而不是覆盖。
 - Job/CronJob 对象自身带 `app.kubernetes.io/name`（CronJob 写在 `spec.jobTemplate.metadata.labels`）。未放开或未打标签时告警仍会触发，只是没有 `app` 标签，按 namespace 路由。
+- 同一 `metricLabelsAllowlist` 里的 `pods=[app.kubernetes.io/name]` 供容器资源规则 `pod:app:info` 把 Pod 关联到应用；未放开时持续崩溃、从未就绪的 Pod 关联不到应用，重启与 OOM 不进入应用面板。
 - 需要框架内 `job_runs_total` 等指标时，可为该进程开启 `metrics.push`，在退出前推送到 Pushgateway，见 [Metrics 推送](../../pkg/metrics/README.md#一次性进程推送到-pushgateway)。
 
 ## 健康探测与共享 Kafka

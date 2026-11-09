@@ -123,7 +123,6 @@ func newManagerWithDrivers(
 	metricsCollector, err := newMetricsCollector(
 		connectionFactory,
 		config,
-		appInfo,
 		metricsProvider,
 	)
 	if err != nil {

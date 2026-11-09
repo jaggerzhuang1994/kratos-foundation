@@ -244,7 +244,7 @@ def component_fixture_tests(components):
         add('db_client_connections_create_time_milliseconds_bucket', dict(redis, status='success', le=le), '0+60x10')
     for result, step in [('hit', 48), ('miss', 12), ('error', 60)]:
         add('business_cache_lookups_total', dict(main, cache_name='users', result=result), f'0+{step}x10')
-    add('job_runs_total', dict(main, job='scrape-target', exported_job='sync-users', status='success'), '0+60x10')
+    add('job_runs_total', dict(main, job='scrape-target', job_name='sync-users', status='success'), '0+60x10')
     for result, step in [('success', 45), ('contended', 15)]:
         add('lock_operations_total', dict(main, lock_name='leader', operation='try_lock', result=result), f'0+{step}x10')
     add('oss_requests_total', dict(main, bucket='assets', operation='get', result='success'), '0+60x10')
@@ -277,7 +277,7 @@ def component_fixture_tests(components):
                  (39, {'redis_connection': 'primary', 'pool_name': 'default', 'type': 'command'}, 95),
                  (40, {'redis_connection': 'primary', 'pool_name': 'default'}, .002),
                  (43, {'cache_name': 'users'}, .8),
-                 (70, {'exported_job': 'sync-users', 'status': 'success', 'event': '完成'}, 600),
+                 (70, {'job_name': 'sync-users', 'status': 'success', 'event': '完成'}, 600),
                  (75, {'lock_name': 'leader', 'operation': 'lock'}, .95),
                  (76, {'lock_name': 'leader'}, .25),
                  (79, {'bucket': 'assets', 'operation': 'get', 'result': 'success'}, 1),
@@ -407,7 +407,7 @@ def fleet_fixture_tests(fleet):
     kafka = {'app': 'worker', 'pod': 'worker-0', 'kafka_destination': 'events', 'kafka_consumer': 'sync'}
     add('kafka_consumer_messages_total', dict(kafka, kafka_result='success'), '0+42x10')
     add('kafka_consumer_messages_total', dict(kafka, kafka_result='error'), '0+18x10')
-    add('job_runs_total', {'app': 'cron', 'pod': 'cron-0', 'exported_job': 'cleanup', 'status': 'failure'}, '0+1x10')
+    add('job_runs_total', {'app': 'cron', 'pod': 'cron-0', 'job_name': 'cleanup', 'status': 'failure'}, '0+1x10')
     # 采集失败或年龄未知的观察者不得把旧值带进舰队页。
     for instance, age, known in [('a', 30, 1), ('b', 999, 0)]:
         stats = {'app': 'worker', 'pod': 'worker-0', 'instance': instance, 'queue_destination': 'emails'}
@@ -585,7 +585,7 @@ def service_section_fixture_tests(service):
         series.append(input_series('queue_oldest_ready_age_seconds', stats, f'{age}+0x10'))
         series.append(input_series('queue_stats_oldest_ready_known', stats, f'{known}+0x10'))
         series.append(input_series('queue_stats_collection_success', stats, '1+0x10'))
-    series.append(input_series('job_running', dict(worker, exported_job='sync'), '1+0x10'))
+    series.append(input_series('job_running', dict(worker, job_name='sync'), '1+0x10'))
     series.append(input_series('server_requests_code_total', dict(api, operation='/users', kind='http', code='200'), '0+60x10'))
     for labels, open_fds in [(worker, 50), (api, 10)]:
         series.append(input_series('go_goroutines', labels, '10+0x10'))

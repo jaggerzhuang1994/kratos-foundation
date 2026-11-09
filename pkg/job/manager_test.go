@@ -59,7 +59,7 @@ func TestNewManagerWiresCronAdmissionMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	if sample := findJobMetricSample(t, observability.metricsProvider, jobSkippedInstrumentName, map[string]string{
-		metricLabelJob: "admission", metricLabelReason: "already_running",
+		metricLabelJobName: "admission", metricLabelReason: "already_running",
 	}); sample.counter != 1 {
 		t.Fatalf("skip counter = %v, want 1", sample.counter)
 	}
@@ -262,7 +262,7 @@ func TestNewManagerRunsOneShotThroughConfiguredObservability(t *testing.T) {
 		t.Fatalf("one-shot spans = %#v", spans)
 	}
 	if sample := findJobMetricSample(t, observability.metricsProvider, jobRunsInstrumentName, map[string]string{
-		metricLabelJob: "invoice", metricLabelStatus: "success",
+		metricLabelJobName: "invoice", metricLabelStatus: "success",
 	}); sample.counter != 1 {
 		t.Fatalf("one-shot counter = %v, want 1", sample.counter)
 	}

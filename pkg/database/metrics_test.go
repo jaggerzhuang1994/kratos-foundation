@@ -16,7 +16,6 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -24,46 +23,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestMergeMetricLabelsValidatesNamesReservationsAndIdentityConflicts(t *testing.T) {
-	labels, err := mergeMetricLabels(
-		map[string]string{"region": "east"},
-		[]attribute.KeyValue{
-			attribute.String("service.name", "orders"),
-			attribute.String("service.instance.id", "instance-1"),
-		},
-	)
+func TestValidateMetricLabelsCopiesLabelsAndRejectsInvalidOrReservedNames(t *testing.T) {
+	configured := map[string]string{"region": "east"}
+	labels, err := validateMetricLabels(configured)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := map[string]string{
-		"region":              "east",
-		"service_name":        "orders",
-		"service_instance_id": "instance-1",
-	}; !reflect.DeepEqual(labels, want) {
-		t.Fatalf("merged labels = %#v, want %#v", labels, want)
+	if want := map[string]string{"region": "east"}; !reflect.DeepEqual(labels, want) {
+		t.Fatalf("validated labels = %#v, want %#v", labels, want)
+	}
+	labels["region"] = "west"
+	if configured["region"] != "east" {
+		t.Fatalf("validateMetricLabels() aliased the configured map: %#v", configured)
 	}
 
 	for _, test := range []struct {
 		name   string
 		labels map[string]string
-		attrs  []attribute.KeyValue
 		want   string
 	}{
 		{name: "invalid name", labels: map[string]string{"bad-name": "value"}, want: "invalid"},
 		{name: "reserved operation", labels: map[string]string{"operation": "manual"}, want: "reserved"},
 		{name: "reserved result", labels: map[string]string{"result": "manual"}, want: "reserved"},
 		{name: "reserved db name", labels: map[string]string{"db_name": "manual"}, want: "reserved"},
-		{
-			name:   "identity conflict",
-			labels: map[string]string{"service_name": "manual"},
-			attrs:  []attribute.KeyValue{attribute.String("service.name", "orders")},
-			want:   "conflicts",
-		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			labels, err := mergeMetricLabels(test.labels, test.attrs)
+			labels, err := validateMetricLabels(test.labels)
 			if labels != nil || err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("mergeMetricLabels() = (%#v, %v), want %q error", labels, err, test.want)
+				t.Fatalf("validateMetricLabels() = (%#v, %v), want %q error", labels, err, test.want)
 			}
 		})
 	}
@@ -83,7 +70,6 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 	collector, err := newMetricsCollector(
 		factory,
 		config,
-		managerTestAppInfo{},
 		provider,
 	)
 	if err != nil {
@@ -92,8 +78,21 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 	if collector == nil || len(collector.dbStats) != 1 {
 		t.Fatalf("database stats collector = %#v", collector)
 	}
-	if families, err := provider.registry.Gather(); err != nil || len(families) == 0 {
+	families, err := provider.registry.Gather()
+	if err != nil || len(families) == 0 {
 		t.Fatalf("registered database stats = %d families, %v", len(families), err)
+	}
+	// 回归：连接池指标只带 db_name 与配置标签，不附加每个进程唯一的 service_instance_id 等资源属性。
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if want := map[string]string{"db_name": "primary", "region": "test"}; !reflect.DeepEqual(labels, want) {
+				t.Fatalf("%s labels = %v, want %v", family.GetName(), labels, want)
+			}
+		}
 	}
 	collector.close()
 	collector.close()
@@ -105,7 +104,6 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 	if collector, err := newMetricsCollector(
 		factory,
 		&config_pb.Database{Metrics: &config_pb.GormMetrics{Disable: &disabled}},
-		managerTestAppInfo{},
 		provider,
 	); err != nil || collector != nil {
 		t.Fatalf("disabled metrics collector = (%v, %v)", collector, err)
@@ -113,7 +111,6 @@ func TestNewMetricsCollectorRegistersAndUnregistersDatabaseStats(t *testing.T) {
 	if collector, err := newMetricsCollector(
 		factory,
 		config,
-		managerTestAppInfo{},
 		nilDatabaseMetricsProvider{},
 	); collector != nil || err == nil || !strings.Contains(err.Error(), "registerer is nil") {
 		t.Fatalf("nil registry metrics collector = (%v, %v)", collector, err)
@@ -129,7 +126,6 @@ func TestNewMetricsCollectorDoesNotQueryMySQLStatus(t *testing.T) {
 	collector, err := newMetricsCollector(
 		factory,
 		&config_pb.Database{Default: proto.String("primary")},
-		managerTestAppInfo{},
 		provider,
 	)
 	if err != nil {

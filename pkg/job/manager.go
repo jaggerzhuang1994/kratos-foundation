@@ -127,6 +127,9 @@ func NewManager(
 	if err != nil {
 		return nil, err
 	}
+	for _, definition := range spec.definitions {
+		admissionMetrics.initJob(context.Background(), definition.name)
+	}
 	manager.config = configManager
 	return manager, nil
 }

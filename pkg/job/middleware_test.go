@@ -179,14 +179,14 @@ func TestMiddlewaresReportSuccessFailureCancellationAndPanic(t *testing.T) {
 		{job: "panic", status: "failure"},
 		{job: "middleware-panic", status: "failure"},
 	} {
-		labels := map[string]string{metricLabelJob: outcome.job, metricLabelStatus: outcome.status}
+		labels := map[string]string{metricLabelJobName: outcome.job, metricLabelStatus: outcome.status}
 		if sample := findJobMetricSample(t, observability.metricsProvider, jobRunsInstrumentName, labels); sample.counter != 1 {
 			t.Errorf("%s run counter = %v, want 1", outcome.job, sample.counter)
 		}
 		if sample := findJobMetricSample(t, observability.metricsProvider, jobDurationInstrumentName, labels); sample.histogramCount != 1 || sample.histogramSum < 0 {
 			t.Errorf("%s duration = count %d sum %v", outcome.job, sample.histogramCount, sample.histogramSum)
 		}
-		if sample := findJobMetricSample(t, observability.metricsProvider, jobRunningInstrumentName, map[string]string{metricLabelJob: outcome.job}); sample.gauge != 0 {
+		if sample := findJobMetricSample(t, observability.metricsProvider, jobRunningInstrumentName, map[string]string{metricLabelJobName: outcome.job}); sample.gauge != 0 {
 			t.Errorf("%s running gauge = %v, want 0", outcome.job, sample.gauge)
 		}
 	}

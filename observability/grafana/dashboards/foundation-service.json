@@ -235,7 +235,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(count by (namespace,app,exported_job) (job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}))",
+          "expr": "count(count by (namespace,app,job_name) (job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}))",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -1527,7 +1527,7 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (namespace,app,exported_job,status) (increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__range]))",
+              "expr": "sum by (namespace,app,job_name,status) (increase(job_runs_total{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__range]))",
               "legendFormat": "",
               "instant": true,
               "range": false,
@@ -1618,7 +1618,7 @@
                 "indexByName": {
                   "namespace": 0,
                   "app": 1,
-                  "exported_job": 2,
+                  "job_name": 2,
                   "status": 3,
                   "Value #A": 4,
                   "Value": 4
@@ -1626,7 +1626,7 @@
                 "renameByName": {
                   "namespace": "命名空间",
                   "app": "应用",
-                  "exported_job": "任务",
+                  "job_name": "任务",
                   "status": "结果",
                   "Value #A": "次数",
                   "Value": "次数"
@@ -1653,14 +1653,14 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (namespace,app,exported_job) (job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
-              "legendFormat": "运行 · {{namespace}} / {{app}} / {{exported_job}}",
+              "expr": "sum by (namespace,app,job_name) (job_running{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+              "legendFormat": "运行 · {{namespace}} / {{app}} / {{job_name}}",
               "range": true
             },
             {
               "refId": "B",
-              "expr": "sum by (namespace,app,exported_job) (job_pending{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
-              "legendFormat": "等待 · {{namespace}} / {{app}} / {{exported_job}}",
+              "expr": "sum by (namespace,app,job_name) (job_pending{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"})",
+              "legendFormat": "等待 · {{namespace}} / {{app}} / {{job_name}}",
               "range": true
             }
           ],
@@ -1733,8 +1733,8 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "histogram_quantile(0.95, sum by (namespace,app,exported_job,le) (rate(job_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])))",
-              "legendFormat": "{{namespace}} / {{app}} / {{exported_job}}",
+              "expr": "histogram_quantile(0.95, sum by (namespace,app,job_name,le) (rate(job_duration_seconds_bucket{namespace=~\"${namespace}\",${app_pod_label:raw}=~\"${pod}\",app=~\"${app}\",container=~\"${container}\"}[$__rate_interval])))",
+              "legendFormat": "{{namespace}} / {{app}} / {{job_name}}",
               "range": true
             }
           ],

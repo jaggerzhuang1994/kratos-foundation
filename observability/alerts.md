@@ -71,7 +71,7 @@
 
 | 规则 | 含义 |
 | --- | --- |
-| `pod:app:info` | Pod 到应用的映射，取近 1h 最后一次 `app_ready` 的 namespace/pod/app；进程崩溃重启期间 `app_ready` 中断，映射仍保留，重启与 OOM 能关联到应用 |
+| `pod:app:info` | Pod 到应用的映射：以 kube-state-metrics `kube_pod_labels` 的 `label_app_kubernetes_io_name` 为准，Pod 存在即有映射，进程从未起来（CrashLoopBackOff、启动即 OOM）的 Pod 也能关联到应用；该 Pod 没有这个标签时退回近 1h 最后一次 `app_ready`。同一 Pod 只取一个来源，两边不一致时以 Pod 标签为准 |
 | `app_container:container_cpu_usage_seconds:rate5m` | 容器 CPU 使用（核） |
 | `app_container:container_cpu_cfs_throttled:ratio_rate5m` | 被 CFS 限流的周期占比，接近 1 说明 CPU limit 过紧 |
 | `app_container:container_memory_working_set_bytes:max` / `app_container:container_memory_rss:max` | Working Set（kubelet 判定 OOM 与驱逐的口径）与 RSS |
@@ -83,7 +83,8 @@
 
 - 采集端为应用目标、cAdvisor 与 kube-state-metrics 附加一致的 env/cluster，应用目标附加 `pod`；
 - cAdvisor 至少保留 `container_cpu_usage_seconds_total`、`container_cpu_cfs_periods_total`、`container_cpu_cfs_throttled_periods_total`、`container_memory_working_set_bytes`、`container_memory_rss`；
-- 只覆盖上报 `app_ready` 的 Foundation 应用；ECI 等虚拟节点没有 kubelet cAdvisor，CPU 与内存无结果，request/limit、重启仍来自 kube-state-metrics。
+- kube-state-metrics 在 `metricLabelsAllowlist` 放开 `pods=[app.kubernetes.io/name]`（[示例](kubernetes/kube-prometheus-values.yaml)），Pod 模板带 `app.kubernetes.io/name` 且取值与应用指标的 `app` 一致；覆盖所有带该标签的 Pod，不限 Foundation 应用。未放开时只覆盖上报过 `app_ready` 的 Foundation 应用，从未就绪的 Pod 关联不到；
+- ECI 等虚拟节点没有 kubelet cAdvisor，CPU 与内存无结果，request/limit、重启仍来自 kube-state-metrics。
 
 ## 尚不代表的保证
 
@@ -186,4 +187,4 @@ flowchart TD
 | `job_last_success_timestamp_seconds` | `push_time_seconds{job="<app>"} unless on (job) (sum by (job) (job_runs_total{job="<app>",status="failure"}) > 0)` 只在最近一次运行成功时有值；跨多次运行的上次成功时间需 `max_over_time` 或继续以 `kube_cronjob_status_last_successful_time` 为准 |
 | `job_last_duration_seconds` | `job_duration_seconds_sum{job="<app>"}`（单个任务单次运行时即为本次耗时） |
 
-框架当前不额外导出这三个 gauge：它们与上表 Pushgateway 自带序列重复，而对常驻进程直接抓取时 `job_runs_total` 的 `increase` 已足够。推送后的任务名标签为 `exported_job`，与 `honorLabels=false` 直接抓取时的改名一致，可复用同一面板变量。K8s Job 状态仍是成功/失败的权威来源，推送指标用于耗时、跳过与业务计数等补充分析。
+框架当前不额外导出这三个 gauge：它们与上表 Pushgateway 自带序列重复，而对常驻进程直接抓取时 `job_runs_total` 的 `increase` 已足够。推送后任务名标签仍为 `job_name`，与直接抓取一致，可复用同一面板变量。K8s Job 状态仍是成功/失败的权威来源，推送指标用于耗时、跳过与业务计数等补充分析。

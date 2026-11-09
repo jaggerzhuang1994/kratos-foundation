@@ -121,7 +121,7 @@ func TestNewPusherConfig(t *testing.T) {
 	}
 }
 
-// 推送内容与 /metrics 共享同一 Registry；任务指标的 job 标签改为 exported_job，抓取侧保持原样。
+// 推送内容与 /metrics 共享同一 Registry；指标自带的 job 标签改为 exported_job，抓取侧保持原样。
 func TestPusherPushesInstanceRegistry(t *testing.T) {
 	provider, info := newPushProvider(t)
 	counter, err := provider.Meter("test").Int64Counter("job_runs_total")

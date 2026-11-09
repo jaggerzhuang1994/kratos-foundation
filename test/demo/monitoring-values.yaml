@@ -42,6 +42,7 @@ prometheus-node-exporter:
         - {sourceLabels: [__meta_kubernetes_pod_node_name], targetLabel: node}
 kube-state-metrics:
   metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/name]
     - jobs=[app.kubernetes.io/name]
     - cronjobs=[app.kubernetes.io/name]
   prometheus:

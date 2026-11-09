@@ -204,6 +204,18 @@ func (t *Telemetry) RecordDeadLetter(
 	span.AddEvent(event)
 }
 
+// InitConsumer 在消费者启动时为低频结果写入 0：从未发生前没有序列，面板显示无数据而不是 0，
+// increase(...) > 0 类告警也会因为没有起点而漏掉第一次。未配置死信时不初始化死信序列。
+func (t *Telemetry) InitConsumer(ctx context.Context, destination, consumer string, deadLetter bool) {
+	t.consumerRuntimeFailures.Add(ctx, 0, consumerMetricAttributes(destination, consumer, "error"))
+	t.retries.Add(ctx, 0, consumerMetricAttributes(destination, consumer, "scheduled"))
+	if deadLetter {
+		for _, result := range []string{"success", "error"} {
+			t.deadLetters.Add(ctx, 0, consumerMetricAttributes(destination, consumer, result))
+		}
+	}
+}
+
 func (t *Telemetry) RecordRuntimeFailure(ctx context.Context, destination, consumer string) {
 	t.consumerRuntimeFailures.Add(
 		ctx,

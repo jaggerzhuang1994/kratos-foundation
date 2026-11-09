@@ -183,3 +183,24 @@ func TestTelemetryRecordsTaskRetryFailureRuntimeAndDispatcher(t *testing.T) {
 		t.Fatalf("producer duration = count %d sum %v, want count 1 sum 1", sample.histogramCount, sample.histogramSum)
 	}
 }
+
+func TestInitConsumerWritesZeroForKnownResults(t *testing.T) {
+	value, _, provider := newTelemetryForTest(t)
+	value.InitConsumer(context.Background(), "orders", "worker")
+	for _, check := range []struct {
+		family string
+		result string
+	}{
+		{"queue_consumer_runtime_failures_total", "error"},
+		{"queue_consumer_retries_total", "scheduled"},
+		{"queue_consumer_failed_tasks_total", "success"},
+		{"queue_consumer_failed_tasks_total", "error"},
+	} {
+		sample := findTelemetryMetricSample(t, provider, check.family, map[string]string{
+			"queue_destination": "orders", "queue_consumer": "worker", "queue_result": check.result,
+		})
+		if sample.counter != 0 {
+			t.Fatalf("%s{result=%s} = %v, want 0", check.family, check.result, sample.counter)
+		}
+	}
+}

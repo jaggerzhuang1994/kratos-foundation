@@ -104,7 +104,7 @@ func (p *Pusher) Push(ctx context.Context) error {
 	return nil
 }
 
-// jobLabelRenamer 把指标自身的 job 标签（如 job_runs_total 的任务名）改为 exported_job。
+// jobLabelRenamer 把指标自身的 job 标签（框架指标已改用 job_name，业务指标仍可能自带）改为 exported_job。
 // push 包拒绝含 job 标签的指标，直接推送会使所有包含任务指标的进程推送失败。
 type jobLabelRenamer struct {
 	clientprometheus.Gatherer
