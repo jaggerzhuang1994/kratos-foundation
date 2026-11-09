@@ -12,6 +12,22 @@
 - 无新增提交
 <!-- changelog:auto:end -->
 
+## v2.11.1（2026-11-08）
+
+### 升级风险
+
+- **配置热更新改为按来源顺序整体重放**：此前每个来源各自把更新合并到当前配置之上，排在前面的来源（例如基础 yaml 被 `touch`、IDE 保存或 ConfigMap 挂载触发文件事件）重载后会覆盖后面 `-conf` 文件和 Consul 的值，直到下一次变化。现在任一来源更新时，按原顺序把全部来源的最近快照重新合并，后面的来源始终优先；内容与上次完全相同的更新（只改 mtime 的文件事件、内容未变的 Consul 快照）不再触发合并和 `config changed`。高优先级来源删除某个键后，若低优先级来源仍有该键，会恢复为低优先级的值（此前保留旧值）。某个来源的新内容无法解码时整次合并被拒绝、保持上一份配置，该来源修复前其他来源的更新也会暂缓，修复后一并生效（此前只拒绝出错的来源）。来源 watcher 的非取消错误改记 `config.watch.failed` 后 1s 重试。
+
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+**修复**
+
+- **config**：re-merge all sources in order on any source reload（`df4faee`）
+<!-- changelog:auto:end -->
+
 ## v2.11.0（2026-11-08）
 
 ### 升级风险
@@ -29,6 +45,10 @@
 **新增**
 
 - ⚠️ 不兼容：**metrics**：fix database identity labels, job label conflict, pod app mapping and zero counters（`4ea2179`）
+
+**文档**
+
+- **changelog**：prepare v2.11.0 release notes（`fe70340`）
 <!-- changelog:auto:end -->
 
 ## v2.10.1（2026-11-03）
