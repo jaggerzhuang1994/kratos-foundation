@@ -62,7 +62,7 @@ type Manager interface {
 // Source 保留 Kratos 的配置源契约，便于文件、Consul 等实现直接接入。
 type Source = kratosconfig.Source
 
-// Sources 按顺序进行初始加载；热更新按官方默认 merge 处理，不保证固定来源优先级。
+// Sources 按顺序加载，后面的来源覆盖前面的来源；任一来源热更新时按同一顺序重放全部来源。
 type Sources []Source
 
 // KeyValue 是 Source 加载和更新时交换的键值单元，别名避免自定义源重复导入 Kratos config。
@@ -110,6 +110,8 @@ type manager struct {
 	backend kratosconfig.Config
 	// sources 经过复制及模板预处理的来源，由 Manager 负责停止。
 	sources []*preprocessedSource
+	// ordered 组合全部来源的有序来源，持有转发各来源更新的组合监听器。
+	ordered *orderedSource
 	// mu 保护关闭状态、订阅集合及共享快照。
 	mu sync.Mutex
 	// closed 是否已关闭，阻止后续加载和订阅。
@@ -133,17 +135,16 @@ func newManager(sources Sources) (*manager, error) {
 	}
 	m := &manager{}
 	all := append(Sources{kratosenv.NewSource()}, sources...)
-	wrapped := make([]kratosconfig.Source, 0, len(all))
 	for i, source := range all {
 		if source == nil {
 			return nil, fmt.Errorf("config source %d is nil", i)
 		}
-		next := &preprocessedSource{source: source, expand: i != 0}
-		m.sources = append(m.sources, next)
-		wrapped = append(wrapped, next)
+		m.sources = append(m.sources, &preprocessedSource{source: source, expand: i != 0})
 	}
 	// Source 先展开环境模板，合并后继续使用官方 resolver 解析配置引用。
-	m.backend = kratosconfig.New(kratosconfig.WithSource(wrapped...))
+	// 全部来源组合为一个有序来源，任一来源更新都按原顺序重放全部来源，保持固定优先级。
+	m.ordered = newOrderedSource(m.sources)
+	m.backend = kratosconfig.New(kratosconfig.WithSource(m.ordered))
 	if err := m.backend.Load(); err != nil {
 		return nil, errors.Join(err, m.close())
 	}
@@ -204,6 +205,12 @@ func (m *manager) close() error {
 		var errs []error
 		if err := m.backend.Close(); err != nil {
 			errs = append(errs, err)
+		}
+		// 初始 merge 失败时官方 Config 未登记组合监听器，需单独停止其转发任务。
+		if m.ordered != nil {
+			if err := m.ordered.stop(); err != nil && !errors.Is(errors.Join(errs...), err) {
+				errs = append(errs, err)
+			}
 		}
 		for _, source := range m.sources {
 			if err := source.stop(); err != nil && !errors.Is(errors.Join(errs...), err) {

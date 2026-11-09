@@ -44,7 +44,7 @@ flowchart TD
 
 ## 热更新与断线恢复
 
-KV 监听由本包通过 Consul blocking query 实现。每次通知包含完整前缀，包括仅删除键或前缀变空。官方 Config 直接合并通知结果，不再重复 Load；空结果或字段删除不会撤销旧缓存，也不会恢复低优先级值。
+KV 监听由本包通过 Consul blocking query 实现。每次通知包含完整前缀，包括仅删除键或前缀变空。Manager 按来源顺序重放全部来源的最近快照，不再重复 Load；空结果或字段删除不会撤销旧缓存，但低优先级来源仍有该字段时恢复为其值。
 
 网络错误、HTTP 429 和 5xx 使用可取消退避恢复：100ms 基数逐次翻倍、5s 封顶，并加入 80%–100% 抖动。首次暂时故障记录 WARN config.consul.retrying，恢复成功记录 INFO config.consul.recovered，均含 operation/load 或 watch、path，恢复事件含 attempts；不逐次记录退避尝试。恢复时清除旧查询索引并拉取完整状态；Consul 索引回退记录 WARN config.consul.index.reset（previous_index/index）并重新建立查询基线。认证和授权等永久 HTTP 错误直接返回，交由官方 watcher 循环记录及重试，不再提供 Manager 终止状态。
 

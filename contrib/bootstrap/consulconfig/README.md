@@ -73,7 +73,7 @@ func wireAppWithFullPaths(info appinfo.AppInfo) (*app.App, func(), error) {
 
 - 本地：已存在的字面文件优先；目录加载直属 `*.yaml` 普通文件；其他路径按 `filepath.Glob` 展开。每项结果按名字典序排列，重叠路径保留首次位置；`*` 不跨目录。无匹配继续使用其他来源，非法 glob 或文件系统错误返回错误。详见[文件配置源](../../config/file/README.md)。
 - Consul：使用 `path.Match` 语法；支持精确键、目录直属 `*.yaml` 及完整 glob。每项结果按键名字典序排列。启用客户端时校验空白、重复和非法模式；客户端禁用时不执行来源路径校验。详见[Consul 配置源](../../config/consul/README.md)。
-- 列表越靠后，初次加载优先级越高。现有 Manager 热更新按各来源独立合并，不重算全源优先级，低优先级来源的后续更新可能覆盖已有高优先级值；详见[来源与合并](../../../pkg/config/README.md#来源与合并)。
+- 列表越靠后优先级越高。Manager 热更新时按同一顺序重放全部来源，低优先级来源的后续更新不会覆盖高优先级值；详见[来源与合并](../../../pkg/config/README.md#来源与合并)。
 
 ## 远程前缀与相对路径组合
 

@@ -257,7 +257,7 @@ func TestExternalConsulSnapshotUpdateDeletionAndStop(t *testing.T) {
 	put(`{"feature":{"value":2}}`)
 	wait(2)
 	t.Logf("update visible=%s", time.Since(start))
-	// 删除整个前缀会产生空快照；官方 merge 不撤销旧缓存，也不恢复低优先级值（见 README“KV 监听”）。
+	// 删除整个前缀会产生空快照；官方 merge 不撤销旧缓存（见 README“KV 监听”）。
 	if _, err := client.KV().DeleteTree(prefix, new(consulapi.WriteOptions).WithContext(ctx)); err != nil {
 		t.Fatal(err)
 	}
