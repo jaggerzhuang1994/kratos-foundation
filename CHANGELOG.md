@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.11.0（2026-11-08）
+
 ### 升级风险
 
 - **数据库指标去掉服务身份常量标签**：`go_sql_*`（连接池）与 `database_sql_*`（GORM 操作）不再带 `service_name`、`service_instance_id`、`service_version`，只保留 `db_name`、`operation`、`result` 与 `database.metrics.labels`。`service_instance_id` 每个进程不同，原先每次重启或发布都会换一整套序列、曲线在发布前后断开。按这三个标签筛选或分组的查询、面板和告警需改用采集侧的 `app` / `pod`；`database.metrics.labels` 现在允许使用这三个名字。
@@ -16,7 +26,9 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- ⚠️ 不兼容：**metrics**：fix database identity labels, job label conflict, pod app mapping and zero counters（`4ea2179`）
 <!-- changelog:auto:end -->
 
 ## v2.10.1（2026-11-03）
@@ -40,6 +52,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.10.1 release notes（`566fdd8`）
 - **changelog**：refresh commit records after v2.10.0（`4aeac9d`）
 <!-- changelog:auto:end -->
 
