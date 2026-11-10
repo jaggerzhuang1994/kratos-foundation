@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"time"
+
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
 )
 
 // Repo 是由业务实现且绑定单个队列的持久化仓储；表名和隔离方式由业务决定。
@@ -47,4 +49,13 @@ type Repo interface {
 	// RetryFailed 原子修改失败任务：清除失败状态和租约/token，Attempts=0，
 	// Task.AvailableAt=availableAt，保留其余任务数据。不存在返回 queue.ErrNotFound。
 	RetryFailed(ctx context.Context, taskID string, availableAt time.Time) error
+}
+
+// ErrorRepo 是 Repo 的可选能力：释放与失败归档时在同一次条件更新中保存执行错误原文。
+// 框架的 gorm Repo 实现了它；自定义 Repo 未实现时 Store 退回 ReleaseReserved/FailReserved，错误只写日志。
+type ErrorRepo interface {
+	// ReleaseReservedWithError 等同 ReleaseReserved，并保存 LastError/LastErrorAt。
+	ReleaseReservedWithError(ctx context.Context, taskID, token string, availableAt time.Time, executionError queue.ExecutionError) error
+	// FailReservedWithError 等同 FailReserved，并保存 LastError/LastErrorAt。
+	FailReservedWithError(ctx context.Context, taskID, token, reason string, failedAt time.Time, executionError queue.ExecutionError) error
 }

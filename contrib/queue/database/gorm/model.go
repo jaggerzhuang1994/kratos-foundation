@@ -66,6 +66,11 @@ type Model struct {
 	Status Status `gorm:"column:status;size:16;not null;default:pending;index;index:,composite:queue_stats,priority:1"`
 	// CompletedAt 是 UTC 成功确认时间；未完成为 NULL。
 	CompletedAt *time.Time `gorm:"column:completed_at;type:timestamp"`
+	// LastErrorMessage 是最近一次执行失败的错误原文（最多 queue.MaxErrorMessageBytes 字节）；
+	// 重试释放和失败归档时覆盖写入，成功确认与人工 Retry 不清除；从未失败为 NULL。
+	LastErrorMessage *string `gorm:"column:last_error_message;type:text"`
+	// LastErrorAt 是 LastErrorMessage 的 UTC 记录时间；从未失败为 NULL。
+	LastErrorAt *time.Time `gorm:"column:last_error_at;type:timestamp"`
 }
 
 // QueueModel 返回嵌入的队列字段，仅供仓储填充和读取。
@@ -120,10 +125,22 @@ func (m *Model) corruptRecord() (*databasequeue.TaskRecord, error) {
 	if strings.TrimSpace(string(m.ID)) == "" || len(m.ID) > 128 || !m.Failed || m.FailedAt == nil {
 		return nil, errors.New("decode queue task: invalid stored state")
 	}
-	return &databasequeue.TaskRecord{
+	record := &databasequeue.TaskRecord{
 		Task:     queue.Task{ID: string(m.ID), AvailableAt: m.AvailableAt.UTC()},
 		Attempts: m.Attempts, Failed: true, FailureReason: queue.FailureCorruptPayload, FailedAt: m.FailedAt.UTC(),
-	}, nil
+	}
+	m.fillLastError(record)
+	return record, nil
+}
+
+// fillLastError 把可空的错误列转换为记录中的零值语义。
+func (m *Model) fillLastError(record *databasequeue.TaskRecord) {
+	if m.LastErrorMessage != nil {
+		record.LastError = *m.LastErrorMessage
+	}
+	if m.LastErrorAt != nil {
+		record.LastErrorAt = m.LastErrorAt.UTC()
+	}
 }
 
 func (m *Model) record() (*databasequeue.TaskRecord, error) {
@@ -145,5 +162,6 @@ func (m *Model) record() (*databasequeue.TaskRecord, error) {
 		}
 		record.FailedAt = m.FailedAt.UTC()
 	}
+	m.fillLastError(record)
 	return record, nil
 }

@@ -78,6 +78,11 @@ type TaskSummary struct {
 	CompletedAt time.Time
 	// FailureReason 是受控失败分类，不应包含原始敏感错误。
 	FailureReason string
+	// LastError 是最近一次执行失败的错误原文；成功或人工重试后仍保留，直到下一次失败覆盖。
+	// 后端未记录时为空。
+	LastError string
+	// LastErrorAt 是 LastError 的记录时间；未记录时为零值。
+	LastErrorAt time.Time
 }
 
 // TaskPage 保存一页任务元数据和下一页不透明游标；空游标表示没有下一页。

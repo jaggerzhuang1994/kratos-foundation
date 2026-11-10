@@ -3,7 +3,11 @@ package queue
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime/debug"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
@@ -39,6 +43,8 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	}()
 	handler := w.handlers[task.MessageVersion]
 	var handlerErr error
+	// detailErr 只用于错误原文：执行 Context 到期时保留 Handler 自己返回的错误，分类仍以 handlerErr 为准。
+	var detailErr error
 	// interrupted 标记 Handler 因执行 Context 取消（排空超时或 Start 的 ctx 取消）而未完成。
 	interrupted := false
 	cause := "handler_error"
@@ -58,13 +64,17 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 			handlerErr = invokeHandler(handlerCtx, handler, task)
 			stopRenewal()
 		}
-		if handlerCtx.Err() != nil {
-			handlerErr = handlerCtx.Err()
+		if ctxErr := handlerCtx.Err(); ctxErr != nil {
+			detailErr = handlerErr
+			if detailErr != nil && !errors.Is(detailErr, ctxErr) {
+				detailErr = fmt.Errorf("%w: %v", ctxErr, detailErr)
+			}
+			handlerErr = ctxErr
 		}
 		interrupted = handlerErr != nil && ctx.Err() != nil
 		cancel()
 	}
-	// 分类只包含框架可识别的原因，不输出 Handler 错误原文。
+	// cause 是框架可识别的受控分类；错误原文另记 error.detail 并由 ErrorRecorder 持久化。
 	if errors.Is(handlerErr, context.DeadlineExceeded) {
 		cause = "timeout"
 	} else if errors.Is(handlerErr, errHandlerPanic) {
@@ -83,6 +93,13 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		executionResult = "stopped"
 		return w.store.Release(operationCtx, reservation, time.Now().UTC())
 	}
+	var executionError ExecutionError
+	if handlerErr != nil {
+		if detailErr == nil {
+			detailErr = handlerErr
+		}
+		executionError = ExecutionError{Message: errorMessage(detailErr), At: time.Now().UTC()}
+	}
 	result := "success"
 	var err error
 	switch {
@@ -94,8 +111,12 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		if IsPermanent(handlerErr) {
 			reason = "permanent"
 		}
-		failedAt := time.Now().UTC()
-		err = w.store.Fail(operationCtx, reservation, reason, failedAt)
+		failedAt := executionError.At
+		if w.recorder != nil {
+			err = w.recorder.FailWithError(operationCtx, reservation, reason, failedAt, executionError)
+		} else {
+			err = w.store.Fail(operationCtx, reservation, reason, failedAt)
+		}
 		w.telemetry.RecordFinalClassification(span, reason, reservation.Attempts)
 		failureResult := "success"
 		if err != nil {
@@ -103,8 +124,9 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		}
 		w.telemetry.RecordFailure(spanCtx, span, w.config.Queue, w.config.Name, failureResult)
 		if err == nil {
-			w.log.WithContext(spanCtx).Errorw("event", "queue.task.failed", "msg", "task failed", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "reason", reason, "error", cause, "task.message_version", task.MessageVersion, "attempts", reservation.Attempts)
-			w.notifyFailure(spanCtx, FailureEvent{Queue: w.config.Queue, FailedTask: FailedTask{Task: task.Clone(), Attempts: reservation.Attempts, Reason: reason, FailedAt: failedAt}, Cause: cause, MaxAttempts: w.retry.MaxAttempts})
+			// logger 已绑定 queue、worker、task.id、task.message_version 与 attempts。
+			logger.Errorw("event", "queue.task.failed", "msg", "task failed", "reason", reason, "error", cause, "error.detail", executionError.Message)
+			w.notifyFailure(spanCtx, FailureEvent{Queue: w.config.Queue, FailedTask: FailedTask{Task: task.Clone(), Attempts: reservation.Attempts, Reason: reason, FailedAt: failedAt, LastError: executionError.Message, LastErrorAt: executionError.At}, Cause: cause, MaxAttempts: w.retry.MaxAttempts})
 		}
 	default:
 		result = "retry"
@@ -112,10 +134,15 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		for attempt := 1; attempt < reservation.Attempts; attempt++ {
 			delay = nextBackoff(delay, w.retry.MaxBackoff)
 		}
-		err = w.store.Release(operationCtx, reservation, time.Now().UTC().Add(delay))
+		retryAt := executionError.At.Add(delay)
+		if w.recorder != nil {
+			err = w.recorder.ReleaseWithError(operationCtx, reservation, retryAt, executionError)
+		} else {
+			err = w.store.Release(operationCtx, reservation, retryAt)
+		}
 		if err == nil {
 			w.telemetry.RecordRetry(spanCtx, span, w.config.Queue, w.config.Name, reservation.Attempts)
-			w.log.WithContext(spanCtx).Warnw("event", "queue.task.retry_scheduled", "msg", "task retry scheduled", "queue", w.config.Queue, "worker", w.config.Name, "task.id", task.ID, "task.message_version", task.MessageVersion, "error", cause, "attempts", reservation.Attempts, "retry_after", delay)
+			logger.Warnw("event", "queue.task.retry_scheduled", "msg", "task retry scheduled", "error", cause, "error.detail", executionError.Message, "retry_after", delay)
 		}
 	}
 	if err != nil {
@@ -131,13 +158,28 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 
 var errHandlerPanic = errors.New("queue handler panicked")
 
+// invokeHandler 把 panic 转为可分类的错误，错误原文带 panic 值与调用栈，便于从失败记录定位。
 func invokeHandler(ctx context.Context, handler taskHandler, task *Task) (err error) {
 	defer func() {
-		if recover() != nil {
-			err = errHandlerPanic
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("%w: %v\n%s", errHandlerPanic, recovered, debug.Stack())
 		}
 	}()
 	return handler(ctx, task.Clone())
+}
+
+// errorMessage 返回合法 UTF-8 的错误原文，超过 MaxErrorMessageBytes 时按字符边界截断。
+func errorMessage(err error) string {
+	message := strings.ToValidUTF8(err.Error(), "\uFFFD")
+	if len(message) <= MaxErrorMessageBytes {
+		return message
+	}
+	const suffix = "...(truncated)"
+	cut := MaxErrorMessageBytes - len(suffix)
+	for cut > 0 && !utf8.RuneStart(message[cut]) {
+		cut--
+	}
+	return message[:cut] + suffix
 }
 
 // FailureEvent 表示已成功归档的最终失败；坏消息可能不能解码为业务类型。

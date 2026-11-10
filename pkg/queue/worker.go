@@ -158,6 +158,8 @@ type Worker[T any] struct {
 	onFailed func(context.Context, FailureEvent) error
 	// renewer 在 RenewLease 开启时为 Store 的续租能力，否则为 nil。
 	renewer LeaseRenewer
+	// recorder 为 Store 的执行错误记录能力；未实现时为 nil，错误只写日志。
+	recorder ErrorRecorder
 	// aborted 在排空预算耗尽时取消；Start 通过 AfterFunc 把它转为执行 Context 的取消。
 	aborted context.Context
 	// abort 取消 aborted。
@@ -195,8 +197,9 @@ func newWorker[T any](config workerConfig, store Store, handlers map[string]task
 			return nil, errors.New("queue store does not support lease renewal")
 		}
 	}
+	recorder, _ := store.(ErrorRecorder)
 	aborted, abort := context.WithCancel(context.Background())
-	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner(), renewer: renewer, aborted: aborted, abort: abort}, nil
+	return &Worker[T]{config: config, store: store, handlers: maps.Clone(handlers), retry: retry, log: observability.Logger.WithModule("queue"), telemetry: telemetry, runner: lifecycle.NewRunner(), renewer: renewer, recorder: recorder, aborted: aborted, abort: abort}, nil
 }
 
 // Start 阻塞运行所有领取循环；存储瞬时故障在循环内退避重试，只有 Store 违反契约时取消同实例其他循环并返回错误。

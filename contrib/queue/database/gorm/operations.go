@@ -164,6 +164,7 @@ func (m *Model) summary(now time.Time, precision time.Duration) (queue.TaskSumma
 	if m.CompletedAt != nil {
 		summary.CompletedAt = m.CompletedAt.UTC()
 	}
+	summary.LastError, summary.LastErrorAt = record.LastError, record.LastErrorAt
 	return summary, nil
 }
 

@@ -152,10 +152,13 @@ func TestDefinitionCustomCodec(t *testing.T) {
 	}
 }
 
+// testLog 记录日志事件；With 返回的子 logger 写入同一事件列表，绑定字段追加在调用参数之后。
 type testLog struct {
 	log.Logger
 	mu     sync.Mutex
 	events []string
+	root   *testLog
+	fields []any
 }
 
 func (l *testLog) WithModule(module string) log.Logger {
@@ -165,12 +168,21 @@ func (l *testLog) WithModule(module string) log.Logger {
 	return l
 }
 
-func (l *testLog) With(...any) log.Logger                 { return l }
+func (l *testLog) With(kv ...any) log.Logger {
+	return &testLog{root: l.target(), fields: append(append([]any(nil), l.fields...), kv...)}
+}
 func (l *testLog) WithContext(context.Context) log.Logger { return l }
+func (l *testLog) target() *testLog {
+	if l.root != nil {
+		return l.root
+	}
+	return l
+}
 func (l *testLog) record(level string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.events = append(l.events, level+" "+fmt.Sprint(args...))
+	root := l.target()
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	root.events = append(root.events, level+" "+fmt.Sprint(append(append([]any(nil), args...), l.fields...)...))
 }
 func (l *testLog) Debugw(args ...any) { l.record("DEBUG", args...) }
 func (l *testLog) Infow(args ...any)  { l.record("INFO", args...) }

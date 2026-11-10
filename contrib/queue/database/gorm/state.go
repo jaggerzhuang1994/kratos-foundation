@@ -60,6 +60,39 @@ func (r *Repo[T]) FailReserved(ctx context.Context, id, token, reason string, at
 	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": reason, "failed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}), "fail", queue.ErrLeaseLost)
 }
 
+// ReleaseReservedWithError 与 ReleaseReserved 相同，并在同一次条件更新中覆盖最近一次执行错误。
+func (r *Repo[T]) ReleaseReservedWithError(ctx context.Context, id, token string, at time.Time, executionError queue.ExecutionError) error {
+	if err := r.validateTimestamp("available_at", at); err != nil {
+		return err
+	}
+	if err := r.validateTimestamp("last_error_at", executionError.At); err != nil {
+		return err
+	}
+	values := map[string]any{"status": StatusPending, "available_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}
+	r.setLastError(values, executionError)
+	return transitionResult(r.reserved(ctx, id, token).Updates(values), "release", queue.ErrLeaseLost)
+}
+
+// FailReservedWithError 与 FailReserved 相同，并在同一次条件更新中覆盖最近一次执行错误。
+func (r *Repo[T]) FailReservedWithError(ctx context.Context, id, token, reason string, at time.Time, executionError queue.ExecutionError) error {
+	if err := r.validateTimestamp("failed_at", at); err != nil {
+		return err
+	}
+	if err := r.validateTimestamp("last_error_at", executionError.At); err != nil {
+		return err
+	}
+	values := map[string]any{"status": StatusFailed, "failed": true, "failure_reason": reason, "failed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}
+	r.setLastError(values, executionError)
+	return transitionResult(r.reserved(ctx, id, token).Updates(values), "fail", queue.ErrLeaseLost)
+}
+
+func (r *Repo[T]) setLastError(values map[string]any, executionError queue.ExecutionError) {
+	values["last_error_message"] = executionError.Message
+	values["last_error_at"] = timestampCeil(executionError.At, r.timestampPrecision)
+}
+
+var _ databasequeue.ErrorRepo = (*Repo[Entity])(nil)
+
 // ListFailed 按失败时间和任务 ID 返回独立快照；正文损坏的行不中断列表，按
 // queue.FailureCorruptPayload 返回只含 ID 与时间的记录，既不隐藏损坏也不挡住其他失败任务。
 func (r *Repo[T]) ListFailed(ctx context.Context, limit int) ([]databasequeue.TaskRecord, error) {

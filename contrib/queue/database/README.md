@@ -42,6 +42,8 @@ func NewTaskStores(emailRepo, reportRepo databasequeue.Repo) (*databasequeue.Sto
 | ListFailed | 当前 Repo 的失败记录，按 FailedAt、Task.ID 升序，最多 limit 条 | 无记录返回空切片 |
 | RetryFailed | 仅修改失败 Task.ID；清除失败和租约字段，Attempts=0，设置 Task.AvailableAt，保留其余任务数据 | `queue.ErrNotFound` |
 
+可选 `ErrorRepo`（框架 gorm Repo 已实现）提供 `ReleaseReservedWithError` / `FailReservedWithError`：所有权条件和状态变化与 ReleaseReserved / FailReserved 相同，并在同一次条件更新中覆盖 LastError / LastErrorAt（最近一次执行失败的错误原文，最多 `queue.MaxErrorMessageBytes` 字节、合法 UTF-8）；确认成功与人工 Retry 不清除。Store 因此实现 `queue.ErrorRecorder`，Repo 未实现 ErrorRepo 时退回普通释放与失败归档，错误原文只出现在 Worker 日志中。
+
 多个 Worker 可能竞争同一个 Repo。Claim 的读取候选与更新必须通过事务/行锁或包含旧身份、token、到期状态的条件更新保证原子性；无条件更新会重复领取。业务 Handler 必须在数据库原子操作完成后执行，不跨业务执行持锁。具体同步机制、索引、竞争重试及公平性由业务实现，本包不提供数据库特定策略。
 
 过期重领必须增加 Attempts 并更换 token；旧 Worker 的确认、释放及失败归档必须被拒绝。仅完成并删除后可复用 Task.ID；保留的完成记录继续占用 ID，新领取不能复用旧 token。任务允许重投且领取次数有限：业务完成后、确认前崩溃仍可能重投；领取后执行前反复崩溃也可能耗尽次数并进入失败状态，因此不保证 Handler 至少实际执行一次或最终成功，业务 Handler 必须幂等。底层只返回错误，由 Worker 记录受控日志，不重复暴露 SQL、参数或凭据。
@@ -126,6 +128,7 @@ record := databasequeue.TaskRecord{
 | Attempts | 累计领取次数 |
 | Token / ReservedUntil | 当前领取标识及租约截止时间 |
 | Failed / FailureReason / FailedAt | 失败状态、受控分类及失败时间 |
+| LastError / LastErrorAt | 最近一次执行失败的错误原文及时间，由 ErrorRepo 写入；未记录时为零值 |
 
 TaskRecord 不包含 GORM 标签、TableName、数据库主键或 JSON 存储字节，时间使用 time.Time。业务 Repo 自己定义 GORM/SQL 实体、表名和序列化方式，在持久化实体与 TaskRecord 之间转换；本包抽象契约不要求特定 schema；选择可选 GORM Repo 时须遵守其基础存储 Model 的字段约束。
 

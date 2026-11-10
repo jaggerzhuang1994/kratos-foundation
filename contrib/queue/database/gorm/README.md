@@ -40,16 +40,16 @@ flowchart TD
 | `pending` | 新入队、Release 等待重试或人工 Retry；具体可执行时间见 available_at |
 | `running` | Claim 已提交租约；不代表进程仍存活，过期后可重新领取 |
 | `completed` | 成功 Ack 且开启保留；写入 completed_at，清空 token/reserved_until |
-| `failed` | 最终失败或损坏数据隔离；保留 failure_reason/failed_at，清空租约 |
+| `failed` | 最终失败或损坏数据隔离；保留 failure_reason/failed_at，清空租约；last_error_message 为最后一次执行错误 |
 
 `status`、`completed_at` 是 GORM `Model` 的存储列。原 `failed` 列与 TaskRecord.Failed 保留兼容，正常状态变更在同一数据库语句中同步 status 与失败/租约字段；业务不得独立改写这些列。领取只检索 pending/running，再按失败标记、available_at 和租约截止判断可执行性；未知状态不参与领取。completed 不计入积压统计。
 
-`available_at`、`failed_at`、`completed_at` 使用 SQL `timestamp` 时间列并以 UTC `time.Time` 读写；MySQL 与 SQLite 都保留 `timestamp` 声明类型。框架按当前方言共同可依赖的默认精度处理边界：SQLite 为毫秒，MySQL 为秒；写入向上取整、查询时钟向下取整，避免提前执行或回收。MySQL 写入值还必须落在 UTC `1970-01-01 00:00:01` 至 `2038-01-19 03:14:07`，构造出的仓储会在写库前拒绝零值和越界时间。未失败或未完成时对应字段为 NULL。`completed_at` 记录 Store 发起成功确认的时间，不是业务事务提交时间。Attempts 是本轮累计领取次数（包括租约恢复），人工 Retry 仍会清零。每个任务只保留一行最新状态，不保存每次尝试的独立历史、返回值或 Handler 错误原文。完成记录不会自动清理，保留期间 ID 不能复用，Retry 只允许失败任务。重启后关闭保留仅影响后续确认，不会清理已有完成记录。
+`available_at`、`failed_at`、`completed_at` 使用 SQL `timestamp` 时间列并以 UTC `time.Time` 读写；MySQL 与 SQLite 都保留 `timestamp` 声明类型。框架按当前方言共同可依赖的默认精度处理边界：SQLite 为毫秒，MySQL 为秒；写入向上取整、查询时钟向下取整，避免提前执行或回收。MySQL 写入值还必须落在 UTC `1970-01-01 00:00:01` 至 `2038-01-19 03:14:07`，构造出的仓储会在写库前拒绝零值和越界时间。未失败或未完成时对应字段为 NULL。`completed_at` 记录 Store 发起成功确认的时间，不是业务事务提交时间。Attempts 是本轮累计领取次数（包括租约恢复），人工 Retry 仍会清零。每个任务只保留一行最新状态，不保存每次尝试的独立历史或返回值；`last_error_message`（`TEXT`，最多 4096 字节）与 `last_error_at` 保存最近一次执行失败（重试排期或失败归档）的错误原文和时间，下一次失败覆盖，成功确认与人工 Retry 不清除，从未失败为 NULL。错误原文来自业务 Handler 的 `error`，可能包含业务数据，读取权限按业务敏感数据管理。完成记录不会自动清理，保留期间 ID 不能复用，Retry 只允许失败任务。重启后关闭保留仅影响后续确认，不会清理已有完成记录。
 
 业务可直接只读查询所绑定任务表，例如以下 SQL；`id` 就是公开的 `Task.ID`，按二进制语义存储，`data` 只保存消息版本、载荷、Headers 和创建时间。GORM Repo 同时实现可选 `OperationsRepo`，可通过 `Queue.Operations()` 构建业务自己的分页运维入口；框架不提供管理界面。
 
 ```sql
-SELECT id, status, attempts, completed_at, failure_reason, failed_at
+SELECT id, status, attempts, completed_at, failure_reason, failed_at, last_error_message, last_error_at
 FROM email_tasks
 ORDER BY completed_at DESC, id ASC
 LIMIT 100;
@@ -67,6 +67,18 @@ flowchart TD
     F --> G([返回实际结果])
     B -- 数据库错误或取消 --> H([保留错误链返回])
 ```
+
+### v2.12 新增错误列
+
+`Model` 新增可空列 `last_error_message`（`TEXT`）与 `last_error_at`（`timestamp`）。升级前必须先给每张队列表加列，否则新版本的投递（INSERT 带全部 Model 列）、释放与失败归档都会因列不存在而失败。两列可空、无默认值，旧版本应用不读写它们，因此可以先迁移、再滚动升级：
+
+```sql
+ALTER TABLE email_tasks
+  ADD COLUMN last_error_message TEXT NULL,
+  ADD COLUMN last_error_at TIMESTAMP NULL;
+```
+
+MySQL 8.0 对末尾追加可空列默认走 INSTANT（只改元数据）；5.7 会以 INPLACE 重建表，大表在低峰执行。简单模式也可以由部署命令调用 `Migrate(ctx)` 补齐列。存量行两列为 NULL，读取时视为未记录。
 
 ### v2.1 表重建
 
@@ -124,7 +136,7 @@ func NewEmailStore(ctx context.Context, manager queuegorm.ConnectionProvider) (*
 
 基础 `id` 直接保存 `Task.ID`，是唯一公开任务标识；MySQL 使用 `varbinary(128)`、SQLite 使用 `BLOB` 保持逐字节比较，不能改成受数字亲和性、大小写、音调或尾随空格规则影响的文本列。`generation` 是每次插入重新生成的内部行世代令牌，只用于避免任务删除后同 ID 重建导致旧领取快照误更新，不是第二个任务 ID，也不会通过 Task 或运维接口返回。`data` 不再重复保存 ID 和 AvailableAt，只保存消息版本、Payload、Headers 与 CreatedAt。AvailableAt 从独立时间列恢复；Payload 在 JSON 中保留二进制信息。业务迁移必须保留这些字段和唯一主键，不能通过手工修改表或任务正文绕开契约。
 
-Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写队列管理列（status、completed_at 与原有租约/失败字段），不对业务模型执行整体 Save。业务字段在领取、释放、失败和重试期间保留。不能配置会自动修改队列列的数据库触发器，不能用自定义 Scope 或 GORM 插件偷偷过滤/修改任务。
+Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写队列管理列（status、completed_at、last_error_message、last_error_at 与原有租约/失败字段），不对业务模型执行整体 Save。业务字段在领取、释放、失败和重试期间保留。不能配置会自动修改队列列的数据库触发器，不能用自定义 Scope 或 GORM 插件偷偷过滤/修改任务。
 
 ## 事务与并发
 

@@ -3,10 +3,12 @@ package queue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
+	"unicode/utf8"
 )
 
 func TestExecutionPersistsOutcome(t *testing.T) {
@@ -23,7 +25,7 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 		{"crashed repeatedly", 4, func(context.Context, *Task) error { panic("must not run") }, "retry_exhausted", "failed"},
 		{"permanent", 1, func(context.Context, *Task) error { return Permanent(errors.New("invalid")) }, "permanent", "failed"},
 		{"unknown type", 1, nil, "permanent", "failed"},
-		{"panic", 1, func(context.Context, *Task) error { panic("private panic data") }, "release", "retry"},
+		{"panic", 1, func(context.Context, *Task) error { panic("handler panic value") }, "release", "retry"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			obs, _ := testObservability(t)
@@ -58,9 +60,12 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 			}
 			if tc.name != "success" {
 				cause := map[string]string{"retry": "handler_error", "exhausted": "handler_error", "crashed repeatedly": "attempts_exhausted", "permanent": "handler_error", "unknown type": "handler_missing", "panic": "panic"}[tc.name]
-				if !strings.Contains(logs, "error"+cause) || !strings.Contains(logs, "task.message_versionemail") || strings.Contains(logs, "private panic data") {
-					t.Fatalf("unsafe or incomplete failure log: %s", logs)
+				detail := map[string]string{"retry": "temporary", "exhausted": "temporary", "crashed repeatedly": "queue attempts exhausted before execution", "permanent": "permanent queue error: invalid", "unknown type": "permanent queue error: queue task message version is not registered", "panic": "queue handler panicked: handler panic value\ngoroutine"}[tc.name]
+				if !strings.Contains(logs, "error"+cause) || !strings.Contains(logs, "task.message_versionemail") || !strings.Contains(logs, "error.detail"+detail) {
+					t.Fatalf("incomplete failure log: %s", logs)
 				}
+			} else if strings.Contains(logs, "error.detail") {
+				t.Fatalf("success logged an error detail: %s", logs)
 			}
 			if outcome == "release" && at.Before(before.Add(500*time.Millisecond)) {
 				t.Fatal("retry was not delayed")
@@ -209,5 +214,103 @@ func TestFailureCallbackSuccessAndTimeout(t *testing.T) {
 				t.Fatalf("callback failure logged=%v timeout=%v", logged, timeout)
 			}
 		})
+	}
+}
+
+// recorderStub 在 storeStub 之上实现 ErrorRecorder，记录 Worker 写入的执行错误。
+type recorderStub struct {
+	*storeStub
+	released, failed []ExecutionError
+	reasons          []string
+}
+
+func (s *recorderStub) ReleaseWithError(_ context.Context, _ *Reservation, at time.Time, executionError ExecutionError) error {
+	if at.Before(executionError.At) {
+		return errors.New("retry scheduled before the failure")
+	}
+	s.released = append(s.released, executionError)
+	return nil
+}
+
+func (s *recorderStub) FailWithError(_ context.Context, _ *Reservation, reason string, at time.Time, executionError ExecutionError) error {
+	if !at.Equal(executionError.At) {
+		return errors.New("failure time differs from error time")
+	}
+	s.failed = append(s.failed, executionError)
+	s.reasons = append(s.reasons, reason)
+	return nil
+}
+
+func TestExecutionRecordsErrorDetail(t *testing.T) {
+	obs, _ := testObservability(t)
+	// storeStub 未设置 release/fail：若走普通 Release/Fail 会因 nil 函数 panic，证明使用了 ErrorRecorder。
+	store := &recorderStub{storeStub: &storeStub{ack: func(context.Context, *Reservation) error { return nil }}}
+	var event FailureEvent
+	handlerErr := fmt.Errorf("call provider: %w", errors.New("balance \xff too low"))
+	q, err := buildTestWorker(Definition[string]{Queue: "q", Version: 1}, store, func(_ context.Context, message string) error {
+		if message == "ok" {
+			return nil
+		}
+		return handlerErr
+	}, WorkerConfig{OnFailed: func(_ context.Context, e FailureEvent) error { event = e; return nil }}, obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 1; attempt <= 3; attempt++ {
+		r := &Reservation{Task: &Task{ID: "id", MessageVersion: "string.v1", Payload: []byte(`"bad"`)}, Token: "token", Attempts: attempt}
+		if err = q.execute(context.Background(), r, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := "call provider: balance � too low"
+	if len(store.released) != 2 || len(store.failed) != 1 || store.reasons[0] != "retry_exhausted" {
+		t.Fatalf("released=%v failed=%v reasons=%v", store.released, store.failed, store.reasons)
+	}
+	for _, recorded := range append(store.released, store.failed...) {
+		if recorded.Message != want || recorded.At.IsZero() || recorded.At.Location() != time.UTC {
+			t.Fatalf("recorded %+v", recorded)
+		}
+	}
+	if event.LastError != want || !event.LastErrorAt.Equal(store.failed[0].At) {
+		t.Fatalf("failure event %+v", event)
+	}
+	ok := &Reservation{Task: &Task{ID: "id", MessageVersion: "string.v1", Payload: []byte(`"ok"`)}, Token: "token", Attempts: 1}
+	if err = q.execute(context.Background(), ok, time.Now()); err != nil || len(store.released)+len(store.failed) != 3 {
+		t.Fatalf("success touched the error record: %v", err)
+	}
+}
+
+func TestExecutionTimeoutKeepsHandlerError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		obs, _ := testObservability(t)
+		store := &recorderStub{storeStub: &storeStub{}}
+		worker, err := newWorker[*Task](workerConfig{Name: "test", Queue: "mail", Timeout: time.Second}, store, map[string]taskHandler{"email": func(ctx context.Context, _ *Task) error {
+			<-ctx.Done()
+			return Permanent(fmt.Errorf("query upstream: %w", errors.New("connection reset")))
+		}}, obs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = worker.execute(context.Background(), &Reservation{Task: &Task{ID: "one", MessageVersion: "email"}, Token: "t", Attempts: 1}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		// 超时仍按可重试处理（不受 Handler 返回的 Permanent 影响），错误原文保留 Handler 的说明。
+		if len(store.released) != 1 || store.released[0].Message != "context deadline exceeded: permanent queue error: query upstream: connection reset" {
+			t.Fatalf("released %+v failed %+v", store.released, store.failed)
+		}
+		logs := strings.Join(obs.Logger.(*testLog).events, "\n")
+		if !strings.Contains(logs, "errortimeout") {
+			t.Fatalf("timeout cause missing: %s", logs)
+		}
+	})
+}
+
+func TestErrorMessageTruncatesOnRuneBoundary(t *testing.T) {
+	if got := errorMessage(errors.New("short")); got != "short" {
+		t.Fatalf("short message %q", got)
+	}
+	long := errorMessage(errors.New(strings.Repeat("a", MaxErrorMessageBytes-15) + strings.Repeat("错", 100)))
+	if len(long) > MaxErrorMessageBytes || !utf8.ValidString(long) || !strings.HasSuffix(long, "...(truncated)") {
+		t.Fatalf("truncated message len=%d valid=%v", len(long), utf8.ValidString(long))
 	}
 }

@@ -175,7 +175,7 @@ flowchart TD
 
 ClassifyError 可把领域错误映射为 `queue.Permanent(err)` 或返回普通错误；返回 nil 保留原错误，不能把执行失败改成成功。坏消息和已标记的永久错误不交给分类器。panic 和实际 Context 超时由 Worker 统一处理，不保证交给分类器。
 
-`OnFailed(ctx, event)` 仅在 `Store.Fail` 成功后同步执行，覆盖永久错误、坏消息、未注册类型、重试耗尽及执行前领取次数耗尽。事件包含独立 Task 副本、Attempts、MaxAttempts、Reason、Cause 和 FailedAt，不要求坏消息能够解码成业务类型。回调错误、panic、超时记录 `ERROR queue.failure.callback_failed`，`reason=error|panic|timeout`，不输出回调错误原文或 panic 值；不回滚归档、不重新执行消息；回调必须响应 Context。
+`OnFailed(ctx, event)` 仅在 `Store.Fail` 成功后同步执行，覆盖永久错误、坏消息、未注册类型、重试耗尽及执行前领取次数耗尽。事件包含独立 Task 副本、Attempts、MaxAttempts、Reason、Cause、FailedAt 以及本次执行的错误原文 LastError / LastErrorAt，不要求坏消息能够解码成业务类型。回调错误、panic、超时记录 `ERROR queue.failure.callback_failed`，`reason=error|panic|timeout`，不输出回调错误原文或 panic 值；不回滚归档、不重新执行消息；回调必须响应 Context。
 
 **执行失败不等于归档成功；归档成功也不等于通知必达。** 归档存储失败或租约丢失不会触发回调；归档之后、回调之前崩溃可能丢通知。必须送达的业务通知需可靠任务或持久化事件设计，不能依赖此回调或在回调内简单发送一次。运维管理继续使用 `Store.Failed(ctx, limit)` 和 `Store.Retry(ctx, id, at)`，查询返回独立副本、limit 为 1–1000，重试清零领取次数；不自动扫描重试或提供全局查找。
 

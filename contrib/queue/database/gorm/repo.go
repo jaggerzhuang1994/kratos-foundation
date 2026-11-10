@@ -108,7 +108,7 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 		return nil, fmt.Errorf("parse queue model: %w", err)
 	}
 	// 固定基础列的映射和唯一主键，防止自定义字段遮蔽租约或改变任务身份。
-	for _, name := range []string{"Status", "CompletedAt", "ID", "Generation", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt"} {
+	for _, name := range []string{"Status", "CompletedAt", "ID", "Generation", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt", "LastErrorMessage", "LastErrorAt"} {
 		f := statement.Schema.LookUpField(name)
 		base, _ := reflect.TypeFor[Model]().FieldByName(name)
 		if f == nil || len(f.BindNames) != 2 || f.BindNames[0] != "Model" || f.StructField.Tag != base.Tag || f.DBName != strings.Split(strings.TrimPrefix(base.Tag.Get("gorm"), "column:"), ";")[0] || !f.Creatable || !f.Updatable || !f.Readable {

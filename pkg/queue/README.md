@@ -147,7 +147,9 @@ flowchart TD
     ZR -- 否 --> ZE
 ```
 
-按需开启模块 Debug 后，每个有效领取在 Handler 调度前记录 `DEBUG event=queue.task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `DEBUG event=queue.task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`，不记录 Payload、Headers 或 Handler 错误原文。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。业务错误的详细定位由业务 Handler 在符合自身脱敏规则的边界完成；普通错误仍可被追踪系统记录为异常事件。
+按需开启模块 Debug 后，每个有效领取在 Handler 调度前记录 `DEBUG event=queue.task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `DEBUG event=queue.task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`。`queue.task.retry_scheduled` 与 `queue.task.failed` 另带 `error.detail`：本次执行的错误原文（Handler 返回错误的完整包装链；超时时为 `context deadline exceeded: <Handler 返回的错误>`；panic 时为 panic 值与调用栈），按字符边界截断到 `MaxErrorMessageBytes`（4096 字节）。不记录 Payload 或 Headers；错误原文由业务 Handler 决定，返回给框架的错误不应包含密钥等不能进日志的数据。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。普通错误仍可被追踪系统记录为异常事件。
+
+**执行错误持久化**：Store 实现可选 `ErrorRecorder` 时，Worker 用 `ReleaseWithError` / `FailWithError` 代替 Release / Fail，在同一次状态写入中保存上述错误原文与时间（`ExecutionError`），下一次失败覆盖，确认成功与人工 Retry 不清除；运维接口的 `TaskSummary.LastError`、`Store.Failed` 返回的 `FailedTask.LastError` 和 `OnFailed` 事件可读到它。数据库 Store（框架 gorm Repo，需先给表加 `last_error_message`、`last_error_at` 列）支持；Redis Store 与未实现 `database.ErrorRepo` 的自定义 Repo 不支持，退回 Release / Fail，错误只在日志中。停机中止释放不是执行失败，不写错误。
 
 Database Store 支持与业务数据同事务投递：业务 Repo.Insert 必须复用调用方事务，Post 成功不代表事务已提交；消费只领取已提交任务。组装及 Outbox 边界见 [Database 事务投递](../../contrib/queue/database/README.md#与业务事务一起投递)。
 

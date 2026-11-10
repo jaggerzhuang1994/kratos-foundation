@@ -23,4 +23,8 @@ type TaskRecord struct {
 	FailureReason string
 	// FailedAt 是失败归档时间，仅在 Failed 为 true 时有意义；人工 Retry 时恢复零值。
 	FailedAt time.Time
+	// LastError 是最近一次执行失败的错误原文，由 ErrorRepo 写入；成功和人工 Retry 不清除。
+	LastError string
+	// LastErrorAt 是 LastError 的记录时间；未记录时为零值。
+	LastErrorAt time.Time
 }

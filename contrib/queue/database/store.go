@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/queue"
@@ -78,6 +79,48 @@ func (s *Store) Fail(ctx context.Context, r *queue.Reservation, reason string, a
 	return s.repo.FailReserved(ctx, r.Task.ID, r.Token, reason, at)
 }
 
+// ReleaseWithError 与 Release 相同，Repo 实现 ErrorRepo 时同时保存执行错误。
+func (s *Store) ReleaseWithError(ctx context.Context, r *queue.Reservation, at time.Time, executionError queue.ExecutionError) error {
+	repo, ok := s.repo.(ErrorRepo)
+	if !ok {
+		return s.Release(ctx, r, at)
+	}
+	if err := validExecutionError(executionError); err != nil {
+		return err
+	}
+	if !validReservation(r) {
+		return queue.ErrLeaseLost
+	}
+	return repo.ReleaseReservedWithError(ctx, r.Task.ID, r.Token, at, executionError)
+}
+
+// FailWithError 与 Fail 相同，Repo 实现 ErrorRepo 时同时保存执行错误。
+func (s *Store) FailWithError(ctx context.Context, r *queue.Reservation, reason string, at time.Time, executionError queue.ExecutionError) error {
+	repo, ok := s.repo.(ErrorRepo)
+	if !ok {
+		return s.Fail(ctx, r, reason, at)
+	}
+	if len(reason) > 128 {
+		return errors.New("database queue failure reason exceeds 128 bytes")
+	}
+	if err := validExecutionError(executionError); err != nil {
+		return err
+	}
+	if !validReservation(r) {
+		return queue.ErrLeaseLost
+	}
+	return repo.FailReservedWithError(ctx, r.Task.ID, r.Token, reason, at, executionError)
+}
+
+func validExecutionError(executionError queue.ExecutionError) error {
+	if len(executionError.Message) > queue.MaxErrorMessageBytes || !utf8.ValidString(executionError.Message) || executionError.At.IsZero() {
+		return errors.New("database queue execution error must be valid UTF-8 within the size limit and have a time")
+	}
+	return nil
+}
+
+var _ queue.ErrorRecorder = (*Store)(nil)
+
 // Failed 返回独立的失败任务快照；limit 必须在 1..1000 内。
 func (s *Store) Failed(ctx context.Context, limit int) ([]queue.FailedTask, error) {
 	if limit < 1 || limit > 1000 {
@@ -97,7 +140,7 @@ func (s *Store) Failed(ctx context.Context, limit int) ([]queue.FailedTask, erro
 		if !record.Failed || strings.TrimSpace(record.Task.ID) == "" || (!corrupt && strings.TrimSpace(record.Task.MessageVersion) == "") {
 			return nil, errors.New("database queue repo returned an invalid failure")
 		}
-		result = append(result, queue.FailedTask{Task: record.Task.Clone(), Attempts: record.Attempts, Reason: record.FailureReason, FailedAt: record.FailedAt})
+		result = append(result, queue.FailedTask{Task: record.Task.Clone(), Attempts: record.Attempts, Reason: record.FailureReason, FailedAt: record.FailedAt, LastError: record.LastError, LastErrorAt: record.LastErrorAt})
 	}
 	return result, nil
 }

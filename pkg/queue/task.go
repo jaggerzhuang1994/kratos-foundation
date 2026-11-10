@@ -54,6 +54,32 @@ type FailedTask struct {
 	Reason string
 	// FailedAt 是最终失败归档时间。
 	FailedAt time.Time
+	// LastError 是最近一次执行失败的错误原文，最多 MaxErrorMessageBytes 字节；
+	// 后端不支持 ErrorRecorder 或从未记录时为空。
+	LastError string
+	// LastErrorAt 是 LastError 的记录时间；未记录时为零值。
+	LastErrorAt time.Time
+}
+
+// MaxErrorMessageBytes 是持久化执行错误原文的字节上限，超出部分由 Worker 截断。
+const MaxErrorMessageBytes = 4096
+
+// ExecutionError 是一次执行失败的错误快照。
+type ExecutionError struct {
+	// Message 是错误原文（含 Handler 包装链与 panic 值），合法 UTF-8 且不超过 MaxErrorMessageBytes 字节。
+	Message string
+	// At 是执行失败的时间。
+	At time.Time
+}
+
+// ErrorRecorder 是 Store 的可选能力：在释放重试或失败归档的同一次状态写入中保存本次执行错误，
+// 下一次失败覆盖上一次，确认成功与人工 Retry 不清除。所有权校验与 Release/Fail 相同。
+// Store 未实现时 Worker 退回 Release/Fail，错误只出现在日志中。
+type ErrorRecorder interface {
+	// ReleaseWithError 等同 Release，并保存本次执行错误。
+	ReleaseWithError(ctx context.Context, reservation *Reservation, availableAt time.Time, executionError ExecutionError) error
+	// FailWithError 等同 Fail，并保存本次执行错误。
+	FailWithError(ctx context.Context, reservation *Reservation, reason string, failedAt time.Time, executionError ExecutionError) error
 }
 
 // FailureCorruptPayload 是存储正文损坏、无法解码时的失败分类。此类 FailedTask 只保证

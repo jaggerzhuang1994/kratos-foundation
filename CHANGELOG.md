@@ -4,6 +4,15 @@
 
 ## 计划中
 
+### 升级风险
+
+- **GORM 队列表新增 `last_error_message`、`last_error_at` 两列，升级前必须先迁移**：`contrib/queue/database/gorm.Model` 新增可空列 `last_error_message`（`TEXT`）与 `last_error_at`（`timestamp`）。新版本的投递 INSERT 会写入全部 Model 列，释放和失败归档会更新这两列，表里没有它们时投递、重试排期和失败归档都会报列不存在。升级前对每张嵌入 `Model` 的队列表执行 `ALTER TABLE <表> ADD COLUMN last_error_message TEXT NULL, ADD COLUMN last_error_at TIMESTAMP NULL;`（简单模式也可调用 `SimpleRepo.Migrate`）；旧版本不读写这两列，可以先迁移再滚动升级。业务模型自己的字段不能再使用这两个列名。
+- **Worker 日志开始输出 Handler 错误原文**：`queue.task.retry_scheduled`、`queue.task.failed` 新增字段 `error.detail`，内容是本次执行的错误原文（超时时为 `context deadline exceeded: <Handler 返回的错误>`，panic 时为 panic 值与调用栈），按字符边界截断到 4096 字节；此前只记录受控分类 `error`（cause）。Handler panic 时 `queue.execute` span 的异常事件也由固定文本改为带 panic 值与调用栈。Handler 返回给框架的错误不应包含密钥等不能进日志的数据。
+
+### 新增
+
+- **队列记录每次执行失败的错误原因**：新增 `queue.ErrorRecorder` 可选接口与 `queue.ExecutionError`、`queue.MaxErrorMessageBytes`；Store 实现时 Worker 在重试排期和失败归档的同一次状态写入中保存错误原文与时间，下一次失败覆盖，确认成功与人工 Retry 不清除。`TaskSummary`（运维 List/Get）、`FailedTask`（`Store.Failed`、`OnFailed` 事件）新增 `LastError`、`LastErrorAt`。数据库 Store 通过新的可选 `database.ErrorRepo` 支持，框架 gorm Repo 已实现；`database.TaskRecord` 新增 `LastError`、`LastErrorAt`。Redis Store 与未实现 `ErrorRepo` 的自定义 Repo 行为不变，错误只出现在日志中。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 
