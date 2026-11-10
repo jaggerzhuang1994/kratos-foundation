@@ -31,6 +31,10 @@
 **新增**
 
 - ⚠️ 不兼容：**queue**：record the error message of each failed execution（`57c742b`）
+
+**文档**
+
+- **changelog**：prepare v2.12.0 release notes（`d1d2f0e`）
 <!-- changelog:auto:end -->
 
 ## v2.11.1（2026-11-08）
