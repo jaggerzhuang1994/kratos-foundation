@@ -37,6 +37,7 @@
 
 **文档**
 
+- **changelog**：prepare v2.13.0 release notes（`da20e61`）
 - **changelog**：refresh commit records after v2.12.0（`91093c7`）
 <!-- changelog:auto:end -->
 
