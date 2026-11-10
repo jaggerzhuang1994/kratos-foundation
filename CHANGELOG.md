@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.12.0（2026-11-09）
+
 ### 升级风险
 
 - **GORM 队列表新增 `last_error_message`、`last_error_at` 两列，升级前必须先迁移**：`contrib/queue/database/gorm.Model` 新增可空列 `last_error_message`（`TEXT`）与 `last_error_at`（`timestamp`）。新版本的投递 INSERT 会写入全部 Model 列，释放和失败归档会更新这两列，表里没有它们时投递、重试排期和失败归档都会报列不存在。升级前对每张嵌入 `Model` 的队列表执行 `ALTER TABLE <表> ADD COLUMN last_error_message TEXT NULL, ADD COLUMN last_error_at TIMESTAMP NULL;`（简单模式也可调用 `SimpleRepo.Migrate`）；旧版本不读写这两列，可以先迁移再滚动升级。业务模型自己的字段不能再使用这两个列名。
@@ -18,7 +28,9 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- ⚠️ 不兼容：**queue**：record the error message of each failed execution（`57c742b`）
 <!-- changelog:auto:end -->
 
 ## v2.11.1（2026-11-08）
@@ -35,6 +47,10 @@
 **修复**
 
 - **config**：re-merge all sources in order on any source reload（`df4faee`）
+
+**文档**
+
+- **changelog**：prepare v2.11.1 release notes（`c048ba3`）
 <!-- changelog:auto:end -->
 
 ## v2.11.0（2026-11-08）
