@@ -55,7 +55,7 @@ ORDER BY completed_at DESC, id ASC
 LIMIT 100;
 ```
 
-运维 List 按存储主键稳定升序分页，Cursor 为后端不透明值；状态按查询时的 `available_at`、有效租约、失败及完成字段计算，返回结果不包含正文。Get 才返回完整任务快照。Delete 仅接受 failed/completed，Cancel 仅接受没有有效租约的 pending/scheduled，Retry 仅接受 failed；不存在返回 `queue.ErrNotFound`，存在但状态不允许返回 `queue.ErrStateConflict`。Cleanup 在事务内按 ID 选取并再次带终态和截止条件删除至多 `limit` 条 failed/completed，和 Worker 并发时不会删除已转为其他状态的记录。
+运维 List 默认按存储主键稳定升序分页，也支持[筛选与排序](#运维查询与批量操作)；Cursor 为后端不透明值；状态按查询时的 `available_at`、有效租约、失败及完成字段计算，返回结果不包含正文。Get 才返回完整任务快照。Delete 仅接受 failed/completed，Cancel 仅接受没有有效租约的 pending/scheduled，Retry 仅接受 failed；不存在返回 `queue.ErrNotFound`，存在但状态不允许返回 `queue.ErrStateConflict`。Cleanup 在事务内按 ID 选取并再次带终态和截止条件删除至多 `limit` 条 failed/completed，和 Worker 并发时不会删除已转为其他状态的记录。
 
 ```mermaid
 flowchart TD
@@ -67,6 +67,53 @@ flowchart TD
     F --> G([返回实际结果])
     B -- 数据库错误或取消 --> H([保留错误链返回])
 ```
+
+### v2.13 新增跟踪列
+
+`Model` 新增四个可空列，升级前必须先加列和索引，否则新版本的投递（INSERT 带全部 Model 列）会报列不存在：
+
+| 列 | 写入时机 | 用途 |
+| --- | --- | --- |
+| `message_version` `VARCHAR(255)` | 入队时冗余正文里的消息版本 | 按消息版本筛选、分组 |
+| `created_at` `TIMESTAMP` | 入队，取 `Task.CreatedAt` 向下取整 | 按创建时间排序、筛选 |
+| `updated_at` `TIMESTAMP` | 入队、领取、释放、失败、完成、人工重试、改排期；续租不写 | 按最近状态变化排序、筛选 |
+| `started_at` `TIMESTAMP` | 每次领取（开始执行） | 按最近开始执行时间排序、筛选 |
+
+消息版本最长 255 字节，超过时 Insert 返回错误（此前不限制）。业务扩展模型不能再有同名列或同名 Go 字段（`MessageVersion`、`CreatedAt`、`UpdatedAt`、`StartedAt`），构造时会报 `queue model overrides managed field`。正文里的 `created_at` 仍保留，`TaskSummary.CreatedAt` 以正文的完整精度为准，列只是排序和筛选用的副本。
+
+MySQL 迁移（把 `email_tasks` 换成实际表名，索引名按 `idx_<表名>_...` 与 AutoMigrate 生成的一致）：
+
+```sql
+ALTER TABLE email_tasks
+  ADD COLUMN message_version VARCHAR(255) NULL,
+  ADD COLUMN created_at TIMESTAMP NULL,
+  ADD COLUMN updated_at TIMESTAMP NULL,
+  ADD COLUMN started_at TIMESTAMP NULL,
+  ADD INDEX idx_email_tasks_queue_created (status, created_at),
+  ADD INDEX idx_email_tasks_queue_updated (status, updated_at),
+  ADD INDEX idx_email_tasks_message_version (message_version),
+  ALGORITHM=INPLACE, LOCK=NONE;
+```
+
+加列与建索引都是在线 DDL，不阻塞读写；旧版本不读写这些列，可以先迁移、再滚动升级。简单模式也可由部署命令调用 `Migrate(ctx)` 补齐。
+
+**回填旧行**：迁移前已有的行（以及滚动升级期间旧版本写入的行）四列为 NULL。它们照常被领取、展示（创建时间与消息版本从正文读取），但按这几列筛选、排序、分组时不会被正确归类。全部实例升级后回填：
+
+- 推荐用 `Repo.Backfill(ctx, limit)`（简单模式 `SimpleRepo` 同样可用），循环到返回 0。它从正文取消息版本和完整的创建时间，`updated_at` 取创建、失败、完成、最近错误时间中最晚的一个，`started_at` 无从得知、保持 NULL；每列以 `COALESCE` 写入，不覆盖并发写入的新值，可以在业务运行时执行。
+- 只能执行 SQL 时，下面的语句按批更新、重复执行到影响 0 行。SQL 里无法可靠还原应用连接的时区换算，`created_at` 近似取 `available_at`（没有延迟和重试的任务两者相同）；需要精确值时用 `Backfill`。
+
+```sql
+UPDATE email_tasks SET
+  message_version = COALESCE(message_version, IF(JSON_VALID(CAST(data AS CHAR CHARACTER SET utf8mb4)),
+    LEFT(JSON_UNQUOTE(JSON_EXTRACT(CAST(data AS CHAR CHARACTER SET utf8mb4), '$.message_version')), 255), '')),
+  created_at = COALESCE(created_at, available_at),
+  updated_at = COALESCE(updated_at, GREATEST(created_at, COALESCE(failed_at, created_at),
+    COALESCE(completed_at, created_at), COALESCE(last_error_at, created_at)))
+WHERE message_version IS NULL OR created_at IS NULL OR updated_at IS NULL
+LIMIT 5000;
+```
+
+两种方式都要求 MySQL 5.7.8+（JSON 函数）。正文损坏的行消息版本记为空字符串。
 
 ### v2.12 新增错误列
 
@@ -136,7 +183,7 @@ func NewEmailStore(ctx context.Context, manager queuegorm.ConnectionProvider) (*
 
 基础 `id` 直接保存 `Task.ID`，是唯一公开任务标识；MySQL 使用 `varbinary(128)`、SQLite 使用 `BLOB` 保持逐字节比较，不能改成受数字亲和性、大小写、音调或尾随空格规则影响的文本列。`generation` 是每次插入重新生成的内部行世代令牌，只用于避免任务删除后同 ID 重建导致旧领取快照误更新，不是第二个任务 ID，也不会通过 Task 或运维接口返回。`data` 不再重复保存 ID 和 AvailableAt，只保存消息版本、Payload、Headers 与 CreatedAt。AvailableAt 从独立时间列恢复；Payload 在 JSON 中保留二进制信息。业务迁移必须保留这些字段和唯一主键，不能通过手工修改表或任务正文绕开契约。
 
-Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写队列管理列（status、completed_at、last_error_message、last_error_at 与原有租约/失败字段），不对业务模型执行整体 Save。业务字段在领取、释放、失败和重试期间保留。不能配置会自动修改队列列的数据库触发器，不能用自定义 Scope 或 GORM 插件偷偷过滤/修改任务。
+Repo 跳过 GORM 模型钩子和关联对象的自动创建，状态更新只写队列管理列（status、completed_at、last_error_message、last_error_at、updated_at、started_at 与原有租约/失败字段），不对业务模型执行整体 Save。业务字段在领取、释放、失败和重试期间保留。不能配置会自动修改队列列的数据库触发器，不能用自定义 Scope 或 GORM 插件偷偷过滤/修改任务。
 
 ## 事务与并发
 
@@ -203,6 +250,18 @@ flowchart TD
 统计覆盖索引 `(status, failed, available_at, reserved_until)` 避免为聚合读取任务正文所在的数据行，但仍扫描非 completed 记录，不是常数时间。应结合活跃/失败任务量控制采集频率和 timeout；本实现不在采集时自动新增索引或缓存结果。
 接入 `queue.RegisterStats` 并在释放借用连接前注销，具体指标与流程见 [Queue 统计文档](../../../../pkg/queue/README.md#持久化积压统计)。
 
+## 运维查询与批量操作
+
+Repo 实现 `databasequeue.ExtendedOperationsRepo`，`Queue.Operations()` 返回的能力可断言为 `queue.ExtendedOperations`：`TaskQuery.Filter` / `Sort` 筛选排序、`Count` / `CountByStatus`、按消息版本或失败分类 `Group`、`Reschedule` 改排期，以及按 ID 或按条件的批量重试 / 取消 / 删除 / 改排期。语义与边界见 [Queue 运维契约](../../../../pkg/queue/README.md#筛选排序与扩展运维)，这里只说明数据库层面的取舍：
+
+- 排序使用键集分页（排序列 + `id`），翻页不随偏移变慢；MySQL 与 SQLite 对 NULL 的默认顺序一致（升序在前、降序在后），游标按同样顺序衔接。
+- 时间范围两端按存储精度（MySQL 秒、SQLite 毫秒）向上取整后比较。
+- `message_version` 与 `failure_reason` 按列的排序规则比较：MySQL 默认 `utf8mb4_0900_ai_ci` 不区分大小写。
+- `ErrorContains` 用 `LIKE`（`!` 转义，`%`、`_` 按字面匹配）扫描 `last_error_message`，不使用索引，应与状态、时间等条件组合缩小范围。
+- 按状态筛选时，`status` 为 failed / completed 可直接用 `(status, created_at)`、`(status, updated_at)` 排序；pending / scheduled / running 由租约和排期计算，排序需要对匹配行做文件排序。按 `started_at`、`completed_at`、`last_error_at` 排序没有专门索引，结果集大时同样走文件排序。
+- 按 ID 批量操作对每个 ID 单独执行一条条件语句；按条件批量操作先取至多 `limit` 个 ID，再带同样的状态条件变更，两步之间状态已变化的任务不会被误改，`Affected` 以实际变更行数为准。两者都不包外层事务，不会长时间持有行锁阻塞 Worker 确认。
+- `CountByStatus` 用一条 `SUM(CASE ...)` 聚合，`Count`、`Group` 按筛选条件扫描匹配行；都不是常数时间，大表上应带时间范围等条件。
+
 ## 查询索引与容量边界
 
 Model 在保留原有单列索引的基础上增加以下非唯一联合索引；默认命名为 `idx_<表名>_queue_failed` 和 `idx_<表名>_queue_stats`，自定义 GORM NamingStrategy 时以实际生成名称为准。
@@ -211,6 +270,9 @@ Model 在保留原有单列索引的基础上增加以下非唯一联合索引�
 | --- | --- |
 | failed, failed_at, id | 失败列表按失败时间、ID 排序，支持 LIMIT 提前停止 |
 | status, failed, available_at, reserved_until | 覆盖统计查询的过滤与聚合列，减少回表 |
+| status, created_at | 运维列表按状态筛选、按创建时间排序（`idx_<表名>_queue_created`） |
+| status, updated_at | 运维列表按状态筛选、按最近状态变化排序（`idx_<表名>_queue_updated`） |
+| message_version | 按消息版本筛选与分组（单列索引 `idx_<表名>_message_version`） |
 
 简单模式通过部署命令执行 `Migrate(ctx)` 创建索引；扩展模式由业务迁移添加同列顺序的索引。创建索引需要额外空间，并增加插入和状态更新的维护成本；大表部署须评估 DDL 时间和锁等待，消费路径不执行 DDL。迁移流程及失败处理见上方“v2.1 表重建”流程图。
 

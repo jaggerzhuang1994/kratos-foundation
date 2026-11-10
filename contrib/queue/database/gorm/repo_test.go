@@ -160,6 +160,14 @@ type extraKeyTask struct {
 
 func (*extraKeyTask) TableName() string { return "extra_tasks" }
 
+// createdTask 用业务自己的 CreatedAt 遮蔽 v2.13 新增的队列列。
+type createdTask struct {
+	Model
+	CreatedAt time.Time
+}
+
+func (*createdTask) TableName() string { return "created_tasks" }
+
 func TestRepoRejectsModelOverrides(t *testing.T) {
 	_, db := testRepo(t)
 	ctx := context.Background()
@@ -178,6 +186,42 @@ func TestRepoRejectsModelOverrides(t *testing.T) {
 	}
 	if _, err := NewRepo[*testTask](ctx, provider, nil, Config{}); err == nil {
 		t.Fatal("nil factory accepted")
+	}
+	if _, err := NewRepo(ctx, provider, func(context.Context, *databasequeue.TaskRecord) (*createdTask, error) { return &createdTask{}, nil }, Config{}); err == nil {
+		t.Fatal("business created_at accepted")
+	}
+}
+
+func TestRepoInsertWritesTrackingColumns(t *testing.T) {
+	repo, db := testRepo(t)
+	ctx := context.Background()
+	created := time.Unix(1700000000, 123456789).UTC()
+	before := time.Now().UTC().Truncate(time.Millisecond)
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "tracked", MessageVersion: "email.v1", AvailableAt: created, CreatedAt: created}}); err != nil {
+		t.Fatal(err)
+	}
+	var row testTask
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	// 已发生的时刻向下取整（SQLite 毫秒），不会记得比实际晚。
+	if row.MessageVersion == nil || *row.MessageVersion != "email.v1" || row.CreatedAt == nil || !row.CreatedAt.Equal(created.Truncate(time.Millisecond)) {
+		t.Fatalf("tracking columns = %v %v", row.MessageVersion, row.CreatedAt)
+	}
+	if row.UpdatedAt == nil || row.UpdatedAt.Before(before) || row.StartedAt != nil {
+		t.Fatalf("updated_at = %v started_at = %v", row.UpdatedAt, row.StartedAt)
+	}
+	// 未设置 CreatedAt 时取入库时刻。
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "now", MessageVersion: "v", AvailableAt: created}}); err != nil {
+		t.Fatal(err)
+	}
+	var fresh testTask
+	if err := db.Where("id = ?", "now").Take(&fresh).Error; err != nil || fresh.CreatedAt == nil || fresh.CreatedAt.Before(before) {
+		t.Fatalf("default created_at = %v, %v", fresh.CreatedAt, err)
+	}
+	long := strings.Repeat("v", 256)
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "long", MessageVersion: long, AvailableAt: created}}); err == nil {
+		t.Fatal("message version over 255 bytes accepted")
 	}
 }
 
@@ -542,6 +586,27 @@ func TestExternalRepoMySQL(t *testing.T) {
 		if record, err := repo.Claim(ctx, time.Unix(1700000001, 0), time.Unix(1700000061, 0), "owner"); err != nil || record == nil {
 			t.Fatalf("claim at ceiling: %+v %v", record, err)
 		}
+	})
+	// 运维查询的 SQL（键集翻页、NULL 排序、聚合、LIKE 转义、批量条件）在 MySQL 上逐项复跑。
+	t.Run("operations list", func(t *testing.T) {
+		repo, db := open(t)
+		runListTasksFiltersAndSorts(t, repo, db)
+	})
+	t.Run("operations count", func(t *testing.T) {
+		repo, db := open(t)
+		runCountAndGroupTasks(t, repo, db)
+	})
+	t.Run("operations bulk", func(t *testing.T) {
+		repo, db := open(t)
+		runRescheduleAndBulkTasks(t, repo, db, time.Second)
+	})
+	t.Run("operations matching", func(t *testing.T) {
+		repo, db := open(t)
+		runMatchingOperations(t, repo, db)
+	})
+	t.Run("backfill", func(t *testing.T) {
+		repo, db := open(t)
+		runBackfillLegacyRows(t, repo, db)
 	})
 	t.Run("skip locked", func(t *testing.T) {
 		// 并发 Worker 用 SKIP LOCKED 各自锁定不同候选：每个任务只被领取一次，积压期间几乎没有空领取。

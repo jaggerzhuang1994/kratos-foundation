@@ -214,3 +214,61 @@ func TestCompleteReservedRejectsDuplicateAndFailedWrites(t *testing.T) {
 		t.Fatalf("completion time: %+v", row.Model)
 	}
 }
+
+func TestRepoTracksUpdatedAndStartedAt(t *testing.T) {
+	repo, db := testRepo(t)
+	ctx := context.Background()
+	start := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
+	read := func() Model {
+		t.Helper()
+		var row testTask
+		if err := db.Take(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		return row.Model
+	}
+	if err := repo.Insert(ctx, &databasequeue.TaskRecord{Task: queue.Task{ID: "t", MessageVersion: "v", AvailableAt: start}}); err != nil {
+		t.Fatal(err)
+	}
+	// 领取：started_at 与 updated_at 都是领取时刻。
+	claimAt := start.Add(time.Minute)
+	if record, err := repo.Claim(ctx, claimAt, claimAt.Add(time.Hour), "owner"); err != nil || record == nil {
+		t.Fatalf("claim = %v, %v", record, err)
+	}
+	row := read()
+	if row.StartedAt == nil || !row.StartedAt.Equal(claimAt) || row.UpdatedAt == nil || !row.UpdatedAt.Equal(claimAt) {
+		t.Fatalf("after claim started=%v updated=%v", row.StartedAt, row.UpdatedAt)
+	}
+	// 续租不是状态变化，不更新 updated_at。
+	if err := repo.RenewReserved(ctx, "t", "owner", claimAt.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if renewed := read(); !renewed.UpdatedAt.Equal(claimAt) {
+		t.Fatalf("renew changed updated_at to %v", renewed.UpdatedAt)
+	}
+	// 释放、再领取、失败、人工重试都会刷新 updated_at。
+	if err := repo.ReleaseReserved(ctx, "t", "owner", start); err != nil {
+		t.Fatal(err)
+	}
+	released := read()
+	if !released.UpdatedAt.After(claimAt) || !released.StartedAt.Equal(claimAt) {
+		t.Fatalf("after release updated=%v started=%v", released.UpdatedAt, released.StartedAt)
+	}
+	second := start.Add(2 * time.Minute)
+	if record, err := repo.Claim(ctx, second, second.Add(time.Hour), "again"); err != nil || record == nil {
+		t.Fatalf("second claim = %v, %v", record, err)
+	}
+	if err := repo.FailReserved(ctx, "t", "again", "permanent", second); err != nil {
+		t.Fatal(err)
+	}
+	failed := read()
+	if !failed.StartedAt.Equal(second) || failed.UpdatedAt.Before(second) {
+		t.Fatalf("after fail updated=%v started=%v", failed.UpdatedAt, failed.StartedAt)
+	}
+	if err := repo.RetryTask(ctx, "t", start); err != nil {
+		t.Fatal(err)
+	}
+	if retried := read(); retried.UpdatedAt.Before(*failed.UpdatedAt) || retried.Status != StatusPending {
+		t.Fatalf("after retry = %+v", retried)
+	}
+}

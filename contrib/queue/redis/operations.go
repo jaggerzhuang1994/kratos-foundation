@@ -37,7 +37,12 @@ func (s *Store) List(ctx context.Context, query queue.TaskQuery) (queue.TaskPage
 	if err := query.Validate(); err != nil {
 		return queue.TaskPage{}, err
 	}
-	if onlyCompleted(query.Statuses) {
+	// Redis 只能按状态筛选、按哈希扫描顺序返回；其他条件和排序明确拒绝，不静默忽略。
+	if !query.Filter.OnlyStatuses() || query.Sort != (queue.TaskSort{}) {
+		return queue.TaskPage{}, fmt.Errorf("redis queue list supports status filters only: %w", queue.ErrUnsupported)
+	}
+	statuses := query.EffectiveFilter().Statuses
+	if onlyCompleted(statuses) {
 		return queue.TaskPage{}, nil
 	}
 	state, err := decodeCursor(query.Cursor)
@@ -74,7 +79,7 @@ func (s *Store) List(ctx context.Context, query queue.TaskQuery) (queue.TaskPage
 		state.Pending = state.Pending[count:]
 		budget -= count
 		for index, item := range items {
-			if item == nil || !matchesStatus(query.Statuses, item.Summary.Status) {
+			if item == nil || !matchesStatus(statuses, item.Summary.Status) {
 				continue
 			}
 			page.Tasks = append(page.Tasks, item.Summary)

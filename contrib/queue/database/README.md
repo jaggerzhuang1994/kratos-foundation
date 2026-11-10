@@ -28,6 +28,8 @@ func NewTaskStores(emailRepo, reportRepo databasequeue.Repo) (*databasequeue.Sto
 
 如果具体 Repo 还实现 `databasequeue.OperationsRepo`，Store 的 `QueueOperations()` 会返回可用能力，类型化 `Queue.Operations()` 可直接发现；未实现时返回 `false`，业务不得假设运维入口存在。`OperationsRepo` 的 List/Get/Delete/Cancel/Retry/Cleanup 必须遵循[公共运维状态表](../../../pkg/queue/README.md#可选运维契约)，其中变更操作必须在数据库条件更新或事务中原子判断状态与租约。适配器只校验公共参数并复制返回快照，不持有进程锁、不提供管理路由。
 
+Repo 还实现 `databasequeue.ExtendedOperationsRepo` 时，`QueueOperations()` 的返回值同时满足 `queue.ExtendedOperations`（计数、分组、改排期、按 ID 或按条件批量操作），并且 `ListTasks` 必须支持 `TaskQuery.Filter` 与 `TaskQuery.Sort`。适配器在调用 Repo 前统一校验筛选条件、ID 数量和批量上限，非法输入不会到达 Repo；`CountByStatus` 补齐未出现的状态为 0。框架的 [GORM Repo](gorm/README.md#运维查询与批量操作) 已实现。
+
 ## Repo 接口约束
 
 所有方法支持 Context 取消和并发调用，输入只读且不得在返回后保留可变引用，返回 TaskRecord 及其 Payload/Headers 必须是独立快照。除 Insert 可参与投递方显式事务外，状态变更方法成功返回必须已提交；Claim 只能读取已提交任务。Insert 在外层事务中成功只表示写入该事务，最终提交或回滚由业务决定。其他存储错误保留错误链；取消或提交响应丢失不能被当成“没有任务”。

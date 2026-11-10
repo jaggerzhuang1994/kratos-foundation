@@ -55,7 +55,7 @@ func (r *Repo[T]) Claim(ctx context.Context, now, until time.Time, token string)
 		}
 		return nil, decodeErr
 	}
-	result := claim.Updates(claimValues(model, token, until))
+	result := claim.Updates(r.claimValues(model, token, now, until))
 	if result.Error != nil {
 		return nil, fmt.Errorf("claim queue task: %w", result.Error)
 	}
@@ -104,7 +104,7 @@ func (r *Repo[T]) claimSkipLocked(ctx context.Context, now, until time.Time, tok
 				}
 				return nil
 			}
-			result := update.Updates(claimValues(model, token, until))
+			result := update.Updates(r.claimValues(model, token, now, until))
 			if result.Error != nil {
 				return fmt.Errorf("claim queue task: %w", result.Error)
 			}
@@ -130,11 +130,12 @@ func (r *Repo[T]) available(db *gorm.DB, now time.Time) *gorm.DB {
 }
 
 func (r *Repo[T]) quarantineValues(now time.Time) map[string]any {
-	return map[string]any{"status": StatusFailed, "failed": true, "failure_reason": queue.FailureCorruptPayload, "failed_at": timestampCeil(now, r.timestampPrecision), "token": "", "reserved_until": 0}
+	return map[string]any{"status": StatusFailed, "failed": true, "failure_reason": queue.FailureCorruptPayload, "failed_at": timestampCeil(now, r.timestampPrecision), "token": "", "reserved_until": 0, "updated_at": r.updatedAt(now)}
 }
 
-func claimValues(model *Model, token string, until time.Time) map[string]any {
-	return map[string]any{"status": StatusRunning, "token": token, "reserved_until": deadlineMillis(until), "attempts": model.Attempts + 1}
+// claimValues 写入新租约；started_at 与 updated_at 记录本次领取时刻。
+func (r *Repo[T]) claimValues(model *Model, token string, now, until time.Time) map[string]any {
+	return map[string]any{"status": StatusRunning, "token": token, "reserved_until": deadlineMillis(until), "attempts": model.Attempts + 1, "started_at": r.updatedAt(now), "updated_at": r.updatedAt(now)}
 }
 
 func claimedRecord(record *databasequeue.TaskRecord, token string, until time.Time) *databasequeue.TaskRecord {

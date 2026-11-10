@@ -97,7 +97,7 @@ Lua 执行期间无需显式获取/释放锁，原子边界即同步边界；每
 
 ## 可选运维能力
 
-`Queue.Operations()` 可直接发现本 Store。List 使用 HSCAN 分批读取任务 ID，再查询四个状态索引；每次请求最多检查 `max(64, limit*4)` 且不超过 4000 条候选，Cursor 会保存扫描位置和本批未消费 ID，因此无遗漏但在大量过滤不命中时可能返回不足一页。Cursor 解码上限为 1 MiB、最多保留 4000 个非空且不超过 128 字节的任务 ID，超限或畸形输入直接拒绝。并发状态变化意味着跨页结果不是全局快照。List 仅返回元数据，Get 返回正文。
+`Queue.Operations()` 可直接发现本 Store。List 使用 HSCAN 分批读取任务 ID，再查询四个状态索引；每次请求最多检查 `max(64, limit*4)` 且不超过 4000 条候选，Cursor 会保存扫描位置和本批未消费 ID，因此无遗漏但在大量过滤不命中时可能返回不足一页。Cursor 解码上限为 1 MiB、最多保留 4000 个非空且不超过 128 字节的任务 ID，超限或畸形输入直接拒绝。并发状态变化意味着跨页结果不是全局快照。List 仅返回元数据，Get 返回正文。 List 只支持按状态筛选（`Statuses` 或 `Filter.Statuses`）和默认顺序，其他筛选条件或 `Sort` 返回 `queue.ErrUnsupported`；本 Store 不实现 `queue.ExtendedOperations`。
 
 Delete 只允许 failed，Cancel 只允许 pending/scheduled，Retry 只允许 failed；状态检查与修改在 Lua 中原子完成，有有效租约的 running 返回 `ErrStateConflict`。Ack 会删除成功记录，所以 Redis 不存在 completed 历史，按 completed 查询或清理返回空。Cleanup 只删除截止时间之前的 failed，单次上限 1000；业务负责定时触发、鉴权和审计。
 

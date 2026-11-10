@@ -43,6 +43,40 @@ func TestOperationsListMetadataAndGetBody(t *testing.T) {
 	}
 }
 
+func TestOperationsListRejectsUnsupportedQuery(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	task := &queue.Task{ID: "task", MessageVersion: "job.v1", AvailableAt: now.Add(time.Hour), CreatedAt: now}
+	taskJSON, err := json.Marshal(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordJSON, err := json.Marshal(record{Task: string(taskJSON)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := goredis.NewClient(&goredis.Options{Addr: "unused"})
+	t.Cleanup(func() { _ = client.Close() })
+	client.AddHook(operationsHook{record: string(recordJSON), delayed: float64(now.Add(time.Hour).UnixMilli())})
+	store := &Store{client: client, keys: []string{"q:tasks", "q:ready", "q:delayed", "q:reserved", "q:failed"}}
+	ctx := context.Background()
+	for _, query := range []queue.TaskQuery{
+		{Limit: 1, Filter: queue.TaskFilter{MinAttempts: 1}},
+		{Limit: 1, Sort: queue.TaskSort{Field: queue.TaskSortCreatedAt}},
+	} {
+		if _, err := store.List(ctx, query); !errors.Is(err, queue.ErrUnsupported) {
+			t.Fatalf("List(%+v) error = %v", query, err)
+		}
+	}
+	// Filter.Statuses 与旧的 Statuses 等价。
+	page, err := store.List(ctx, queue.TaskQuery{Limit: 1, Filter: queue.TaskFilter{Statuses: []queue.TaskStatus{queue.TaskStatusScheduled}}})
+	if err != nil || len(page.Tasks) != 1 {
+		t.Fatalf("List(filter statuses) = %#v, %v", page, err)
+	}
+	if _, ok := any(store).(queue.ExtendedOperations); ok {
+		t.Fatal("redis store claims extended operations")
+	}
+}
+
 func TestOperationsListCursorPreservesUnconsumedScanBatch(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	records := make(map[string]string, 2)

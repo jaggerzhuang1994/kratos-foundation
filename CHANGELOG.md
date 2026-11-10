@@ -4,6 +4,18 @@
 
 ## 计划中
 
+### 升级风险
+
+- **GORM 队列表新增 `message_version`、`created_at`、`updated_at`、`started_at` 四列和三个索引，升级前必须先迁移**：新版本投递的 INSERT 写入全部 Model 列，表里没有这些列时投递会报列不存在。四列均可空、旧版本不读写，可以先迁移再滚动升级；MySQL 的 `ALTER TABLE ... ADD COLUMN ..., ADD INDEX ..., ALGORITHM=INPLACE, LOCK=NONE` 语句与回填方式见 [GORM 队列文档](contrib/queue/database/gorm/README.md#v213-新增跟踪列)，简单模式也可调用 `SimpleRepo.Migrate`。全部实例升级后用 `Repo.Backfill` 或文档里的 SQL 回填旧行，否则旧行在按这些列筛选、排序、分组时不会被正确归类（领取与展示不受影响）。
+- **消息版本超过 255 字节时 GORM Repo 拒绝入队**：`message_version` 列为 `VARCHAR(255)`，此前不限制长度。
+- **业务扩展模型不能再使用 `message_version`、`created_at`、`updated_at`、`started_at` 列或 `MessageVersion`、`CreatedAt`、`UpdatedAt`、`StartedAt` 字段**：与队列管理列冲突，`NewRepo` 构造时返回 `queue model overrides managed field`。
+- **`queue.TaskQuery` 从 `operations.go` 移到 `operations_query.go` 并新增 `Filter`、`Sort` 字段**：字段名与旧字段不变；Redis Store 收到非状态筛选或排序时返回 `queue.ErrUnsupported`（此前没有这两个字段）。
+
+### 新增
+
+- **队列运维扩展**：`queue.TaskQuery` 新增 `Filter`（`TaskFilter`：状态、任务 ID、消息版本、失败分类、各时间列范围、最少尝试次数、错误原文子串）和 `Sort`（创建、更新、可执行、开始执行、失败、完成、最近错误时间，升 / 降序，键集游标）；`TaskSummary` 新增 `UpdatedAt`、`StartedAt`。新增可选接口 `queue.ExtendedOperations`：`Count`、`CountByStatus`、`Group`、`Reschedule`，以及按 ID（`RetryTasks`、`CancelTasks`、`DeleteTasks`、`RescheduleTasks`）和按条件（`RetryMatching`、`CancelMatching`、`DeleteMatching`）的批量操作，配套 `BulkResult`、`TaskGroup`、`ErrUnsupported`、`MaxBulkTasks`。数据库 Store 通过新的可选 `database.ExtendedOperationsRepo` 暴露，框架 GORM Repo 已实现；默认排序与旧游标保持兼容。
+- **GORM Repo 记录创建、更新、开始执行时间并提供回填**：新增列见升级风险；`Repo.Backfill(ctx, limit)` 按批为旧行补齐消息版本、创建时间和更新时间。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

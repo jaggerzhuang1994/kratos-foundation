@@ -14,32 +14,47 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ListTasks 按稳定主键顺序返回一页任务元数据；正文仅由 GetTask 返回。
+// ListTasks 按筛选条件和排序返回一页任务元数据；正文仅由 GetTask 返回。
+// 默认排序按存储主键升序，游标与旧版本兼容；其他排序使用绑定排序方式的键集游标。
 func (r *Repo[T]) ListTasks(ctx context.Context, query queue.TaskQuery) (queue.TaskPage, error) {
 	if err := query.Validate(); err != nil {
 		return queue.TaskPage{}, err
 	}
 	now := time.Now().UTC()
-	db := r.consumerDB(ctx)
-	if query.Cursor != "" {
-		cursor, err := decodeOperationsCursor(query.Cursor)
-		if err != nil {
-			return queue.TaskPage{}, err
+	db := r.applyFilter(r.consumerDB(ctx), query.EffectiveFilter(), now)
+	if query.Sort.Field == queue.TaskSortDefault {
+		if query.Cursor != "" {
+			cursor, err := decodeOperationsCursor(query.Cursor)
+			if err != nil {
+				return queue.TaskPage{}, err
+			}
+			db = db.Where("id > ?", cursor)
 		}
-		db = db.Where("id > ?", cursor)
-	}
-	if len(query.Statuses) > 0 {
-		condition, args := operationsStatusCondition(query.Statuses, now, r.timestampPrecision)
-		db = db.Where(condition, args...)
+		db = db.Order("id ASC")
+	} else {
+		var cursor *listCursor
+		if query.Cursor != "" {
+			decoded, err := decodeListCursor(query.Cursor, query.Sort)
+			if err != nil {
+				return queue.TaskPage{}, err
+			}
+			cursor = &decoded
+		}
+		db = applySort(db, query.Sort, cursor)
 	}
 	var entities []T
-	if err := db.Order("id ASC").Limit(query.Limit + 1).Find(&entities).Error; err != nil {
+	if err := db.Limit(query.Limit + 1).Find(&entities).Error; err != nil {
 		return queue.TaskPage{}, fmt.Errorf("list queue tasks: %w", err)
 	}
 	page := queue.TaskPage{Tasks: make([]queue.TaskSummary, 0, min(len(entities), query.Limit))}
 	for index, entity := range entities {
 		if index == query.Limit {
-			page.NextCursor = encodeOperationsCursor(string(entities[index-1].QueueModel().ID))
+			last := entities[index-1].QueueModel()
+			if query.Sort.Field == queue.TaskSortDefault {
+				page.NextCursor = encodeOperationsCursor(string(last.ID))
+			} else {
+				page.NextCursor = encodeListCursor(cursorAfter(last, query.Sort))
+			}
 			break
 		}
 		summary, err := entity.QueueModel().summary(now, r.timestampPrecision)
@@ -92,8 +107,7 @@ func (r *Repo[T]) RetryTask(ctx context.Context, id string, at time.Time) error 
 	if err := r.validateTimestamp("available_at", at); err != nil {
 		return err
 	}
-	result := r.consumerDB(ctx).Where("id = ? AND status = ? AND failed = ?", id, StatusFailed, true).
-		Updates(map[string]any{"status": StatusPending, "completed_at": nil, "failed": false, "failure_reason": "", "failed_at": nil, "attempts": 0, "token": "", "reserved_until": 0, "available_at": timestampCeil(at, r.timestampPrecision)})
+	result := r.consumerDB(ctx).Where("id = ? AND status = ? AND failed = ?", id, StatusFailed, true).Updates(r.retryValues(at))
 	return r.operationsTransitionResult(ctx, result, id, "retry")
 }
 
@@ -164,6 +178,12 @@ func (m *Model) summary(now time.Time, precision time.Duration) (queue.TaskSumma
 	if m.CompletedAt != nil {
 		summary.CompletedAt = m.CompletedAt.UTC()
 	}
+	if m.UpdatedAt != nil {
+		summary.UpdatedAt = m.UpdatedAt.UTC()
+	}
+	if m.StartedAt != nil {
+		summary.StartedAt = m.StartedAt.UTC()
+	}
 	summary.LastError, summary.LastErrorAt = record.LastError, record.LastErrorAt
 	return summary, nil
 }
@@ -188,32 +208,35 @@ func operationsStatusCondition(statuses []queue.TaskStatus, now time.Time, preci
 	parts := make([]string, 0, len(statuses))
 	args := make([]any, 0, len(statuses)*2)
 	seen := make(map[queue.TaskStatus]struct{}, len(statuses))
-	leaseNow := now.UnixMilli()
-	availableNow := timestampFloor(now, precision)
 	for _, status := range statuses {
 		if _, ok := seen[status]; ok {
 			continue
 		}
 		seen[status] = struct{}{}
-		switch status {
-		case queue.TaskStatusFailed:
-			parts = append(parts, "status = ?")
-			args = append(args, StatusFailed)
-		case queue.TaskStatusCompleted:
-			parts = append(parts, "status = ?")
-			args = append(args, StatusCompleted)
-		case queue.TaskStatusRunning:
-			parts = append(parts, "status NOT IN ? AND token <> '' AND reserved_until > ?")
-			args = append(args, []Status{StatusFailed, StatusCompleted}, leaseNow)
-		case queue.TaskStatusScheduled:
-			parts = append(parts, "status NOT IN ? AND (reserved_until = 0 OR reserved_until <= ?) AND available_at > ?")
-			args = append(args, []Status{StatusFailed, StatusCompleted}, leaseNow, availableNow)
-		case queue.TaskStatusPending:
-			parts = append(parts, "status NOT IN ? AND (reserved_until = 0 OR reserved_until <= ?) AND available_at <= ?")
-			args = append(args, []Status{StatusFailed, StatusCompleted}, leaseNow, availableNow)
-		}
+		condition, values := statusCondition(status, now, precision)
+		parts = append(parts, condition)
+		args = append(args, values...)
 	}
 	return "(" + strings.Join(parts, ") OR (") + ")", args
+}
+
+// statusCondition 返回单个运维状态的 SQL 条件，与 operationStatus 的判定一致。
+func statusCondition(status queue.TaskStatus, now time.Time, precision time.Duration) (string, []any) {
+	leaseNow := now.UnixMilli()
+	availableNow := timestampFloor(now, precision)
+	active := []Status{StatusFailed, StatusCompleted}
+	switch status {
+	case queue.TaskStatusFailed:
+		return "status = ?", []any{StatusFailed}
+	case queue.TaskStatusCompleted:
+		return "status = ?", []any{StatusCompleted}
+	case queue.TaskStatusRunning:
+		return "status NOT IN ? AND token <> '' AND reserved_until > ?", []any{active, leaseNow}
+	case queue.TaskStatusScheduled:
+		return "status NOT IN ? AND (reserved_until = 0 OR reserved_until <= ?) AND available_at > ?", []any{active, leaseNow, availableNow}
+	default:
+		return "status NOT IN ? AND (reserved_until = 0 OR reserved_until <= ?) AND available_at <= ?", []any{active, leaseNow, availableNow}
+	}
 }
 
 func cleanupCondition(options queue.CleanupOptions, precision time.Duration) (string, []any) {

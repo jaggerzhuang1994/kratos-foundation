@@ -108,7 +108,7 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 		return nil, fmt.Errorf("parse queue model: %w", err)
 	}
 	// 固定基础列的映射和唯一主键，防止自定义字段遮蔽租约或改变任务身份。
-	for _, name := range []string{"Status", "CompletedAt", "ID", "Generation", "Data", "Attempts", "Token", "AvailableAt", "ReservedUntil", "Failed", "FailureReason", "FailedAt", "LastErrorMessage", "LastErrorAt"} {
+	for _, name := range managedFields {
 		f := statement.Schema.LookUpField(name)
 		base, _ := reflect.TypeFor[Model]().FieldByName(name)
 		if f == nil || len(f.BindNames) != 2 || f.BindNames[0] != "Model" || f.StructField.Tag != base.Tag || f.DBName != strings.Split(strings.TrimPrefix(base.Tag.Get("gorm"), "column:"), ";")[0] || !f.Creatable || !f.Updatable || !f.Readable {
@@ -135,6 +135,17 @@ func newRepo[T Entity](ctx context.Context, provider ConnectionProvider, factory
 }
 
 func (r *Repo[T]) entity() T { return reflect.New(r.entityType).Interface().(T) }
+
+// updatedAt 返回写入 updated_at 的值：状态变化发生的时刻，按存储精度向下取整。
+func (r *Repo[T]) updatedAt(now time.Time) *time.Time {
+	return timestampFloorPointer(now, r.timestampPrecision)
+}
+
+// touch 在一次状态变更的写入值里加上 updated_at。
+func (r *Repo[T]) touch(values map[string]any) map[string]any {
+	values["updated_at"] = r.updatedAt(time.Now())
+	return values
+}
 
 func (r *Repo[T]) db(ctx context.Context) *gorm.DB {
 	// 队列状态必须读主库：配置只读副本时，候选、统计与运维读取若走副本会看到复制延迟前的租约。
@@ -171,8 +182,16 @@ func (r *Repo[T]) validateTimestamp(name string, at time.Time) error {
 
 // Insert 将任务和工厂自定义字段写入同一行，可复用业务 Context 中的事务。
 func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) error {
-	if record == nil || record.Task.ID == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.MessageVersion) == "" || strings.TrimSpace(record.Task.ID) == "" || record.Attempts < 0 || len(record.Token) > 36 || len(record.FailureReason) > 128 {
+	if record == nil || record.Task.ID == "" || len(record.Task.ID) > 128 || strings.TrimSpace(record.Task.MessageVersion) == "" || len(record.Task.MessageVersion) > maxMessageVersionBytes || strings.TrimSpace(record.Task.ID) == "" || record.Attempts < 0 || len(record.Token) > 36 || len(record.FailureReason) > 128 {
 		return errors.New("invalid queue task")
+	}
+	now := time.Now()
+	createdAt := record.Task.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+	if err := r.validateTimestamp("created_at", createdAt); err != nil {
+		return err
 	}
 	if err := r.validateTimestamp("available_at", record.Task.AvailableAt); err != nil {
 		return err
@@ -201,7 +220,14 @@ func (r *Repo[T]) Insert(ctx context.Context, record *databasequeue.TaskRecord) 
 	if reflect.ValueOf(entity).IsNil() || entity.QueueModel() == nil || entity.TableName() != r.modelTable {
 		return errors.New("factory returned an invalid queue model")
 	}
-	model := Model{Status: StatusPending, ID: taskID(record.Task.ID), Generation: uuid.NewString(), Data: data, AvailableAt: timestampCeil(record.Task.AvailableAt, r.timestampPrecision), Attempts: record.Attempts, Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason}
+	version := record.Task.MessageVersion
+	model := Model{
+		Status: StatusPending, ID: taskID(record.Task.ID), Generation: uuid.NewString(), Data: data,
+		AvailableAt: timestampCeil(record.Task.AvailableAt, r.timestampPrecision), Attempts: record.Attempts,
+		Token: record.Token, Failed: record.Failed, FailureReason: record.FailureReason,
+		MessageVersion: &version, CreatedAt: timestampFloorPointer(createdAt, r.timestampPrecision),
+		UpdatedAt: r.updatedAt(now),
+	}
 	if !record.ReservedUntil.IsZero() {
 		model.ReservedUntil = deadlineMillis(record.ReservedUntil)
 		model.Status = StatusRunning

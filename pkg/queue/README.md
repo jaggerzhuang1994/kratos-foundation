@@ -18,7 +18,8 @@
 | [worker_execution.go](worker_execution.go) | 单次任务执行、超时与 panic、Ack/Release/Fail、归档成功后的失败通知 |
 | [retry.go](retry.go) | 重试策略、退避计算和等待、Permanent 错误标记 |
 | [task.go](task.go) | Task、Reservation、FailedTask、Store、Stats 与存储错误契约 |
-| [operations.go](operations.go) | 可选运维查询、状态变更、游标和有界清理契约 |
+| [operations.go](operations.go) | 可选运维查询、状态变更、有界清理，以及计数、分组、改排期和批量操作的扩展契约 |
+| [operations_query.go](operations_query.go) | 运维列表的分页、筛选条件与排序 |
 | [observability.go](observability.go) | 应用观测依赖及积压统计指标注册 |
 
 `internal/telemetry` 保留独立的指标与追踪实现，`testdata/wireassembly` 保留真实 Wire 生成验证。运行流程见下方“执行、延迟与失败”；文件归属不改变调用顺序或资源所有权。
@@ -65,12 +66,42 @@ Retry 的第一次等待使用 MinBackoff，后续按两倍增长并受 MaxBacko
 
 | 操作 | 允许状态 | 结果边界 |
 | --- | --- | --- |
-| `List` | pending、scheduled、running、failed、completed | `limit` 为 1–1000；状态筛选可选；正文不返回 |
+| `List` | pending、scheduled、running、failed、completed | `limit` 为 1–1000；状态筛选可选；`Filter`、`Sort` 需后端支持；正文不返回 |
 | `Get` | 任意仍存在状态 | 返回完整独立快照；不存在为 `ErrNotFound` |
 | `Delete` | failed、completed | 其他状态为 `ErrStateConflict` |
 | `Cancel` | pending、scheduled | running 或终态为 `ErrStateConflict` |
 | `Retry` | failed | 清零尝试次数并重新排期；其他状态为 `ErrStateConflict` |
 | `Cleanup` | 截止时间之前的 failed、completed | 每次最多 1000 条；返回实际删除数 |
+
+`TaskSummary` 除状态、次数和各时间点外，还有 `UpdatedAt`（最近一次状态变化：入队、领取、释放、失败、完成、人工重试、改排期，续租不算）和 `StartedAt`（最近一次领取即开始执行的时间）；后端未记录时为零值。
+
+### 筛选、排序与扩展运维
+
+`TaskQuery.Filter`（`TaskFilter`）按状态、任务 ID、消息版本、失败分类、各时间列范围（左闭右开 `TimeRange`）、最少尝试次数和错误原文子串筛选，字段之间为“且”，同一字段多个值为“或”；`TaskQuery.Sort` 按创建、更新、可执行、开始执行、失败、完成或最近错误时间升序 / 降序，同值按任务 ID 同方向排列，排序列为空的任务升序在前、降序在后。零值 `Sort` 保持按存储主键升序，旧游标继续可用；其他排序的 Cursor 绑定生成它的排序方式，换排序后复用返回错误。旧字段 `TaskQuery.Statuses` 保留，与 `Filter.Statuses` 二选一。不支持某个条件或排序的后端返回 `ErrUnsupported`，不会静默忽略：Redis Store 只支持按状态筛选、默认顺序。
+
+后端还实现 `ExtendedOperations` 时，`q.Operations()` 的返回值可断言为它：
+
+```go
+ops, ok := q.Operations()
+if !ok {
+    return errNoOperations
+}
+ext, ok := ops.(queue.ExtendedOperations)
+if !ok {
+    return errNoOperations // 例如 Redis Store
+}
+counts, err := ext.CountByStatus(ctx, queue.TaskFilter{MessageVersions: []string{"email.v1"}})
+```
+
+| 操作 | 作用 | 边界 |
+| --- | --- | --- |
+| `Count` / `CountByStatus` | 匹配数量；一次返回各状态数量（未出现的状态为 0） | `CountByStatus` 的筛选不能含状态 |
+| `Group` | 按消息版本或失败分类分组计数，数量降序 | 至多 1–1000 组 |
+| `Reschedule` / `RescheduleTasks` | 修改没有有效租约的 pending/scheduled 任务的执行时间（立即执行或延后），不改尝试次数 | 其他状态 `ErrStateConflict` |
+| `RetryTasks` / `CancelTasks` / `DeleteTasks` | 按 ID 批量执行单条操作的同一规则 | 1–`MaxBulkTasks` 个 ID；`BulkResult.Items` 按请求顺序给出每个 ID 的 nil / `ErrNotFound` / `ErrStateConflict` |
+| `RetryMatching` / `CancelMatching` / `DeleteMatching` | 按筛选条件批量重试 failed、取消等待中、删除终态任务 | 每次至多 `limit`（1–`MaxBulkTasks`）条，循环到 `Affected` 为 0 处理完；只返回实际变更数 |
+
+批量操作逐条或按条件在存储层原子校验状态，不包外层事务、不长时间持有行锁；中途数据库出错时返回错误和已完成部分的结果。Database GORM Repo 实现全部扩展能力。
 
 Redis 成功确认后立即删除，因而不会列出或清理 completed；Database GORM 只有开启 `RetainCompleted` 才存在 completed。所有变更必须由存储层原子检查状态和有效租约，进程内不另加锁；并发 Worker 已取得有效租约时不能被取消或删除。清理是调用方显式触发的有界操作，不启动后台 goroutine，也不自动按保留期运行。
 

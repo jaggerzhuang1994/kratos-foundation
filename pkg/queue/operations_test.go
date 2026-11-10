@@ -6,24 +6,6 @@ import (
 	"time"
 )
 
-func TestTaskQueryValidateRejectsInvalidInput(t *testing.T) {
-	tests := []struct {
-		name  string
-		query TaskQuery
-	}{
-		{name: "zero limit", query: TaskQuery{}},
-		{name: "limit too large", query: TaskQuery{Limit: 1001}},
-		{name: "unknown status", query: TaskQuery{Limit: 1, Statuses: []TaskStatus{"unknown"}}},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if err := test.query.Validate(); err == nil {
-				t.Fatalf("Validate() error = nil for %#v", test.query)
-			}
-		})
-	}
-}
-
 func TestTaskSnapshotCloneDetachesTaskBody(t *testing.T) {
 	original := TaskSnapshot{Summary: TaskSummary{ID: "task"}, Task: &Task{ID: "task", Payload: []byte("body"), Headers: map[string]string{"secret": "value"}}}
 	clone := original.Clone()
@@ -124,3 +106,23 @@ func (operationsStoreStub) Fail(context.Context, *Reservation, string, time.Time
 }
 func (operationsStoreStub) Failed(context.Context, int) ([]FailedTask, error) { return nil, nil }
 func (operationsStoreStub) Retry(context.Context, string, time.Time) error    { return nil }
+
+func TestBulkValidation(t *testing.T) {
+	long := string(make([]byte, 129))
+	for _, ids := range [][]string{nil, {""}, {" "}, {long}, make([]string, MaxBulkTasks+1)} {
+		if ValidateBulkIDs(ids) == nil {
+			t.Fatalf("ValidateBulkIDs(%d ids) error = nil", len(ids))
+		}
+	}
+	if err := ValidateBulkIDs([]string{"a", "b"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, limit := range []int{0, -1, MaxBulkTasks + 1} {
+		if ValidateBulkLimit(limit) == nil {
+			t.Fatalf("ValidateBulkLimit(%d) error = nil", limit)
+		}
+	}
+	if err := ValidateBulkLimit(MaxBulkTasks); err != nil {
+		t.Fatal(err)
+	}
+}

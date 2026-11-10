@@ -32,7 +32,7 @@ func (r *Repo[T]) CompleteReserved(ctx context.Context, id, token string, at tim
 			return err
 		}
 		// 终态和租约在同一次条件更新中提交，旧 owner 和重复确认不能改写完成记录。
-		return transitionResult(reserved.Updates(map[string]any{"status": StatusCompleted, "completed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}), "complete", queue.ErrLeaseLost)
+		return transitionResult(reserved.Updates(r.touch(map[string]any{"status": StatusCompleted, "completed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""})), "complete", queue.ErrLeaseLost)
 	}
 	return transitionResult(reserved.Delete(r.entity()), "complete", queue.ErrLeaseLost)
 }
@@ -49,7 +49,7 @@ func (r *Repo[T]) ReleaseReserved(ctx context.Context, id, token string, at time
 	if err := r.validateTimestamp("available_at", at); err != nil {
 		return err
 	}
-	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"status": StatusPending, "available_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}), "release", queue.ErrLeaseLost)
+	return transitionResult(r.reserved(ctx, id, token).Updates(r.touch(map[string]any{"status": StatusPending, "available_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""})), "release", queue.ErrLeaseLost)
 }
 
 // FailReserved 保留任务和自定义字段，在同一行记录失败状态。
@@ -57,7 +57,7 @@ func (r *Repo[T]) FailReserved(ctx context.Context, id, token, reason string, at
 	if err := r.validateTimestamp("failed_at", at); err != nil {
 		return err
 	}
-	return transitionResult(r.reserved(ctx, id, token).Updates(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": reason, "failed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""}), "fail", queue.ErrLeaseLost)
+	return transitionResult(r.reserved(ctx, id, token).Updates(r.touch(map[string]any{"status": StatusFailed, "failed": true, "failure_reason": reason, "failed_at": timestampCeil(at, r.timestampPrecision), "reserved_until": 0, "token": ""})), "fail", queue.ErrLeaseLost)
 }
 
 // ReleaseReservedWithError 与 ReleaseReserved 相同，并在同一次条件更新中覆盖最近一次执行错误。
@@ -87,6 +87,7 @@ func (r *Repo[T]) FailReservedWithError(ctx context.Context, id, token, reason s
 }
 
 func (r *Repo[T]) setLastError(values map[string]any, executionError queue.ExecutionError) {
+	r.touch(values)
 	values["last_error_message"] = executionError.Message
 	values["last_error_at"] = timestampCeil(executionError.At, r.timestampPrecision)
 }
@@ -116,10 +117,15 @@ func (r *Repo[T]) ListFailed(ctx context.Context, limit int) ([]databasequeue.Ta
 	return records, nil
 }
 
+// retryValues 是人工重试写入的值：清除失败与租约、次数清零并重新排期。
+func (r *Repo[T]) retryValues(at time.Time) map[string]any {
+	return r.touch(map[string]any{"status": StatusPending, "completed_at": nil, "failed": false, "failure_reason": "", "failed_at": nil, "attempts": 0, "token": "", "reserved_until": 0, "available_at": timestampCeil(at, r.timestampPrecision)})
+}
+
 // RetryFailed 原子重置失败状态、次数和租约，保留正文及自定义字段。
 func (r *Repo[T]) RetryFailed(ctx context.Context, id string, at time.Time) error {
 	if err := r.validateTimestamp("available_at", at); err != nil {
 		return err
 	}
-	return transitionResult(r.consumerDB(ctx).Where("id = ? AND failed = ?", id, true).Updates(map[string]any{"status": StatusPending, "completed_at": nil, "failed": false, "failure_reason": "", "failed_at": nil, "attempts": 0, "token": "", "reserved_until": 0, "available_at": timestampCeil(at, r.timestampPrecision)}), "retry", queue.ErrNotFound)
+	return transitionResult(r.consumerDB(ctx).Where("id = ? AND failed = ?", id, true).Updates(r.retryValues(at)), "retry", queue.ErrNotFound)
 }

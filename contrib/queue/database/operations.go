@@ -24,11 +24,15 @@ type operations struct {
 	repo OperationsRepo
 }
 
-// QueueOperations 仅在底层 Repo 实现 OperationsRepo 时暴露运维能力。
+// QueueOperations 仅在底层 Repo 实现 OperationsRepo 时暴露运维能力；
+// Repo 还实现 ExtendedOperationsRepo 时，返回值同时满足 queue.ExtendedOperations。
 func (s *Store) QueueOperations() (queue.Operations, bool) {
 	repo, ok := s.repo.(OperationsRepo)
 	if !ok {
 		return nil, false
+	}
+	if extended, ok := s.repo.(ExtendedOperationsRepo); ok {
+		return &extendedOperations{operations: operations{repo: repo}, repo: extended}, true
 	}
 	return &operations{repo: repo}, true
 }
