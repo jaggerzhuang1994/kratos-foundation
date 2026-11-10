@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.13.0（2026-11-10）
+
 ### 升级风险
 
 - **GORM 队列表新增 `message_version`、`created_at`、`updated_at`、`started_at` 四列和三个索引，升级前必须先迁移**：新版本投递的 INSERT 写入全部 Model 列，表里没有这些列时投递会报列不存在。四列均可空、旧版本不读写，可以先迁移再滚动升级；MySQL 的 `ALTER TABLE ... ADD COLUMN ..., ADD INDEX ..., ALGORITHM=INPLACE, LOCK=NONE` 语句与回填方式见 [GORM 队列文档](contrib/queue/database/gorm/README.md#v213-新增跟踪列)，简单模式也可调用 `SimpleRepo.Migrate`。全部实例升级后用 `Repo.Backfill` 或文档里的 SQL 回填旧行，否则旧行在按这些列筛选、排序、分组时不会被正确归类（领取与展示不受影响）。
@@ -21,7 +31,13 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- ⚠️ 不兼容：**queue**：tracking columns, filtered/sorted listing and bulk operations（`6719bde`）
+
+**文档**
+
+- **changelog**：refresh commit records after v2.12.0（`91093c7`）
 <!-- changelog:auto:end -->
 
 ## v2.12.0（2026-11-09）
