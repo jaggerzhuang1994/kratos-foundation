@@ -4,6 +4,16 @@
 
 ## 计划中
 
+<!-- changelog:auto:start -->
+### 提交记录
+
+> 由 `make changelog` 按 Git tag 生成，请勿手改本块。
+
+- 无新增提交
+<!-- changelog:auto:end -->
+
+## v2.14.0（2026-11-11）
+
 ### 升级风险
 
 - **队列任务不再沿用投递方的 trace，改为一个任务一条 trace**：`queue.execute` 的 `trace.id` 由任务 ID 确定（UUID 形式的任务 ID 去掉连字符即 `trace.id`），首次执行与重试共用，以 Link 关联投递方 span（此前是投递方 trace 的子 span）。一次请求或定时任务批量投递时，这批任务及其下游调用此前共用一个 `trace.id`，无法按任务区分。按「投递方 trace.id」检索消费日志的排障方式需改为按任务 ID 或 `queue.task.execution.started` 的 `dispatch.trace.id`；追踪系统里投递与执行不再是同一条 trace，通过 Link 跳转。采样沿用投递方的决定，任务没有投递方 trace 时按采样处理。
@@ -27,7 +37,18 @@
 
 > 由 `make changelog` 按 Git tag 生成，请勿手改本块。
 
-- 无新增提交
+**新增**
+
+- **request,log,job,database**：quieter background calls, job trace ids and caller-cancel SQL logs（`09bd9f3`）
+- ⚠️ 不兼容：**log,server,queue**：always-on panic diagnostics, per-task traces and task lifecycle at info（`8e06a3b`）
+
+**文档**
+
+- **changelog**：refresh commit records after v2.13.0（`30a8f8a`）
+
+**构建与依赖**
+
+- bump toolchain to go1.26.11 for GO-2026-6859（`679c419`）
 <!-- changelog:auto:end -->
 
 ## v2.13.0（2026-11-10）
