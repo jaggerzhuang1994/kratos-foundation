@@ -40,6 +40,8 @@ orders := logger.WithModule("orders").WithLevel(kratoslog.LevelWarn)
 orders.WithContext(request.WithDebug(ctx)).Debug("request details")
 ```
 
+**panic 日志不受级别限制**：ERROR 及以上、事件名以 `.panicked` 或 `.panic.recovered` 结尾的日志绕过上述全部级别（根、实例、模块）和输出端级别，只有 `LOG_DISABLE` 或命中模块的 `disable` 能关闭；panic 是代码缺陷，调高级别不应让它消失。
+
 输出端级别是独立的最低限制，debug 不绕过它。未配置 `log.level` 且 `LOG_LEVEL=info` 时，仅把 `log.std.level` 改成 debug 不会产生 DEBUG 日志；需要根配置、模块配置、实例或请求放宽根级别。
 
 ## 配置热更新

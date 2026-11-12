@@ -145,7 +145,7 @@ flowchart TD
     C --> D{有到期且可领取的任务?}
     D -- 否 --> E([结束原子操作 返回空])
     D -- 是 --> F[保存token/截止/次数 提交并释放锁]
-    F --> FS[Worker DEBUG queue.task.execution.started]
+    F --> FS[Worker INFO queue.task.execution.started]
     FS --> G{Store校验任务及领取状态}
     G -- 快照无效 --> H([返回错误 不继续写入])
     G -- 有效 --> J[原子操作外执行业务Handler]
@@ -160,7 +160,7 @@ flowchart TD
     C & L & M & N -- 存储故障 --> P[Worker ERROR queue.storage.failed]
     C -- 停机 --> U([停止领取 在途任务排空后退出])
     L & M & N -- 旧token --> Q[Worker WARN queue.lease.lost]
-    L -- 成功 --> R[Worker DEBUG queue.task.execution.finished result=success duration]
+    L -- 成功 --> R[Worker INFO queue.task.execution.finished result=success duration]
     M -- 成功 --> S[Worker WARN queue.task.retry_scheduled]
     N -- 成功 --> T[Worker ERROR queue.task.failed]
     P & Q & R & S & T --> Z([本次操作结束])

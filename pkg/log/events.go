@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 )
 
 // eventCounter 由 bootstrap.NewMetricsBootstrap 设置，把需要告警的异常事件计入指标。
@@ -24,7 +25,7 @@ func SetEventCounter(counter func(event string)) (restore func()) {
 
 // CountedEvent 报告事件名是否属于计数范围。
 func CountedEvent(event string) bool {
-	return strings.HasSuffix(event, ".rejected") || strings.HasSuffix(event, ".panicked") || strings.HasSuffix(event, ".panic.recovered")
+	return strings.HasSuffix(event, ".rejected") || output.IsPanicEvent(event)
 }
 
 // observeEvent 在 WARN 及以上级别查找本次调用或实例字段中的 event，命中计数范围时回调。

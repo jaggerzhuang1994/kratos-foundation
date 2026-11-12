@@ -178,7 +178,7 @@ func (c *websocketClient) resolve() {
 	defer func() {
 		if r := recover(); r != nil {
 			if c.Logger != nil {
-				c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "resolve", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("websocket handler panic recovered")
+				c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "resolve", "panic_type", fmt.Sprintf("%T", r), "panic", fmt.Sprint(r), "stack", string(debug.Stack())).Error("websocket handler panic recovered")
 			}
 		}
 	}()
@@ -226,7 +226,7 @@ func (c *websocketClient) resolve() {
 				defer func() {
 					if r := recover(); r != nil {
 						if c.Logger != nil {
-							c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_message", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("websocket handler panic recovered")
+							c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_message", "panic_type", fmt.Sprintf("%T", r), "panic", fmt.Sprint(r), "stack", string(debug.Stack())).Error("websocket handler panic recovered")
 						}
 					}
 				}()
@@ -265,7 +265,7 @@ func (c *websocketClient) shutdown(ctx context.Context) error {
 func (c *websocketClient) invokeShutdown(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil && c.Logger != nil {
-			c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_shutdown", "panic_type", fmt.Sprintf("%T", r), "stack", log.DebugOnly(string(debug.Stack()))).Error("websocket handler panic recovered")
+			c.WithContext(c.request.Context()).With("event", "server.websocket.panic.recovered", "stage", "on_shutdown", "panic_type", fmt.Sprintf("%T", r), "panic", fmt.Sprint(r), "stack", string(debug.Stack())).Error("websocket handler panic recovered")
 		}
 	}()
 	c.onShutdownHandler.OnShutdown(ctx, c)

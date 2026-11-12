@@ -194,31 +194,31 @@ flowchart TD
     I -- 空 --> W[可取消轮询]
     W --> I
     I -- 成功 --> J[原子操作提交释放锁 固定 token 和次数]
-    J --> JS[DEBUG queue.task.execution.started]
+    J --> JS[INFO queue.task.execution.started]
     JS --> K{次数及类型有效?}
     K -- 否 --> FAIL[按 token 调用 Store.Fail]
     K -- 是 --> L{解码和校验成功?}
     L -- 否 --> FAIL
     L -- 是 --> M[原子边界外 BeforeHandle 等待及处理中间件 协作超时]
-    M -- 应用取消 --> STOP[DEBUG queue.task.execution.finished result=stopped duration]
+    M -- 应用取消 --> STOP[INFO queue.task.execution.finished result=stopped duration]
     STOP --> END
     M -- 成功 --> ACK[按 token Ack]
     M -- 错误或超时 --> N{永久失败或耗尽?}
     N -- 是 --> FAIL
     N -- 否 --> R[按 token Release 保存重试排期]
     R -- 成功 --> RL[WARN queue.task.retry_scheduled]
-    ACK -- 成功 --> AL[DEBUG queue.task.execution.finished result=success duration]
+    ACK -- 成功 --> AL[INFO queue.task.execution.finished result=success duration]
     FAIL -- 成功 --> FL[ERROR queue.task.failed]
     FL --> CB{配置 OnFailed?}
-    CB -- 否 --> FF[DEBUG queue.task.execution.finished result=failed duration]
+    CB -- 否 --> FF[INFO queue.task.execution.finished result=failed duration]
     CB -- 是 --> CALL[原子边界外调用回调 独立超时预算]
     CALL -- 成功 --> FF
     CALL -- 错误或 panic 或超时 --> CL[ERROR queue.failure.callback_failed]
     CL --> FF
-    RL --> RF[DEBUG queue.task.execution.finished result=retry duration]
+    RL --> RF[INFO queue.task.execution.finished result=retry duration]
     RF & FF & AL --> I
     I & FAIL & ACK & R -- 存储故障 --> SL[ERROR queue.storage.failed]
-    SL --> SF[DEBUG queue.task.execution.finished result=storage_error duration]
+    SL --> SF[INFO queue.task.execution.finished result=storage_error duration]
     SF --> END
     FAIL & ACK & R -- 纯租约冲突 --> LL[WARN queue.lease.lost]
     LL --> I

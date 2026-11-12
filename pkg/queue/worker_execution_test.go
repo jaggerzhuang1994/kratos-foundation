@@ -4,11 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 	"unicode/utf8"
+
+	kratoslog "github.com/go-kratos/kratos/v2/log"
+	kratostracing "github.com/go-kratos/kratos/v2/middleware/tracing"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/testlog"
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestExecutionPersistsOutcome(t *testing.T) {
@@ -49,13 +57,14 @@ func TestExecutionPersistsOutcome(t *testing.T) {
 				t.Fatalf("outcome %s snapshot %s", outcome, r.Task.Payload)
 			}
 			logs := strings.Join(obs.Logger.(*testLog).events, "\n")
-			if !strings.Contains(logs, "DEBUG eventqueue.task.execution.started") ||
-				!strings.Contains(logs, "DEBUG eventqueue.task.execution.finished") ||
+			if !strings.Contains(logs, "INFO eventqueue.task.execution.started") ||
+				!strings.Contains(logs, "INFO eventqueue.task.execution.finished") ||
 				!strings.Contains(logs, "result"+tc.result) ||
 				!strings.Contains(logs, "duration") {
 				t.Fatalf("incomplete execution lifecycle log: %s", logs)
 			}
-			if strings.Contains(logs, "INFO eventqueue.task.execution.") || strings.Contains(logs, "data") || strings.Contains(logs, "token") {
+			// 开始与结束各记一条 Info，不记录 Payload 或租约 Token。
+			if strings.Count(logs, "eventqueue.task.execution.") != 2 || strings.Contains(logs, "data") || strings.Contains(logs, "token") {
 				t.Fatalf("noisy or unsafe execution log: %s", logs)
 			}
 			if tc.name != "success" {
@@ -312,5 +321,132 @@ func TestErrorMessageTruncatesOnRuneBoundary(t *testing.T) {
 	long := errorMessage(errors.New(strings.Repeat("a", MaxErrorMessageBytes-15) + strings.Repeat("错", 100)))
 	if len(long) > MaxErrorMessageBytes || !utf8.ValidString(long) || !strings.HasSuffix(long, "...(truncated)") {
 		t.Fatalf("truncated message len=%d valid=%v", len(long), utf8.ValidString(long))
+	}
+}
+
+// 同一次请求批量投递的任务各自一条 trace（以 Link 关联投递方）：trace.id 由任务 ID 确定，重试共用；
+// Handler 内通过 Context 输出的业务日志带同一个 trace.id 与任务定位字段，重试时另带 task.retry。
+func TestExecutionUsesOneTracePerTaskLinkedToProducer(t *testing.T) {
+	obs, exporter := testObservability(t)
+	logPath := filepath.Join(t.TempDir(), "queue.log")
+	logger, cleanup, err := testlog.New(testlog.Config{
+		Level:       kratoslog.LevelDebug,
+		FilterEmpty: true,
+		TimeFormat:  time.RFC3339,
+		Std:         testlog.OutputConfig{Disable: true, Level: kratoslog.LevelDebug},
+		File: testlog.FileConfig{
+			OutputConfig: testlog.OutputConfig{Level: kratoslog.LevelDebug},
+			Path:         logPath,
+			Rotating:     testlog.RotatingConfig{Disable: true},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	// 与 bootstrap 相同：trace.id 由 Context 中的 span 求值。
+	logger = logger.With(foundationlog.TraceIDKey, kratostracing.TraceID())
+	obs.Logger = logger
+
+	// 一个投递方 span 内连续投递两个任务。
+	stored := []*Task{}
+	store := &storeStub{
+		enqueue: func(_ context.Context, task *Task) error { stored = append(stored, task); return nil },
+		ack:     func(context.Context, *Reservation) error { return nil },
+		release: func(context.Context, *Reservation, time.Time) error { return nil },
+	}
+	dispatcher, err := newDispatcher("mail", store, obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	producerCtx, producerSpan := obs.Tracing.Tracer("test").Start(context.Background(), "cron")
+	producerTrace := producerSpan.SpanContext().TraceID()
+	for range 2 {
+		if _, err = dispatcher.dispatch(producerCtx, &Task{MessageVersion: "email"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	producerSpan.End()
+
+	handlerTraces := []trace.TraceID{}
+	failFirstAttempt := true
+	worker, err := newWorker[*Task](workerConfig{Name: "test", Queue: "mail", Timeout: time.Second}, store, map[string]taskHandler{"email": func(ctx context.Context, _ *Task) error {
+		handlerTraces = append(handlerTraces, trace.SpanContextFromContext(ctx).TraceID())
+		logger.WithContext(ctx).Info("business log")
+		if failFirstAttempt {
+			failFirstAttempt = false
+			return errors.New("upstream unavailable")
+		}
+		return nil
+	}}, obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 第一个任务首次执行失败后重试一次，第二个任务一次成功。
+	for _, reservation := range []*Reservation{
+		{Task: stored[0], Token: "t", Attempts: 1},
+		{Task: stored[0], Token: "t", Attempts: 2},
+		{Task: stored[1], Token: "t", Attempts: 1},
+	} {
+		if err = worker.execute(context.Background(), reservation, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(handlerTraces) != 3 || handlerTraces[0] != handlerTraces[1] {
+		t.Fatalf("retry must reuse the task trace: %v", handlerTraces)
+	}
+	if handlerTraces[0] == handlerTraces[2] || handlerTraces[0] == producerTrace || handlerTraces[2] == producerTrace {
+		t.Fatalf("tasks must not share a trace: producer=%s handlers=%v", producerTrace, handlerTraces)
+	}
+	// 任务 ID 是 UUID 时 trace.id 就是去掉连字符的任务 ID。
+	if handlerTraces[0].String() != strings.ReplaceAll(stored[0].ID, "-", "") {
+		t.Fatalf("trace %s is not derived from task id %s", handlerTraces[0], stored[0].ID)
+	}
+	handlerTraces = []trace.TraceID{handlerTraces[0], handlerTraces[2]}
+	executions := 0
+	for _, span := range exporter.GetSpans() {
+		if span.Name != "queue.execute" {
+			continue
+		}
+		executions++
+		if span.Parent.TraceID() == producerTrace || len(span.Links) != 1 || span.Links[0].SpanContext.TraceID() != producerTrace {
+			t.Fatalf("execute span parent=%v links=%v, want task trace linked to producer %s", span.Parent, span.Links, producerTrace)
+		}
+	}
+	if executions != 3 {
+		t.Fatalf("execute spans = %d, want 3", executions)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, task := range stored {
+		lines, retryLines := 0, 0
+		for line := range strings.SplitSeq(string(data), "\n") {
+			if !strings.Contains(line, "task.id="+task.ID) {
+				continue
+			}
+			lines++
+			if strings.Contains(line, "task.retry=1") {
+				retryLines++
+			}
+			// 框架日志与业务日志共用本次执行的 trace.id，任务定位字段不重复。
+			if !strings.Contains(line, "trace.id="+handlerTraces[index].String()) || strings.Count(line, "task.id=") != 1 || strings.Count(line, "queue=mail") != 1 {
+				t.Fatalf("task %d log line lacks its trace or duplicates fields: %s", index, line)
+			}
+		}
+		// 每次执行 started、business log、finished 各一行；第一个任务多一行重试调度，且重试那次执行的三行都带 task.retry=1。
+		wantLines, wantRetryLines := 3, 0
+		if index == 0 {
+			wantLines, wantRetryLines = 7, 3
+		}
+		if lines != wantLines || retryLines != wantRetryLines {
+			t.Fatalf("task %d log lines = %d (retry %d), want %d (retry %d): %s", index, lines, retryLines, wantLines, wantRetryLines, data)
+		}
+	}
+	if !strings.Contains(string(data), "dispatch.trace.id="+producerTrace.String()) || !strings.Contains(string(data), "business log") {
+		t.Fatalf("producer trace or business log missing: %s", data)
 	}
 }

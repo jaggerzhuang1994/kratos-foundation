@@ -4,6 +4,20 @@
 
 ## 计划中
 
+### 升级风险
+
+- **队列任务不再沿用投递方的 trace，改为一个任务一条 trace**：`queue.execute` 的 `trace.id` 由任务 ID 确定（UUID 形式的任务 ID 去掉连字符即 `trace.id`），首次执行与重试共用，以 Link 关联投递方 span（此前是投递方 trace 的子 span）。一次请求或定时任务批量投递时，这批任务及其下游调用此前共用一个 `trace.id`，无法按任务区分。按「投递方 trace.id」检索消费日志的排障方式需改为按任务 ID 或 `queue.task.execution.started` 的 `dispatch.trace.id`；追踪系统里投递与执行不再是同一条 trace，通过 Link 跳转。采样沿用投递方的决定，任务没有投递方 trace 时按采样处理。
+- **panic 恢复日志开始输出 panic 值与堆栈，5xx 故障日志开始输出完整错误链**：`server.request.panic.recovered`、`server.websocket.panic.recovered`、`app.runtime.panicked` 新增字段 `panic`（panic 值），`stack` 不再限于 Debug；`server.request.failed` 的 `error.detail` 不再限于 Debug。此前默认级别只有 `panic_type`，线上无法定位。panic 值与错误原文来自业务代码，不应包含密钥等不能进日志的数据；返回给调用方的错误不变（不带 panic 值，`err_stack` 仍按环境剥离）。
+- **服务端中间件链新增 `recovery.traced`（优先级 620，访问日志之内）**：业务、自定义中间件、校验与限流的 panic 在服务端 span 内恢复，恢复日志带 `trace.id`；最外层 `recovery` 保留。按名称替换 `recovery` 的业务需同时处理 `recovery.traced`。
+
+### 变更
+
+- 队列执行 Context 带日志字段 `queue`、`task.id`，重试的执行另带 `task.retry`（第几次重试）：Handler 内通过 Context 输出的业务日志自动带任务定位字段。
+- **队列任务开始 / 结束日志由 DEBUG 升为 INFO**：`queue.task.execution.started`、`queue.task.execution.finished` 默认级别即可看到每个任务的边界、结果与耗时；任务量大的队列日志量随之增加，需要关闭时把 `queue` 模块级别调到 warn。
+- **panic 的请求计入访问日志与请求指标**：`recovery.traced` 位于访问日志之内（优先级 620），恢复出的 500 经过 `server.request.completed` 与请求指标；此前 panic 的请求既没有访问日志也不计入指标。同一次 panic 只记录 `server.request.panic.recovered`，不再追加 `server.request.failed`。
+- **panic 日志不受日志级别限制**：ERROR 及以上、事件名以 `.panicked` 或 `.panic.recovered` 结尾的日志绕过根级别、实例级别、模块级别与各输出（std / file）的级别阈值，只有整体禁用日志或禁用该模块能关闭。
+- 队列 Handler panic 新增 `ERROR event=queue.task.panic.recovered`（`error.detail` 为 panic 值与调用栈），计入 `log_events_total` 与 `FoundationPanicRecovered` 告警；此前只体现在重试 / 失败日志的 `error=panic`，不触发 panic 告警。
+
 <!-- changelog:auto:start -->
 ### 提交记录
 

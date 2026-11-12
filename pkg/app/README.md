@@ -329,7 +329,7 @@ Context，使用支持取消的数据库/网络 API，为连接和读写配置�
 
 ## Runtime panic 防护
 
-App 对 Runtime 的 `Start`、`Stop` 与 `AbortStartup` 统一恢复 panic：记录 ERROR `app.runtime.panicked`（字段 phase、panic_type，堆栈仅在 Debug 下输出），并把它转为真实故障走统一停机，仍执行 BeforeStop、服务注销和其余 Runtime 的 Stop，Run 返回 `runtime <phase> panicked with <type>`。错误与日志只带 panic 的类型而不带取值，避免泄漏请求或凭据内容。启动与停止钩子运行在 Run 所在 goroutine，panic 仍向调用方传播。
+App 对 Runtime 的 `Start`、`Stop` 与 `AbortStartup` 统一恢复 panic：记录 ERROR `app.runtime.panicked`（字段 phase、panic_type、panic、stack），并把它转为真实故障走统一停机，仍执行 BeforeStop、服务注销和其余 Runtime 的 Stop，Run 返回 `runtime <phase> panicked with <type>`。Run 返回的错误只带 panic 的类型；日志带 panic 值与堆栈，不依赖 Debug 级别。启动与停止钩子运行在 Run 所在 goroutine，panic 仍向调用方传播。
 
 ## 应用日志
 

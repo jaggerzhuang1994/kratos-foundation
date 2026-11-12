@@ -19,6 +19,9 @@ const (
 	MiddlewarePriorityMetadata = 300
 	// MiddlewarePriorityTracing 让后续处理都处于服务端 span 内。
 	MiddlewarePriorityTracing = 400
+	// middlewarePriorityTracedRecovery 紧贴访问日志之内：业务、自定义中间件、校验与限流的 panic 在服务端 span 内恢复，
+	// 日志带 trace.id，恢复出的 500 再经过访问日志、错误边界与请求指标，panic 的请求同样有访问记录并计入指标。
+	middlewarePriorityTracedRecovery = 620
 	// MiddlewarePriorityMetrics 在 tracing 后记录请求指标。
 	MiddlewarePriorityMetrics = 500
 	// MiddlewarePriorityLogging 在上下文信息完整后记录请求日志。
@@ -83,6 +86,11 @@ func newMiddlewares(policies *middlewarePolicies) middlewareSet {
 			Name:       "logging",
 			Priority:   MiddlewarePriorityLogging,
 			Middleware: policies.logging.Middleware(),
+		},
+		{
+			Name:       "recovery.traced",
+			Priority:   middlewarePriorityTracedRecovery,
+			Middleware: recoverRequests(policies.logger),
 		},
 		{
 			Name:       "validator",

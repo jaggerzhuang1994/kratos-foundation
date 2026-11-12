@@ -13,6 +13,8 @@ import (
 type preparedOutput struct {
 	// output 合并过滤与级别策略后的输出链。
 	output kratoslog.Logger
+	// unleveled 与 output 相同但不带输出端级别阈值，供不受级别限制的 panic 日志写入；nil 时使用 output。
+	unleveled kratoslog.Logger
 	// file 文件输出资源；未启用时为 nil。
 	file kratoslog.Logger
 	// config 本代输出采用的完整配置快照。
@@ -58,14 +60,19 @@ func prepareOutput(config envConfig, previous *preparedOutput) (*preparedOutput,
 		}
 		next.file, next.releaseFile = file, release
 	}
-	var sinks []kratoslog.Logger
+	var sinks, unleveled []kratoslog.Logger
 	if next.file != nil {
-		sinks = append(sinks, output.NewLevelFilter(output.NewFilter(next.file, false, output.FilterKeysSet(config.File.FilterKeys)), config.File.Level))
+		sink := output.NewFilter(next.file, false, output.FilterKeysSet(config.File.FilterKeys))
+		sinks = append(sinks, output.NewLevelFilter(sink, config.File.Level))
+		unleveled = append(unleveled, sink)
 	}
 	if !config.Std.Disable {
-		sinks = append(sinks, output.NewLevelFilter(output.NewFilter(output.NewStd(), false, output.FilterKeysSet(config.Std.FilterKeys)), config.Std.Level))
+		sink := output.NewFilter(output.NewStd(), false, output.FilterKeysSet(config.Std.FilterKeys))
+		sinks = append(sinks, output.NewLevelFilter(sink, config.Std.Level))
+		unleveled = append(unleveled, sink)
 	}
 	next.output = output.NewStack(sinks...)
+	next.unleveled = output.NewStack(unleveled...)
 	return next, reused, nil
 }
 
@@ -110,4 +117,20 @@ func (l *outputLogger) Log(level kratoslog.Level, keyvals ...any) error {
 		<-l.ready
 	}
 	return l.output.Log(level, keyvals...)
+}
+
+// logAlways 与 Log 相同，但绕过输出端级别阈值；只用于 panic 日志。
+func (l *outputLogger) logAlways(level kratoslog.Level, keyvals ...any) error {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.closed {
+		return os.ErrClosed
+	}
+	if l.ready != nil && !l.readyDone.Load() {
+		<-l.ready
+	}
+	if l.unleveled == nil {
+		return l.output.Log(level, keyvals...)
+	}
+	return l.unleveled.Log(level, keyvals...)
 }

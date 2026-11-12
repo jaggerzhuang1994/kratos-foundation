@@ -146,7 +146,7 @@ flowchart TD
     Z --> ZL[INFO queue.worker.stopped]
     ZE([正常停止])
     H -- 成功 --> K[原子边界结束 新token与attempts已保存]
-    K --> KS[DEBUG queue.task.execution.started]
+    K --> KS[INFO queue.task.execution.started]
     KS --> L{消息版本匹配且未超次数?}
     L -- 是 --> M[原子边界外执行Handler 带超时Context]
     L -- 否 --> R[按token持久化失败]
@@ -154,19 +154,19 @@ flowchart TD
     M -- 可重试错误或超时 --> O[按token释放 写下次可执行时间]
     M -- 永久失败或次数耗尽 --> R
     M -- 排空超时中止 --> PR[按token立即释放 不退避]
-    PR --> PS[DEBUG queue.task.execution.finished result=stopped duration]
+    PR --> PS[INFO queue.task.execution.finished result=stopped duration]
     PS --> Z
-    N -- 成功 --> P[DEBUG queue.task.execution.finished result=success duration]
+    N -- 成功 --> P[INFO queue.task.execution.finished result=success duration]
     O -- 成功 --> Q[WARN Worker queue.task.retry_scheduled]
     R -- 成功 --> S[ERROR Worker queue.task.failed]
-    Q --> Q1[DEBUG queue.task.execution.finished result=retry duration]
-    S --> S1[DEBUG queue.task.execution.finished result=failed duration]
+    Q --> Q1[INFO queue.task.execution.finished result=retry duration]
+    S --> S1[INFO queue.task.execution.finished result=failed duration]
     P --> H
     Q1 & S1 --> H
-    N & O & R -- 纯租约冲突 --> TL[DEBUG queue.task.execution.finished result=storage_error duration]
+    N & O & R -- 纯租约冲突 --> TL[INFO queue.task.execution.finished result=storage_error duration]
     TL --> T[WARN Worker queue.lease.lost]
     T --> H
-    N & O & R -- 存储故障 --> U1[DEBUG queue.task.execution.finished result=storage_error duration]
+    N & O & R -- 存储故障 --> U1[INFO queue.task.execution.finished result=storage_error duration]
     U1 --> U[WARN queue.storage.retrying 倍增退避 500ms-30s]
     H -- 领取故障 --> U
     U --> H
@@ -178,7 +178,7 @@ flowchart TD
     ZR -- 否 --> ZE
 ```
 
-按需开启模块 Debug 后，每个有效领取在 Handler 调度前记录 `DEBUG event=queue.task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `DEBUG event=queue.task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`。`queue.task.retry_scheduled` 与 `queue.task.failed` 另带 `error.detail`：本次执行的错误原文（Handler 返回错误的完整包装链；超时时为 `context deadline exceeded: <Handler 返回的错误>`；panic 时为 panic 值与调用栈），按字符边界截断到 `MaxErrorMessageBytes`（4096 字节）。不记录 Payload 或 Headers；错误原文由业务 Handler 决定，返回给框架的错误不应包含密钥等不能进日志的数据。Trace span 传播跨投递/执行上下文，指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。普通错误仍可被追踪系统记录为异常事件。
+每个有效领取在 Handler 调度前记录 `INFO event=queue.task.execution.started`，结束时无论成功、重试、最终失败、应用停止或存储失败都记录 `INFO event=queue.task.execution.finished`，包含 `result=success|retry|failed|stopped|storage_error` 和覆盖 Handler、状态持久化及失败回调的 `duration`。日志还记录队列、Worker、任务 ID、消息版本（task.message_version）、次数、重试等待时间或受控失败分类；`reason` 保留最终处理分类，`cause` 区分 `handler_missing`、`timeout`、`panic`、`attempts_exhausted`、`decode_error`、`validation_error` 和 `handler_error`。`queue.task.retry_scheduled` 与 `queue.task.failed` 另带 `error.detail`：本次执行的错误原文（Handler 返回错误的完整包装链；超时时为 `context deadline exceeded: <Handler 返回的错误>`；panic 时为 panic 值与调用栈），按字符边界截断到 `MaxErrorMessageBytes`（4096 字节）。不记录 Payload 或 Headers；错误原文由业务 Handler 决定，返回给框架的错误不应包含密钥等不能进日志的数据。一个任务一条 trace：`trace.id` 由任务 ID 确定（UUID 形式的任务 ID 去掉连字符即 `trace.id`，其他 ID 取队列名与 ID 的摘要），首次执行与每次重试共用，以 Link 关联投递方 span，baggage 照常传播，采样沿用投递方的决定。同一请求或定时任务批量投递的任务不再共用一个 `trace.id`；一个任务的框架日志、Handler 通过 Context 输出的业务日志和下游调用都带该任务的 `trace.id`。执行 Context 另带日志字段 `queue`、`task.id`，重试的执行再带 `task.retry`（第几次重试，首次执行不带）；`queue.task.execution.started` 另记投递方的 `dispatch.trace.id`；开始与结束日志为 Info 级别，结束日志相当于任务的访问日志，任务量大到需要关闭时把 `queue` 模块级别调到 warn。Handler panic 另记一条 `ERROR event=queue.task.panic.recovered`（`error.detail` 为 panic 值与调用栈），不受日志级别限制并计入 `log_events_total`。指标标签使用逻辑队列和 Worker 名称，勿用任务 ID 构造这些名称。普通错误仍可被追踪系统记录为异常事件。
 
 **执行错误持久化**：Store 实现可选 `ErrorRecorder` 时，Worker 用 `ReleaseWithError` / `FailWithError` 代替 Release / Fail，在同一次状态写入中保存上述错误原文与时间（`ExecutionError`），下一次失败覆盖，确认成功与人工 Retry 不清除；运维接口的 `TaskSummary.LastError`、`Store.Failed` 返回的 `FailedTask.LastError` 和 `OnFailed` 事件可读到它。数据库 Store（框架 gorm Repo，需先给表加 `last_error_message`、`last_error_at` 列）支持；Redis Store 与未实现 `database.ErrorRepo` 的自定义 Repo 不支持，退回 Release / Fail，错误只在日志中。停机中止释放不是执行失败，不写错误。
 

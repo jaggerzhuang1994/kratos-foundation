@@ -618,11 +618,11 @@ flowchart TD
 
 默认 HTTP/gRPC unary 链在 metrics 后、可选访问日志前安装常驻 `errors` 中间件。它调用 `errors.Normalize`：旧结构化错误保留原始 HTTP 状态和业务码，普通未知错误公开返回安全 500；基础设施错误链中的本地取消/超时按 499/504 处理，明确 4xx 仍保留外层语义。
 
-`ERROR event=server.request.failed` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。传输上下文存在时，故障日志保留 `transport`、`endpoint`、`operation`，并始终记录 `code`、`reason` 和紧凑 `error`，完整 `error.detail` 使用 `log.DebugOnly`。服务端与客户端访问摘要分别使用稳定的 `INFO event=server.request.completed` 与 `event=client.request.completed`，字段为 kind/operation/code/reason/latency，不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
+`ERROR event=server.request.failed` 对服务端故障记录一次带请求 context 的诊断；`server.logging.disable=true` 只关闭访问摘要，不关闭该故障日志。传输上下文存在时，故障日志保留 `transport`、`endpoint`、`operation`，并始终记录 `code`、`reason` 和紧凑 `error`，完整错误链 `error.detail`（`%+v`，含堆栈）随故障日志一并输出，不依赖 Debug 级别。服务端与客户端访问摘要分别使用稳定的 `INFO event=server.request.completed` 与 `event=client.request.completed`，字段为 kind/operation/code/reason/latency，不读取请求/响应正文，不输出 cause/stack，只记录操作、状态和耗时；deadline 诊断仅在请求 debug 中展开。业务层应保留错误链，避免重复记录后再返回。SQL 或其他依赖日志仍由各自配置控制。
 
-最外层 `ERROR event=server.request.panic.recovered` 始终记录 panic 类型，堆栈通过 `log.DebugOnly` 仅在请求 debug 中展开；服务间错误诊断仍保存堆栈，不记录原始 panic 值或请求正文。panic 不会再进入内层故障出口，避免重复记录。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
+`ERROR event=server.request.panic.recovered` 始终记录 `panic_type`、`panic`（panic 值）与 `stack`，且不受任何日志级别限制（见 [log](../log/README.md)）；不记录请求参数或正文，返回给调用方的错误不带 panic 值。链上登记两层恢复：`recovery`（最外层）兜住所有中间件的 panic，`recovery.traced`（访问日志之内）在服务端 span 内恢复业务、自定义中间件、校验与限流的 panic，日志因此带 `trace.id`，恢复出的 500 仍经过访问日志与请求指标；一次 panic 只记录一次，不再追加 `server.request.failed`。panic 值来自业务代码，不应把密钥等不能进日志的数据放进 panic。状态码、业务码、cause 和传输过滤的兼容边界见 [errors](../errors/README.md)。
 
-业务通过 Spec 同名替换 `errors` 或 `recovery` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC unary 请求链。WebSocket 升级错误在本层只记录 `DEBUG event=server.websocket.upgrade.failed`，仍返回给请求错误边界按现有规则处理；普通未分类的握手错误可能被归为 500，业务拒绝应返回明确的结构化 4xx。WebSocket 读循环及异步消息 panic 由连接边界记录一次 `ERROR event=server.websocket.panic.recovered`，包含连接 Context、`transport=websocket`、`path`、`stage` 和 `panic_type`，不记录原始 panic 值或消息正文；纯堆栈仍仅在连接 Context 启用 debug 时展开。正常断开与停机拒绝不额外告警；超限消息为 Warn，框架无法向调用方返回的关闭失败为 Error。业务回调返回/消费的错误仍由业务处理。
+业务通过 Spec 同名替换 `errors`、`recovery` 或 `recovery.traced` 中间件时，应自行承担等价保护。本说明针对默认 HTTP/gRPC unary 请求链。WebSocket 升级错误在本层只记录 `DEBUG event=server.websocket.upgrade.failed`，仍返回给请求错误边界按现有规则处理；普通未分类的握手错误可能被归为 500，业务拒绝应返回明确的结构化 4xx。WebSocket 读循环及异步消息 panic 由连接边界记录一次 `ERROR event=server.websocket.panic.recovered`，包含连接 Context、`transport=websocket`、`path`、`stage`、`panic_type`、`panic`（panic 值）和 `stack`，不记录消息正文。正常断开与停机拒绝不额外告警；超限消息为 Warn，框架无法向调用方返回的关闭失败为 Error。业务回调返回/消费的错误仍由业务处理。
 
 ```mermaid
 flowchart TD
@@ -631,22 +631,16 @@ flowchart TD
     C --> D[常驻错误边界]
     D --> E{访问日志开启?}
     E -- 是 --> F[访问摘要: 无正文和堆栈]
-    E -- 否 --> G[自定义中间件 / 校验 / 限流 / 业务]
-    F --> G
+    E -- 否 --> R[span 内 panic 恢复]
+    F --> R
+    R --> G[自定义中间件 / 校验 / 限流 / 业务]
     G --> H[Normalize: 保留已知状态或安全兜底]
     H --> I{服务端故障?}
-    I -- 是 --> J[ERROR server.request.failed: code reason error]
+    I -- 是 --> J[ERROR server.request.failed: code reason error error.detail]
     I -- 否 --> K([返回安全协议错误或成功])
-    J --> N{请求 debug?}
-    N -- 是 --> O[展开 error.detail]
-    N -- 否 --> K
-    O --> K
-    G -. panic .-> L[ERROR server.request.panic.recovered: 类型]
-    L --> P{请求 debug?}
-    P -- 是 --> Q[展开 stack]
-    P -- 否 --> M
-    Q --> M
-    M([安全 500])
+    J --> K
+    G -. panic .-> L[ERROR server.request.panic.recovered: 类型 panic 值 stack trace.id]
+    L --> M([安全 500: 仍记访问摘要与请求指标])
 ```
 
 Kratos `grpc.Middleware` 只应用于 unary 调用；本包额外为 gRPC 流登记两个 stream interceptor：最外层把流处理器的 panic 恢复为 500 `UNKNOWN` 并记录 `server.request.panic.recovered`（grpc-go 不恢复处理器 panic，未恢复时整个进程退出），以及在流建立时恢复 `request_debug`；没有将整条 unary 中间件链扩展到流。Kratos 的 `grpc.StreamInterceptor` 会整体替换已登记的流拦截器，通过 `GRPC().Option(grpc.StreamInterceptor(...))` 登记业务 stream interceptor 时上述两个也被替换，须自行提供 panic 恢复、鉴权、截止时间及观测边界。

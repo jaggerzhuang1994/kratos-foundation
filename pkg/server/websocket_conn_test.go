@@ -222,11 +222,12 @@ func TestWebSocketPanicDiagnosticsFollowConnectionDebug(t *testing.T) {
 						t.Fatalf("panic diagnostic missing %s: %s", field, line)
 					}
 				}
-				if strings.Count(line, "event=server.websocket.panic.recovered") != 1 || strings.Contains(line, "private websocket") {
-					t.Fatalf("panic diagnostics duplicated or disclosed a payload: %s", line)
+				if strings.Count(line, "event=server.websocket.panic.recovered") != 1 || strings.Contains(line, "private websocket body") {
+					t.Fatalf("panic diagnostics duplicated or disclosed a message body: %s", line)
 				}
-				if got := strings.Contains(line, "stack="); got != debug {
-					t.Fatalf("debug=%v stack present=%v: %s", debug, got, line)
+				// panic 值与堆栈在默认级别就输出，不依赖连接级 debug。
+				if !strings.Contains(line, "stack=") || !strings.Contains(line, "panic=private websocket panic payload") {
+					t.Fatalf("debug=%v panic value or stack missing: %s", debug, line)
 				}
 			})
 		}

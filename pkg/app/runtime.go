@@ -12,7 +12,6 @@ import (
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/errtree"
-	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 )
 
 // Run 按以下顺序执行一次完整生命周期并返回汇总结果：
@@ -195,12 +194,12 @@ func (a *App) budgetContext(timeout time.Duration) (context.Context, context.Can
 }
 
 // guard 把 Runtime 回调中的 panic 转为错误并记录 ERROR，使应用按真实故障统一停机，
-// 而不是跳过停止钩子与服务注销直接崩溃。错误与日志只带 panic 类型，堆栈仅在 Debug 下输出。
+// 而不是跳过停止钩子与服务注销直接崩溃。返回的错误只带 panic 类型，日志带 panic 值与堆栈。
 func (a *App) guard(phase string, call func() error) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			a.logEvent(a.base, kratoslog.LevelError, "app.runtime.panicked", "runtime panic recovered",
-				"phase", phase, "panic_type", fmt.Sprintf("%T", recovered), "stack", foundationlog.DebugOnly(string(debug.Stack())))
+				"phase", phase, "panic_type", fmt.Sprintf("%T", recovered), "panic", fmt.Sprint(recovered), "stack", string(debug.Stack()))
 			err = fmt.Errorf("runtime %s panicked with %T", phase, recovered)
 		}
 	}()

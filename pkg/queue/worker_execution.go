@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -9,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	foundationlog "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -19,22 +21,41 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		return errInvalidReservation
 	}
 	task := reservation.Task
-	parent := taskPropagator.Extract(ctx, propagation.MapCarrier(task.Headers))
-	spanCtx, span := w.telemetry.Tracer().Start(parent, "queue.execute", trace.WithSpanKind(trace.SpanKindConsumer))
+	// 一个任务一条 trace：trace.id 由任务 ID 确定，重试与首次执行共用，不沿用投递方的 trace。
+	// 一次请求或定时任务可能批量投递，沿用投递方 trace 时这批任务及其下游调用的日志共用一个 trace.id，无法按任务区分。
+	// 投递方 span 以 Link 关联，baggage 照常传播。
+	producer := taskPropagator.Extract(ctx, propagation.MapCarrier(task.Headers))
+	producerSpan := trace.SpanContextFromContext(producer)
+	startOptions := []trace.SpanStartOption{trace.WithSpanKind(trace.SpanKindConsumer)}
+	if producerSpan.IsValid() {
+		startOptions = append(startOptions, trace.WithLinks(trace.Link{SpanContext: producerSpan}))
+	}
+	spanCtx, span := w.telemetry.Tracer().Start(
+		trace.ContextWithRemoteSpanContext(producer, taskSpanContext(w.config.Queue, task.ID, producerSpan)),
+		"queue.execute", startOptions...,
+	)
 	defer span.End()
+	// Handler 内通过 Context 输出的业务日志同样带上任务定位字段；重试的执行另带 task.retry（第几次重试）。
+	spanCtx = foundationlog.WithKv(spanCtx, "queue", w.config.Queue, "task.id", task.ID)
+	if reservation.Attempts > 1 {
+		spanCtx = foundationlog.WithKv(spanCtx, "task.retry", reservation.Attempts-1)
+	}
 	started := time.Now()
 	executionResult := "failure"
+	// queue 与 task.id 已随 spanCtx 带入。
 	logger := w.log.WithContext(spanCtx).With(
-		"queue", w.config.Queue,
 		"worker", w.config.Name,
-		"task.id", task.ID,
 		"task.message_version", task.MessageVersion,
 		"attempts", reservation.Attempts,
 	)
-	// 每个领取都有指标与 span，逐次执行日志仅在 Debug 排障时输出。
-	logger.Debugw("event", "queue.task.execution.started", "msg", "task execution started")
+	// 每次执行在 Info 记录开始与结束：结束日志带结果与耗时，相当于任务的访问日志；开始日志用于发现卡住未结束的任务。
+	startedFields := []any{"event", "queue.task.execution.started", "msg", "task execution started"}
+	if producerSpan.IsValid() {
+		startedFields = append(startedFields, "dispatch.trace.id", producerSpan.TraceID().String())
+	}
+	logger.Infow(startedFields...)
 	defer func() {
-		logger.Debugw(
+		logger.Infow(
 			"event", "queue.task.execution.finished",
 			"msg", "task execution finished",
 			"result", executionResult,
@@ -79,6 +100,9 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 		cause = "timeout"
 	} else if errors.Is(handlerErr, errHandlerPanic) {
 		cause = "panic"
+		// panic 单独记一条：事件名以 .panic.recovered 结尾，不受日志级别限制并计入 panic 告警；
+		// 随后的重试或失败日志只表达处理结果。
+		logger.Errorw("event", "queue.task.panic.recovered", "msg", "task handler panic recovered", "error.detail", errorMessage(handlerErr))
 	} else if errors.Is(handlerErr, errMessageDecode) {
 		cause = "decode_error"
 	} else if errors.Is(handlerErr, errMessageValidation) {
@@ -154,6 +178,29 @@ func (w *Worker[T]) execute(ctx context.Context, reservation *Reservation, claim
 	}
 	w.telemetry.RecordMessage(spanCtx, w.config.Queue, w.config.Name, result, time.Since(started))
 	return err
+}
+
+// taskSpanContext 返回任务级的父 span 上下文，同一任务的每次执行都是它的子 span，因而共用 trace.id。
+// 任务 ID 是 UUID 时 trace.id 就是去掉连字符的任务 ID，可直接用任务 ID 检索；其他 ID 取队列名与 ID 的摘要。
+// 采样沿用投递方的决定，没有投递方 trace 时按采样处理；该父 span 只用于归组，不会被导出。
+func taskSpanContext(queueName, taskID string, producer trace.SpanContext) trace.SpanContext {
+	digest := sha256.Sum256([]byte(queueName + "\x00" + taskID))
+	var traceID trace.TraceID
+	if parsed, err := trace.TraceIDFromHex(strings.ReplaceAll(taskID, "-", "")); err == nil {
+		traceID = parsed
+	} else {
+		copy(traceID[:], digest[:16])
+	}
+	var spanID trace.SpanID
+	copy(spanID[:], digest[16:24])
+	if !spanID.IsValid() {
+		spanID[7] = 1
+	}
+	flags := trace.FlagsSampled
+	if producer.IsValid() {
+		flags = producer.TraceFlags()
+	}
+	return trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, TraceFlags: flags, Remote: true})
 }
 
 var errHandlerPanic = errors.New("queue handler panicked")

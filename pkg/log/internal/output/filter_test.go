@@ -143,3 +143,23 @@ func BenchmarkStackLogger(b *testing.B) {
 		}
 	}
 }
+
+func TestHasPanicEventMatchesOnlyErrorPanicEvents(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		level   kratoslog.Level
+		keyvals []any
+		want    bool
+	}{
+		{"请求 panic 恢复", kratoslog.LevelError, []any{"event", "server.request.panic.recovered"}, true},
+		{"Runtime panic", kratoslog.LevelError, []any{"phase", "start", "event", "app.runtime.panicked"}, true},
+		{"普通故障事件", kratoslog.LevelError, []any{"event", "server.request.failed"}, false},
+		{"没有事件名", kratoslog.LevelError, []any{"msg", "boom"}, false},
+		{"低于 ERROR 不放行", kratoslog.LevelWarn, []any{"event", "server.request.panic.recovered"}, false},
+		{"非字符串事件值", kratoslog.LevelError, []any{"event", 42}, false},
+	} {
+		if got := HasPanicEvent(tc.level, tc.keyvals); got != tc.want {
+			t.Errorf("%s: HasPanicEvent = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

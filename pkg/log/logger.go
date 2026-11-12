@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log/internal/output"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 )
 
@@ -183,6 +184,21 @@ func (l *logger) clone() *logger {
 	}
 }
 
+// enabled 在 levelEnabled 之上放行 panic 事件：ERROR 及以上、事件名表示 panic 被恢复的日志不受级别阈值限制，
+// 只有整体禁用或模块禁用能关闭。keyvals 为本次调用的字段，事件名也可以来自实例绑定字段。
+func (l *logger) enabled(level kratoslog.Level, custom *customState, keyvals []any) bool {
+	if l.levelEnabled(level, custom) {
+		return true
+	}
+	if l.config.disabled || level < kratoslog.LevelError {
+		return false
+	}
+	if override := custom.policy.matchModule(l.module); override != nil && override.Disable != nil && *override.Disable {
+		return false
+	}
+	return output.HasPanicEvent(level, keyvals) || output.HasPanicEvent(level, l.kv)
+}
+
 // levelEnabled 按请求 debug、模块策略、实例、根策略、env 解析；禁用不能被放宽。
 func (l *logger) levelEnabled(level kratoslog.Level, custom *customState) bool {
 	if l.config.disabled {
@@ -215,7 +231,7 @@ func (l *logger) levelEnabled(level kratoslog.Level, custom *customState) bool {
 func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) error {
 	l.observeEvent(level, keyvals)
 	custom := l.shared.custom.Load()
-	if !l.levelEnabled(level, custom) {
+	if !l.enabled(level, custom, keyvals) {
 		return nil
 	}
 	cache := l.currentCache(custom)
@@ -257,7 +273,7 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 	}
 	for {
 		custom = l.shared.custom.Load()
-		if !l.levelEnabled(level, custom) {
+		if !l.enabled(level, custom, keyvals) {
 			return nil
 		}
 		cache = l.currentCache(custom)
@@ -272,7 +288,13 @@ func (l *logger) log(level kratoslog.Level, withMsgKey bool, keyvals ...any) err
 			l.shared.gate.RUnlock()
 			continue
 		}
-		err := owned.Log(level, event...)
+		var err error
+		// panic 日志同样绕过输出端级别阈值；事件名取自原始字段，不受 event 被 filter_keys 过滤的影响。
+		if output.HasPanicEvent(level, keyvals) || output.HasPanicEvent(level, l.kv) {
+			err = owned.logAlways(level, event...)
+		} else {
+			err = owned.Log(level, event...)
+		}
 		l.shared.gate.RUnlock()
 		return err
 	}
@@ -342,7 +364,7 @@ func (l *logger) Warnw(keyvals ...any) {
 }
 
 func (l *logger) Error(a ...any) {
-	if !l.levelEnabled(kratoslog.LevelError, l.shared.custom.Load()) {
+	if !l.enabled(kratoslog.LevelError, l.shared.custom.Load(), nil) {
 		// 级别被关闭时仍计入异常事件指标。
 		l.observeEvent(kratoslog.LevelError, nil)
 		return
@@ -351,7 +373,7 @@ func (l *logger) Error(a ...any) {
 }
 
 func (l *logger) Errorf(format string, a ...any) {
-	if !l.levelEnabled(kratoslog.LevelError, l.shared.custom.Load()) {
+	if !l.enabled(kratoslog.LevelError, l.shared.custom.Load(), nil) {
 		// 级别被关闭时仍计入异常事件指标。
 		l.observeEvent(kratoslog.LevelError, nil)
 		return

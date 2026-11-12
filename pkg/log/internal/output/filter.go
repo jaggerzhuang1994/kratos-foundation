@@ -15,6 +15,25 @@ func NewLevelFilter(logger log.Logger, level log.Level) log.Logger {
 	return log.NewFilter(logger, log.FilterLevel(level))
 }
 
+// IsPanicEvent 报告事件名是否表示 panic 被恢复（以 .panicked 或 .panic.recovered 结尾）。
+func IsPanicEvent(event string) bool {
+	return strings.HasSuffix(event, ".panicked") || strings.HasSuffix(event, ".panic.recovered")
+}
+
+// HasPanicEvent 报告一条 ERROR 及以上的日志是否带 panic 事件名。这类日志不受任何级别阈值限制：
+// panic 是代码缺陷，调高日志级别不应让它消失。
+func HasPanicEvent(level log.Level, keyvals []any) bool {
+	if level < log.LevelError {
+		return false
+	}
+	for i := len(keyvals) - 2; i >= 0; i -= 2 {
+		if key, ok := keyvals[i].(string); ok && key == "event" {
+			return IsPanicEvent(fmt.Sprint(keyvals[i+1]))
+		}
+	}
+	return false
+}
+
 type filterLogger struct {
 	// logger 字段过滤后的输出目标。
 	logger log.Logger

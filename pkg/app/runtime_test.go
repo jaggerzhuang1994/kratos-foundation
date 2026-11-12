@@ -376,7 +376,8 @@ func TestRunRecoversRuntimePanicsAndStopsGracefully(t *testing.T) {
 				for len(events) > 0 {
 					event := <-events
 					if event["event"] == "app.runtime.panicked" {
-						if event["level"] != kratoslog.LevelError || strings.Contains(fmt.Sprint(event), "secret") {
+						// 日志带 panic 值与堆栈用于定位；Run 返回的错误只带类型（上面已断言）。
+						if event["level"] != kratoslog.LevelError || !strings.Contains(fmt.Sprint(event["panic"]), "secret") || fmt.Sprint(event["stack"]) == "" {
 							t.Fatalf("panic event = %v", event)
 						}
 						phases = append(phases, event["phase"].(string))

@@ -89,15 +89,19 @@ func TestNormalizeErrorsRecordsOnlyServerFailure(t *testing.T) {
 	}
 }
 
-func TestRecoveryDoesNotExposeRequestOrPanicPayload(t *testing.T) {
+// 恢复日志带 panic 值与堆栈用于定位，不带请求参数；返回给调用方的错误不带 panic 值。
+func TestRecoveryLogsPanicValueButNotRequest(t *testing.T) {
 	logger := &boundaryLogger{}
 	handler := recoverRequests(logger)(normalizeErrors(logger)(func(context.Context, any) (any, error) { panic("secret-panic") }))
 	reply, err := handler(context.Background(), "secret-request")
 	if reply != nil || foundationerrors.Code(err) != 500 || len(logger.entries) != 1 {
 		t.Fatalf("reply=%v err=%v logs=%v", reply, err, logger.entries)
 	}
-	if strings.Contains(logger.entries[0], "secret-panic") || strings.Contains(logger.entries[0], "secret-request") || strings.Contains(err.Error(), "secret-") {
-		t.Fatal("sensitive panic information leaked")
+	if strings.Contains(logger.entries[0], "secret-request") || strings.Contains(err.Error(), "secret-") {
+		t.Fatal("request or panic value leaked")
+	}
+	if !strings.Contains(logger.entries[0], "secret-panic") || !strings.Contains(logger.entries[0], "stack") {
+		t.Fatalf("panic value or stack missing: %s", logger.entries[0])
 	}
 	// 非正式环境保留服务间诊断；prod 中 gRPC 响应不得携带 panic 堆栈。
 	t.Setenv("APP_ENV", "local")
@@ -119,7 +123,8 @@ func (boundaryTransport) Kind() transport.Kind { return transport.KindGRPC }
 func (boundaryTransport) Endpoint() string     { return "grpc://localhost:9000" }
 func (boundaryTransport) Operation() string    { return "/test/Call" }
 
-func TestRequestFailureDiagnosticsFollowRequestDebug(t *testing.T) {
+// 5xx 故障日志在默认级别就带完整错误链，不依赖请求级 debug。
+func TestRequestFailureDiagnosticsAlwaysCarryErrorDetail(t *testing.T) {
 	logger, path := newBoundaryTestLogger(t)
 	for index, debug := range []bool{false, true} {
 		ctx := context.Background()
@@ -139,16 +144,14 @@ func TestRequestFailureDiagnosticsFollowRequestDebug(t *testing.T) {
 		if !strings.Contains(line, "error=load account: database unavailable") {
 			t.Fatalf("case %d error summary missing: %s", index, line)
 		}
-		if got := strings.Contains(line, "error.detail="); got != debug {
-			t.Fatalf("case %d debug=%v error.detail present=%v: %s", index, debug, got, line)
-		}
-		if got := verboseFormats > 0; got != debug {
-			t.Fatalf("case %d debug=%v verbose error formatted=%v", index, debug, got)
+		if !strings.Contains(line, "error.detail=") || verboseFormats == 0 {
+			t.Fatalf("case %d debug=%v error.detail missing (verbose formats=%d): %s", index, debug, verboseFormats, line)
 		}
 	}
 }
 
-func TestRequestPanicStackFollowsRequestDebug(t *testing.T) {
+// panic 值与堆栈在默认级别就输出，不依赖请求级 debug。
+func TestRequestPanicDiagnosticsAlwaysCarryValueAndStack(t *testing.T) {
 	logger, path := newBoundaryTestLogger(t)
 	for index, debug := range []bool{false, true} {
 		ctx := context.Background()
@@ -163,11 +166,8 @@ func TestRequestPanicStackFollowsRequestDebug(t *testing.T) {
 		if !strings.Contains(line, "panic_type=string") {
 			t.Fatalf("case %d panic type missing: %s", index, line)
 		}
-		if got := strings.Contains(line, "stack="); got != debug {
-			t.Fatalf("case %d debug=%v stack present=%v: %s", index, debug, got, line)
-		}
-		if strings.Contains(line, "private panic payload") {
-			t.Fatalf("case %d panic payload leaked: %s", index, line)
+		if !strings.Contains(line, "stack=") || !strings.Contains(line, "panic=private panic payload") {
+			t.Fatalf("case %d debug=%v panic value or stack missing: %s", index, debug, line)
 		}
 	}
 }

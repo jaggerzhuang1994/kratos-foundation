@@ -20,7 +20,8 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 		return func(ctx context.Context, req any) (any, error) {
 			reply, err := next(ctx, req)
 			err = foundationerrors.Normalize(err)
-			if err != nil && foundationerrors.Code(err) >= 500 {
+			// 内层恢复的 panic 已记录过类型、panic 值与堆栈，这里不再重复记录。
+			if err != nil && foundationerrors.Code(err) >= 500 && !errors.Is(err, errRequestPanicked) {
 				summary := err
 				if cause := errors.Unwrap(err); cause != nil {
 					summary = cause
@@ -30,9 +31,10 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 					"code", foundationerrors.Code(err),
 					"reason", foundationerrors.Reason(err),
 					"error", summary,
-					"error.detail", log.DebugOnly(kratoslog.Valuer(func(context.Context) any {
+					// 完整错误链与堆栈随故障日志输出，不依赖 Debug 级别：线上默认 Info 也要能直接定位。
+					"error.detail", kratoslog.Valuer(func(context.Context) any {
 						return fmt.Sprintf("%+v", err)
-					})),
+					}),
 				).Error("request failed")
 			}
 			return reply, err
@@ -40,8 +42,13 @@ func normalizeErrors(logger log.Logger) middleware.Middleware {
 	}
 }
 
-// recoverRequests 防止请求 panic 终止服务，不记录可能包含认证材料的请求和 panic 原文。
-// panic 会越过内层错误边界，因此只在此处记录类型，并按请求 debug 展开堆栈。
+// errRequestPanicked 标记由 panic 恢复出的 500，供外层错误边界识别，避免同一次 panic 记录两条故障日志。
+var errRequestPanicked = errors.New("request panicked")
+
+// recoverRequests 防止请求 panic 终止服务，记录 panic 类型、panic 值与堆栈，不记录请求参数或正文。
+// panic 会越过内层错误边界，只能在此处记录；堆栈不依赖 Debug 级别，线上默认 Info 也要能直接定位。
+// 链上登记两层：最外层兜住所有中间件的 panic；访问日志之内的一层让业务 panic 的日志带上 trace.id，
+// 并让恢复出的 500 经过访问日志与请求指标。
 func recoverRequests(logger log.Logger) middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (reply any, err error) {
@@ -51,10 +58,11 @@ func recoverRequests(logger log.Logger) middleware.Middleware {
 					requestLogger(logger, ctx).With(
 						"event", "server.request.panic.recovered",
 						"panic_type", fmt.Sprintf("%T", recovered),
-						"stack", log.DebugOnly(stack),
+						"panic", fmt.Sprint(recovered),
+						"stack", stack,
 					).Error("request panic recovered")
 					reply = nil
-					err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithMetadata(map[string]string{"err_stack": stack})
+					err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithCause(errRequestPanicked).WithMetadata(map[string]string{"err_stack": stack})
 				}
 			}()
 			return next(ctx, req)
@@ -74,7 +82,8 @@ func recoverStreams(logger log.Logger) stdgrpc.StreamServerInterceptor {
 					"transport", "grpc",
 					"operation", info.FullMethod,
 					"panic_type", fmt.Sprintf("%T", recovered),
-					"stack", log.DebugOnly(stack),
+					"panic", fmt.Sprint(recovered),
+					"stack", stack,
 				).Error("request panic recovered")
 				err = foundationerrors.New(500, "UNKNOWN", "Internal Server Error").WithMetadata(map[string]string{"err_stack": stack})
 			}
