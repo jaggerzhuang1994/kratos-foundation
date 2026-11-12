@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime"
@@ -169,6 +170,10 @@ func (handler *gormLogHandler) Handle(ctx context.Context, record slog.Record) e
 			fields = append(fields, "slow_threshold", handler.slowThreshold)
 		}
 		level := gormLogLevel(record.Level)
+		// 调用方取消（客户端断开、上游放弃等待）导致的查询中止不是数据库故障，降为 Info；超时与其他错误仍为 Error。
+		if level == kratoslog.LevelError && ctx.Err() == context.Canceled && gormQueryCanceled(attributes) {
+			level = kratoslog.LevelInfo
+		}
 		// 队列轮询只降低普通 SQL，慢查询和失败仍保留诊断级别。
 		if handler.debugQueries && record.Level == slog.LevelInfo {
 			level = kratoslog.LevelDebug
@@ -189,6 +194,28 @@ func (handler *gormLogHandler) Handle(ctx context.Context, record slog.Record) e
 		logger.Info(message)
 	}
 	return nil
+}
+
+// gormQueryCanceled 报告查询记录中的错误是否为 context.Canceled。
+func gormQueryCanceled(attributes []slog.Attr) bool {
+	for _, attribute := range attributes {
+		value := attribute.Value.Resolve()
+		if value.Kind() == slog.KindGroup {
+			if gormQueryCanceled(value.Group()) {
+				return true
+			}
+			continue
+		}
+		if attribute.Key != "error" {
+			continue
+		}
+		if err, ok := value.Any().(error); ok {
+			return errors.Is(err, context.Canceled)
+		}
+		// GORM 的 slog 适配把错误写成文本；包装过的取消错误以该文本结尾或包含它。
+		return strings.Contains(value.String(), context.Canceled.Error())
+	}
+	return false
 }
 
 func (handler *gormLogHandler) WithAttrs(attributes []slog.Attr) slog.Handler {

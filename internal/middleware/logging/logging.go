@@ -12,6 +12,7 @@ import (
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/internal/deadline"
 	foundationerrors "github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/errors"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/log"
+	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/request"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/pkg/servicename"
 	"github.com/jaggerzhuang1994/kratos-foundation/v2/proto/kratos_foundation_pb/config_pb"
 )
@@ -72,27 +73,46 @@ func deadlineFields() []any {
 	}
 }
 
+// BackgroundHeader 是 HTTP 与 gRPC 共用的框架保留键；只有单个值 1 表示后台周期性调用。
+// 它只把成功的访问摘要降为 Debug，不影响失败日志、指标和链路。
+const BackgroundHeader = "x-foundation-background"
+
 // accessLog 只记录请求结果摘要，不读取请求或响应正文，也不重复输出错误堆栈。
 // 完整服务端故障由常驻错误边界记录，关闭访问日志不会关闭故障诊断。
 // 服务端框架端点（健康检查、反射等）成功时降为 Debug：注册中心与探针高频轮询会淹没业务日志，失败仍按 Info 输出。
+// 标记为后台周期性调用（request.WithBackground）的请求同样处理：客户端随请求头传给下游，两端成功时都降为 Debug。
 func accessLog(logger log.Logger, client bool) middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			started := time.Now()
-			reply, err := next(ctx, req)
 			component := "server"
 			info, ok := transport.FromServerContext(ctx)
 			if client {
 				component = "client"
 				info, ok = transport.FromClientContext(ctx)
 			}
+			background := request.IsBackground(ctx)
+			if ok {
+				if header := info.RequestHeader(); header != nil {
+					if client && background {
+						header.Set(BackgroundHeader, "1")
+					} else if !client && !background {
+						// 多值、空值和非约定值均不采纳。
+						if values := header.Values(BackgroundHeader); len(values) == 1 && values[0] == "1" {
+							background = true
+							ctx = request.WithBackground(ctx)
+						}
+					}
+				}
+			}
+			reply, err := next(ctx, req)
 			var operation, kind string
 			if ok {
 				operation = info.Operation()
 				kind = info.Kind().String()
 			}
 			write := logger.WithContext(ctx).Infow
-			if !client && err == nil && servicename.IsFrameworkOperation(operation) {
+			if err == nil && (background || (!client && servicename.IsFrameworkOperation(operation))) {
 				write = logger.WithContext(ctx).Debugw
 			}
 			write(

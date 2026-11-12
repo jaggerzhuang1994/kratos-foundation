@@ -275,13 +275,25 @@ func TestTelemetryIgnoresUnnamedJobsAndDisabledTracingProvider(t *testing.T) {
 		}
 	}
 
+	// 与 tracing 包的禁用 Provider 一致：永不采样，但保留有效 SpanContext。
 	disabledTracing := newJobTracingProvider(runtimeTracingProvider{
-		provider: observability.tracingProvider.provider,
+		provider: tracesdk.NewTracerProvider(tracesdk.WithSampler(tracesdk.NeverSample())),
 		disabled: true,
 	}, true)
 	_, span := disabledTracing.recordStart(withJobName(context.Background(), "disabled"))
 	if span.IsRecording() {
 		t.Fatal("disabled tracing provider returned a recording span")
+	}
+	// 全局关闭 tracing 时每次执行仍有独立的关联 ID，供日志按 trace.id 关联；只是不采样、不导出。
+	_, next := disabledTracing.recordStart(withJobName(context.Background(), "disabled"))
+	if !span.SpanContext().IsValid() || span.SpanContext().TraceID() == next.SpanContext().TraceID() {
+		t.Fatalf("job executions lack distinct correlation ids: %s %s", span.SpanContext().TraceID(), next.SpanContext().TraceID())
+	}
+	next.End()
+	// 任务自身关闭 tracing 时不生成关联 ID。
+	_, off := newJobTracingProvider(observability.tracingProvider, false).recordStart(withJobName(context.Background(), "off"))
+	if off.SpanContext().IsValid() {
+		t.Fatal("job with tracing disabled must not start a span")
 	}
 	disabledTracing.recordEnd(span, errors.New("ignored"))
 	if spans := observability.spans.GetSpans(); len(spans) != 0 {

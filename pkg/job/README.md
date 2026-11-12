@@ -258,6 +258,8 @@ flowchart TD
 
 ## 中间件执行顺序
 
+全局关闭 tracing（`tracing.disable`）时任务仍为每次执行生成独立的 `trace.id`（不采样、不导出），任务日志与它发起的下游调用可按 `trace.id` 关联；任务自身关闭 tracing 时不生成。
+
 Cron 的进入顺序为：recovery → 并发控制 → tracing → metrics → logging → 按注册顺序的业务中间件 → Task；返回及 defer 按相反顺序执行。Once、Daemon 使用同一顺序，但没有并发控制。关闭观测只移除对应观测层，recovery 始终位于整个执行链最外层，且只组装一次。
 
 观测层进入时将结果初始化为 panic 失败标记，只有下层正常返回才用返回值覆盖。因此 panic 展开期间不会按 nil error 记录成功，运行指标会归还、span 会以失败状态结束。最外层 recovery 统一将 panic 转为携带原始内容与堆栈的错误，交给既有结果处理边界。业务 panic 的 trace 使用通用 `job execution panicked` 描述，详细错误由最终 ErrorHandler 接收。

@@ -245,6 +245,39 @@ func TestGORMLoggerWritesStructuredSlowAndFailedQueries(t *testing.T) {
 	}
 }
 
+// 调用方取消导致的查询中止不是数据库故障：降为 Info；超时、其他错误，以及 Context 未取消时的同名错误仍为 Error。
+func TestGORMLoggerDowngradesCallerCancellation(t *testing.T) {
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	expired, release := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer release()
+	for _, test := range []struct {
+		name  string
+		ctx   context.Context
+		err   error
+		level string
+	}{
+		{"caller canceled", canceled, context.Canceled, "INFO "},
+		{"wrapped cancellation", canceled, fmt.Errorf("query rows: %w", context.Canceled), "INFO "},
+		{"deadline exceeded", expired, context.DeadlineExceeded, "ERROR "},
+		{"driver failure on canceled context", canceled, errors.New("driver failed"), "ERROR "},
+		{"cancellation error on live context", context.Background(), context.Canceled, "ERROR "},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base, path := newDatabaseFileLogger(t)
+			g := newGORMLogger(base, &config_pb.GormLogger{Level: config_pb.GormLogger_INFO.Enum()})
+			g.Trace(test.ctx, time.Now(), func() (string, int64) { return "SELECT 1", 0 }, test.err)
+			written, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(string(written), test.level) || !strings.Contains(string(written), "err=") {
+				t.Fatalf("want %squery log with err: %s", test.level, written)
+			}
+		})
+	}
+}
+
 func TestGORMLoggerIgnoresConfiguredRecordNotFound(t *testing.T) {
 	base, path := newDatabaseFileLogger(t)
 	g := newGORMLogger(base, &config_pb.GormLogger{

@@ -14,6 +14,17 @@ logger.WithContext(ctx).With("detail", log.DebugOnly("verbose")).Info("request s
 
 `WithDebug` 返回子 Context，父 Context 不变；取消、截止时间及其他值仍继承。`IsDebug(ctx)` 读取状态，未设置返回 false。不要传入 nil Context。异步任务只有继承该上下文才继承标记；同一进程中不需要额外 metadata API。
 
+## 后台周期性调用
+
+定时刷新缓存、轮询上游这类固定频率的调用，成功时的访问摘要没有排障价值，却会淹没业务日志。发起调用前标记 Context：
+
+```go
+// 前置条件：ctx 来自后台刷新循环，client 是 Foundation 生成客户端。
+rsp, err := client.GetCurrencyInfos(request.WithBackground(ctx), req)
+```
+
+被标记的调用成功时，客户端的 `client.request.completed` 降为 Debug；标记随保留键 `x-foundation-background`（单个值 `1`）传给下游，下游的 `server.request.completed` 同样降为 Debug，并把标记带入处理上下文。失败照常按 Info 记录，请求指标、链路和错误边界不受影响。`IsBackground(ctx)` 读取状态。该标记只降低成功摘要的级别，不是授权凭据；访问日志中间件关闭时不传播。不要用于用户请求或任务执行路径。
+
 ## 跨服务传播
 
 与截止时间一样，状态属于 Context，由传输适配层负责跨服务编码和恢复。Foundation server/client 自动安装独立的 `request_debug` 中间件，无需把键加入通用 metadata 前缀。

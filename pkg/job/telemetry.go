@@ -181,9 +181,11 @@ type jobTracingProvider struct {
 
 func newJobTracingProvider(provider foundationtracing.Provider, enabled bool) jobTracing {
 	result := &jobTracingProvider{}
-	if !enabled || provider.Disabled() {
+	if !enabled {
 		result.tracer = noop.NewTracerProvider().Tracer(instrumentationNameJob)
 	} else {
+		// 全局关闭 tracing 时 Provider 只生成关联 ID、不采样不导出：每次执行仍有独立的 trace.id，
+		// 任务日志和它发起的下游调用可以按 trace.id 关联。
 		result.tracer = provider.Tracer(instrumentationNameJob)
 	}
 	return result

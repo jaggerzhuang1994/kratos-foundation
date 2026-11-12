@@ -159,7 +159,7 @@ func guardErrorHandler(log moduleLog, handler func(context.Context, string, erro
 	return func(ctx context.Context, name string, err error) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				log.WithContext(ctx).With("event", "job.error_handler.panicked", "job", name, "panic_type", fmt.Sprintf("%T", recovered)).
+				log.WithContext(ctx).With("event", "job.error_handler.panicked", "job", name, "panic_type", fmt.Sprintf("%T", recovered), "panic", fmt.Sprint(recovered), "stack", string(debug.Stack())).
 					Error("job error handler panicked")
 			}
 		}()

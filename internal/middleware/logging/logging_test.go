@@ -265,3 +265,102 @@ func TestServerFrameworkSuccessLogsAtDebug(t *testing.T) {
 		})
 	}
 }
+
+// backgroundTransport 是带可写请求头的 gRPC 传输替身。
+type backgroundTransport struct {
+	testGRPCTransport
+	header backgroundHeader
+}
+
+func (t *backgroundTransport) RequestHeader() transport.Header { return t.header }
+
+type backgroundHeader map[string][]string
+
+func (h backgroundHeader) Get(key string) string {
+	if values := h[key]; len(values) > 0 {
+		return values[0]
+	}
+	return ""
+}
+func (h backgroundHeader) Set(key, value string)      { h[key] = []string{value} }
+func (h backgroundHeader) Add(key, value string)      { h[key] = append(h[key], value) }
+func (h backgroundHeader) Values(key string) []string { return h[key] }
+func (h backgroundHeader) Keys() []string {
+	keys := []string{}
+	for key := range h {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// 后台周期性调用成功时两端的访问摘要都降为 Debug，标记随请求头传给下游；失败照常按 Info 记录。
+func TestBackgroundCallsLogSuccessAtDebugOnBothSides(t *testing.T) {
+	logger, path := newTestLogger(t)
+	const operation = "/base_service.BaseService/GetCurrencyInfos"
+	written := func(run func()) string {
+		before, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		run()
+		after, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(after[len(before):])
+	}
+	failure := errors.New("upstream unavailable")
+
+	// 客户端：标记的调用写入请求头，成功不记 Info，失败照常记录；未标记的调用不写头。
+	client := Client(logger, nil)
+	header := backgroundHeader{}
+	marked := transport.NewClientContext(request.WithBackground(context.Background()), &backgroundTransport{testGRPCTransport: testGRPCTransport{operation: operation}, header: header})
+	if logs := written(func() { _, _ = client(func(context.Context, any) (any, error) { return nil, nil })(marked, nil) }); logs != "" {
+		t.Fatalf("background client success logged at info: %s", logs)
+	}
+	if got := header.Values(BackgroundHeader); len(got) != 1 || got[0] != "1" {
+		t.Fatalf("background header = %v", got)
+	}
+	if logs := written(func() { _, _ = client(func(context.Context, any) (any, error) { return nil, failure })(marked, nil) }); !strings.Contains(logs, "operation="+operation) {
+		t.Fatalf("background client failure not logged: %s", logs)
+	}
+	plainHeader := backgroundHeader{}
+	plain := transport.NewClientContext(context.Background(), &backgroundTransport{testGRPCTransport: testGRPCTransport{operation: operation}, header: plainHeader})
+	if logs := written(func() { _, _ = client(func(context.Context, any) (any, error) { return nil, nil })(plain, nil) }); !strings.Contains(logs, "operation="+operation) || len(plainHeader) != 0 {
+		t.Fatalf("ordinary client call must log at info without the header: %s %v", logs, plainHeader)
+	}
+
+	// 服务端：收到单值 1 时成功不记 Info，并把标记带入处理上下文；失败、多值与其他取值照常记录。
+	server := Server(logger, nil)
+	for _, tc := range []struct {
+		name    string
+		values  []string
+		err     error
+		wantLog bool
+	}{
+		{"marked success", []string{"1"}, nil, false},
+		{"marked failure", []string{"1"}, failure, true},
+		{"duplicated header", []string{"1", "1"}, nil, true},
+		{"other value", []string{"true"}, nil, true},
+		{"unmarked", nil, nil, true},
+	} {
+		incoming := backgroundHeader{}
+		if tc.values != nil {
+			incoming[BackgroundHeader] = tc.values
+		}
+		ctx := transport.NewServerContext(context.Background(), &backgroundTransport{testGRPCTransport: testGRPCTransport{operation: operation}, header: incoming})
+		handlerBackground := false
+		logs := written(func() {
+			_, _ = server(func(ctx context.Context, _ any) (any, error) {
+				handlerBackground = request.IsBackground(ctx)
+				return nil, tc.err
+			})(ctx, nil)
+		})
+		if got := strings.Contains(logs, "operation="+operation); got != tc.wantLog {
+			t.Fatalf("%s: info access log written=%v, want %v: %s", tc.name, got, tc.wantLog, logs)
+		}
+		if wantMark := len(tc.values) == 1 && tc.values[0] == "1"; handlerBackground != wantMark {
+			t.Fatalf("%s: handler background=%v, want %v", tc.name, handlerBackground, wantMark)
+		}
+	}
+}

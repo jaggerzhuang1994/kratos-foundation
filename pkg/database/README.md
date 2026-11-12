@@ -346,6 +346,8 @@ flowchart LR
 
 结构化 `caller` 使用 GORM 提供的查询来源，格式为 `目录/文件:行号`，不依赖固定跳栈层数；GORM 无法提供有效来源时沿用日志包默认 caller。请求 Context 会继续传给 Foundation logger：存在有效 SpanContext 时，SQL 日志自动附带 `trace.id` 和 `span.id`；没有活动 Span 时不会生成虚假的关联 ID，默认 `LOG_FILTER_EMPTY=true` 会省略对应空字段，显式关闭空值过滤时则可能保留空字段。HTTP、WebSocket、Job 和队列任务执行应把派生 Context 传入数据库操作；队列领取前的空轮询、启动与清理等后台生命周期操作通常没有活动 Span，因此不含有效关联 ID 属于预期行为。
 
+调用方取消（Context 已取消且查询错误为 `context canceled`，例如客户端断开或上游放弃等待）导致的查询中止不是数据库故障，记录为 INFO；超时（`context deadline exceeded`）与其他错误仍为 ERROR。
+
 GORM 上游的日志配置没有 Debug 档：`silent` 不生成 SQL 日志；当前 slog logger 在其他级别均优先记录未忽略的错误（ERROR），没有此类错误时，`slow_threshold` 非零且耗时严格超过阈值则记录慢 SQL（WARN）；只有 `info` 还会生成普通 SQL（INFO）。因此 `error` 级别也可能记录慢 SQL。开发环境或短时排障可使用 `info`；不要为了获得 trace ID 长期开启全量 SQL Info，常规请求关联优先依赖 Trace 与指标。忽略 RecordNotFound 和参数过滤仍由 `gorm.logger` 控制；`colorful` 仅为兼容保留，结构化日志不输出 ANSI 颜色。
 
 [GORM 队列仓储](../../contrib/queue/database/gorm/README.md#sql-日志) 使用 Foundation logger 时，会在复制的独立会话中将普通 SQL 从 INFO 转为 DEBUG，覆盖投递、消费、统计、运维和简单模式迁移。慢查询仍为 WARN，失败仍为 ERROR，`event=database.gorm.query`、caller、Context 和参数过滤保持原有行为；共享连接上的其他业务 SQL 级别不变。自定义 GORM logger 未提供可选的 `WithDebugQueries() gormlogger.Interface` 方法时，Repo 沿用其自身策略。查看普通队列 SQL 仍需 GORM `gorm.logger.level: info` 开启生成，且 Foundation 模块策略及对应输出端允许 DEBUG；派生会话不会恢复 GORM 已关闭的日志。

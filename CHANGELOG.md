@@ -15,6 +15,9 @@
 - 队列执行 Context 带日志字段 `queue`、`task.id`，重试的执行另带 `task.retry`（第几次重试）：Handler 内通过 Context 输出的业务日志自动带任务定位字段。
 - **队列任务开始 / 结束日志由 DEBUG 升为 INFO**：`queue.task.execution.started`、`queue.task.execution.finished` 默认级别即可看到每个任务的边界、结果与耗时；任务量大的队列日志量随之增加，需要关闭时把 `queue` 模块级别调到 warn。
 - **panic 的请求计入访问日志与请求指标**：`recovery.traced` 位于访问日志之内（优先级 620），恢复出的 500 经过 `server.request.completed` 与请求指标；此前 panic 的请求既没有访问日志也不计入指标。同一次 panic 只记录 `server.request.panic.recovered`，不再追加 `server.request.failed`。
+- **后台周期性调用的成功访问日志降为 Debug**：新增 `request.WithBackground(ctx)` / `request.IsBackground(ctx)`。被标记的调用成功时客户端 `client.request.completed` 降为 Debug，标记经保留键 `x-foundation-background` 传给下游，下游 `server.request.completed` 同样降级；失败照常记录。用于定时刷新缓存、轮询上游等固定频率调用，需业务在调用处标记。
+- **调用方取消的 SQL 日志由 ERROR 降为 INFO**：Context 已取消且查询错误为 `context canceled` 时，`database.gorm.query` 记录为 INFO；超时与其他错误仍为 ERROR。按 ERROR 统计数据库故障的告警不再被客户端断开触发。
+- **全局关闭 tracing 时 Job 每次执行仍有 `trace.id`**：此前 `tracing.disable=true` 时任务日志没有 `trace.id`，现与 Server、Queue 一致，只生成关联 ID、不采样不导出。`job.error_handler.panicked` 补充 `panic` 与 `stack`。
 - **panic 日志不受日志级别限制**：ERROR 及以上、事件名以 `.panicked` 或 `.panic.recovered` 结尾的日志绕过根级别、实例级别、模块级别与各输出（std / file）的级别阈值，只有整体禁用日志或禁用该模块能关闭。
 - 队列 Handler panic 新增 `ERROR event=queue.task.panic.recovered`（`error.detail` 为 panic 值与调用栈），计入 `log_events_total` 与 `FoundationPanicRecovered` 告警；此前只体现在重试 / 失败日志的 `error=panic`，不触发 panic 告警。
 
