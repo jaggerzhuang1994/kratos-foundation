@@ -5,7 +5,7 @@
 适用于 HTTP 服务、gRPC 服务、API 网关、队列消费者、定时任务、一次性脚本和自定义常驻进程。
 
 - 模块：`github.com/jaggerzhuang1994/kratos-foundation/v2`
-- 要求：Go 1.26+；构建与发布使用已修复标准库漏洞的工具链（当前 go1.26.10+）
+- 要求：Go 1.26+；构建与发布使用已修复标准库漏洞的工具链（当前 go1.26.11+）
 - 版本：以 Git tag 为准，变更与升级风险见 [CHANGELOG](CHANGELOG.md)，从 v1 迁移见 [MIGRATION](MIGRATION.md)
 
 ## 能力一览

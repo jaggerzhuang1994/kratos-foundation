@@ -19,6 +19,7 @@
 - **调用方取消的 SQL 日志由 ERROR 降为 INFO**：Context 已取消且查询错误为 `context canceled` 时，`database.gorm.query` 记录为 INFO；超时与其他错误仍为 ERROR。按 ERROR 统计数据库故障的告警不再被客户端断开触发。
 - **全局关闭 tracing 时 Job 每次执行仍有 `trace.id`**：此前 `tracing.disable=true` 时任务日志没有 `trace.id`，现与 Server、Queue 一致，只生成关联 ID、不采样不导出。`job.error_handler.panicked` 补充 `panic` 与 `stack`。
 - **panic 日志不受日志级别限制**：ERROR 及以上、事件名以 `.panicked` 或 `.panic.recovered` 结尾的日志绕过根级别、实例级别、模块级别与各输出（std / file）的级别阈值，只有整体禁用日志或禁用该模块能关闭。
+- 构建与测试工具链升至 go1.26.11，修复 `net/http` 的 GO-2026-6859（HTTP/1 服务在 MaxBytesReader 与请求头并发时可能崩溃）。`toolchain` 指令只约束本仓库自身的构建，不强制使用方升级；业务镜像应使用 go1.26.11 及以上构建。
 - 队列 Handler panic 新增 `ERROR event=queue.task.panic.recovered`（`error.detail` 为 panic 值与调用栈），计入 `log_events_total` 与 `FoundationPanicRecovered` 告警；此前只体现在重试 / 失败日志的 `error=panic`，不触发 panic 告警。
 
 <!-- changelog:auto:start -->

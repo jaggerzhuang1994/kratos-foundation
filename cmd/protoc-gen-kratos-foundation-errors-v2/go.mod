@@ -2,7 +2,7 @@ module github.com/jaggerzhuang1994/kratos-foundation/cmd/protoc-gen-kratos-found
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/go-kratos/kratos/v2 v2.9.2

@@ -2,7 +2,7 @@ module github.com/jaggerzhuang1994/kratos-foundation/v2
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 tool github.com/google/wire/cmd/wire
 
